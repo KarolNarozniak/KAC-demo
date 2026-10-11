@@ -62,6 +62,8 @@ export type DemoProfile = {
   email: string;
   studyProgram: string;
   timezone: string;
+  studentId?: string;
+  academicYear?: string;
 };
 
 export type DemoState = {

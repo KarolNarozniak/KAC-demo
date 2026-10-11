@@ -89,9 +89,9 @@ export function Button({ title, onPress, primary = false, danger = false, disabl
   return <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel} disabled={disabled} onPress={onPress} style={[styles.button, primary && styles.primary, danger && styles.danger, disabled && { opacity: 0.5 }]}><Text style={[styles.buttonText, primary && styles.primaryText]}>{title}</Text></Pressable>;
 }
 
-export function Field({ label, value, onChangeText, placeholder, keyboardType }: { label: string; value: string; onChangeText: (text: string) => void; placeholder?: string; keyboardType?: any }) {
+export function Field({ label, value, onChangeText, placeholder, keyboardType, secureTextEntry = false, autoCapitalize }: { label: string; value: string; onChangeText: (text: string) => void; placeholder?: string; keyboardType?: any; secureTextEntry?: boolean; autoCapitalize?: any }) {
   const { palette, styles } = useTheme();
-  return <View style={{ flex: 1, minWidth: 100, marginBottom: 12 }}><Text style={styles.label}>{label}</Text><TextInput accessibilityLabel={label} value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor={palette.placeholder} keyboardType={keyboardType} style={styles.input} /></View>;
+  return <View style={{ flex: 1, minWidth: 100, marginBottom: 12 }}><Text style={styles.label}>{label}</Text><TextInput accessibilityLabel={label} value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor={palette.placeholder} keyboardType={keyboardType} secureTextEntry={secureTextEntry} autoCapitalize={autoCapitalize} style={styles.input} /></View>;
 }
 
 export function Pill({ children, color }: { children: React.ReactNode; color?: string }) {
