@@ -1,0 +1,3067 @@
+Podsumowanie,Klucz zgłoszenia,Id. zgłoszenia,Typ zgłoszenia,Status,Klucz projektu,Nazwa projektu,Typ projektu,Lider projektu,Opis projektu,Adres URL projektu,Priorytet,Rozwiązanie,Osoba przypisana,Osoba zgłaszająca,Twórca,Utworzono,Zaktualizowano,Ostatnio wyświetlane,Rozwiązane,Odnośne wersje,Wersja naprawy,Komponenty,Termin,Etykiety,Opis,Środowisko,Obserwatorzy,Rejestruj pracę,Pierwotne oszacowanie,Pozostałe oszacowanie,Czas poświęcony,Stosunek pracy,Σ Pierwotne oszacowanie,Σ Pozostałe oszacowanie,Σ Czas poświęcony,Poziom zabezpieczeń,Załącznik,Załącznik,Załącznik,Załącznik,Załącznik,Pole własne (Docelowy koniec),Pole własne (Docelowy start),Pole własne (Kolor epiki),Pole własne (Nazwa epiki),Pole własne (Oznaczono flagą),Pole własne (Pierwotne punkty historyjki),Pole własne (Punkty historyjki),Pole własne (Ranking),Sprint,Pole własne (Status epiki),Pole własne (Zespół),Pole własne (Łącze epiki),Pole własne (Łącze nadrzędne),Komentarz
+Ustawienia powiadomień: włączanie i godziny ciszy (nowe),S23KC2S1P2-31,17930,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56597@student.wat.edu.pl,u56597@student.wat.edu.pl,u56597@student.wat.edu.pl,07 paź 2026 21:01 ,11 paź 2026 11:34 ,11 paź 2026 16:53 ,,,,,,,"*Jako* student
+*chcę* włączać i wyłączać powiadomienia oraz ustawiać godziny ciszy,
+*aby* decydować, czy i kiedy aplikacja może wysyłać mi powiadomienia.
+
+W makiecie: przełącznik ""Powiadomienia"", pola rozpoczęcia i zakończenia godzin ciszy oraz podgląd działania powiadomień.
+
+*1. Scenariusz*
+ # Użytkownik otwiera ustawienia powiadomień.
+
+ # System wyświetla przełącznik ""Powiadomienia"" oraz ustawienia godzin ciszy.
+
+ # Użytkownik włącza powiadomienia.
+3a. Jeśli użytkownik wyłączy powiadomienia, aplikacja nie będzie ich wysyłać niezależnie od godzin ciszy. Scenariusz przechodzi do kroku 5.
+
+ # Użytkownik włącza godziny ciszy i wybiera godzinę ich rozpoczęcia oraz zakończenia.
+4a. Jeśli użytkownik wyłączy godziny ciszy, powiadomienia będą dozwolone o każdej porze. Scenariusz przechodzi do kroku 5.
+
+ # Użytkownik klika ""Zapisz"".
+5a. Jeśli użytkownik kliknie ""Anuluj"", system zamyka formularz bez zmiany ustawień. Scenariusz kończy się.
+5b. Jeśli godziny ciszy są włączone, ale nie podano obu godzin lub są one jednakowe, system wyświetla komunikat o błędzie. Użytkownik poprawia dane i ponownie klika ""Zapisz"".
+
+ # System zatwierdza ustawienia i wyświetla ich aktualne wartości.
+
+ # Użytkownik uruchamia podgląd powiadomienia dla przykładowej godziny.
+
+ # System pokazuje, czy powiadomienie może zostać wysłane zgodnie z ustawieniami.
+8a. Jeśli powiadomienia są wyłączone lub przykładowa godzina przypada w godzinach ciszy, system pokazuje, że powiadomienie zostało zablokowane.
+
+ # Użytkownik sprawdza wynik podglądu. Scenariusz kończy się.
+
+*2. Ograniczenia typu pre i post*
+ * Preconditions — warunki wstępne:
+
+ ** Makieta aplikacji jest uruchomiona.
+
+ ** Dostępne są ustawienia powiadomień.
+
+ ** Formularz zawiera przełącznik ""Powiadomienia"" i możliwość ustawienia godzin ciszy.
+
+ ** Makieta umożliwia podgląd powiadomienia dla przykładowej godziny.
+
+ * Postconditions — warunki końcowe:
+
+ ** Aktualny stan powiadomień i godziny ciszy są widoczne w ustawieniach.
+
+ ** Przy wyłączonych powiadomieniach podgląd pokazuje ich blokowanie o każdej porze.
+
+ ** Przy włączonych powiadomieniach i godzinach ciszy podgląd pokazuje blokowanie powiadomień w wybranym przedziale.
+
+ ** Godziny ciszy mogą przechodzić przez północ, np. od 22:00 do 7:00, i obowiązują codziennie.
+
+ ** W przypadku błędnych danych system nie zatwierdza zmian.
+
+ ** W przypadku anulowania wcześniejsze ustawienia pozostają bez zmian.
+
+ ** Ustawienia nie są zapisywane w bazie, a wysyłanie i blokowanie powiadomień są symulowane w makiecie.
+
+*3. Potrzeby informacyjne*
+ * Informacja, czy powiadomienia są włączone.
+
+ * Informacja, czy godziny ciszy są włączone.
+
+ * Godzina rozpoczęcia i zakończenia godzin ciszy.
+
+ * Strefa czasowa używana przez aplikację.
+
+ * Wcześniejsze ustawienia powiadomień.
+
+ * Przykładowa godzina i treść powiadomienia.
+
+ * Informacja, czy przykładowa godzina przypada w godzinach ciszy.
+
+ * Wynik podglądu: powiadomienie dozwolone lub zablokowane.
+
+ * Komunikat o błędnych lub niepełnych ustawieniach godzin ciszy.
+
+ * Informacja o zatwierdzeniu lub anulowaniu zmian.",,u56597@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z6c:",,,,S23KC2S1P2-6,,
+Publikacja zaakceptowanego grafiku,S23KC2S1P2-30,17929,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56597@student.wat.edu.pl,u56597@student.wat.edu.pl,u56597@student.wat.edu.pl,07 paź 2026 21:01 ,11 paź 2026 11:33 ,11 paź 2026 16:53 ,,,,,,,"*Jako* student
+*chcę* opublikować zaakceptowany grafik pracy w wybranym kalendarzu Google,
+*aby* widzieć zaplanowane zmiany razem z pozostałymi wydarzeniami.
+
+W makiecie: przycisk ""Opublikuj w Google Calendar"", wybór kalendarza oraz potwierdzenie publikacji grafiku.
+
+*1. Scenariusz*
+ # Użytkownik otwiera zaakceptowany grafik pracy.
+
+ # Użytkownik klika przycisk ""Opublikuj w Google Calendar"".
+
+ # System wyświetla ekran połączenia z kontem Google.
+
+ # Użytkownik wybiera konto i zezwala na dodawanie wydarzeń do kalendarza.
+4a. Jeśli użytkownik odmówi dostępu, system wyświetla informację o braku możliwości publikacji. Scenariusz kończy się.
+
+ # System wyświetla listę kalendarzy, do których użytkownik może dodawać wydarzenia.
+
+ # Użytkownik wybiera kalendarz docelowy.
+
+ # System wyświetla podgląd zmian roboczych przeznaczonych do publikacji.
+
+ # Użytkownik klika ""Opublikuj"".
+8a. Jeśli użytkownik kliknie ""Anuluj"", system zamyka podgląd bez publikowania grafiku. Scenariusz kończy się.
+
+ # System dodaje zaplanowane zmiany jako wydarzenia do wybranego kalendarza Google.
+9a. Jeśli publikacja się nie powiedzie, system wyświetla komunikat o błędzie. Użytkownik może ponowić próbę.
+
+ # System wyświetla potwierdzenie publikacji i liczbę dodanych wydarzeń.
+
+ # Użytkownik widzi zmiany robocze razem z pozostałymi wydarzeniami w przykładowym widoku kalendarza Google. Scenariusz kończy się.
+
+*2. Ograniczenia typu pre i post*
+ * Preconditions — warunki wstępne:
+
+ ** Makieta aplikacji jest uruchomiona.
+
+ ** Grafik pracy został zaakceptowany i zawiera co najmniej jedną zmianę roboczą.
+
+ ** Dostępny jest przycisk ""Opublikuj w Google Calendar"".
+
+ ** Makieta zawiera przykładowe konto Google i kalendarze z możliwością dodawania wydarzeń.
+
+ ** Dostępny jest podgląd wydarzeń przeznaczonych do publikacji.
+
+ * Postconditions — warunki końcowe:
+
+ ** Po udanej publikacji zmiany robocze są widoczne jako wydarzenia w wybranym kalendarzu Google.
+
+ ** Daty i godziny opublikowanych wydarzeń odpowiadają zaakceptowanemu grafikowi.
+
+ ** System wyświetla potwierdzenie i liczbę opublikowanych wydarzeń.
+
+ ** W przypadku odmowy dostępu lub anulowania grafik nie zostaje opublikowany.
+
+ ** W przypadku błędu system nie wyświetla potwierdzenia udanej publikacji.
+
+ ** Zaakceptowany grafik w aplikacji pozostaje bez zmian.
+
+ ** Połączenie z Google Calendar i publikacja są symulowane w makiecie. Wydarzenia nie są dodawane do rzeczywistego kalendarza Google.
+
+*3. Potrzeby informacyjne*
+ * Zaakceptowany grafik pracy.
+
+ * Tytuły, daty oraz godziny rozpoczęcia i zakończenia zmian roboczych.
+
+ * Wybrane konto Google.
+
+ * Informacja o udzieleniu lub odmowie uprawnienia do dodawania wydarzeń.
+
+ * Lista kalendarzy, do których użytkownik może dodawać wydarzenia.
+
+ * Wybrany kalendarz docelowy.
+
+ * Lista wydarzeń wyświetlanych w podglądzie publikacji.
+
+ * Informacja o zatwierdzeniu lub anulowaniu publikacji.
+
+ * Wynik publikacji i liczba dodanych wydarzeń.
+
+ * Treść komunikatu o błędzie publikacji.
+
+ * Przykładowe pozostałe wydarzenia w kalendarzu Google.",,u56597@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z4o:",,,,S23KC2S1P2-5,,
+Wykrywanie braku możliwości realizacji celu,S23KC2S1P2-29,17928,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56597@student.wat.edu.pl,u56597@student.wat.edu.pl,u56597@student.wat.edu.pl,07 paź 2026 21:00 ,11 paź 2026 11:32 ,11 paź 2026 16:53 ,,,,,,,"*Jako* student
+{*}chcę{*}, aby planer wykrywał, gdy przy mojej dostępności i ograniczeniach nie da się osiągnąć celu godzin pracy,
+*aby* móc zmienić cel lub ustawienia planowania.
+
+W makiecie: komunikat o braku możliwości osiągnięcia celu, liczba brakujących godzin oraz przyciski ""Zmień cel"" i ""Zmień ustawienia"".
+
+*1. Scenariusz*
+ # Użytkownik otwiera planer i określa cel godzin pracy dla wybranego okresu.
+
+ # Użytkownik ustawia swoją dostępność i ograniczenia planowania.
+
+ # Użytkownik klika ""Ułóż grafik"".
+
+ # System sprawdza, czy przy podanej dostępności i ograniczeniach można osiągnąć cel godzin pracy.
+
+ # System wykrywa, że celu nie można osiągnąć, i wyświetla komunikat z liczbą możliwych do zaplanowania godzin oraz liczbą brakujących godzin.
+5a. Jeśli cel można osiągnąć, system wyświetla grafik spełniający cel. Scenariusz kończy się.
+
+ # Użytkownik klika ""Zmień cel"".
+6a. Jeśli użytkownik kliknie ""Zmień ustawienia"", system otwiera formularz dostępności i ograniczeń. Użytkownik zmienia ustawienia, a scenariusz przechodzi do kroku 8.
+6b. Jeśli użytkownik zamknie komunikat, cel i ustawienia pozostają bez zmian. Scenariusz kończy się.
+
+ # System wyświetla formularz celu godzin pracy, a użytkownik zmienia jego wartość.
+
+ # Użytkownik zatwierdza zmiany i ponownie klika ""Ułóż grafik"".
+
+ # System ponownie sprawdza możliwość osiągnięcia celu. Jeśli cel nadal jest nieosiągalny, scenariusz wraca do kroku 5. W przeciwnym przypadku system wyświetla grafik spełniający cel. Scenariusz kończy się.
+
+*2. Ograniczenia typu pre i post*
+ * Preconditions — warunki wstępne:
+
+ ** Makieta aplikacji jest uruchomiona i dostępny jest planer.
+
+ ** Użytkownik ma określony cel godzin pracy i okres planowania.
+
+ ** W makiecie podano dostępność użytkownika i ograniczenia planowania.
+
+ ** Dostępny jest przycisk ""Ułóż grafik"".
+
+ ** Makieta zawiera przykładowy przypadek, w którym dostępny czas nie wystarcza do osiągnięcia celu.
+
+ * Postconditions — warunki końcowe:
+
+ ** Przy nieosiągalnym celu system wyświetla komunikat o braku możliwości jego realizacji.
+
+ ** Użytkownik widzi liczbę możliwych do zaplanowania godzin i liczbę brakujących godzin.
+
+ ** Użytkownik może zmienić cel lub ustawienia i ponownie sprawdzić wynik.
+
+ ** System nie zmienia samodzielnie celu ani ograniczeń użytkownika.
+
+ ** Po zamknięciu komunikatu cel i ustawienia pozostają bez zmian.
+
+ ** Sprawdzanie możliwości osiągnięcia celu jest symulowane w makiecie, a dane nie są zapisywane w bazie.
+
+*3. Potrzeby informacyjne*
+ * Cel godzin pracy.
+
+ * Okres, którego dotyczy cel.
+
+ * Dni i godziny dostępności użytkownika.
+
+ * Godziny obowiązkowych zajęć i inne przedziały wykluczone z pracy.
+
+ * Ograniczenia planowania, np. maksymalna liczba godzin pracy dziennie.
+
+ * Liczba godzin możliwych do zaplanowania przy podanych ustawieniach.
+
+ * Liczba godzin brakujących do osiągnięcia celu.
+
+ * Informacja o ograniczeniach, które uniemożliwiają osiągnięcie celu.
+
+ * Treść komunikatu o nieosiągalnym celu.
+
+ * Nowa wartość celu lub zmienione ustawienia planowania.
+
+ * Wynik ponownego sprawdzenia po zmianach.",,u56597@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z4i:",,,,S23KC2S1P2-4,,
+Określenie preferowanych godzin,S23KC2S1P2-28,17927,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56597@student.wat.edu.pl,u56597@student.wat.edu.pl,u56597@student.wat.edu.pl,07 paź 2026 21:00 ,11 paź 2026 11:30 ,11 paź 2026 16:53 ,,,,,,,"*Jako* student
+*chcę* określić preferowane godziny pracy,
+*aby* planer uwzględniał je podczas układania grafiku.
+
+W makiecie: formularz wyboru dni i preferowanych godzin pracy oraz podgląd przykładowego grafiku uwzględniającego te preferencje.
+
+*1. Scenariusz*
+ # Użytkownik otwiera ustawienia planera.
+
+ # System wyświetla formularz preferowanych godzin pracy.
+
+ # Użytkownik wybiera dni tygodnia oraz godziny rozpoczęcia i zakończenia preferowanych przedziałów pracy.
+
+ # Użytkownik klika ""Zapisz"".
+4a. Jeśli użytkownik kliknie ""Anuluj"", system zamyka formularz bez zmiany preferencji. Scenariusz kończy się.
+4b. Jeśli godzina zakończenia nie jest późniejsza niż godzina rozpoczęcia, system wyświetla komunikat o błędzie. Użytkownik poprawia godziny i ponownie klika ""Zapisz"".
+
+ # System zatwierdza preferencje i wyświetla je w ustawieniach planera.
+
+ # Użytkownik uruchamia podgląd układania grafiku.
+
+ # System wyświetla przykładowy grafik, w którym w pierwszej kolejności wybiera preferowane godziny pracy.
+7a. Jeśli preferowane godziny kolidują z obowiązkowymi zajęciami, system pomija zajęte przedziały i pokazuje pracę w innych dostępnych godzinach.
+
+ # Użytkownik przegląda grafik i sprawdza, jak uwzględniono jego preferencje. Scenariusz kończy się.
+
+*2. Ograniczenia typu pre i post*
+ * Preconditions — warunki wstępne:
+
+ ** Makieta aplikacji jest uruchomiona.
+
+ ** Dostępne są ustawienia planera.
+
+ ** Formularz umożliwia wybór dni tygodnia i przedziałów godzinowych.
+
+ ** Makieta zawiera przykładowe obowiązkowe zajęcia i umożliwia podgląd grafiku pracy.
+
+ * Postconditions — warunki końcowe:
+
+ ** Wybrane dni i godziny pracy są widoczne w ustawieniach planera.
+
+ ** Przykładowy grafik uwzględnia preferowane godziny, jeśli są dostępne.
+
+ ** Preferencje nie pozwalają na zaplanowanie pracy w godzinach obowiązkowych zajęć.
+
+ ** W przypadku błędnego przedziału godzinowego system nie zatwierdza zmian.
+
+ ** W przypadku anulowania wcześniejsze preferencje pozostają bez zmian.
+
+ ** Preferencje nie są zapisywane w bazie, a układanie grafiku jest symulowane w makiecie.
+
+*3. Potrzeby informacyjne*
+ * Wybrane dni tygodnia.
+
+ * Godziny rozpoczęcia i zakończenia preferowanych przedziałów pracy.
+
+ * Wcześniej ustawione preferencje.
+
+ * Godziny obowiązkowych zajęć.
+
+ * Dostępne przedziały czasu na pracę.
+
+ * Informacja, że preferowane godziny mają pierwszeństwo, ale nie są bezwzględnym ograniczeniem.
+
+ * Komunikat o błędnym przedziale godzinowym.
+
+ * Przykładowy grafik uwzględniający preferencje.
+
+ * Informacja o zatwierdzeniu lub anulowaniu zmian.",,u56597@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z43:",,,,S23KC2S1P2-3,,
+Jednorazowy import wydarzeń z Google Calendar,S23KC2S1P2-27,17926,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56597@student.wat.edu.pl,u56597@student.wat.edu.pl,u56597@student.wat.edu.pl,07 paź 2026 21:00 ,11 paź 2026 11:29 ,11 paź 2026 16:53 ,,,,,,,"*Jako* student
+*chcę* jednorazowo zaimportować wydarzenia z Google Calendar,
+*aby* przenieść je do aplikacji bez ręcznego przepisywania.
+
+W makiecie: przycisk ""Importuj z Google Calendar"", wybór kalendarza i zakresu dat oraz podgląd wydarzeń przed importem.
+
+*1. Scenariusz*
+ # Użytkownik w widoku kalendarza klika przycisk ""Importuj z Google Calendar"".
+
+ # System wyświetla ekran połączenia z kontem Google.
+
+ # Użytkownik wybiera konto i zezwala na odczyt wydarzeń.
+3a. Jeśli użytkownik odmówi dostępu, system wyświetla informację o braku możliwości importu. Scenariusz kończy się.
+
+ # System wyświetla listę dostępnych kalendarzy.
+
+ # Użytkownik wybiera kalendarz i zakres dat, a następnie klika ""Dalej"".
+
+ # System wyświetla podgląd wydarzeń z wybranego kalendarza i zakresu dat.
+6a. Jeśli w wybranym zakresie nie ma wydarzeń, system wyświetla odpowiedni komunikat. Użytkownik może zmienić zakres dat i wrócić do kroku 5.
+
+ # Użytkownik klika ""Importuj"".
+7a. Jeśli użytkownik kliknie ""Anuluj"", system zamyka podgląd bez dodawania wydarzeń. Scenariusz kończy się.
+
+ # System dodaje wydarzenia do kalendarza aplikacji i wyświetla komunikat z liczbą zaimportowanych wydarzeń.
+
+ # Użytkownik widzi zaimportowane wydarzenia w kalendarzu aplikacji. Scenariusz kończy się.
+
+*2. Ograniczenia typu pre i post*
+ * Preconditions — warunki wstępne:
+
+ ** Makieta aplikacji jest uruchomiona i wyświetla widok kalendarza.
+
+ ** Dostępny jest przycisk ""Importuj z Google Calendar"".
+
+ ** Makieta zawiera przykładowe konto Google, kalendarze i wydarzenia do prezentacji importu.
+
+ ** Dostępne są wybór zakresu dat i podgląd wydarzeń.
+
+ * Postconditions — warunki końcowe:
+
+ ** Zaimportowane wydarzenia są widoczne w kalendarzu aplikacji.
+
+ ** Tytuły, daty i godziny wydarzeń odpowiadają danym pokazanym w podglądzie importu.
+
+ ** System wyświetla liczbę zaimportowanych wydarzeń.
+
+ ** Import jest jednorazowy. Późniejsze zmiany w Google Calendar nie aktualizują wydarzeń w aplikacji.
+
+ ** W przypadku odmowy dostępu lub anulowania importu kalendarz aplikacji pozostaje bez zmian.
+
+ ** Połączenie z Google Calendar i import są symulowane w makiecie. Dane nie są zapisywane w bazie.
+
+*3. Potrzeby informacyjne*
+ * Wybrane konto Google.
+
+ * Informacja o udzieleniu lub odmowie dostępu do wydarzeń.
+
+ * Lista dostępnych kalendarzy i ich nazwy.
+
+ * Wybrany kalendarz.
+
+ * Zakres dat importu.
+
+ * Tytuły, daty oraz godziny rozpoczęcia i zakończenia wydarzeń.
+
+ * Lista wydarzeń wyświetlanych w podglądzie importu.
+
+ * Informacja o braku wydarzeń w wybranym zakresie.
+
+ * Liczba zaimportowanych wydarzeń.
+
+ * Informacja, że import nie uruchamia stałej synchronizacji.
+
+ * Informacja o zatwierdzeniu lub anulowaniu importu.",,u56597@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z3u:",,,,S23KC2S1P2-2,,
+Oznaczanie obowiązkowych zajęć,S23KC2S1P2-26,17925,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56597@student.wat.edu.pl,u56597@student.wat.edu.pl,u56597@student.wat.edu.pl,07 paź 2026 20:59 ,11 paź 2026 11:24 ,11 paź 2026 16:53 ,,,,,,,"*Jako* student
+*chcę* oznaczyć zajęcia jako obowiązkowe,
+*aby* planer wykluczał ich godziny podczas układania grafiku pracy.
+
+W makiecie: przełącznik ""Obowiązkowe"" w formularzu i wyróżnienie na karcie wydarzenia (ikona lub ramka). Przykładowy grafik pracy omija godziny obowiązkowych zajęć.
+
+*1. Scenariusz*
+ # Użytkownik w widoku tygodnia klika przycisk ""+"".
+
+ # System wyświetla formularz nowego wydarzenia z przełącznikiem ""Obowiązkowe"".
+
+ # Użytkownik wpisuje tytuł, wybiera dzień, godziny i kategorię ""zajęcia"" oraz zaznacza przełącznik ""Obowiązkowe"".
+3a. Jeśli użytkownik nie zaznaczy przełącznika, system doda zwykłe wydarzenie bez wyróżnienia i bez blokady godzin wynikającej z obowiązkowości. Scenariusz przechodzi do kroku 4.
+
+ # Użytkownik klika ""Zapisz"".
+4a. Jeśli użytkownik kliknie ""Anuluj"", system zamyka formularz bez dodawania wydarzenia. Scenariusz kończy się.
+
+ # System zamyka formularz i wyświetla w widoku tygodnia kartę wydarzenia w wybranym dniu i o wybranej godzinie.
+
+ # System wyróżnia kartę obowiązkowych zajęć ikoną lub ramką.
+6a. Jeśli wydarzenie nie zostało oznaczone jako obowiązkowe (3a), system wyświetla kartę bez wyróżnienia.
+
+ # Użytkownik uruchamia podgląd grafiku pracy.
+
+ # System wyświetla przykładowy grafik pracy, który omija godziny obowiązkowych zajęć. Scenariusz kończy się.
+
+*2. Ograniczenia typu pre i post*
+ * Preconditions — warunki wstępne:
+
+ ** Makieta aplikacji jest uruchomiona i wyświetla widok tygodnia.
+
+ ** W widoku tygodnia widoczny jest przycisk ""+"".
+
+ ** Formularz wydarzenia zawiera przełącznik ""Obowiązkowe"".
+
+ ** Dostępny jest podgląd przykładowego grafiku pracy.
+
+ * Postconditions — warunki końcowe:
+
+ ** Karta wydarzenia oznaczonego jako obowiązkowe jest wyróżniona ikoną lub ramką.
+
+ ** Przykładowy grafik pracy nie pokrywa się z godzinami obowiązkowych zajęć.
+
+ ** Karta wydarzenia bez oznaczenia wygląda tak samo jak zwykłe wydarzenia i nie blokuje godzin z powodu obowiązkowości.
+
+ ** Dane wydarzenia nie są zapisywane w bazie, a działanie planera jest symulowane w makiecie.
+
+ ** W przypadku anulowania widok tygodnia pozostaje bez zmian.
+
+*3. Potrzeby informacyjne*
+ * Tytuł wydarzenia.
+
+ * Dzień i godziny rozpoczęcia oraz zakończenia wydarzenia.
+
+ * Kategoria wydarzenia.
+
+ * Informacja, czy wydarzenie jest obowiązkowe (tak lub nie).
+
+ * Wygląd wyróżnienia obowiązkowych zajęć (ikona lub ramka).
+
+ * Przedziały godzinowe wykluczone z planowania pracy.
+
+ * Przykładowe wydarzenia wyświetlane w widoku tygodnia.
+
+ * Przykładowy grafik pracy omijający obowiązkowe zajęcia.
+
+ * Informacja o zapisaniu lub anulowaniu dodawania wydarzenia.",,u56597@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z3k:i",,,,S23KC2S1P2-1,,
+Rozpoznawanie wydarzeń po kolorze,S23KC2S1P2-52,18048,Historyjka,W toku,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56649@student.wat.edu.pl,u56649@student.wat.edu.pl,u56649@student.wat.edu.pl,09 paź 2026 17:51 ,11 paź 2026 10:38 ,11 paź 2026 16:53 ,,,,,,,"*Jako* student
+{*}chcę{*}, aby zajęcia, praca i sprawy prywatne miały różne kolory,
+*aby* na pierwszy rzut oka je odróżnić.
+
+W makiecie: trzy stałe kolory przypisane do kategorii (niebieski dla zajęć, spójny z logo KAC, pomarańczowy dla pracy i zielony dla spraw prywatnych) oraz mała legenda pod kalendarzem. Bez możliwości wyboru własnych kolorów i bez prawdziwego zapisu danych.
+
+*1. Scenariusz*
+ # Użytkownik otwiera widok tygodnia w kalendarzu.
+ # System wyświetla karty wydarzeń w kolorach ich kategorii (niebieski – zajęcia, pomarańczowy – praca, zielony – prywatne) oraz legendę pod kalendarzem.
+2a. Jeśli w wybranym tygodniu nie ma wydarzeń, system wyświetla pusty widok tygodnia z legendą. Scenariusz kończy się.
+ # Użytkownik klika wybraną kartę wydarzenia.
+ # System wyświetla szczegóły wydarzenia: tytuł, datę, godziny oraz nazwę kategorii w jej kolorze.
+
+*2. Ograniczenia typu pre i post*
+
+Preconditions — warunki wstępne:
+ * Makieta aplikacji jest uruchomiona i wyświetla widok tygodnia.
+ * Tabela kategorii (tKategorie) zawiera kategorie: zajęcia, praca, prywatne, a każda ma przypisany kolor (Kolor_HEX).
+ * Istnieje kalendarz użytkownika (tKalendarze).
+ * W kalendarzu są przykładowe wydarzenia (tWydarzenia) z przypisaną kategorią.
+
+Postconditions — warunki końcowe:
+ * Każda karta wydarzenia jest wyświetlona w kolorze swojej kategorii.
+ * Pod kalendarzem widoczna jest legenda z trzema kategoriami i ich kolorami.
+ * Dane wydarzeń i kategorii pozostają bez zmian (scenariusz tylko odczytuje dane).
+ * Model danych nie zostaje zmieniony (żadnych nowych tabel ani kolumn).
+
+*3. Potrzeby informacyjne*
+ * Tytuł wydarzenia (tWydarzenia: Tytul).
+ * Data i godzina rozpoczęcia oraz zakończenia, potrzebne do umieszczenia karty w widoku tygodnia (tWydarzenia: Rozpoczecie, Zakonczenie).
+ * Kategoria wydarzenia (tWydarzenia: ID_Kategorii, tKategorie: Nazwa).
+ * Kolor kategorii (tKategorie: Kolor_HEX).
+ * Kalendarz użytkownika, z którego wyświetlane są wydarzenia (tWydarzenia: ID_Kalendarza).
+ * Opisy w legendzie: nazwy kategorii i ich kolory (tKategorie: Nazwa, Kolor_HEX).
+ * Przykładowe wydarzenia z każdej kategorii (zajęcia, praca i sprawy prywatne).
+
+*4. Obiekty biznesowe i ich atrybuty*
+
+Scenariusz rozpoznawania wydarzeń po kolorze dotyczy przede wszystkim obiektu biznesowego Kategoria (tabela tKategorie w pliku Excel). Kategoria ma nazwę (Nazwa) oraz kolor zapisany w formacie HEX (Kolor_HEX). To właśnie ten atrybut decyduje o kolorze karty wydarzenia w kalendarzu i w legendzie. Kolory są stałe i przypisane w modelu danych, więc użytkownik ich nie wybiera ani nie zmienia.
+
+Scenariusz korzysta też z obiektu Wydarzenie (tWydarzenia). Każde wydarzenie ma tytuł (Tytul), datę i godzinę rozpoczęcia (Rozpoczecie) i zakończenia (Zakonczenie) oraz odwołanie do kategorii (ID_Kategorii). Relacja jeden do wielu między tKategorie a tWydarzenia oznacza, że jedna kategoria może mieć wiele wydarzeń, a każde wydarzenie ma dokładnie jedną kategorię, a więc jeden kolor. Wydarzenia należą do kalendarza (tKalendarze, atrybuty Nazwa i ID_Uzytkownika), który z kolei należy do studenta (tUzytkownicy), dzięki czemu wyświetlane są tylko jego wydarzenia.",,u56649@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z3e:",Sprint 0 – KAC Makieta,,,S23KC2S1P2-1,,
+Przeglądanie kolejnych tygodni planu,S23KC2S1P2-53,18049,Historyjka,W toku,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56603@student.wat.edu.pl,u56603@student.wat.edu.pl,u56603@student.wat.edu.pl,09 paź 2026 17:55 ,10 paź 2026 21:47 ,11 paź 2026 16:53 ,,,,,,,"*Historyjka użytkownika:*
+
+*Jako* student 
+*chcę* przechodzić w kalendarzu do poprzedniego i następnego tygodnia, 
+*aby* planować z wyprzedzeniem.
+
+*Scenariusz:*
+
+1. Użytkownik otwiera kalendarz w widoku tygodniowym.
+
+2. System wyświetla aktualnie wybrany tydzień wraz z zaplanowanymi wydarzeniami oraz strzałkami „wstecz” i „dalej”.
+
+3. Użytkownik klika strzałkę „dalej”, aby przejść do następnego tygodnia.
+
+4. System wyznacza daty następnego tygodnia i pobiera przypisane do niego wydarzenia.
+4a. Jeśli w wybranym tygodniu nie ma zaplanowanych wydarzeń, system wyświetla pusty widok tygodnia z informacją o braku wydarzeń.
+4b. Jeśli system nie może pobrać wydarzeń, wyświetla komunikat o błędzie i umożliwia ponowienie próby.
+
+5. System wyświetla kolejny tydzień wraz z zaplanowanymi zajęciami, pracą i innymi wydarzeniami.
+
+6. Użytkownik klika strzałkę „wstecz”, aby wrócić do poprzedniego tygodnia.
+
+7. System wyznacza daty poprzedniego tygodnia i pobiera przypisane do niego wydarzenia.
+
+8. System wyświetla poprzedni tydzień wraz z zaplanowanymi wydarzeniami.
+h4. Ograniczenia typu pre i post:
+
+*Preconditions — warunki wstępne:*
+ * Użytkownik jest zalogowany do aplikacji.
+
+ * Użytkownik ma dostęp do kalendarza.
+
+ * Kalendarz jest dostępny w widoku tygodniowym.
+
+ * W makiecie dostępne są przyciski nawigacyjne „wstecz” i „dalej”.
+
+ * W danych kalendarza mogą znajdować się wydarzenia przypisane do różnych tygodni.
+
+h4. Postconditions — warunki końcowe:
+ * System wyświetla tydzień wybrany przez użytkownika.
+
+ * Użytkownik może przechodzić do poprzedniego i następnego tygodnia za pomocą strzałek.
+
+ * Wydarzenia są prezentowane w odpowiednich dniach i godzinach.
+
+ * Jeśli wybrany tydzień nie zawiera wydarzeń, system wyświetla pusty widok z odpowiednią informacją.
+
+ * Przeglądanie tygodni nie powoduje zmiany ani usunięcia zapisanych wydarzeń.
+
+h4. Potrzeby informacyjne:
+ * Aktualnie wybrany tydzień.
+
+ * Data rozpoczęcia i zakończenia tygodnia.
+
+ * Daty poprzedniego i następnego tygodnia.
+
+ * Lista wydarzeń przypisanych do poszczególnych tygodni.
+
+ * Nazwy wydarzeń, np. wykład, laboratorium, praca lub wydarzenie prywatne.
+
+ * Daty i godziny rozpoczęcia oraz zakończenia wydarzeń.
+
+ * Kategorie wydarzeń, np. zajęcia, praca i wydarzenia prywatne.
+
+ * Informacja o braku wydarzeń w wybranym tygodniu.
+
+ * Informacja o ewentualnym błędzie pobierania wydarzeń.
+
+h3. Obiekty biznesowe i ich atrybuty
+
+Scenariusz przeglądania kolejnych tygodni planu dotyczy przede wszystkim obiektów biznesowych Wydarzenie (tWydarzenia) oraz Kalendarz (tKalendarze).
+
+Obiekt Wydarzenie (tWydarzenia) zawiera wydarzenia wyświetlane w kalendarzu tygodniowym, np. zajęcia, pracę i spotkania prywatne. Jego atrybuty to: ID_Wydarzenia, ID_Kalendarza, Tytul, Rozpoczęcie, Zakończenie, ID_Kategorii, Obowiązkowe, ID_Serii, Powtarzaj_Co_Tydzień oraz Status_Kolizji. W tym scenariuszu najważniejsze są ID_Kalendarza, Tytul, Rozpoczęcie i Zakończenie, ponieważ na ich podstawie system ustala, które wydarzenia należy wyświetlić w wybranym tygodniu.
+
+Obiekt Kalendarz (tKalendarze) określa kalendarz, do którego należą wydarzenia. Jego atrybuty to: ID_Kalendarza, Nazwa oraz ID_Użytkownika. Dzięki temu system może pobrać wydarzenia z właściwego kalendarza użytkownika.
+
+Scenariusz wykorzystuje te dwa obiekty do pobrania i wyświetlenia wydarzeń przypadających na wybrany tydzień. System ustala zakres dat tygodnia, a następnie wyświetla wydarzenia na podstawie ich dat i godzin rozpoczęcia oraz zakończenia. Przechodzenie do poprzedniego lub następnego tygodnia nie powoduje zmiany ani usunięcia zapisanych wydarzeń.",,u56603@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z3k:9",Sprint 0 – KAC Makieta,,,S23KC2S1P2-1,,
+Informacja o zmianie planu ,S23KC2S1P2-24,17923,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56601@student.wat.edu.pl,u56601@student.wat.edu.pl,u56601@student.wat.edu.pl,07 paź 2026 20:46 ,10 paź 2026 17:07 ,11 paź 2026 16:53 ,,,,,,,"{*}Jako{*} student
+
+{*}chcę{*} otrzymywać powiadomienia o zmianach wydarzeń w moim planie,
+
+{*}aby{*} wiedzieć, że mój harmonogram został zmieniony.
+
+W makiecie: powiadomienie o zmianie wydarzenia zawierające jego nazwę oraz nowy termin. Po otwarciu powiadomienia użytkownik widzi szczegóły zmiany i aktualne dane wydarzenia.
+h2. 1. Scenariusz
+
+
+
+ # W wydarzeniu w kalendarzu następuje zmiana.
+
+
+ # System wykrywa zmianę i ustala, którego wydarzenia dotyczy.
+
+
+
+ ** {*}2a.{*} Jeśli system nie może ustalić szczegółów zmiany, ponawia sprawdzenie lub informuje o problemie.
+
+
+
+
+
+ # System przygotowuje powiadomienie zawierające informacje o zmienionym wydarzeniu i nowym terminie.
+
+
+ # System wysyła powiadomienie skonfigurowanym kanałem.
+
+
+
+ ** {*}4a.{*} Jeśli wystąpi błąd wysyłania powiadomienia, system podejmuje ponowną próbę wysłania.
+
+
+
+
+
+ # Użytkownik otwiera powiadomienie.
+
+
+
+ ** {*}5a.{*} Jeśli użytkownik nie otworzy powiadomienia, informacja pozostaje dostępna w centrum powiadomień, jeśli aplikacja udostępnia taką funkcję.
+
+
+
+
+
+ # System wyświetla szczegóły zmiany i aktualny termin wydarzenia.
+
+
+
+
+h2. 2. Ograniczenia typu pre i post
+
+{*}Preconditions — warunki wstępne:{*}
+
+
+
+ * Użytkownik jest zalogowany do aplikacji.
+
+
+ * Użytkownik ma wydarzenia zapisane w kalendarzu.
+
+
+ * Użytkownik ma skonfigurowany sposób otrzymywania powiadomień.
+
+
+ * System ma dostęp do informacji o zmianach wydarzeń.
+
+
+ * Aplikacja umożliwia wyświetlanie powiadomień o zmianach.
+
+
+
+
+{*}Postconditions — warunki końcowe:{*}
+
+
+
+ * Użytkownik otrzymuje informację o zmianie wydarzenia.
+
+
+ * Powiadomienie zawiera informacje o zmienionym wydarzeniu i nowym terminie.
+
+
+ * Aktualne dane wydarzenia są dostępne w kalendarzu.
+
+
+ * W przypadku błędu wysyłania system podejmuje ponowną próbę.
+
+
+ * Jeśli użytkownik nie otworzy powiadomienia, informacja może pozostać dostępna w centrum powiadomień.
+
+
+
+
+h2. 3. Potrzeby informacyjne
+
+
+
+ * Nazwa wydarzenia.
+
+
+ * Dane wydarzenia przed zmianą.
+
+
+ * Dane wydarzenia po zmianie.
+
+
+ * Poprzednia i nowa data wydarzenia.
+
+
+ * Poprzednia i nowa godzina wydarzenia.
+
+
+ * Rodzaj zmiany, np. zmiana terminu lub miejsca.
+
+
+ * Wybrany kanał powiadomień.
+
+
+ * Status wysłania powiadomienia.
+
+
+ * Informacja o ewentualnym błędzie wysyłania.
+
+
+ * Aktualne dane wydarzenia w kalendarzu.",,u56601@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z50:",,,,S23KC2S1P2-6,,
+Pobieranie zmian ,S23KC2S1P2-23,17922,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56601@student.wat.edu.pl,u56601@student.wat.edu.pl,u56601@student.wat.edu.pl,07 paź 2026 20:46 ,10 paź 2026 17:06 ,11 paź 2026 16:53 ,,,,,,,"{*}Jako{*} student
+
+{*}chcę{*}, aby planer pobierał zmiany z wybranego kalendarza Google,
+
+{*}aby{*} mój plan był aktualny.
+
+W makiecie: opcja połączenia z Google Calendar, wybór konta i kalendarza oraz przycisk synchronizacji. Po uruchomieniu synchronizacji system wyświetla zaktualizowany plan i informację o jej wyniku.
+h2. 1. Scenariusz
+
+
+
+ # Użytkownik otwiera ustawienia integracji z kalendarzem.
+
+
+ # System wyświetla opcję połączenia z Google Calendar.
+
+
+ # Użytkownik wybiera konto Google i kalendarz, który chce synchronizować.
+
+
+
+ ** {*}3a.{*} Jeśli użytkownik nie wybierze kalendarza, system prosi o wskazanie kalendarza do synchronizacji.
+
+
+
+
+
+ # System prosi o wymagane uprawnienia do odczytu wydarzeń.
+
+
+ # Użytkownik udziela uprawnień i zatwierdza wybór kalendarza.
+
+
+
+ ** {*}5a.{*} Jeśli użytkownik nie udzieli wymaganych uprawnień, system informuje, że synchronizacja nie może zostać uruchomiona.
+
+
+
+
+
+ # System pobiera wydarzenia i synchronizuje je z planerem.
+
+
+
+ ** {*}6a.{*} Jeśli wystąpi błąd połączenia lub pobierania danych, system informuje o nieudanej synchronizacji i umożliwia ponowienie próby.
+
+
+
+
+
+ # System wyświetla zaktualizowany plan i informację o zakończeniu synchronizacji.
+
+
+
+
+h2. 2. Ograniczenia typu pre i post
+
+{*}Preconditions — warunki wstępne:{*}
+
+
+
+ * Użytkownik jest zalogowany do aplikacji.
+
+
+ * Użytkownik posiada konto Google i dostęp do kalendarza.
+
+
+ * System umożliwia połączenie z Google Calendar.
+
+
+ * Użytkownik może udzielić wymaganych uprawnień do odczytu wydarzeń.
+
+
+
+
+{*}Postconditions — warunki końcowe:{*}
+
+
+
+ * Planer jest połączony z wybranym kalendarzem Google.
+
+
+ * Wydarzenia zostają pobrane i zsynchronizowane z planerem.
+
+
+ * Użytkownik widzi zaktualizowany plan i informację o wyniku synchronizacji.
+
+
+ * W przypadku braku uprawnień synchronizacja nie zostaje uruchomiona.
+
+
+ * W przypadku błędu system informuje o problemie i umożliwia ponowienie próby.
+
+
+
+
+h2. 3. Potrzeby informacyjne
+
+
+
+ * Konto Google użytkownika.
+
+
+ * Lista dostępnych kalendarzy Google.
+
+
+ * Wybrany kalendarz do synchronizacji.
+
+
+ * Informacja o wymaganych uprawnieniach.
+
+
+ * Lista wydarzeń w kalendarzu Google.
+
+
+ * Nazwy wydarzeń, daty i godziny.
+
+
+ * Informacje o zmianach w wydarzeniach.
+
+
+ * Status synchronizacji.
+
+
+ * Informacja o błędach podczas pobierania danych.",,u56601@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z4m:",,,,S23KC2S1P2-5,,
+Uwzględnienie odpoczynku,S23KC2S1P2-22,17921,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56601@student.wat.edu.pl,u56601@student.wat.edu.pl,u56601@student.wat.edu.pl,07 paź 2026 20:46 ,10 paź 2026 17:05 ,11 paź 2026 16:53 ,,,,,,,"{*}Jako{*} student
+
+{*}chcę{*}, aby planer uwzględniał czas na odpoczynek,
+
+{*}aby{*} harmonogram nie był przeładowany.
+
+W makiecie: opcje określenia preferowanego czasu odpoczynku i długości przerw oraz przycisk generowania grafiku. Po zatwierdzeniu ustawień planer wyświetla harmonogram uwzględniający zajęcia, pracę i zadeklarowany czas wolny.
+h2. 1. Scenariusz
+
+
+
+ # Użytkownik otwiera ustawienia planera.
+
+
+ # System wyświetla opcje dotyczące odpoczynku i przerw.
+
+
+ # Użytkownik określa preferowaną długość przerw lub czas przeznaczony na odpoczynek.
+
+
+ # System sprawdza ustawienia i zapisuje preferencje.
+
+
+
+ ** {*}4a.{*} Jeśli ustawienia są nieprawidłowe, system wskazuje błędne wartości i prosi o ich poprawienie.
+
+
+
+
+
+ # Użytkownik uruchamia generowanie grafiku.
+
+
+ # System tworzy harmonogram uwzględniający zajęcia, pracę i zadeklarowany czas odpoczynku.
+
+
+
+ ** {*}6a.{*} Jeśli system nie może uwzględnić wszystkich preferencji, informuje o problemie i umożliwia zmianę ustawień.
+
+
+
+
+
+ # System wyświetla zaproponowany harmonogram.
+
+
+
+
+h2. 2. Ograniczenia typu pre i post
+
+{*}Preconditions — warunki wstępne:{*}
+
+
+
+ * Użytkownik jest zalogowany do aplikacji.
+
+
+ * Użytkownik ma dostęp do planera.
+
+
+ * Użytkownik ma uzupełniony plan zajęć i dostępność.
+
+
+ * System umożliwia określenie preferowanego czasu odpoczynku.
+
+
+
+
+{*}Postconditions — warunki końcowe:{*}
+
+
+
+ * Preferencje dotyczące odpoczynku zostają zapisane.
+
+
+ * Wygenerowany harmonogram uwzględnia zadeklarowany czas odpoczynku w zakresie możliwym do pogodzenia z pozostałymi ograniczeniami.
+
+
+ * Harmonogram uwzględnia zajęcia i godziny pracy użytkownika.
+
+
+ * W przypadku nieprawidłowych ustawień system wskazuje wartości wymagające poprawy.
+
+
+ * W przypadku braku możliwości uwzględnienia wszystkich preferencji użytkownik otrzymuje odpowiednią informację.
+
+
+
+
+h2. 3. Potrzeby informacyjne
+
+
+
+ * Plan zajęć użytkownika.
+
+
+ * Dostępność użytkownika.
+
+
+ * Godziny pracy.
+
+
+ * Preferowana długość przerw.
+
+
+ * Czas przeznaczony na odpoczynek.
+
+
+ * Informacja o poprawności ustawień.
+
+
+ * Wygenerowany harmonogram.
+
+
+ * Informacja o tym, czy harmonogram uwzględnia zadeklarowane preferencje.",,u56601@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z4a:",,,,S23KC2S1P2-4,,
+Określenie maksymalnej liczby godzin ,S23KC2S1P2-21,17920,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56601@student.wat.edu.pl,u56601@student.wat.edu.pl,u56601@student.wat.edu.pl,07 paź 2026 20:45 ,10 paź 2026 17:04 ,11 paź 2026 16:53 ,,,,,,,"{*}Jako{*} student
+
+{*}chcę{*} ustawić maksymalną liczbę godzin pracy w tygodniu,
+
+{*}aby{*} planer nie przekraczał mojego limitu.
+
+W makiecie: pole do wpisania maksymalnej liczby godzin pracy w tygodniu oraz przycisk generowania grafiku. Po zatwierdzeniu limitu planer wyświetla propozycję grafiku uwzględniającą zajęcia, dostępność i ustalony limit.
+h2. 1. Scenariusz
+
+
+
+ # Użytkownik otwiera ustawienia planera.
+
+
+ # System wyświetla ustawienia limitu godzin pracy.
+
+
+ # Użytkownik wpisuje maksymalną liczbę godzin pracy w tygodniu.
+
+
+ # System sprawdza poprawność limitu i zapisuje ustawienie.
+
+
+
+ ** {*}4a.{*} Jeśli limit jest nieprawidłowy, system wyświetla komunikat o błędzie i prosi o podanie poprawnej wartości.
+
+
+
+
+
+ # Użytkownik uruchamia generowanie grafiku.
+
+
+ # System tworzy grafik z uwzględnieniem zajęć, dostępności i limitu pracy.
+
+
+
+ ** {*}6a.{*} Jeśli system nie może wygenerować grafiku spełniającego wszystkie ograniczenia, wyświetla informację o problemie i umożliwia zmianę ustawień.
+
+
+
+
+
+ # System wyświetla zaproponowany grafik użytkownikowi.
+
+
+
+
+h2. 2. Ograniczenia typu pre i post
+
+{*}Preconditions — warunki wstępne:{*}
+
+
+
+ * Użytkownik jest zalogowany do aplikacji.
+
+
+ * Użytkownik ma dostęp do planera.
+
+
+ * Użytkownik ma uzupełnioną dostępność.
+
+
+ * System posiada informacje o zajęciach użytkownika.
+
+
+ * System umożliwia ustawienie tygodniowego limitu godzin pracy.
+
+
+
+
+{*}Postconditions — warunki końcowe:{*}
+
+
+
+ * Limit godzin pracy zostaje zapisany w ustawieniach planera.
+
+
+ * Wygenerowany grafik nie przekracza ustalonego limitu godzin pracy.
+
+
+ * Grafik uwzględnia zajęcia i dostępność użytkownika.
+
+
+ * W przypadku nieprawidłowego limitu system wyświetla komunikat o błędzie.
+
+
+ * W przypadku braku możliwości wygenerowania grafiku użytkownik otrzymuje odpowiednią informację.
+
+
+
+
+h2. 3. Potrzeby informacyjne
+
+
+
+ * Maksymalna liczba godzin pracy w tygodniu.
+
+
+ * Dostępność użytkownika.
+
+
+ * Daty i godziny zajęć.
+
+
+ * Informacje o dostępnych godzinach pracy.
+
+
+ * Informacja o poprawności wprowadzonego limitu.
+
+
+ * Wygenerowany grafik pracy.
+
+
+ * Informacja o tym, czy grafik spełnia ustalone ograniczenia.",,u56601@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z40:",,,,S23KC2S1P2-3,,
+Korekta błędnie odczytanych danych,S23KC2S1P2-20,17919,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56601@student.wat.edu.pl,u56601@student.wat.edu.pl,u56601@student.wat.edu.pl,07 paź 2026 20:45 ,10 paź 2026 17:03 ,11 paź 2026 16:53 ,,,,,,,"{*}Jako{*} student
+
+{*}chcę{*} poprawić błędnie odczytane dane podczas importu planu zajęć,
+
+{*}aby{*} upewnić się, że informacje są prawidłowe.
+
+W makiecie: formularz importu pliku z planem zajęć, podgląd odczytanych wydarzeń z możliwością edycji nazw, dat, godzin i miejsc. Po zatwierdzeniu poprawione wydarzenia są widoczne w kalendarzu.
+h2. 1. Scenariusz
+
+
+
+ # Użytkownik otwiera moduł importu planu zajęć.
+
+
+ # System wyświetla formularz importu z opcją wyboru pliku.
+
+
+ # Użytkownik wybiera plik zawierający plan zajęć.
+
+
+ # System odczytuje plik i wyświetla rozpoznane wydarzenia do weryfikacji.
+
+
+
+ ** {*}4a.{*} Jeśli plik jest uszkodzony lub ma nieobsługiwany format, system wyświetla komunikat o błędzie i umożliwia wybór innego pliku.
+
+
+
+
+
+ # Użytkownik sprawdza dane i poprawia błędne nazwy, daty, godziny lub miejsca.
+
+
+ # System sprawdza poprawność wprowadzonych danych i aktualizuje podgląd wydarzeń.
+
+
+
+ ** {*}6a.{*} Jeśli dane są niepoprawne, system wskazuje pola wymagające poprawy i umożliwia ich edycję.
+
+
+
+
+
+ # Użytkownik zatwierdza import.
+
+
+
+ ** {*}7a.{*} Jeśli użytkownik anuluje import, system zamyka formularz bez zapisywania wydarzeń. Scenariusz kończy się.
+
+
+
+
+
+ # System zapisuje wydarzenia w kalendarzu i wyświetla potwierdzenie zakończenia importu.
+
+
+
+
+h2. 2. Ograniczenia typu pre i post
+
+{*}Preconditions — warunki wstępne:{*}
+
+
+
+ * Użytkownik jest zalogowany do aplikacji.
+
+
+ * Użytkownik ma dostęp do modułu importu planu zajęć.
+
+
+ * Użytkownik posiada plik zawierający plan zajęć.
+
+
+ * System obsługuje format pliku i umożliwia odczyt jego danych.
+
+
+
+
+{*}Postconditions — warunki końcowe:{*}
+
+
+
+ * Poprawione i zatwierdzone wydarzenia są zapisane w kalendarzu.
+
+
+ * Użytkownik otrzymuje potwierdzenie zakończenia importu.
+
+
+ * W przypadku nieobsługiwanego lub uszkodzonego pliku wydarzenia nie zostają zaimportowane, a system wyświetla komunikat o błędzie.
+
+
+ * W przypadku niepoprawnych danych system wskazuje pola wymagające poprawy.
+
+
+ * W przypadku anulowania importu wydarzenia nie zostają zapisane w kalendarzu.
+
+
+
+
+h2. 3. Potrzeby informacyjne
+
+
+
+ * Plik zawierający plan zajęć.
+
+
+ * Format importowanego pliku.
+
+
+ * Nazwy wydarzeń.
+
+
+ * Daty wydarzeń.
+
+
+ * Godziny rozpoczęcia i zakończenia.
+
+
+ * Miejsca zajęć.
+
+
+ * Informacje o błędach wykrytych podczas odczytu danych.
+
+
+ * Informacja o poprawności wprowadzonych danych.
+
+
+ * Status importu: zakończony, nieudany lub anulowany.",,u56601@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z3s:",,,,S23KC2S1P2-2,,
+Powielanie zajęć na kolejne tygodnie,S23KC2S1P2-19,17918,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56601@student.wat.edu.pl,u56601@student.wat.edu.pl,u56601@student.wat.edu.pl,07 paź 2026 20:45 ,10 paź 2026 17:01 ,11 paź 2026 16:53 ,,,,,,,"*Jako* student
+
+*chcę* zaznaczyć opcję „Powtarzaj co tydzień"",
+
+*aby* zajęcia pojawiły się w kolejnych tygodniach bez ponownego wpisywania.
+
+ 
+
+W makiecie: przełącznik powtarzania w formularzu, a po zapisie to samo wydarzenie widać w następnych tygodniach (bez wyboru zakresu dat i wyjątków).
+
+ 
+
+*1. Scenariusz*
+1. Użytkownik w widoku tygodnia klika przycisk „+"".
+2. System wyświetla formularz nowego wydarzenia.
+3. Użytkownik wypełnia formularz (tytuł, dzień, godziny, kategoria) i zaznacza przełącznik „Powtarzaj co tydzień"".
+   3a. Jeśli użytkownik nie zaznaczy przełącznika, system doda wydarzenie tylko w wybranym tygodniu. Scenariusz przechodzi do kroku 4, a krok 7 pokazuje brak wydarzenia w kolejnym tygodniu.
+4. Użytkownik klika „Zapisz"".
+   4a. Jeśli użytkownik kliknie „Anuluj"", system zamyka formularz bez dodawania wydarzenia. Scenariusz kończy się.
+5. System zamyka formularz i wyświetla w widoku tygodnia kartę wydarzenia w wybranym dniu i o wybranej godzinie.
+6. Użytkownik przechodzi do kolejnego tygodnia, klikając strzałkę „dalej"".
+7. System wyświetla w kolejnym tygodniu to samo wydarzenie w tym samym dniu i o tej samej godzinie.
+   7a. Jeśli wydarzenie nie było ustawione jako powtarzane (3a), system nie wyświetla go w kolejnym tygodniu.
+
+*2. Ograniczenia typu pre i post*
+ - Preconditions — warunki wstępne:
+o Makieta aplikacji jest uruchomiona i wyświetla widok tygodnia.
+o W widoku tygodnia widoczny jest przycisk „+"" oraz strzałki przechodzenia między tygodniami.
+o Formularz wydarzenia zawiera przełącznik „Powtarzaj co tydzień"".
+ - Postconditions — warunki końcowe:
+o Wydarzenie z zaznaczonym powtarzaniem jest widoczne w wybranym dniu i o wybranej godzinie w bieżącym oraz w kolejnych tygodniach wyświetlanych w makiecie.
+o Wydarzenie bez zaznaczonego powtarzania jest widoczne tylko w wybranym tygodniu.
+o Dane wydarzenia nie są zapisywane w bazie, a karty są widoczne tylko w trakcie prezentacji makiety.
+o W przypadku anulowania widok tygodnia pozostaje bez zmian.
+
+*3. Potrzeby informacyjne*
+ - Tytuł wydarzenia.
+ - Dzień i godziny wydarzenia.
+ - Kategoria wydarzenia.
+ - Informacja, czy wydarzenie ma się powtarzać co tydzień (tak lub nie).
+ - Przykładowe wydarzenia wyświetlane w kolejnych tygodniach.",,u56601@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z3k:",,,,S23KC2S1P2-1,,
+Zapisanie wydarzenia w kilku kliknięciach,S23KC2S1P2-49,18045,Historyjka,W toku,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56651@student.wat.edu.pl,u56651@student.wat.edu.pl,u56651@student.wat.edu.pl,09 paź 2026 17:24 ,09 paź 2026 18:35 ,11 paź 2026 16:53 ,,,,,,,"*Jako* student
+
+*chcę* dodać wydarzenie z tytułem, datą, godziną i kategorią,
+
+*aby* zobaczyć, jak szybko zapiszę zajęcia, pracę lub sprawy prywatne w kalendarzu.
+
+ 
+
+W makiecie: przycisk „+"", prosty formularz (tytuł, data, godziny, kategoria) i po „Zapisz"" nowa karta wydarzenia w widoku tygodnia. Bez prawdziwego zapisu danych.
+
+ 
+
+*1. Scenariusz*
+1. Użytkownik w widoku tygodnia klika przycisk „+"".
+2. System wyświetla formularz nowego wydarzenia.
+3. Użytkownik wpisuje tytuł, wybiera datę, godzinę rozpoczęcia i zakończenia oraz kategorię (zajęcia, praca lub prywatne) i klika „Zapisz"".
+   3a. Jeśli użytkownik kliknie „Anuluj"", system zamyka formularz bez dodawania wydarzenia. Scenariusz kończy się.
+4. System zamyka formularz i wyświetla w widoku tygodnia nową kartę wydarzenia w wybranym dniu i o wybranej godzinie.
+
+*2. Ograniczenia typu pre i post*
+ - Preconditions — warunki wstępne:
+o Makieta aplikacji jest uruchomiona i wyświetla widok tygodnia.
+o W widoku tygodnia widoczny jest przycisk „+"".
+o Tabela kategorii (tKategorie) zawiera kategorie: zajęcia, praca, prywatne.
+o Istnieje kalendarz użytkownika (tKalendarze).
+ - Postconditions — warunki końcowe:
+o W widoku tygodnia widoczna jest nowa karta wydarzenia z tytułem, w wybranym dniu i o wybranej godzinie.
+o Wydarzenie ma ustawione pola tytuł, rozpoczęcie, zakończenie i kategoria; pozostałe pola mają wartości domyślne (nieobowiązkowe, bez powtarzania, bez serii, brak kolizji).
+o Model danych nie zostaje zmieniony (żadnych nowych tabel ani kolumn).
+o W przypadku anulowania widok tygodnia pozostaje bez zmian.
+
+*3. Potrzeby informacyjne*
+ - Tytuł wydarzenia (tWydarzenia: Tytul).
+ - Data i godzina rozpoczęcia (tWydarzenia: Rozpoczecie).
+ - Data i godzina zakończenia (tWydarzenia: Zakonczenie).
+ - Kategoria wydarzenia: zajęcia, praca lub prywatne (tWydarzenia: ID_Kategorii, tKategorie: Nazwa).
+ - Kalendarz użytkownika, do którego należy wydarzenie (tWydarzenia: ID_Kalendarza).
+ - Przykładowe wydarzenia wyświetlane w widoku tygodnia (zajęcia, praca i prywatne spotkanie).
+
+ 
+
+*4. Obiekty biznesowe i ich atrybuty*
+
+Scenariusz dodania wydarzenia dotyczy przede wszystkim obiektu biznesowego Wydarzenie (tabela tWydarzenia w pliku Excel). Wydarzenie ma tytuł (Tytul), datę i godzinę rozpoczęcia (Rozpoczecie), datę i godzinę zakończenia (Zakonczenie) oraz kategorię (ID_Kategorii) i jest przypisane do kalendarza użytkownika (ID_Kalendarza). Pola tytuł, rozpoczęcie, zakończenie i kategoria wpisuje student w formularzu, a identyfikator wydarzenia i kalendarz są nadawane automatycznie.
+
+Scenariusz korzysta też z dwóch innych obiektów. Kategoria (tKategorie, atrybut Nazwa) to rodzaj wydarzenia wybierany z listy: zajęcia, praca lub prywatne. Kalendarz (tKalendarze, atrybuty Nazwa i ID_Uzytkownika) należy do studenta (tUzytkownicy) i zawiera jego wydarzenia, więc nowe wydarzenie trafia do niego.
+
+Pozostałe atrybuty wydarzenia (Obowiazkowe, Powtarzaj_Co_Tydzien, ID_Serii i Status_Kolizji) nie są w tym scenariuszu wypełniane przez użytkownika i przyjmują wartości domyślne. Dotyczą one innych historyjek Sprintu 0 (zajęcia obowiązkowe, powtarzanie i kolizje).",,u56651@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z3h:",Sprint 0 – KAC Makieta,,,S23KC2S1P2-1,,
+Ostrzeżenie o nakładających się terminach,S23KC2S1P2-55,18051,Historyjka,W toku,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56609@student.wat.edu.pl,u56620@student.wat.edu.pl,u56620@student.wat.edu.pl,09 paź 2026 17:59 ,09 paź 2026 18:03 ,11 paź 2026 16:53 ,,,,,,,"*Jako* student
+
+*chcę* zobaczyć komunikat ostrzegający, że nowe wydarzenie nakłada się na inne,
+
+*aby* wiedzieć o kolizji w moim planie.
+
+*W makiecie:* po zapisie wydarzenia w zajętym czasie pojawia się komunikat „Uwaga: to wydarzenie nakłada się na inne” z nazwą kolidującego wydarzenia i przyciskiem „OK”. Bez wyboru „Zmień termin” ani „Zapisz mimo to”, a wydarzenie zostaje w kalendarzu.
+h3. 1. Scenariusz
+ # *Użytkownik* w widoku tygodnia klika przycisk „+” i wypełnia formularz wydarzenia (tytuł, data, godziny, kategoria).
+ # *Użytkownik* wprowadza godziny, które pokrywają się z już istniejącym wydarzeniem w tym samym dniu.
+ # *Użytkownik* klika „Zapisz”.
+ # *System* zamyka formularz, dodaje nową kartę wydarzenia do widoku tygodnia i wyświetla okno pop-up z komunikatem: {_}„Uwaga: to wydarzenie nakłada się na inne: [Nazwa kolidującego wydarzenia]”{_}.
+ # *Użytkownik* klika przycisk „OK”.
+ # *System* zamyka okno komunikatu, pozostawiając dodane wydarzenie w kalendarzu obok wydarzenia kolidującego.
+
+h3. 2. Ograniczenia typu pre i post
+
+*Preconditions — warunki wstępne:*
+ * Makieta aplikacji jest uruchomiona i wyświetla widok tygodnia z co najmniej jednym istniejącym wydarzeniem.
+ * Otwarty jest formularz dodawania nowego wydarzenia z wprowadzonymi godzinami pokrywającymi się z istniejącym wydarzeniem.
+
+*Postconditions — warunki końcowe:*
+ * Wyświetlony zostaje pop-up informacyjny o kolizji z nazwą drugiego wydarzenia.
+ * Po kliknięciu „OK” nowa karta wydarzenia pozostaje w widoku tygodnia na równi z kolidującym wydarzeniem.
+ * Dane nie są zapisywane w stałej bazie danych, a wynik jest widoczny tylko w trakcie prezentacji makiety.
+
+h3. 3. Potrzeby informacyjne
+ * Tytuł i godziny nowego wydarzenia.
+ * Tytuł i godziny istniejącego wydarzenia, z którym występuje kolizja.
+ * Treść komunikatu ostrzegawczego ({_}„Uwaga: to wydarzenie nakłada się na inne: [Nazwa kolidującego wydarzenia]”{_}).
+ * Przycisk potwierdzenia odbioru komunikatu („OK”).",,u56620@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z3f:i",Sprint 0 – KAC Makieta,,,S23KC2S1P2-1,,
+Przesunięcie wydarzenia na inną godzinę,S23KC2S1P2-50,18046,Historyjka,W toku,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56620@student.wat.edu.pl,u56620@student.wat.edu.pl,u56620@student.wat.edu.pl,09 paź 2026 17:35 ,09 paź 2026 18:03 ,11 paź 2026 16:53 ,,,,,,,"*Jako* student 
+*chcę* otworzyć dodane wydarzenie i zmienić jego godzinę, 
+*aby* dostosować plan do zmiany w harmonogramie.
+
+W makiecie: kliknięcie karty otwiera szczegóły z możliwością zmiany godziny, a po „Zapisz” karta przesuwa się w widoku tygodnia.
+h3. 1. Scenariusz
+ # *Użytkownik* w widoku tygodnia klika istniejącą kartę wydarzenia.
+ # *System* wyświetla formularz edycji ze szczegółami wydarzenia i polami wyboru godzin.
+ # *Użytkownik* zmienia godzinę rozpoczęcia i/lub zakończenia wydarzenia.
+ # *Użytkownik* klika „Zapisz”.
+ ## *4a.* Jeśli użytkownik kliknie „Anuluj”, system zamyka formularz bez zapisywania zmian. Scenariusz kończy się.
+ ## *4b.* Jeśli użytkownik wstawi niepoprawną godzinę (godzina zakończenia wcześniejsza niż rozpoczęcia), system wyświetla komunikat {_}„Godzina zakończenia musi być późniejsza niż rozpoczęcia”{_}. Użytkownik poprawia godziny, a scenariusz wraca do kroku 3.
+ # *System* zamyka formularz i wyświetla kartę wydarzenia na nowej pozycji w widoku tygodnia
+
+h4. *2. Ograniczenia typu pre i post*
+
+*Preconditions — warunki wstępne:*
+ * Makieta aplikacji jest uruchomiona i wyświetla widok tygodnia.
+ * W widoku tygodnia widoczna jest przynajmniej jedna karta z dodanym wydarzeniem.
+ * Formularz edycji umożliwia zmianę godziny rozpoczęcia i zakończenia.
+
+*Postconditions — warunki końcowe:*
+ * W widoku tygodnia karta wydarzenia wyświetla się na nowej, wybranej pozycji godzinowej.
+ * Zmiana nie jest zapisywana w stałej bazie danych — zmiana pozycji karty jest widoczna tylko w trakcie prezentacji makiety.
+ * W przypadku anulowania lub błędnych godzin widok tygodnia i pozycja karty pozostają bez zmian.
+
+h3. 3. Potrzeby informacyjne
+ * Identyfikator/nazwa klikniętego wydarzenia.
+ * Aktualna godzina rozpoczęcia i zakończenia.
+ * Nova godzina rozpoczęcia i zakończenia wydarzenia.
+ * Przykładowe wydarzenia wyświetlane w widoku tygodnia przed i po zmianie.",,u56620@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z4j:9",Sprint 0 – KAC Makieta,,,S23KC2S1P2-1,,
+"Wyróżnienie zajęć, których nie można opuścić",S23KC2S1P2-54,18050,Historyjka,W toku,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56597@student.wat.edu.pl,u56597@student.wat.edu.pl,u56651@student.wat.edu.pl,09 paź 2026 17:56 ,09 paź 2026 18:03 ,11 paź 2026 16:53 ,,,,,,,"*Jako* student
+
+*chcę* oznaczyć zajęcia jako obowiązkowe,
+
+*aby* od razu widzieć godziny, w których nie można planować pracy.
+
+ 
+
+W makiecie: przełącznik „Obowiązkowe"" w formularzu i na karcie wydarzenia widoczne wyróżnienie (ikona lub ramka).
+
+ 
+
+*1. Scenariusz*
+1. Użytkownik w widoku tygodnia klika przycisk „+"".
+2. System wyświetla formularz nowego wydarzenia z przełącznikiem „Obowiązkowe"".
+3. Użytkownik wpisuje tytuł, wybiera dzień, godziny i kategorię „zajęcia"" oraz zaznacza przełącznik „Obowiązkowe"".
+   3a. Jeśli użytkownik nie zaznaczy przełącznika, system doda zwykłe wydarzenie bez wyróżnienia. Scenariusz przechodzi do kroku 4.
+4. Użytkownik klika „Zapisz"".
+   4a. Jeśli użytkownik kliknie „Anuluj"", system zamyka formularz bez dodawania wydarzenia. Scenariusz kończy się.
+5. System zamyka formularz i wyświetla w widoku tygodnia kartę wydarzenia w wybranym dniu i o wybranej godzinie.
+6. System wyróżnia kartę obowiązkowych zajęć ikoną lub ramką, widoczną na tle zwykłych wydarzeń.
+   6a. Jeśli wydarzenie nie zostało oznaczone jako obowiązkowe (3a), system wyświetla kartę bez wyróżnienia.
+7. Użytkownik odczytuje z widoku tygodnia, które godziny zajmują obowiązkowe zajęcia. Scenariusz kończy się.
+
+*2. Ograniczenia typu pre i post*
+
+- Preconditions — warunki wstępne:
+o Makieta aplikacji jest uruchomiona i wyświetla widok tygodnia.
+o W widoku tygodnia widoczny jest przycisk „+"".
+o Formularz wydarzenia zawiera przełącznik „Obowiązkowe"".
+- Postconditions — warunki końcowe:
+o Karta wydarzenia oznaczonego jako obowiązkowe jest w widoku tygodnia wyróżniona ikoną lub ramką.
+o Karta wydarzenia bez oznaczenia wygląda tak samo jak zwykłe wydarzenia.
+o Dane wydarzenia nie są zapisywane w bazie, a karty są widoczne tylko w trakcie prezentacji makiety.
+o W przypadku anulowania widok tygodnia pozostaje bez zmian.
+
+*3. Potrzeby informacyjne*
+
+- Tytuł wydarzenia.
+- Dzień i godziny wydarzenia.
+- Kategoria wydarzenia.
+- Informacja, czy wydarzenie jest obowiązkowe (tak lub nie).
+- Wygląd wyróżnienia obowiązkowych zajęć (ikona lub ramka).
+- Przykładowe wydarzenia wyświetlane w widoku tygodnia.",,u56651@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z3f:",Sprint 0 – KAC Makieta,,,S23KC2S1P2-1,,
+Powielenie zajęć na kolejne tygodnie,S23KC2S1P2-51,18047,Historyjka,W toku,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56601@student.wat.edu.pl,u56601@student.wat.edu.pl,u56651@student.wat.edu.pl,09 paź 2026 17:50 ,09 paź 2026 18:03 ,11 paź 2026 16:53 ,,,,,,,"*Jako* student
+
+*chcę* zaznaczyć opcję „Powtarzaj co tydzień"",
+
+*aby* zajęcia pojawiły się w kolejnych tygodniach bez ponownego wpisywania.
+
+ 
+
+W makiecie: przełącznik powtarzania w formularzu, a po zapisie to samo wydarzenie widać w następnych tygodniach (bez wyboru zakresu dat i wyjątków).
+
+ 
+
+*1. Scenariusz*
+1. Użytkownik w widoku tygodnia klika przycisk „+"".
+2. System wyświetla formularz nowego wydarzenia.
+3. Użytkownik wypełnia formularz (tytuł, dzień, godziny, kategoria) i zaznacza przełącznik „Powtarzaj co tydzień"".
+   3a. Jeśli użytkownik nie zaznaczy przełącznika, system doda wydarzenie tylko w wybranym tygodniu. Scenariusz przechodzi do kroku 4, a krok 7 pokazuje brak wydarzenia w kolejnym tygodniu.
+4. Użytkownik klika „Zapisz"".
+   4a. Jeśli użytkownik kliknie „Anuluj"", system zamyka formularz bez dodawania wydarzenia. Scenariusz kończy się.
+5. System zamyka formularz i wyświetla w widoku tygodnia kartę wydarzenia w wybranym dniu i o wybranej godzinie.
+6. Użytkownik przechodzi do kolejnego tygodnia, klikając strzałkę „dalej"".
+7. System wyświetla w kolejnym tygodniu to samo wydarzenie w tym samym dniu i o tej samej godzinie.
+   7a. Jeśli wydarzenie nie było ustawione jako powtarzane (3a), system nie wyświetla go w kolejnym tygodniu.
+
+*2. Ograniczenia typu pre i post*
+
+- Preconditions — warunki wstępne:
+o Makieta aplikacji jest uruchomiona i wyświetla widok tygodnia.
+o W widoku tygodnia widoczny jest przycisk „+"" oraz strzałki przechodzenia między tygodniami.
+o Formularz wydarzenia zawiera przełącznik „Powtarzaj co tydzień"".
+- Postconditions — warunki końcowe:
+o Wydarzenie z zaznaczonym powtarzaniem jest widoczne w wybranym dniu i o wybranej godzinie w bieżącym oraz w kolejnych tygodniach wyświetlanych w makiecie.
+o Wydarzenie bez zaznaczonego powtarzania jest widoczne tylko w wybranym tygodniu.
+o Dane wydarzenia nie są zapisywane w bazie, a karty są widoczne tylko w trakcie prezentacji makiety.
+o W przypadku anulowania widok tygodnia pozostaje bez zmian.
+
+*3. Potrzeby informacyjne*
+
+- Tytuł wydarzenia.
+- Dzień i godziny wydarzenia.
+- Kategoria wydarzenia.
+- Informacja, czy wydarzenie ma się powtarzać co tydzień (tak lub nie).
+- Przykładowe wydarzenia wyświetlane w kolejnych tygodniach.",,u56651@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z3c:",Sprint 0 – KAC Makieta,,,S23KC2S1P2-1,,
+Obszar związany z najbardziej podstawowymi funkcjami aplikacji,S23KC2S1P2-1,17900,Epika,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,,u56603@student.wat.edu.pl,u56603@student.wat.edu.pl,07 paź 2026 18:55 ,09 paź 2026 17:59 ,11 paź 2026 16:53 ,,,,,,,,,u56603@student.wat.edu.pl,,,,,,,,,,,,,,,,,ghx-label-9,EPIC 1 - Zarządzanie planem zajęć i wydarzeń,,,,"0|i00z24:",,,,,,
+Ręczna korekta zaproponowanego grafiku,S23KC2S1P2-34,17933,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56620@student.wat.edu.pl,u56620@student.wat.edu.pl,u56620@student.wat.edu.pl,07 paź 2026 21:06 ,09 paź 2026 16:37 ,11 paź 2026 16:53 ,,,,,,,"*Jako* użytkownik, 
+*chcę* mieć możliwość ręcznego przesunięcia lub zmiany godzin w automatycznie wygenerowanym grafiku, 
+*aby* dopasować go do moich nagłych potrzeb.
+
+ 
+h3. Scenariusz Główny:
+ # *User → System:* Użytkownik przesuwa lub edytuje godziny zmiany w wygenerowanym grafiku i klika „Zapisz zmiany” ({{{}PATCH /api/v1/work-schedules/\{scheduleId}/shifts/\{shiftId}{{}}}}).
+
+ # *System:* Sprawdza, czy nowe godziny nie kolidują z zajęciami na uczelni oraz czy grafik nie został już wcześniej zatwierdzony.
+
+ # *System:* Aktualizuje godziny wybranej zmiany w bazie danych.
+
+ # *System → User:* Zwraca status {{200 OK}} z zaktualizowaną zmianą i odświeża grafik w aplikacji.
+
+h3. Scenariusz alternatywny:
+ # *User → System:* Użytkownik próbuje przesunąć zmianę w grafik na godziny, w których ma zajęcia na uczelni.
+
+ # *System:* Wykrywa konflikt z planem zajęć i odrzuca zmianę (brak wpisu w bazie).
+
+ # *System → User:* Zwraca kod {{{}400 Bad Request{}}}, a aplikacja wyświetla komunikat: {_}„Wybrane godziny kolidują z zajęciami na uczelni”{_}.
+
+ 
+
+*Punkt wejścia (Pre-condition):* Użytkownik jest zalogowany i posiada wygenerowany, niezatwierdzony grafik pracy.
+
+*Punkt wyjściowy (Post-condition):* Godziny zmiany w grafice zostały zmodyfikowane w bazie danych, a kalendarz wyświetla poprawiony plan pracy.
+
+ 
+
+*Obiekty biznesowe:*
+
+*Użytkownik (Pracujący student)* — osoba edytująca swój grafik.
+
+*Grafik pracy* — zestaw wygenerowanych zmian w danym okresie.
+
+*Zmiana w pracy* — konkretny blok godzinowy modyfikowany przez użytkownika.
+
+ 
+
+*Potrzeby informacyjne:*
+
+*Dane wejściowe (User → System)*
+
+Identyfikator modyfikowanej zmiany ({{{}shiftId{}}}).
+
+Nowa godzina rozpoczęcia i zakończenia pracy.
+
+*Dane wyjściowe (System → User)*
+
+Potwierdzenie zapisu (kod HTTP {{{}200 OK{}}}) i zaktualizowany obiekt zmiany w grafiku.",,u56620@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z4j:",,,,S23KC2S1P2-4,,
+Zebranie zajęć i pracy w jednym kalendarzu,S23KC2S1P2-7,17906,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56651@student.wat.edu.pl,u56651@student.wat.edu.pl,u56651@student.wat.edu.pl,07 paź 2026 20:35 ,09 paź 2026 16:09 ,11 paź 2026 16:53 ,,,,,,,"*Jako* student
+
+*chcę* dodać wydarzenie z tytułem, datą, godziną i kategorią,
+
+*aby* mieć zajęcia i pracę w jednym kalendarzu.
+
+ 
+
+*1. Scenariusz*
+1. Użytkownik otwiera kalendarz i wybiera opcję „Dodaj wydarzenie"".
+2. System wyświetla formularz nowego wydarzenia.
+3. Użytkownik wpisuje tytuł, wybiera datę, godzinę rozpoczęcia i zakończenia oraz kategorię (zajęcia, praca lub prywatne).
+   3a. Jeśli wydarzenie ma się powtarzać, użytkownik wybiera cykl (co tydzień lub co dwa tygodnie) oraz datę końca serii. W kroku 6 system zapisuje wszystkie wystąpienia serii.
+   3b. Jeśli wydarzenie to obowiązkowe zajęcia, użytkownik zaznacza opcję „Obowiązkowe"". System oznacza wydarzenie jako takie, którego nie można naruszyć przy planowaniu grafiku pracy.
+4. Użytkownik zatwierdza formularz przyciskiem „Zapisz"".
+   4a. Jeśli użytkownik wybierze „Anuluj"", system zamyka formularz bez zapisywania wydarzenia i wyświetla kalendarz. Scenariusz kończy się.
+5. System sprawdza poprawność danych oraz to, czy wydarzenie nie koliduje z innymi wydarzeniami.
+   5a. Jeśli brakuje tytułu lub godzina zakończenia nie jest późniejsza niż rozpoczęcia, system wyświetla komunikat o błędzie i nie zapisuje wydarzenia. Użytkownik poprawia dane, a scenariusz wraca do kroku 3.
+   5b. Jeśli wydarzenie koliduje z innym wydarzeniem, system wyświetla listę kolidujących wydarzeń. Użytkownik zmienia termin (powrót do kroku 3), zapisuje wydarzenie mimo kolizji (przejście do kroku 6, system oznacza wydarzenie jako kolidujące) albo anuluje (przejście do 4a).
+   5c. Jeśli wydarzenie kategorii „praca"" koliduje z obowiązkowymi zajęciami, system informuje o naruszeniu i nie zapisuje wydarzenia. Użytkownik zmienia termin lub kategorię, a scenariusz wraca do kroku 3.
+6. System zapisuje wydarzenie i wyświetla je w kalendarzu w odpowiedniej dacie, godzinie i kolorze kategorii.
+   6a. Jeśli zapis się nie powiedzie (np. brak połączenia lub błąd bazy), system wyświetla komunikat o błędzie i zachowuje dane w formularzu. Użytkownik ponawia zapis (powrót do kroku 4).
+7. System wyświetla potwierdzenie dodania wydarzenia.
+
+*2. Ograniczenia typu pre i post*
+ - Preconditions — warunki wstępne:
+o Użytkownik jest zalogowany do aplikacji.
+o Użytkownik ma dostęp do modułu kalendarza.
+o W aplikacji dostępne są kategorie wydarzeń: zajęcia, praca, prywatne.
+ - Postconditions — warunki końcowe:
+o Wydarzenie zostaje zapisane i jest widoczne w kalendarzu w odpowiedniej dacie, godzinie i kolorze kategorii.
+o Liczba wydarzeń użytkownika zwiększa się o jedno (w przypadku serii o liczbę jej wystąpień).
+o Zapisane wydarzenie jest dostępne dla wykrywania kolizji i planowania grafiku.
+o W przypadku zapisu mimo kolizji wydarzenie jest oznaczone jako kolidujące.
+o W przypadku anulowania, błędnych danych, blokady lub błędu zapisu kalendarz pozostaje bez zmian.
+
+*3. Potrzeby informacyjne*
+ - Tytuł wydarzenia.
+ - Data wydarzenia.
+ - Godzina rozpoczęcia i zakończenia wydarzenia.
+ - Kategoria wydarzenia: zajęcia, praca lub prywatne.
+ - Informacja, czy wydarzenie jest obowiązkowe (dla zajęć).
+ - Cykl powtarzania i data końca serii (dla wydarzeń powtarzalnych).
+ - Lista istniejących wydarzeń użytkownika (do sprawdzenia kolizji).
+ - Kolor przypisany do kategorii wydarzenia.
+ - Komunikat o wyniku zapisu: potwierdzenie albo opis błędu.",,u56651@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z3g:",,,,S23KC2S1P2-1,,
+Wyświetlanie tygodnia,S23KC2S1P2-37,17936,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56603@student.wat.edu.pl,u56603@student.wat.edu.pl,u56603@student.wat.edu.pl,07 paź 2026 21:22 ,09 paź 2026 15:58 ,11 paź 2026 16:53 ,,,,,,,"*Historyjka użytkownika:*
+
+*Jako* student 
+*chcę* wyświetlać mój kalendarz w widoku tygodniowym, 
+*aby* mieć przejrzysty obraz zaplanowanych zajęć, pracy i innych wydarzeń w danym tygodniu.
+
+*Scenariusz:*
+
+1. Użytkownik otwiera kalendarz.
+
+2. System wyświetla kalendarz oraz dostępne opcje widoku.
+
+3. Użytkownik wybiera widok tygodniowy i wskazuje tydzień, który chce zobaczyć.
+
+4. System pobiera wydarzenia przypadające na wybrany tydzień
+
+5. System wyświetla wydarzenia w odpowiednich dniach i godzinach.
+
+5a. Jeśli w wybranym tygodniu nie ma zapisanych wydarzeń, system wyświetla pusty kalendarz z informacją o braku zaplanowanych wydarzeń.
+
+*Ograniczenia typu pre i post*
+
+*Preconditions — warunki wstępne:*
+ * Użytkownik jest zalogowany do aplikacji.
+ * Użytkownik ma dostęp do modułu kalendarza.
+ * W aplikacji istnieje kalendarz użytkownika.
+
+*Postconditions — warunki końcowe:*
+ * Kalendarz zostaje wyświetlony w widoku tygodniowym.
+ * Wydarzenia są przedstawione w odpowiednich dniach i godzinach.
+ * W przypadku braku wydarzeń użytkownik widzi pusty kalendarz i odpowiednią informację.
+ * Wyświetlenie kalendarza nie powoduje zmiany zapisanych wydarzeń.
+
+*Potrzeby informacyjne*
+ * Data początku i końca wybranego tygodnia.
+ * Lista wydarzeń przypadających na wybrany tydzień.
+ * Nazwa każdego wydarzenia.
+ * Data i godzina rozpoczęcia oraz zakończenia wydarzenia.
+ * Kategoria wydarzenia, np. zajęcia, praca lub wydarzenie prywatne.
+ * Informacja o braku wydarzeń w danym tygodniu.",,u56603@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z3i:",,,,S23KC2S1P2-1,,
+wykrywanie kolizji,S23KC2S1P2-43,17949,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56609@student.wat.edu.pl,u56609@student.wat.edu.pl,u56609@student.wat.edu.pl,07 paź 2026 22:06 ,09 paź 2026 15:58 ,09 paź 2026 15:03 ,,,,,,,"*Historyjka użytkownika:*
+
+*Jako* pracujący student
+*Chcę* otrzymywać informację o nakładających się wydarzeniach w moim kalendarzu
+*Aby* uniknąć zaplanowania pracy w czasie zajęć lub innych obowiązków.
+
+*1. Scenariusz*
+ # Użytkownik wybiera dodanie nowego wydarzenia lub edycję istniejącego.
+ # System wyświetla formularz wydarzenia.
+ # Użytkownik uzupełnia dane wydarzenia i wybiera „Zapisz”.
+ # System sprawdza poprawność danych, wykrywa kolizję i wyświetla kolidujące wydarzenia oraz opcje: „Popraw termin”, „Zapisz mimo kolizji”, „Anuluj”.
+ # Użytkownik wybiera „Popraw termin”.
+ # System wyświetla formularz z zachowaniem wprowadzonych danych.
+ # Użytkownik zmienia termin na niekolidujący z innymi wydarzeniami i wybiera „Zapisz”.
+ # System ponownie sprawdza dane, zapisuje wydarzenie i wyświetla zaktualizowany kalendarz.
+
+*Scenariusze alternatywne:*
+
+*4a. Brak kolizji:* system zapisuje wydarzenie i wyświetla zaktualizowany kalendarz. Scenariusz kończy się.
+
+*4b. Niepoprawne dane:* system wskazuje błędy i nie zapisuje wydarzenia. Użytkownik poprawia dane — powrót do kroku 3.
+
+*5a. Zapis mimo kolizji:* użytkownik wybiera „Zapisz mimo kolizji”. System zapisuje wydarzenie i wyświetla zaktualizowany kalendarz. Scenariusz kończy się.
+
+*5b. Anulowanie:* użytkownik wybiera „Anuluj”. System kończy operację bez zmiany zapisanych wydarzeń.
+
+*8a. Ponowna kolizja:* system wyświetla aktualne konflikty i dostępne opcje. Użytkownik ponownie podejmuje decyzję — powrót do kroku 5.
+
+*8b. Niepoprawne dane:* system wskazuje błędy i nie zapisuje zmian. Użytkownik poprawia dane — powrót do kroku 7.
+
+*2. Ograniczenia typu pre i post*
+
+*Warunki Pre:*
+ * Student ma dostęp do własnego kalendarza.
+
+*Warunki Post:*
+ * Po zatwierdzeniu nowe lub zmodyfikowane wydarzenie zostaje zapisane i wyświetlone w kalendarzu.
+
+ * Zapis mimo kolizji następuje wyłącznie po świadomym wyborze użytkownika.
+
+ * Pozostałe wydarzenia pozostają bez zmian.
+
+ * Po anulowaniu operacji kalendarz zachowuje stan sprzed jej rozpoczęcia.
+
+ * Wyświetlenie ostrzeżenia lub błędu nie powoduje zapisu.
+
+*3. Potrzeby informacyjne*
+
+Informacja, czy proponowany termin pozwala uniknąć konfliktu z innymi obowiązkami.
+
+Zestawienie kolidujących wydarzeń, pozwalające rozpoznać, które obowiązki wymagają przeplanowania: ich nazwy, terminy oraz kategorie.
+
+Informacja o okresie nakładania się wydarzeń, pozwalająca ocenić rozmiar konfliktu.
+
+Informacja o dostępnych sposobach rozwiązania konfliktu i konsekwencjach każdego wyboru.
+
+Wynik ponownego sprawdzenia, pozwalający ocenić, czy zmiana terminu usunęła konflikt.
+
+Potwierdzenie, czy wydarzenie zostało zapisane, czy operacja zakończyła się bez zapisu.
+
+*Dopuszczalne wartości informacji:*
+
+*Kategoria wydarzenia:* „Zajęcia”, „Praca”, „Prywatne”. Każde wydarzenie ma jedną kategorię; wszystkie kategorie podlegają sprawdzaniu kolizji.
+
+*Wynik sprawdzenia:* „Brak kolizji” albo „Kolizja”. Wynik jest ustalany po potwierdzeniu poprawności danych.
+
+*Decyzja użytkownika po wykryciu kolizji:* „Popraw termin”, „Zapisz mimo kolizji” albo „Anuluj”.
+
+*Wynik zakończenia operacji:* „Zapisano bez kolizji”, „Zapisano mimo kolizji” albo „Anulowano”.
+
+*Reguła interpretacji kolizji:*
+
+!image-2026-10-09-15-01-34-416.png|width=722,height=256!
+
+System sprawdza wydarzenie względem pozostałych wydarzeń w kalendarzu użytkownika; przy edycji pomija porównanie z nim samym. Porównuje pełne daty i godziny sprowadzone do wspólnej osi czasu.
+
+Przykładowo wydarzenia 10:00–12:00 i 11:30–15:00 tego samego dnia kolidują. Wydarzenia 10:00–12:00 i 12:00–15:00 nie kolidują, ponieważ samo zetknięcie granic przedziałów nie jest kolizją.",,u56609@student.wat.edu.pl,,,,,,,,,,"09 paź 2026 14:26 ;u56609@student.wat.edu.pl;image-2026-10-09-14-26-33-240.png;https://jira.wat.edu.pl/secure/attachment/12002/image-2026-10-09-14-26-33-240.png","09 paź 2026 14:26 ;u56609@student.wat.edu.pl;image-2026-10-09-14-26-52-100.png;https://jira.wat.edu.pl/secure/attachment/12003/image-2026-10-09-14-26-52-100.png","09 paź 2026 14:28 ;u56609@student.wat.edu.pl;image-2026-10-09-14-28-08-551.png;https://jira.wat.edu.pl/secure/attachment/12004/image-2026-10-09-14-28-08-551.png","09 paź 2026 14:59 ;u56609@student.wat.edu.pl;image-2026-10-09-14-59-45-533.png;https://jira.wat.edu.pl/secure/attachment/12005/image-2026-10-09-14-59-45-533.png","09 paź 2026 15:01 ;u56609@student.wat.edu.pl;image-2026-10-09-15-01-34-416.png;https://jira.wat.edu.pl/secure/attachment/12006/image-2026-10-09-15-01-34-416.png",,,,,,,,"0|i00z3k:r",,,,S23KC2S1P2-1,,
+Dostosowanie planu do zmian w harmonogramie,S23KC2S1P2-25,17924,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56620@student.wat.edu.pl,u56620@student.wat.edu.pl,u56620@student.wat.edu.pl,07 paź 2026 20:46 ,09 paź 2026 15:57 ,11 paź 2026 16:53 ,,,,,,,"*Jako* student, 
+*chcę* mieć możliwość edytowania oraz usuwania istniejących wydarzeń w kalendarzu, 
+*aby* bieżący plan zajęć i aktywności był zawsze aktualny.
+
+ 
+
+*Punkt Wejścia:*
+
+*Intencja:* Użytkownik inicjuje edycję lub usunięcie istniejącego wydarzenia w interfejsie.
+
+*Kontekst systemowy:* Użytkownik jest zalogowany (posiada ważny token JWT), a w bazie danych istnieje wydarzenie o podanym {{Id}} przypisane do jego konta.
+
+*Użytkownik* posiada uprawnienia do edycji kalendarza
+
+ 
+
+*Punkt Wyjścia:*
+
+*Stan systemu:* Rekord w bazie danych SQL został zaktualizowany lub usunięty.
+
+*Wynik dla użytkownika:* Interfejs wyświetla zaktualizowany kalendarz, a system zwraca odpowiedni kod HTTP.
+
+ 
+
+*Scenariusz Główny:*
+ # *User → System:* Użytkownik wybiera wydarzenie i przesyła nowe dane ({{{}PUT /api/v1/events/\{eventId}{{}}}}) lub żądanie usunięcia ({{{}DELETE /api/v1/events/\{eventId}{{}}}}).
+ # *System:* Waliduje uprawnienia użytkownika do modyfikacji/usunięcia danego wydarzenia oraz sprawdza poprawność zaktualizowanych danych.
+ # *System:* Modyfikuje lub usuwa (soft delete / hard delete) rekord w produkcyjnej bazie danych SQL.
+ # *System → User:* System zwraca odpowiedź {{200 OK}} (z aktualnymi danymi wydarzenia) lub {{204 No Content}} (przy usunięciu) oraz odświeża widok kalendarza.
+
+ 
+
+*Scenariusz Alternatywny:*
+
+*Punkt startowy: Krok 1* Użytkownik próbuje edytować wydarzenie i przesyła formularz z błędnymi danymi (np. data zakończenia jest wcześniejsza niż data rozpoczęcia) lub próbuje usunąć wydarzenie, do którego nie ma praw.
+ # *User → System:* Użytkownik wpisuje błędne dane.
+ # *System:* Wykrywa błąd walidacji i odrzuca zmianę.
+ # *System → User:* Zwraca kod błędu (np. {{{}400 Bad Request{}}}), a aplikacja wyświetla komunikat.
+
+ 
+
+*Obiekty Biznesowe:*
+
+*Wydarzenie* — konkretny wpis w kalendarzu, który użytkownik chce zmienić lub skasować (ma swoją nazwę, godzinę, miejsce i datę).
+
+*Formularz zmian (Dane do edycji)* — nowe informacje, które użytkownik wpisuje w okienku edycji (np. nowa godzina lub zmieniona sala).
+
+*Użytkownik* — osoba, do której należy to wydarzenie (system musi wiedzieć, czy ma prawo je edytować lub usunąć).
+
+ 
+
+ ",,u56620@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z3l:",,,,S23KC2S1P2-1,,
+Kategorie i kolory wydarzeń,S23KC2S1P2-11,17910,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56649@student.wat.edu.pl,u56649@student.wat.edu.pl,u56649@student.wat.edu.pl,07 paź 2026 20:39 ,09 paź 2026 15:57 ,11 paź 2026 16:53 ,,,,,,,"*Jako* student 
+*chcę* oznaczać wydarzenia jako zajęcia, pracę lub prywatne, 
+*aby* móc odróżniać je w kalendarzu.
+
+
+
+{*}Scenariusz{*}:
+
+*1.* Użytkownik wybiera „Dodaj wydarzenie”.
+
+*1a.* Użytkownik wybiera istniejące wydarzenie i klika „Edytuj”. Przejście do kroku 2.
+
+*2.* System wyświetla formularz wydarzenia z listą kategorii: zajęcia, praca, prywatne.
+
+*3.* Użytkownik wpisuje dane wydarzenia, wybiera kategorię i klika „Zapisz”.
+
+*3a.* Użytkownik klika „Anuluj”. System zamyka formularz bez zapisu. Koniec scenariusza.
+
+*4.* System wyświetla wydarzenie w kalendarzu w kolorze wybranej kategorii.
+
+*4a.* Brakuje wymaganych danych (np. godziny). System podświetla puste pole i wyświetla komunikat. Powrót do kroku 3.
+
+ 
+
+{*}Ograniczenia typu pre{*}: użytkownik jest zalogowany, ma dostęp do kalendarza.
+{*}Ograniczenia typu post{*}: wydarzenie ma zapisaną kategorię i jest widoczne w odpowiednim kolorze.
+
+ 
+
+{*}Potrzeby informacyjne{*}: dane wydarzenia (tytuł, data, godziny), lista kategorii, kolor przypisany do każdej kategorii.",,u56649@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z3l:9",,,,S23KC2S1P2-1,,
+Przeniesienie planu zajęć z pliku do aplikacji,S23KC2S1P2-8,17907,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56651@student.wat.edu.pl,u56651@student.wat.edu.pl,u56651@student.wat.edu.pl,07 paź 2026 20:37 ,09 paź 2026 15:57 ,11 paź 2026 16:53 ,,,,,,,"*Jako* student
+
+*chcę* zaimportować plan zajęć z pliku ICS,
+
+*aby* przenieść wydarzenia do aplikacji bez ręcznego przepisywania.
+
+ 
+
+*1. Scenariusz*
+1. Użytkownik otwiera kalendarz i wybiera opcję „Importuj plan zajęć"".
+2. System wyświetla ekran importu z możliwością wyboru pliku w formacie ICS.
+   2a. Jeśli użytkownik wybierze „Anuluj"", system zamyka ekran importu bez zmian w kalendarzu. Scenariusz kończy się.
+3. Użytkownik wybiera plik ICS z urządzenia.
+   3a. Jeśli plik nie jest w formacie ICS lub jest uszkodzony, system wyświetla komunikat o błędzie. Użytkownik wybiera inny plik, a scenariusz wraca do kroku 3.
+   3b. Jeśli plik nie zawiera żadnych wydarzeń, system informuje o braku danych do zaimportowania. Użytkownik wybiera inny plik, a scenariusz wraca do kroku 3.
+4. System odczytuje wydarzenia z pliku i wyświetla ich podgląd (tytuł, data, godziny, powtarzanie).
+   4a. Jeśli część wydarzeń nie może zostać odczytana (np. brakuje daty lub godziny), system pomija je i wyświetla informację o liczbie pominiętych wydarzeń. Scenariusz przechodzi do kroku 5.
+   4b. Jeśli niektóre wydarzenia już istnieją w kalendarzu, system oznacza je jako duplikaty. Użytkownik wybiera, czy je pominąć, czy zaimportować mimo to. Scenariusz przechodzi do kroku 5.
+5. Użytkownik przegląda podgląd, wybiera wydarzenia do zaimportowania i zatwierdza przyciskiem „Importuj"".
+   5a. Jeśli użytkownik wybierze „Anuluj"", system zamyka podgląd bez zapisywania wydarzeń. Scenariusz kończy się.
+6. System zapisuje wybrane wydarzenia w kalendarzu jako zajęcia, wraz ze wszystkimi wystąpieniami wydarzeń powtarzających się.
+   6a. Jeśli zapis się nie powiedzie (np. brak połączenia lub błąd bazy), system wyświetla komunikat o błędzie i zachowuje wybór użytkownika. Użytkownik ponawia import (powrót do kroku 5).
+7. System wyświetla potwierdzenie z liczbą zaimportowanych wydarzeń.
+   7a. Jeśli zaimportowane wydarzenia kolidują z innymi wydarzeniami w kalendarzu, system oznacza je jako kolidujące i informuje o tym użytkownika.
+
+*2. Ograniczenia typu pre i post*
+
+- Preconditions — warunki wstępne:
+o Użytkownik jest zalogowany do aplikacji.
+o Użytkownik ma dostęp do modułu kalendarza.
+o Plik ICS z planem zajęć jest dostępny na urządzeniu użytkownika.
+o Aplikacja ma uprawnienie do odczytu wybranego pliku.
+- Postconditions — warunki końcowe:
+o Wybrane wydarzenia zostają zapisane w kalendarzu jako zajęcia w odpowiednich dniach i godzinach.
+o Liczba wydarzeń użytkownika zwiększa się o liczbę zaimportowanych wydarzeń.
+o Zaimportowane wydarzenia są dostępne dla wykrywania kolizji i planowania grafiku.
+o Duplikaty zostają pominięte lub zaimportowane zgodnie z wyborem użytkownika.
+o Plik źródłowy nie zostaje zmieniony.
+o W przypadku anulowania, błędnego pliku lub błędu zapisu kalendarz pozostaje bez zmian.
+
+*3. Potrzeby informacyjne*
+
+- Plik w formacie ICS (nazwa, rozmiar, zawartość).
+- Dla każdego wydarzenia w pliku: tytuł, data, godzina rozpoczęcia i zakończenia.
+- Miejsce lub sala wydarzenia (jeśli występuje w pliku).
+- Reguła powtarzania wydarzenia (np. co tydzień, data końca).
+- Strefa czasowa wydarzeń w pliku.
+- Lista istniejących wydarzeń użytkownika (do wykrycia duplikatów i kolizji).
+- Kategoria przypisywana importowanym wydarzeniom: zajęcia.
+- Liczba wydarzeń odczytanych, pominiętych i zaimportowanych.
+- Komunikat o wyniku importu: potwierdzenie albo opis błędu.",,u56651@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z3m:",,,,S23KC2S1P2-2,,
+Import planu zajęć z PDF/zdjęcia,S23KC2S1P2-38,17937,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56603@student.wat.edu.pl,u56603@student.wat.edu.pl,u56603@student.wat.edu.pl,07 paź 2026 21:22 ,09 paź 2026 15:57 ,11 paź 2026 16:53 ,,,,,,,"*Historyjka użytkownika:*
+
+*Jako* student 
+*chcę* zaimportować plan zajęć z pliku PDF lub zdjęcia, 
+*aby* nie musieć ręcznie przepisywać wszystkich zajęć do kalendarza.
+
+*Scenariusz:*
+
+1. Użytkownik wybiera opcję importu planu zajęć.
+
+2. System wyświetla możliwość przesłania pliku PDF lub zdjęcia.
+
+3. Użytkownik wybiera i przesyła plik.
+
+3a. Jeśli plik ma nieobsługiwany format, system wyświetla komunikat o błędzie i umożliwia użytkownikowi wybranie innego pliku.
+
+4. System odczytuje dane z przesłanego pliku i prezentuje rozpoznane zajęcia.
+
+4a. Jeśli system nie rozpozna części danych, oznacza je do sprawdzenia przez użytkownika.
+
+5. Użytkownik sprawdza rozpoznane dane i poprawia ewentualne błędy.
+
+6. System aktualizuje podgląd zajęć po wprowadzonych poprawkach.
+
+7. Użytkownik zatwierdza import.
+
+7a. Jeśli użytkownik anuluje import, system rezygnuje z zapisywania nowych wydarzeń i pozostawia kalendarz bez zmian.
+
+8. System zapisuje zatwierdzone zajęcia w kalendarzu i wyświetla potwierdzenie importu.
+
+*Ograniczenia typu pre i post:*
+
+*Preconditions — warunki wstępne:*
+
+- Użytkownik jest zalogowany do aplikacji.
+
+- Użytkownik ma dostęp do modułu importu.
+
+- Użytkownik posiada plik PDF lub zdjęcie zawierające plan zajęć.
+
+- Plik jest dostępny do odczytu przez aplikację.
+
+Postconditions — warunki końcowe:
+
+- Rozpoznane i zatwierdzone zajęcia zostają zapisane w kalendarzu.
+
+- Użytkownik otrzymuje potwierdzenie zakończenia importu.
+
+- Dane, których nie udało się poprawnie odczytać, mogą zostać uzupełnione ręcznie.
+
+- W przypadku anulowania importu nowe wydarzenia nie zostają zapisane.
+
+- W przypadku nieobsługiwanego formatu kalendarz pozostaje bez zmian.
+
+*Potrzeby informacyjne:*
+
+- Nazwa i format przesłanego pliku.
+
+- Data lub zakres dat, którego dotyczy plan.
+
+- Nazwy przedmiotów.
+
+- Dni tygodnia i godziny rozpoczęcia oraz zakończenia zajęć.
+
+- Miejsce prowadzenia zajęć, jeśli podano je w pliku.
+
+- Informacja o cykliczności zajęć, jeśli można ją ustalić.
+
+- Informacja o danych rozpoznanych niepewnie lub nierozpoznanych.
+
+- Informacja o błędach odczytu i nieobsługiwanym formacie.
+
+- Potwierdzenie zapisania danych w kalendarzu.",,u56603@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z3n:",,,,S23KC2S1P2-2,,
+import grafiku pracy ze zdjęcia lub pliku ,S23KC2S1P2-44,17950,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56609@student.wat.edu.pl,u56609@student.wat.edu.pl,u56609@student.wat.edu.pl,07 paź 2026 22:08 ,09 paź 2026 15:57 ,09 paź 2026 15:20 ,,,,,,,"*Historyjka użytkownika:*
+*Jako* pracujący student
+*Chcę* zaimportować grafik pracy ze zdjęcia lub pliku
+*Aby* dodać swoje zmiany do kalendarza bez ręcznego przepisywania.
+
+*1. Scenariusz*
+ # Użytkownik wybiera funkcję „Importuj grafik”.
+ # System wyświetla formularz wyboru pliku oraz informację o obsługiwanych formatach.
+ # Użytkownik wskazuje zdjęcie lub plik i rozpoczyna import.
+ # System sprawdza plik, odczytuje grafik i wyświetla podgląd rozpoznanych zmian do weryfikacji.
+ # Użytkownik sprawdza odczytane dane, w razie potrzeby je poprawia, wybiera swoje zmiany i zatwierdza import.
+ # System sprawdza poprawność wybranych zmian i występowanie duplikatów. Jeżeli dane są poprawne i nie ma duplikatów, zapisuje zmiany w kategorii „Praca” oraz wyświetla potwierdzenie i zaktualizowany kalendarz.
+
+*Scenariusze alternatywne:*
+
+*4a. Nieobsługiwany format lub uszkodzony plik:* system informuje o problemie i prosi o wybór innego pliku — powrót do kroku 3.
+
+*4b. Nie udało się odczytać żadnej zmiany:* system informuje o braku rozpoznanych danych i umożliwia wskazanie czytelniejszego pliku — powrót do kroku 3.
+
+*4c. Częściowy odczyt:* system wyświetla odczytane zmiany i oznacza dane niepełne lub wymagające sprawdzenia. Użytkownik uzupełnia je albo pomija daną zmianę w kroku 5.
+
+*5a. Anulowanie:* użytkownik anuluje import. System kończy operację bez zmiany kalendarza.
+
+*6a. Niepoprawne dane:* system wskazuje wybrane zmiany wymagające poprawienia i nie zapisuje importu. Użytkownik poprawia dane lub odznacza te zmiany — powrót do kroku 5.
+
+*6b. Wykrycie duplikatów:* system pokazuje powtarzające się wydarzenia. Użytkownik dla każdego z nich wybiera „Pomiń”, „Zastąp” lub „Zachowaj oba” i zatwierdza decyzje. System zapisuje import zgodnie z tymi wyborami i przedstawia wynik.
+
+*6c. Błąd zapisu:* system informuje o niepowodzeniu i zachowuje podgląd importu. Użytkownik wybiera „Ponów zapis” albo „Anuluj”. System ponawia krok 6 lub kończy operację bez zmiany kalendarza.
+
+*2. Ograniczenia typu pre i post*
+
+*Preconditions — warunki wstępne:*
+ * Student ma dostęp do własnego kalendarza.
+
+ * Student posiada zdjęcie lub plik z grafikiem pracy i może udostępnić go aplikacji.
+
+*Postconditions — warunki końcowe:*
+ * Po udanym imporcie zatwierdzone zmiany są zapisane w kalendarzu w kategorii „Praca”.
+
+ * Zapisane terminy odpowiadają danym sprawdzonym i zatwierdzonym przez użytkownika.
+
+ * Duplikaty są obsłużone zgodnie z decyzjami użytkownika.
+
+ * Wydarzenia niezwiązane z importem pozostają bez zmian.
+
+ * Anulowanie lub nieudany zapis nie zmienia kalendarza. Zapis importu jest wykonywany w całości albo wcale.
+
+ * System przedstawia liczbę dodanych, zastąpionych i pominiętych zmian.
+
+*3. Potrzeby informacyjne*
+ * Informacja, jakie zdjęcia i pliki można zaimportować, aby użytkownik mógł wybrać odpowiedni dokument.
+
+ * Czytelny podgląd odczytanego grafiku, pozwalający sprawdzić jego zgodność z grafikiem otrzymanym od pracodawcy.
+
+ * Możliwość rozpoznania własnych zmian, jeżeli dokument obejmuje wielu pracowników.
+
+ * Informacja o danych niepełnych lub wymagających poprawy, aby do kalendarza nie trafiły błędne terminy.
+
+ * Informacja, które zmiany występują już w kalendarzu, oraz jakie będą skutki pominięcia, zastąpienia lub zachowania duplikatu.
+
+ * Potwierdzenie wyniku importu, pozwalające ustalić, czy kalendarz zawiera wszystkie wybrane obowiązki.
+
+*Dopuszczalne wartości informacji:*
+ * *Format pliku:* JPG/JPEG, PNG lub PDF.
+
+ * *Wynik odczytu:* „Odczytano wszystkie zmiany”, „Odczytano część zmian”, „Nie odczytano zmian”.
+
+ * *Wynik walidacji wybranych zmian:* „Dane poprawne” albo „Dane wymagają poprawy”.
+
+ * *Wynik sprawdzenia duplikatów:* „Brak duplikatów” albo „Wykryto duplikaty”.
+
+ * *Decyzja dotycząca duplikatu:*
+
+ * 
+ ** „Pomiń” — istniejące wydarzenie pozostaje bez zmian, a importowana kopia nie jest dodawana.
+
+ * 
+ ** „Zastąp” — wskazane istniejące wydarzenie otrzymuje zatwierdzone dane z importu.
+
+ * 
+ ** „Zachowaj oba” — istniejące wydarzenie pozostaje bez zmian, a importowana zmiana jest dodawana jako osobne wydarzenie.
+
+ * *Kategoria importowanych wydarzeń:* „Praca”.
+
+ * *Wynik zakończenia importu:* „Zakończono”, „Anulowano” albo „Nie zapisano z powodu błędu”.
+
+*Reguły interpretacji importu:*
+
+!image-2026-10-09-15-09-26-050.png|width=799,height=450!
+
+gdzie (t) oznacza tytuł, a (s) pełną datę i godzinę rozpoczęcia. Porównania czasu wykonywane są na wspólnej osi czasu. Duplikaty sprawdza się zarówno względem kalendarza, jak i wśród zmian wybranych w danym imporcie.
+
+Samo odczytanie pliku nie powoduje zapisu wydarzeń. Zapis następuje dopiero po weryfikacji i zatwierdzeniu przez użytkownika.",,u56609@student.wat.edu.pl,,,,,,,,,,"09 paź 2026 15:09 ;u56609@student.wat.edu.pl;image-2026-10-09-15-09-26-050.png;https://jira.wat.edu.pl/secure/attachment/12007/image-2026-10-09-15-09-26-050.png",,,,,,,,,,,,"0|i00z3u:9",,,,S23KC2S1P2-2,,
+Kontrola rozpoznanych danych przed zapisem,S23KC2S1P2-32,17931,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56620@student.wat.edu.pl,u56620@student.wat.edu.pl,u56620@student.wat.edu.pl,07 paź 2026 21:05 ,09 paź 2026 15:57 ,11 paź 2026 16:53 ,,,,,,,"*Jako* użytkownik, 
+*chcę* przejrzeć listę wydarzeń odczytanych z pliku/zdjęcia przed ich zapisaniem, 
+*aby* upewnić się, że system bezbłędnie zinterpretował dane.
+
+ 
+
+*Punkt wejścia (pre condition):*
+
+*Użytkownik* jest zalogowany w aplikacji (posiada aktywną sesję / ważny token JWT).
+
+*Użytkownik* znajduje się w module importu kalendarza i wybral plik o dopuszczalnym formacie (.ics, .pdf, .jpg, .png) i rozmiarze poniżej maksymalnego.
+
+ 
+
+*Punkt wyjściowy (post condition):*
+
+*System* pomyślnie wygenerował tymczasowy podgląd danych bez modyfikacji produkcyjnej bazy danych.
+
+Tymczasowa sesja importu wygasa po 15 minutach od braku akcji ze strony użytkownika.
+
+ 
+
+*Scenariusz Główny:*
+
+*User → System:* Użytkownik przesyła plik (ICS, PDF lub zdjęcie) z poziomu interfejsu (wywołanie POST /api/v1/import/preview z plikiem w formacie multipart/form-data).
+
+*System:* Przetwarza plik, wyciąga dane o wydarzeniach i tworzy tymczasową sesję importu w pamięci podręcznej (Redis).
+
+*System → User:* System zwraca odpowiedź (200 OK) z wygenerowaną listą rozpoznanych wydarzeń (ImportPreviewDTO) i identyfikatorem importSessionId do wyświetlenia podglądu.
+
+*User:* Przegląda rozpoznane dane w interfejsie i ewentualnie poprawia ewentualne błędy.
+
+*User → System:* Użytkownik zatwierdza dane, wysyłając żądanie POST /api/v1/import/confirm z zakceptowaną listą oraz importSessionId.
+
+*System:* System zapisuje potwierdzone wydarzenia w produkcyjnej bazie danych SQL.
+
+*System → User:* System zwraca komunikat o pomyślnym zapisie (201 Created) oraz odświeżoną listę wydarzeń w kalendarzu.
+
+ 
+
+*Obiekty biznesowe:*
+
+*Użytkownik (Student)* — osoba importująca kalendarz i akceptująca podgląd.
+
+*Plik wejściowy* — przesłany plik (ICS, PDF lub zdjęcie).
+
+*Tymczasowe wydarzenie* — odczytany rekord przed akceptacją, widoczny na podglądzie.
+
+*Sesja importu* — obiekt tymczasowo przechowujący stan odczytanych danych w pamięci.
+
+*Wydarzenie* — docelowy wpis tworzony w bazie danych po zatwierdzeniu podglądu.
+
+ 
+
+*Potrzeby informacyjne:*
+
+*Dane wejściowe (User → System):*
+
+Plik w formacie {{{}multipart/form-data{}}}.
+
+Token autoryzacyjny użytkownika (JWT Header).
+
+Potwierdzona lista wydarzeń + {{importSessionId}} (przy zatwierdzaniu).
+
+*Dane wyjściowe (System → User):*
+
+Identyfikator sesji ({{{}importSessionId{}}}).
+
+Lista rozpoznanych obiektów wydarzeń (tytuł, data startu/końca, miejsce, poziom pewności odczytu).
+
+Statusy odpowiedzi HTTP ({{{}200 OK{}}}, {{{}201 Created{}}}, {{{}422 Unprocessable Entity{}}}).",,u56620@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z3u:i",,,,S23KC2S1P2-2,,
+Wykrywanie duplikatów wydarzeń,S23KC2S1P2-14,17913,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56649@student.wat.edu.pl,u56649@student.wat.edu.pl,u56649@student.wat.edu.pl,07 paź 2026 20:40 ,09 paź 2026 15:57 ,11 paź 2026 16:53 ,,,,,,,"*Jako* użytkownik 
+{*}chcę{*}, żeby aplikacja wykrywała powtarzające się wydarzenia przy imporcie, 
+*aby* mój kalendarz nie był zaśmiecony kopiami.
+
+
+
+{*}Scenariusz{*}:
+
+*1.* Użytkownik wybiera „Importuj kalendarz” i wskazuje plik.
+
+*2.* System wyświetla podgląd importowanych wydarzeń z oznaczonymi duplikatami.
+
+*2a.* Plik ma niepoprawny format. System wyświetla komunikat o błędzie. Powrót do kroku 1.
+
+*2b.* Nie wykryto duplikatów. System wyświetla podgląd bez oznaczeń. Przejście do kroku 3.
+
+*3.* Użytkownik dla każdego duplikatu wybiera: pomiń, zastąp lub zachowaj oba, i klika „Importuj”.
+
+*3a.* Użytkownik klika „Anuluj”. System przerywa import bez zmian w kalendarzu. Koniec scenariusza.
+
+*4.* System zapisuje wydarzenia i wyświetla podsumowanie: liczbę dodanych, zastąpionych i pominiętych.
+
+
+
+{*}Ograniczenia typu pre{*}: użytkownik jest zalogowany i ma w kalendarzu co najmniej jedno wydarzenie, plik importu jest poprawny.
+{*}Ograniczenia typu post{*}: kalendarz nie zawiera niechcianych kopii, import jest zakończony.
+
+
+
+{*}Potrzeby informacyjne{*}: istniejące wydarzenia użytkownika, wydarzenia z importu (tytuł, data, godzina rozpoczęcia i zakończenia), reguła uznawania duplikatu.",,u56649@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z3v:",,,,S23KC2S1P2-2,,
+Wskazanie godzin dostępnych do pracy,S23KC2S1P2-9,17908,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56651@student.wat.edu.pl,u56651@student.wat.edu.pl,u56651@student.wat.edu.pl,07 paź 2026 20:38 ,09 paź 2026 15:57 ,11 paź 2026 16:53 ,,,,,,,"*Jako* student
+
+*chcę* zaznaczyć dni i godziny, w których mogę pracować,
+
+*aby* grafik był planowany tylko w tych oknach.
+
+ 
+
+*1. Scenariusz*
+1. Użytkownik otwiera profil pracy i wybiera opcję „Dostępność"".
+2. System wyświetla widok tygodnia z aktualnie ustawioną dostępnością.
+   2a. Jeśli dostępność nie została jeszcze ustawiona, system wyświetla pusty widok z informacją, że bez dostępności nie można wygenerować grafiku.
+3. Użytkownik zaznacza dni i godziny, w których może pracować.
+   3a. Jeśli użytkownik chce użyć tych samych godzin w innych dniach, wybiera „Kopiuj na inne dni"" i wskazuje dni. System powiela przedziały godzin we wskazanych dniach.
+   3b. Jeśli użytkownik chce usunąć zaznaczony przedział, zaznacza go i wybiera „Usuń"". System usuwa przedział z widoku.
+4. System wyświetla zaznaczone przedziały i sprawdza ich poprawność.
+   4a. Jeśli godzina zakończenia nie jest późniejsza niż rozpoczęcia, system wyświetla komunikat o błędzie. Użytkownik poprawia przedział, a scenariusz wraca do kroku 3.
+   4b. Jeśli przedziały w jednym dniu nakładają się na siebie, system łączy je w jeden przedział.
+   4c. Jeśli zaznaczony przedział nakłada się na obowiązkowe zajęcia, system oznacza kolidującą część jako niedostępną do pracy i informuje o tym użytkownika. Użytkownik akceptuje zmianę (przejście do kroku 5) albo zmienia przedział (powrót do kroku 3).
+5. Użytkownik zatwierdza dostępność przyciskiem „Zapisz"".
+   5a. Jeśli użytkownik wybierze „Anuluj"", system zamyka widok bez zapisywania zmian i zachowuje poprzednią dostępność. Scenariusz kończy się.
+6. System zapisuje dostępność w profilu pracy.
+   6a. Jeśli zapis się nie powiedzie (np. brak połączenia lub błąd bazy), system wyświetla komunikat o błędzie i zachowuje zaznaczenia. Użytkownik ponawia zapis (powrót do kroku 5).
+7. System wyświetla potwierdzenie wraz z łączną liczbą godzin dostępnych w tygodniu.
+   7a. Jeśli łączna liczba godzin jest mniejsza niż cel godzin ustawiony w profilu, system informuje, że cel może być nieosiągalny.
+
+*2. Ograniczenia typu pre i post*
+
+- Preconditions — warunki wstępne:
+o Użytkownik jest zalogowany do aplikacji.
+o Użytkownik ma dostęp do profilu pracy.
+o Aplikacja ma dostęp do kalendarza użytkownika (do sprawdzenia nakładania się na obowiązkowe zajęcia).
+- Postconditions — warunki końcowe:
+o Dostępność zostaje zapisana w profilu pracy jako zestaw przedziałów godzin dla dni tygodnia.
+o Zapisana dostępność jest używana przy generowaniu propozycji grafiku.
+o Przedziały nakładające się na obowiązkowe zajęcia nie są traktowane jako dostępne do pracy.
+o Zapisanie dostępności nie zmienia istniejących wydarzeń w kalendarzu.
+o W przypadku anulowania, błędnych danych lub błędu zapisu poprzednia dostępność pozostaje bez zmian.
+
+*3. Potrzeby informacyjne*
+
+- Dni tygodnia, w których użytkownik może pracować.
+- Przedziały godzin dostępności dla każdego dnia (od, do).
+- Aktualnie zapisana dostępność użytkownika.
+- Obowiązkowe zajęcia użytkownika (do wykrycia nakładania się).
+- Cel godzin pracy z profilu (do porównania z dostępnością).
+- Łączna liczba godzin dostępnych w tygodniu.
+- Komunikat o wyniku zapisu: potwierdzenie albo opis błędu.",,u56651@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z3w:",,,,S23KC2S1P2-3,,
+Określenie celu godzin,S23KC2S1P2-39,17938,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56603@student.wat.edu.pl,u56603@student.wat.edu.pl,u56603@student.wat.edu.pl,07 paź 2026 21:23 ,09 paź 2026 15:57 ,11 paź 2026 16:53 ,,,,,,,"*Historyjka użytkownika:*
+
+*Jako* student 
+*chcę* określić docelową liczbę godzin pracy, *aby* aplikacja mogła przygotować grafik odpowiadający moim oczekiwaniom dotyczącym czasu pracy.
+
+*Scenariusz:*
+
+1. Użytkownik otwiera profil pracy.
+
+2. System wyświetla aktualne ustawienia profilu.
+
+3. Użytkownik wprowadza docelową liczbę godzin pracy i wybiera okres, którego dotyczy cel.
+
+4. System sprawdza poprawność wprowadzonych danych.
+
+4a. Jeśli podana wartość jest nieprawidłowa, np. jest ujemna lub nie została podana, system wyświetla komunikat o błędzie i prosi użytkownika o poprawienie danych.
+
+5. System wyświetla informację, że wprowadzone dane są poprawne.
+
+6. Użytkownik zapisuje ustawienia.
+
+6a. Jeśli użytkownik rezygnuje z zapisu, system nie zmienia dotychczasowych ustawień profilu.
+
+7. System zapisuje cel godzin pracy i wyświetla potwierdzenie.
+
+*Ograniczenia typu pre i post*
+
+*Preconditions — warunki wstępne:*
+ * Użytkownik jest zalogowany do aplikacji.
+ * Użytkownik ma dostęp do profilu pracy.
+ * System umożliwia edycję ustawień profilu.
+
+*Postconditions — warunki końcowe:*
+ * Docelowa liczba godzin pracy zostaje zapisana wraz z okresem, którego dotyczy.
+ * Użytkownik otrzymuje potwierdzenie zapisania ustawień.
+ * Zapisany cel może zostać wykorzystany przez funkcję automatycznego planowania grafiku.
+ * Jeśli dane są nieprawidłowe, system nie zapisuje ich jako nowego celu.
+ * Jeśli użytkownik anuluje zapis, dotychczasowe ustawienia pozostają bez zmian.
+
+*Potrzeby informacyjne:*
+ * Docelowa liczba godzin pracy.
+ * Okres, którego dotyczy cel, np. tydzień lub miesiąc.
+ * Aktualnie zapisany cel godzin.
+ * Informacja o poprawności wprowadzonych danych.
+ * Dopuszczalny zakres godzin.
+ * Informacja o wyniku zapisu ustawień.
+ * Informacja o ewentualnym błędzie walidacji",,u56603@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z3y:",,,,S23KC2S1P2-3,,
+określenie stawki godzinowej,S23KC2S1P2-45,17951,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56609@student.wat.edu.pl,u56609@student.wat.edu.pl,u56609@student.wat.edu.pl,07 paź 2026 22:08 ,09 paź 2026 15:57 ,09 paź 2026 15:26 ,,,,,,,"*Jako* pracujący student
+*Chcę* zapisać swoją stawkę godzinową w profilu pracy
+*Aby* aplikacja mogła szacować wynagrodzenie za zaplanowane godziny.
+
+*1. Scenariusz*
+ # Użytkownik wybiera ustawienie stawki godzinowej w profilu pracy.
+ # System wyświetla formularz z polem stawki, oznaczeniem waluty oraz wyborem brutto lub netto. Jeżeli stawka została wcześniej zapisana, pokazuje dotychczasowe ustawienia.
+ # Użytkownik wprowadza lub zmienia stawkę, określa jej rodzaj i wybiera „Zapisz”.
+ # System sprawdza poprawność danych, zapisuje ustawienia i wyświetla potwierdzenie.
+ # Użytkownik wybiera okres, dla którego chce sprawdzić szacowane wynagrodzenie.
+ # System wyświetla liczbę zaplanowanych godzin pracy oraz wynagrodzenie obliczone na podstawie zapisanej stawki, wraz z walutą i oznaczeniem brutto lub netto.
+
+*Scenariusze alternatywne:*
+
+*3a. Anulowanie edycji:* użytkownik wybiera „Anuluj”. System zamyka formularz bez zmiany dotychczasowych ustawień.
+
+*4a. Niepoprawne dane:* system blokuje zapis i wyjaśnia, co należy poprawić, np. kwota musi być dodatnia i mieć najwyżej dwa miejsca po przecinku. Użytkownik poprawia dane — powrót do kroku 3.
+
+*4b. Błąd zapisu:* system informuje o niepowodzeniu i zachowuje wprowadzone dane w formularzu. Użytkownik wybiera „Ponów zapis” — powrót do kroku 4 — albo „Anuluj”, po którym system kończy edycję bez zmiany zapisanych ustawień.
+
+*6a. Brak zaplanowanych godzin:* system wyświetla informację o braku zaplanowanej pracy w wybranym okresie oraz szacowane wynagrodzenie równe zero. Zapisana stawka pozostaje bez zmian.
+
+*2. Ograniczenia typu pre i post*
+
+*Preconditions — warunki wstępne:*
+ * Student ma dostęp do własnego profilu pracy i może edytować jego ustawienia.
+
+*Postconditions — warunki końcowe:*
+ * Po udanym zapisie profil zawiera aktualną stawkę godzinową oraz oznaczenie brutto lub netto.
+
+ * Waluta stawki jest jednoznacznie wskazana w formularzu i przy szacowanym wynagrodzeniu.
+
+ * Zapisane ustawienia pozostają dostępne po ponownym otwarciu aplikacji.
+
+ * Szacowane wynagrodzenie jest obliczane na podstawie zapisanej stawki i zaplanowanych godzin w wybranym okresie.
+
+ * Niepoprawne dane nie zastępują wcześniej zapisanych ustawień.
+
+ * Anulowanie lub błąd zapisu pozostawiają dotychczasowe ustawienia bez zmian.
+
+ * Zmiana stawki nie modyfikuje wydarzeń ani liczby godzin pracy w kalendarzu.
+
+*3. Potrzeby informacyjne*
+ * Informacja o aktualnej stawce, pozwalająca sprawdzić jej zgodność z warunkami zatrudnienia.
+
+ * Jednoznaczne określenie waluty oraz tego, czy kwota jest brutto, czy netto, aby uniknąć błędnej interpretacji wynagrodzenia.
+
+ * Informacja o dopuszczalnym sposobie wprowadzenia kwoty oraz wskazanie przyczyny odrzucenia niepoprawnej wartości.
+
+ * Informacja o liczbie zaplanowanych godzin i przewidywanym wynagrodzeniu, pozwalająca ocenić realizację celu zarobkowego.
+
+ * Informacja o okresie objętym szacunkiem oraz stawce użytej do obliczenia.
+
+ * Potwierdzenie zapisania ustawień, pozwalające ustalić, czy aplikacja korzysta już z aktualnej stawki.
+
+*Dopuszczalne wartości informacji:*
+ * *Rodzaj stawki:* „Brutto” albo „Netto”.
+
+ * *Waluta:* „PLN” — przyjęta dla tej wersji funkcji i wyraźnie wskazana w formularzu.
+
+ * *Decyzja w formularzu:* „Zapisz” albo „Anuluj”.
+
+ * *Wynik walidacji:* „Dane poprawne” albo „Dane wymagają poprawy”.
+
+ * *Decyzja po błędzie zapisu:* „Ponów zapis” albo „Anuluj”.
+
+ * *Dostępność godzin do obliczenia:* „Zaplanowano godziny pracy” albo „Brak zaplanowanych godzin pracy”.
+
+Stawka jest wartością liczbową, a nie typem enumeratywnym. Przykładowe poprawne wartości to 30, 30,50 i 42,75. Wartości 0, −10, 30,555 oraz tekst niebędący liczbą są niepoprawne.
+
+*Reguły określania stawki i obliczania wynagrodzenia:*
+
+!image-2026-10-09-15-19-16-276.png|width=724,height=484!
+
+Niepełne godziny są uwzględniane proporcjonalnie, np. 30 minut to (0\{,}5) godziny. Kwota prezentowana użytkownikowi jest zaokrąglana do dwóch miejsc po przecinku.
+
+Dla 20 godzin pracy i stawki 30 PLN za godzinę wynagrodzenie wynosi 600 PLN.
+
+Wynik zachowuje oznaczenie brutto lub netto zapisanej stawki. System nie przelicza brutto na netto ani odwrotnie. W ramach tego story szacunek wykorzystuje jedną stawkę i nie obejmuje premii, dodatków ani odmiennych stawek dla poszczególnych zmian.",,u56609@student.wat.edu.pl,,,,,,,,,,"09 paź 2026 15:19 ;u56609@student.wat.edu.pl;image-2026-10-09-15-19-16-276.png;https://jira.wat.edu.pl/secure/attachment/12009/image-2026-10-09-15-19-16-276.png",,,,,,,,,,,,"0|i00z43:i",,,,S23KC2S1P2-3,,
+Blokowanie dni wolnych i okresu sesji,S23KC2S1P2-33,17932,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56620@student.wat.edu.pl,u56620@student.wat.edu.pl,u56620@student.wat.edu.pl,07 paź 2026 21:06 ,09 paź 2026 15:56 ,11 paź 2026 16:53 ,,,,,,,"*Jako* pracujący student, 
+*chcę* zablokować wybrane dni wolne oraz okres sesji w moim profilu, 
+*aby* system nie planował mi wtedy zmian w pracy.
+
+ 
+
+*Punkt wejścia (Pre-condition):* 
+Użytkownik jest zalogowany (posiada aktywny token JWT) i znajduje się w sekcji ustawień profilu pracy.
+
+*Punkt wyjściowy (Post-condition):* 
+Wybrane dni/okresy są zarejestrowane w bazie danych jako zablokowane dla algorytmu generatora grafiku pracy.
+
+ 
+
+*Scenariusz Podstawowy:*
+ # *User → System:* Użytkownik zaznacza w interfejsie dni wolne lub zakres dat sesji i klika „Zapisz niedostępność” ({{{}POST /api/v1/work-profile/unavailabilities{}}}).
+ # *System:* Waliduje nakładanie się zakresów dat oraz czy daty nie dotyczą przeszłości.
+ # *System:* Zapisuje reguły niedostępności w bazie danych i ustawia powiązanie z profilem pracy użytkownika.
+ # *System → User:* Zwraca status {{201 Created}} z zapisanym obiektem oraz odświeża kalendarz niedostępności.
+
+ 
+
+*Scenariusz Alternatywny:*
+
+*Użytkownik* próbuje zablokować zakres dat z przeszłości lub podaje niepoprawny zakres
+ # *User → System:* Użytkownik przesyła niepoprawny zakres dat (np. z przeszłości lub koniec przed początkiem).
+
+ # *System:* Wykrywa błąd danych i odrzuca zapis (brak zmian w bazie).
+
+ # *System → User:* Zwraca kod {{{}400 Bad Request{}}}, a aplikacja wyświetla komunikat.
+
+ 
+h3. OBIEKTY BIZNESOWE
+
+*Użytkownik (Pracujący student)* — osoba definiująca swoje dni wolne i okres sesji.
+
+*Profil pracy* — główne konto ustawień pracy użytkownika.
+
+*Niedostępność* — zablokowany dzień lub zakres dat (np. urlop, sesja).
+h3. POTRZEBY INFORMACYJNE (Wymiana danych)
+
+*Dane wejściowe (User → System):*
+
+Data początkowa i data końcowa blokady.
+
+Typ niedostępności (np. dzień wolny / sesja).
+
+*Dane wyjściowe (System → User):*
+
+Potwierdzenie zapisu (kod statusu HTTP) i zaktualizowana lista zablokowanych dat.
+
+ 
+
+ 
+h3.  ",,u56620@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z44:",,,,S23KC2S1P2-3,,
+Edycja i zapis ustawień profilu,S23KC2S1P2-15,17914,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56649@student.wat.edu.pl,u56649@student.wat.edu.pl,u56649@student.wat.edu.pl,07 paź 2026 20:41 ,09 paź 2026 15:56 ,11 paź 2026 16:53 ,,,,,,,"*Jako* pracujący student 
+*chcę* edytować i zapisać ustawienia profilu pracy (np. dostępne dni, minimalna i maksymalna liczba godzin), 
+*aby* planowanie grafiku opierało się na aktualnych danych.
+
+
+
+{*}Scenariusz{*}:
+
+*1.* Użytkownik otwiera ekran „Profil pracy”.
+
+*2.* System wyświetla formularz z aktualnymi ustawieniami.
+
+*3.* Użytkownik zmienia dostępne dni i limity godzin, klika „Zapisz”.
+
+*3a.* Użytkownik próbuje opuścić ekran bez zapisu. System pyta, czy odrzucić zmiany. Po potwierdzeniu koniec scenariusza, po odmowie powrót do kroku 3.
+
+*4.* System zapisuje zmiany i wyświetla potwierdzenie.
+
+*4a.* Minimum godzin jest większe niż maksimum lub pole jest puste. System wyświetla komunikat przy polu i nie zapisuje zmian. Powrót do kroku 3.
+
+*4b.* Brak połączenia z internetem. System informuje, że zmiany nie zostały zapisane, i zachowuje dane w formularzu. Powrót do kroku 3.
+
+
+
+{*}Ograniczenia typu pre{*}: użytkownik jest zalogowany i ma utworzony profil pracy.
+{*}Ograniczenia typu post{*}: nowe ustawienia są zapisane i używane przy kolejnym planowaniu grafiku.
+
+
+
+{*}Potrzeby informacyjne{*}: obecne ustawienia profilu, dostępne dni tygodnia, limity godzin, czas dojazdu, reguły walidacji (np. minimum nie większe od maksimum).",,u56649@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z45:",,,,S23KC2S1P2-3,,
+Uzyskanie grafiku pracy dopasowanego do zajęć,S23KC2S1P2-10,17909,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56651@student.wat.edu.pl,u56651@student.wat.edu.pl,u56651@student.wat.edu.pl,07 paź 2026 20:39 ,09 paź 2026 15:56 ,11 paź 2026 16:53 ,,,,,,,"*Jako* student
+
+*chcę* otrzymać propozycję grafiku pracy na wybrany tydzień,
+
+*aby* nie układać go ręcznie.
+
+ 
+
+*1. Scenariusz*
+1. Użytkownik otwiera aplikację i wybiera opcję „Wygeneruj grafik"".
+2. System wyświetla wybór tygodnia (domyślnie następny) oraz podsumowanie profilu pracy: dostępność, cel godzin i maksymalną liczbę godzin.
+   2a. Jeśli w profilu brakuje dostępności lub celu godzin, system informuje o braku ustawień i przekierowuje użytkownika do profilu pracy. Po zapisaniu ustawień scenariusz wraca do kroku 2.
+3. Użytkownik wybiera tydzień i zatwierdza przyciskiem „Generuj"".
+   3a. Jeśli w wybranym tygodniu nie ma zajęć w kalendarzu, system ostrzega o tym i pyta, czy kontynuować. Użytkownik potwierdza (przejście do kroku 4) albo anuluje (scenariusz kończy się).
+4. System pobiera zajęcia i inne wydarzenia z wybranego tygodnia oraz ustawienia profilu, a następnie wylicza propozycję grafiku. Pomija godziny zajęć, zostawia czas na odpoczynek i dąży do celu godzin w ramach limitu.
+   4a. Jeśli cel godzin jest nieosiągalny przy zajęciach i dostępności, system generuje najbliższy możliwy grafik i informuje, ilu godzin brakuje. Użytkownik zmienia cel lub dostępność (powrót do kroku 2) albo przyjmuje wynik (przejście do kroku 5).
+   4b. Jeśli w tygodniu nie ma żadnych wolnych okien, system informuje, że grafiku nie da się wygenerować, i proponuje zmianę dostępności. Scenariusz kończy się.
+   4c. Jeśli generowanie zakończy się błędem, system wyświetla komunikat. Użytkownik ponawia generowanie (powrót do kroku 3).
+5. System wyświetla propozycję grafiku w widoku tygodnia obok zajęć wraz z podsumowaniem: liczbą godzin pracy i informacją, czy cel został osiągnięty.
+6. Użytkownik przegląda propozycję i wybiera jedną z opcji: akceptuj, generuj ponownie, popraw ręcznie lub odrzuć.
+   6a. Jeśli użytkownik wybierze „Generuj ponownie"", system tworzy inną propozycję. Scenariusz wraca do kroku 5.
+   6b. Jeśli użytkownik wybierze „Popraw ręcznie"", przesuwa lub usuwa wybrane zmiany. System sprawdza kolizje i limit godzin oraz odświeża podsumowanie. Jeśli zmiana narusza obowiązkowe zajęcia lub limit godzin, system odrzuca ją z komunikatem. Scenariusz wraca do kroku 5.
+   6c. Jeśli użytkownik wybierze „Odrzuć"", system zamyka propozycję bez zapisywania. Scenariusz kończy się.
+7. Użytkownik akceptuje grafik.
+8. System zapisuje godziny pracy w kalendarzu jako wydarzenia kategorii „praca"" i wyświetla potwierdzenie.
+   8a. Jeśli zapis się nie powiedzie (np. brak połączenia lub błąd bazy), system wyświetla komunikat o błędzie i zachowuje propozycję. Użytkownik ponawia akceptację (powrót do kroku 7).
+
+*2. Ograniczenia typu pre i post*
+
+- Preconditions — warunki wstępne:
+o Użytkownik jest zalogowany do aplikacji.
+o W kalendarzu są zajęcia na wybrany tydzień (zaimportowane lub dodane ręcznie).
+o Profil pracy zawiera co najmniej dostępność i cel godzin.
+- Postconditions — warunki końcowe:
+o Po akceptacji godziny pracy zostają zapisane w kalendarzu jako wydarzenia kategorii „praca"".
+o Żadna zapisana zmiana nie koliduje z obowiązkowymi zajęciami.
+o Suma godzin pracy w tygodniu nie przekracza ustawionego limitu.
+o Zapisany grafik jest dostępny dla powiadomień i publikacji w Google Calendar.
+o W przypadku odrzucenia propozycji, braku wolnych okien, anulowania lub błędu zapisu kalendarz pozostaje bez zmian.
+
+*3. Potrzeby informacyjne*
+
+- Wybrany tydzień (data początku i końca).
+- Zajęcia i inne wydarzenia użytkownika w wybranym tygodniu, z oznaczeniem obowiązkowych.
+- Dostępność użytkownika (dni i godziny, w których może pracować).
+- Cel godzin pracy w tygodniu.
+- Maksymalna liczba godzin pracy w tygodniu.
+- Minimalny czas odpoczynku między zajęciami a pracą.
+- Propozycja grafiku: lista zmian z datą, godziną rozpoczęcia i zakończenia.
+- Podsumowanie propozycji: liczba godzin pracy i informacja o osiągnięciu celu.
+- Liczba brakujących godzin (jeśli cel jest nieosiągalny).
+- Decyzja użytkownika: akceptuj, generuj ponownie, popraw ręcznie lub odrzuć.
+- Komunikat o wyniku: potwierdzenie zapisu albo opis błędu.",,u56651@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z45:i",,,,S23KC2S1P2-4,,
+Uwzględnienie zajęć,S23KC2S1P2-40,17939,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56603@student.wat.edu.pl,u56603@student.wat.edu.pl,u56603@student.wat.edu.pl,07 paź 2026 21:24 ,09 paź 2026 15:56 ,11 paź 2026 16:53 ,,,,,,,"*Historyjka użytkownika:*
+
+*Jako* student 
+{*}chcę{*}, aby podczas automatycznego tworzenia grafiku aplikacja uwzględniała moje zajęcia, 
+*aby* zaplanowane godziny pracy nie kolidowały z moim planem studiów.
+
+*Scenariusz*
+
+1. Użytkownik otwiera funkcję automatycznego planowania grafiku.
+
+2. System wyświetla dostępne opcje planowania.
+
+3. Użytkownik wybiera okres, dla którego chce wygenerować grafik.
+
+4. System pobiera zajęcia z kalendarza oraz ustawienia profilu pracy.
+
+4a. Jeśli kalendarz nie zawiera żadnych zajęć, system informuje użytkownika o braku danych i umożliwia uzupełnienie kalendarza.
+
+5. System wyznacza przedziały czasu, w których można zaplanować pracę, uwzględniając godziny zajęć.
+
+5a. Jeśli dostępna liczba wolnych godzin jest niewystarczająca do realizacji celu godzinowego, system informuje użytkownika, że nie może wygenerować grafiku spełniającego wszystkie wymagania.
+
+6. System wyświetla propozycję grafiku, w której godziny pracy nie kolidują z zajęciami.
+
+7. Użytkownik sprawdza propozycję i decyduje, czy ją zaakceptować.
+
+7a. Jeśli użytkownik nie akceptuje propozycji, może wrócić do ustawień i zmienić preferencje planowania.
+
+8. System zapisuje zaakceptowany grafik i wyświetla potwierdzenie.
+
+*Ograniczenia typu pre i post*
+
+*Preconditions — warunki wstępne:*
+ * Użytkownik jest zalogowany do aplikacji.
+ * Użytkownik ma dostęp do funkcji automatycznego planowania grafiku.
+ * W kalendarzu zapisane są zajęcia w okresie objętym planowaniem.
+ * Użytkownik posiada skonfigurowany profil pracy.
+ * System ma dostęp do informacji o dostępności użytkownika oraz celu godzinowym, jeśli został określony.
+
+*Postconditions — warunki końcowe:*
+ * System generuje propozycję grafiku uwzględniającą zajęcia.
+ * Zaproponowane godziny pracy nie nakładają się na zapisane godziny zajęć.
+ * Po akceptacji grafiku przez użytkownika system zapisuje go w aplikacji.
+ * Jeśli brakuje wystarczającej liczby wolnych godzin, system informuje o ograniczeniach.
+ * Jeśli użytkownik odrzuci propozycję, system nie zapisuje jej jako zaakceptowanego grafiku.
+
+*Potrzeby informacyjne*
+ * Wybrany okres planowania.
+ * Terminy zajęć zapisanych w kalendarzu.
+ * Docelowa liczba godzin pracy.
+ * Dostępność użytkownika w poszczególnych dniach.
+ * Preferowane godziny pracy.
+ * Maksymalna liczba godzin pracy.
+ * Wymagane przerwy i czas odpoczynku, jeśli określono je w profilu.
+ * Lista możliwych przedziałów czasu na pracę.
+ * Informacja o wykrytych ograniczeniach.
+ * Proponowane dni i godziny pracy.
+ * Status akceptacji i zapisania grafiku.",,u56603@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z46:",,,,S23KC2S1P2-4,,
+akceptacja grafiku,S23KC2S1P2-46,17952,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56609@student.wat.edu.pl,u56609@student.wat.edu.pl,u56609@student.wat.edu.pl,07 paź 2026 22:09 ,09 paź 2026 15:56 ,09 paź 2026 15:29 ,,,,,,,"*Historyjka użytkownika:*
+*Jako* pracujący student
+*Chcę* sprawdzić i zaakceptować proponowany grafik pracy
+*Aby* mieć kontrolę nad tym, jakie zmiany zostaną zapisane w moim kalendarzu.
+
+*1. Scenariusz*
+ # Użytkownik wybiera podgląd propozycji grafiku na wybrany tydzień.
+ # System wyświetla proponowane dni i godziny pracy, łączną liczbę godzin oraz opcje „Akceptuj grafik” i „Odrzuć grafik”. Propozycja jest oznaczona jako niezatwierdzona.
+ # Użytkownik sprawdza propozycję i wybiera „Akceptuj grafik”.
+ # System ponownie sprawdza zgodność propozycji z aktualnym kalendarzem i ustawieniami profilu pracy. Jeżeli propozycja pozostaje zgodna, zapisuje jej zmiany jako zatwierdzone wydarzenia w kategorii „Praca” i wyświetla potwierdzenie oraz zaktualizowany kalendarz.
+
+*Scenariusze alternatywne:*
+
+*3a. Odrzucenie propozycji:* użytkownik wybiera „Odrzuć grafik”. System oznacza propozycję jako odrzuconą i nie dodaje jej zmian do kalendarza. Scenariusz kończy się.
+
+*4a. Propozycja nieaktualna:* system wykrywa konflikt z aktualnym kalendarzem lub ustawieniami profilu. Nie zapisuje grafiku, wskazuje przyczynę i udostępnia opcje „Wygeneruj ponownie” oraz „Anuluj”. Użytkownik wybiera ponowne wygenerowanie, a system przygotowuje nową propozycję — powrót do kroku 2. Wybranie „Anuluj” kończy operację bez zapisu.
+
+*4b. Grafik został już zaakceptowany:* system informuje, że propozycja została wcześniej zapisana, i wyświetla istniejące wydarzenia. Nie tworzy duplikatów.
+
+*4c. Błąd zapisu:* system informuje o niepowodzeniu i udostępnia opcje „Ponów zapis” oraz „Anuluj”. Użytkownik wybiera ponowienie — powrót do kroku 4 — albo anulowanie, po którym system kończy operację bez zapisu propozycji.
+
+*2. Ograniczenia typu pre i post*
+
+*Preconditions — warunki wstępne:*
+ * Student ma dostęp do własnego kalendarza.
+
+ * Istnieje wygenerowana, niezatwierdzona propozycja grafiku na wybrany tydzień.
+
+*Postconditions — warunki końcowe:*
+ * Po udanej akceptacji wszystkie zmiany z propozycji są zapisane w kalendarzu jako zatwierdzone wydarzenia w kategorii „Praca”.
+
+ * Propozycja otrzymuje status „Zaakceptowana”.
+
+ * Po odrzuceniu propozycja otrzymuje status „Odrzucona”, a kalendarz pozostaje bez zmian.
+
+ * Anulowanie, nieaktualność propozycji lub błąd zapisu nie powodują dodania jej zmian do kalendarza.
+
+ * Wydarzenia istniejące przed akceptacją pozostają bez zmian.
+
+ * Ponowna próba akceptacji tej samej propozycji nie tworzy duplikatów.
+
+*3. Potrzeby informacyjne*
+ * Czytelny obraz proponowanego tygodnia pracy, pozwalający ocenić możliwość pogodzenia pracy z nauką i innymi obowiązkami.
+
+ * Informacja o łącznej liczbie proponowanych godzin oraz jej relacji do celu tygodniowego, pozwalająca ocenić, czy grafik odpowiada potrzebom studenta.
+
+ * Informacja o zgodności propozycji z aktualną dostępnością i ograniczeniami profilu pracy.
+
+ * Jednoznaczne rozróżnienie propozycji od zatwierdzonego grafiku, aby student wiedział, które zmiany zostały już przyjęte.
+
+ * Informacja o konsekwencjach akceptacji i odrzucenia propozycji.
+
+ * Potwierdzenie wyniku operacji, pozwalające ustalić, czy można polegać na grafiku widocznym w kalendarzu.
+
+*Dopuszczalne wartości informacji:*
+ * *Status propozycji:* „Niezatwierdzona”, „Zaakceptowana”, „Odrzucona”.
+
+ * *Decyzja dotycząca propozycji:* „Akceptuj grafik” albo „Odrzuć grafik”.
+
+ * *Wynik sprawdzenia aktualności:* „Zgodna” albo „Nieaktualna”.
+
+ * *Decyzja po wykryciu nieaktualności:* „Wygeneruj ponownie” albo „Anuluj”.
+
+ * *Decyzja po błędzie zapisu:* „Ponów zapis” albo „Anuluj”.
+
+ * *Kategoria zapisywanych wydarzeń:* „Praca”.
+
+ * *Wynik zakończenia operacji:* „Zaakceptowano”, „Odrzucono”, „Anulowano” albo „Grafik już zaakceptowany”. Błąd zapisu i ponowne generowanie nie są zakończeniem operacji, jeżeli użytkownik ją kontynuuje.
+
+*Reguły akceptacji grafiku:*
+ * Wyświetlenie propozycji nie powoduje dodania zmian do kalendarza.
+
+ * Akceptacja obejmuje całą wyświetloną propozycję. Wybieranie pojedynczych zmian nie jest częścią tego story.
+
+ * Przed zapisem system ponownie sprawdza propozycję względem aktualnego kalendarza i ustawień profilu pracy.
+
+ * Zapis odbywa się w całości albo wcale — nie może powstać częściowo zaakceptowany grafik.
+
+ * Każda propozycja ma unikalny identyfikator, który pozwala rozpoznać ponowioną akceptację i zapobiec duplikatom.
+
+ * Ponowne generowanie tworzy nową propozycję wymagającą osobnej akceptacji użytkownika.",,u56609@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z4i:i",,,,S23KC2S1P2-4,,
+Uwzględnienie czasu dojazdu,S23KC2S1P2-16,17915,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56649@student.wat.edu.pl,u56649@student.wat.edu.pl,u56649@student.wat.edu.pl,07 paź 2026 20:42 ,09 paź 2026 15:56 ,11 paź 2026 16:53 ,,,,,,,"*Jako* student 
+{*}chcę{*}, aby planowanie uwzględniało czas dojazdu między uczelnią a pracą, 
+*aby* proponowany grafik był realny do wykonania.
+
+
+
+{*}Scenariusz{*}:
+
+*1.* Użytkownik wybiera „Zaplanuj grafik” dla wybranego tygodnia.
+
+*2.* System wyświetla propozycję godzin pracy z blokami dojazdu przed i po zajęciach.
+
+*2a.* W profilu nie ustawiono czasu dojazdu. System wyświetla pole do jego wpisania. Po wpisaniu powrót do kroku 2.
+
+*2b.* Nie ma wolnych okien mieszczących pracę i dojazd. System informuje, że w tym tygodniu nie da się zaplanować pracy. Koniec scenariusza.
+
+*3.* Użytkownik przesuwa lub usuwa wybraną zmianę.
+
+*3a.* Użytkownik nie wprowadza zmian. Przejście do kroku 5.
+
+*4.* System aktualizuje propozycję i podsumowanie godzin.
+
+*4a.* Przesunięta zmiana koliduje z zajęciami lub dojazdem. System wyświetla ostrzeżenie i nie przesuwa zmiany. Powrót do kroku 3.
+
+*5.* Użytkownik klika „Akceptuj grafik”.
+
+*5a.* Użytkownik klika „Odrzuć”. System nie zapisuje grafiku. Koniec scenariusza.
+
+*6.* System dodaje zmiany do kalendarza i wyświetla potwierdzenie.
+
+
+
+{*}Ograniczenia typu pre{*}: użytkownik ma wprowadzony plan zajęć i ustawiony czas dojazdu w profilu.
+{*}Ograniczenia typu post{*}: zaproponowany grafik nie koliduje z zajęciami ani z czasem dojazdu.
+
+
+
+{*}Potrzeby informacyjne{*}: plan zajęć (godziny, obowiązkowość), czas dojazdu, dostępność i limity godzin z profilu pracy.",,u56649@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z4j:i",,,,S23KC2S1P2-4,,
+Wykorzystanie istniejącego kalendarza Google,S23KC2S1P2-12,17911,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56651@student.wat.edu.pl,u56651@student.wat.edu.pl,u56651@student.wat.edu.pl,07 paź 2026 20:39 ,09 paź 2026 15:56 ,11 paź 2026 16:53 ,,,,,,,"*Jako* student
+
+*chcę* połączyć konto Google z aplikacją,
+
+*aby* korzystać z mojego istniejącego kalendarza bez przepisywania wydarzeń.
+
+ 
+
+*1. Scenariusz*
+1. Użytkownik otwiera ustawienia aplikacji i wybiera opcję „Połącz z Google Calendar"".
+   1a. Jeśli konto Google jest już połączone, system wyświetla informację o połączonym koncie i opcje „Odłącz"" oraz „Zmień konto"". Scenariusz kończy się.
+2. System wyświetla informację o zakresie dostępu, o który poprosi aplikacja (odczyt i zapis wydarzeń w kalendarzu), oraz przycisk „Zaloguj się przez Google"".
+   2a. Jeśli urządzenie nie ma połączenia z internetem, system wyświetla komunikat o braku połączenia. Użytkownik ponawia próbę po przywróceniu połączenia (powrót do kroku 1).
+3. Użytkownik wybiera przycisk „Zaloguj się przez Google"".
+4. System przekierowuje użytkownika do strony logowania Google.
+5. Użytkownik loguje się na swoje konto Google i zatwierdza zgodę na dostęp aplikacji do kalendarza.
+   5a. Jeśli użytkownik odrzuci zgodę lub zamknie okno logowania, system wyświetla informację, że bez zgody nie można połączyć kalendarza. Użytkownik wraca do kroku 1 albo kończy scenariusz.
+   5b. Jeśli użytkownik ma kilka kont Google, wybiera to, które chce połączyć. Scenariusz przechodzi do kroku 6.
+6. System odbiera potwierdzenie autoryzacji od Google i bezpiecznie zapisuje dane dostępu do konta.
+   6a. Jeśli autoryzacja się nie powiedzie (np. wygasł kod lub wystąpił błąd po stronie Google), system wyświetla komunikat o błędzie i nie zapisuje danych dostępu. Użytkownik ponawia próbę (powrót do kroku 3).
+7. System pobiera listę kalendarzy z konta Google i wyświetla potwierdzenie połączenia wraz z adresem połączonego konta.
+   7a. Jeśli konto nie ma żadnego kalendarza, system informuje o tym i zachowuje połączenie. Scenariusz kończy się.
+8. Użytkownik sprawdza połączone konto. Scenariusz kończy się.
+
+*2. Ograniczenia typu pre i post*
+
+- Preconditions — warunki wstępne:
+o Użytkownik jest zalogowany do aplikacji.
+o Użytkownik ma konto Google z dostępem do Google Calendar.
+o Urządzenie ma połączenie z internetem.
+o Aplikacja jest zarejestrowana w usłudze Google i ma prawo prosić o dostęp do kalendarza.
+- Postconditions — warunki końcowe:
+o Konto Google zostaje połączone z aplikacją, a dane dostępu są bezpiecznie zapisane.
+o Aplikacja ma dostęp do listy kalendarzy użytkownika zgodnie z udzieloną zgodą.
+o Połączenie umożliwia pobieranie wydarzeń i publikację zaakceptowanego grafiku.
+o Połączenie nie zmienia ani nie usuwa żadnych wydarzeń w kalendarzu Google ani w aplikacji.
+o W przypadku odrzucenia zgody, błędu autoryzacji lub braku połączenia z internetem konto pozostaje niepołączone.
+
+*3. Potrzeby informacyjne*
+
+- Informacja o stanie połączenia (połączone lub niepołączone).
+- Zakres dostępu wymagany przez aplikację (odczyt i zapis wydarzeń).
+- Adres e-mail konta Google użytkownika.
+- Zgoda użytkownika na dostęp do kalendarza.
+- Dane dostępu do konta (token), przechowywane bezpiecznie.
+- Lista kalendarzy dostępnych na koncie Google.
+- Komunikat o wyniku połączenia: potwierdzenie albo opis błędu.",,u56651@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z4k:",,,,S23KC2S1P2-5,,
+Wybór kalendarzy,S23KC2S1P2-41,17940,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56603@student.wat.edu.pl,u56603@student.wat.edu.pl,u56603@student.wat.edu.pl,07 paź 2026 21:24 ,09 paź 2026 15:56 ,11 paź 2026 16:53 ,,,,,,,"*Historyjka użytkownika:*
+
+*Jako* student 
+*chcę* wybrać kalendarze Google, które mają być uwzględniane przez aplikację, 
+*aby* system brał pod uwagę tylko te wydarzenia, które są istotne przy planowaniu mojego grafiku.
+
+*Scenariusz:*
+
+1. Użytkownik otwiera ustawienia integracji z Google Calendar.
+
+2. System sprawdza, czy konto Google jest połączone z aplikacją.
+
+2a. Jeśli konto nie jest połączone, system informuje użytkownika o konieczności połączenia konta Google i umożliwia przejście do procesu łączenia.
+
+3. System pobiera i wyświetla listę kalendarzy dostępnych na połączonym koncie.
+
+3a. Jeśli system nie może pobrać listy kalendarzy, wyświetla komunikat o błędzie i umożliwia ponowienie próby.
+
+4. Użytkownik zaznacza kalendarze, które chce uwzględniać w aplikacji.
+
+5. System wyświetla zaznaczone kalendarze do potwierdzenia.
+
+6. Użytkownik zatwierdza wybór.
+
+6a. Jeśli użytkownik anuluje wybór, system zachowuje dotychczasowe ustawienia kalendarzy.
+
+7. System zapisuje ustawienia i wyświetla potwierdzenie.
+
+*Ograniczenia typu pre i post*
+
+*Preconditions — warunki wstępne:*
+ * Użytkownik jest zalogowany do aplikacji.
+ * Użytkownik ma dostęp do ustawień integracji.
+ * Konto Google jest połączone z aplikacją lub użytkownik może przeprowadzić proces łączenia.
+ * Użytkownik udzielił wymaganych uprawnień do wyświetlenia listy kalendarzy.
+
+*Postconditions — warunki końcowe:*
+ * Wybrane kalendarze zostają zapisane w ustawieniach integracji.
+ * Aplikacja uwzględnia wybrane kalendarze w dalszym działaniu.
+ * Użytkownik otrzymuje potwierdzenie zapisania ustawień.
+ * W przypadku anulowania wyboru dotychczasowe ustawienia pozostają bez zmian.
+ * W przypadku błędu pobierania listy kalendarzy system informuje użytkownika i nie zapisuje niepotwierdzonego wyboru.
+
+*Potrzeby informacyjne*
+ * Status połączenia z kontem Google.
+ * Informacja o wymaganych uprawnieniach.
+ * Lista dostępnych kalendarzy.
+ * Nazwy kalendarzy i ich identyfikatory.
+ * Informacja o tym, które kalendarze są obecnie wybrane.
+ * Lista kalendarzy zaznaczonych przez użytkownika.
+ * Informacja o błędach pobierania danych.
+ * Potwierdzenie zapisania ustawień integracji.",,u56603@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z4l:",,,,S23KC2S1P2-5,,
+aktualizacja i usuwanie opublikowanych zmian ,S23KC2S1P2-47,17953,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56609@student.wat.edu.pl,u56609@student.wat.edu.pl,u56609@student.wat.edu.pl,07 paź 2026 22:09 ,09 paź 2026 15:56 ,09 paź 2026 15:16 ,,,,,,,"*Historyjka użytkownika:*
+*Jako* pracujący student
+*Chcę* aby edycja lub usunięcie zmiany w aplikacji były odzwierciedlane w Google Calendar
+*Aby* w obu kalendarzach mieć aktualny grafik pracy.
+
+*1. Scenariusz*
+ # Użytkownik wybiera wcześniej opublikowaną zmianę w kalendarzu aplikacji.
+ # System wyświetla szczegóły zmiany oraz opcje „Edytuj” i „Usuń”.
+ # Użytkownik wybiera „Edytuj”.
+ # System wyświetla formularz z aktualnymi danymi zmiany.
+ # Użytkownik modyfikuje dane i wybiera „Zapisz”.
+ # System sprawdza dane, zapisuje zmiany lokalnie i aktualizuje powiązane wydarzenie w Google Calendar. Po udanej synchronizacji wyświetla potwierdzenie.
+
+*Scenariusze alternatywne:*
+
+*3a. Usunięcie zmiany:* użytkownik wybiera „Usuń”. System prosi o potwierdzenie. Użytkownik potwierdza usunięcie. System usuwa zmianę z lokalnego kalendarza oraz powiązane wydarzenie z Google Calendar i wyświetla potwierdzenie. Scenariusz kończy się.
+
+*3b. Rezygnacja z usunięcia:* po wyświetleniu potwierdzenia w wariancie 3a użytkownik wybiera „Anuluj”. System zachowuje wydarzenia w obu kalendarzach i wraca do widoku szczegółów z kroku 2.
+
+*5a. Anulowanie edycji:* użytkownik wybiera „Anuluj”. System zamyka formularz bez zapisywania zmian i bez uruchamiania synchronizacji.
+
+*6a. Niepoprawne dane:* system wskazuje błędy i nie zapisuje zmian. Użytkownik poprawia dane — powrót do kroku 5.
+
+*6b. Błąd synchronizacji:* system zachowuje zapisaną zmianę lokalną, informuje o nieudanej synchronizacji i udostępnia opcję „Ponów synchronizację”. Użytkownik wybiera ponowienie. System ponownie próbuje zaktualizować powiązane wydarzenie i przedstawia wynik.
+
+*3a.1. Błąd synchronizacji usunięcia:* po potwierdzeniu usunięcia system usuwa zmianę z lokalnego kalendarza, zachowuje informację potrzebną do ponowienia operacji i informuje, że wydarzenie może nadal być widoczne w Google Calendar. Użytkownik wybiera „Ponów synchronizację”. System ponawia usunięcie powiązanego wydarzenia i przedstawia wynik.
+
+*6c. Brak wydarzenia w Google Calendar:* system informuje, że nie można zaktualizować powiązanego wydarzenia, ponieważ już nie istnieje. Zachowuje lokalną zmianę i nie tworzy automatycznie nowego wydarzenia.
+
+*2. Ograniczenia typu pre i post*
+
+*Preconditions — warunki wstępne:*
+ * Student ma dostęp do własnego kalendarza w aplikacji.
+
+ * Integracja z Google Calendar została wcześniej skonfigurowana.
+
+ * Wybrana zmiana została wcześniej opublikowana przez aplikację i ma zapisane powiązanie z wydarzeniem w Google Calendar.
+
+*Postconditions — warunki końcowe:*
+ * Po udanej synchronizacji edycji powiązane wydarzenie w Google Calendar zawiera aktualne dane.
+
+ * Aktualizacja zachowuje tożsamość istniejącego wydarzenia i nie tworzy jego kopii.
+
+ * Po udanej synchronizacji usunięcia zmiana nie jest widoczna w żadnym z kalendarzy.
+
+ * Operacje nie modyfikują wydarzeń niepowiązanych ze zmianą opublikowaną przez aplikację.
+
+ * Błąd synchronizacji nie cofa ani nie uszkadza prawidłowo zapisanej zmiany lokalnej.
+
+ * Nieudana operacja synchronizacji pozostaje dostępna do ponowienia, a użytkownik widzi informację o możliwej rozbieżności między kalendarzami.
+
+ * Anulowanie edycji lub usunięcia nie zmienia danych w żadnym kalendarzu.
+
+*3. Potrzeby informacyjne*
+ * Informacja, czy wybrana zmiana została opublikowana w Google Calendar i czy jej synchronizacja jest aktualna.
+
+ * Podgląd obowiązującego terminu i szczegółów zmiany, pozwalający sprawdzić, który obowiązek będzie aktualizowany lub usuwany.
+
+ * Jasna informacja, że zatwierdzona operacja dotyczy zarówno kalendarza aplikacji, jak i powiązanego wydarzenia w Google Calendar.
+
+ * Potwierdzenie, czy oba kalendarze odzwierciedlają już dokonaną zmianę.
+
+ * W przypadku błędu — informacja, w którym kalendarzu operacja została wykonana, a w którym dane mogą pozostać nieaktualne.
+
+ * Zrozumiała przyczyna niepowodzenia oraz wskazanie dalszego działania, np. przywrócenia połączenia, ponownego zalogowania lub ponowienia synchronizacji.
+
+*Dopuszczalne wartości informacji:*
+ * *Rodzaj operacji:* „Aktualizacja” albo „Usunięcie”.
+
+ * *Decyzja w widoku zmiany:* „Edytuj” albo „Usuń”.
+
+ * *Decyzja w formularzu edycji:* „Zapisz” albo „Anuluj”.
+
+ * *Decyzja przy potwierdzeniu usunięcia:* „Potwierdź usunięcie” albo „Anuluj”.
+
+ * *Stan synchronizacji operacji:* „Oczekuje”, „W trakcie”, „Zakończona”, „Błąd”.
+
+ * *Przyczyna błędu synchronizacji:* „Brak połączenia”, „Wymagane ponowne logowanie”, „Brak uprawnień”, „Brak powiązanego wydarzenia”, „Usługa niedostępna”, „Inny błąd”.
+
+ * *Decyzja po błędzie:* „Ponów synchronizację” albo „Zamknij komunikat”. Zamknięcie komunikatu nie usuwa informacji o niewykonanej operacji.
+
+*Reguły aktualizacji i usuwania:*
+ * System identyfikuje wydarzenie w Google Calendar na podstawie zapisanego powiązania, a nie podobieństwa tytułu lub terminu.
+
+ * Aktualizacja modyfikuje wyłącznie powiązane wydarzenie. Nie tworzy nowego wydarzenia w jego miejsce.
+
+ * Usunięcie wymaga potwierdzenia użytkownika.
+
+ * Po lokalnym usunięciu system zachowuje powiązanie niezbędne do usunięcia wydarzenia w Google Calendar aż do zakończenia synchronizacji.
+
+ * Jeśli podczas usuwania system potwierdzi, że powiązane wydarzenie już nie istnieje w Google Calendar, uznaje cel usunięcia za osiągnięty.
+
+ * Ponowienie operacji nie tworzy duplikatów ani nie wpływa na inne wydarzenia.
+
+ * Jeżeli przed ponowieniem użytkownik ponownie zmieni lokalny grafik, synchronizacja uwzględnia jego najnowszy zatwierdzony stan.",,u56609@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z4p:",,,,S23KC2S1P2-5,,
+Odłączenie konta i cofnięcie zgody,S23KC2S1P2-35,17934,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56620@student.wat.edu.pl,u56620@student.wat.edu.pl,u56620@student.wat.edu.pl,07 paź 2026 21:06 ,09 paź 2026 15:55 ,11 paź 2026 16:53 ,,,,,,,"Jako użytkownik, chcę w każdej chwili móc odłączyć swoje konto Google i cofnąć uprawnienia do synchronizacji, aby dbać o prywatność i bezpieczeństwo moich danych.",,u56620@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z4q:",,,,S23KC2S1P2-5,,
+Obsługa błędów synchronizacji,S23KC2S1P2-17,17916,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56649@student.wat.edu.pl,u56649@student.wat.edu.pl,u56649@student.wat.edu.pl,07 paź 2026 20:42 ,09 paź 2026 15:55 ,11 paź 2026 16:53 ,,,,,,,"*Jako* użytkownik 
+*chcę* dostać jasną informację, gdy synchronizacja z Google Calendar się nie uda, 
+*aby* wiedzieć, że moje dane mogą być nieaktualne.
+
+
+
+{*}Scenariusz{*}:
+
+*1.* Użytkownik klika „Synchronizuj z Google”.
+
+*2.* System wyświetla komunikat o błędzie z przyczyną, czasem ostatniej udanej synchronizacji i przyciskami „Spróbuj ponownie” oraz „Połącz ponownie konto Google”.
+
+*2a.* Synchronizacja się udała. System wyświetla informację o sukcesie. Koniec scenariusza.
+
+*3.* Użytkownik wybiera „Połącz ponownie konto Google”.
+
+*3a.* Użytkownik wybiera „Spróbuj ponownie”. Przejście do kroku 6.
+
+*4.* System wyświetla ekran logowania Google.
+
+*5.* Użytkownik loguje się i zatwierdza dostęp do kalendarza.
+
+*5a.* Użytkownik odmawia dostępu. System informuje, że synchronizacja jest wyłączona, a lokalne wydarzenia pozostają bez zmian. Koniec scenariusza.
+
+*6.* System wykonuje synchronizację i wyświetla informację o sukcesie.
+
+*6a.* Ponowna próba się nie udała. System ponownie wyświetla komunikat o błędzie. Powrót do kroku 3.
+
+
+
+{*}Ograniczenia typu pre{*}: użytkownik ma połączone konto Google.
+{*}Ograniczenia typu post{*}: dane są zsynchronizowane albo użytkownik wie, że synchronizacja się nie udała, a lokalne wydarzenia pozostały nienaruszone.
+
+
+
+{*}Potrzeby informacyjne{*}: status połączenia z Google, typ błędu (brak internetu, wygasłe logowanie, błąd serwera), data ostatniej udanej synchronizacji, lokalna kopia wydarzeń.",,u56649@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z4r:",,,,S23KC2S1P2-5,,
+Otrzymywanie przypomnień przed zajęciami i pracą,S23KC2S1P2-13,17912,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56651@student.wat.edu.pl,u56651@student.wat.edu.pl,u56651@student.wat.edu.pl,07 paź 2026 20:40 ,09 paź 2026 15:55 ,09 paź 2026 15:35 ,,,,,,,"*Jako* student
+
+*chcę* dostać przypomnienie przed zajęciami lub pracą,
+
+*aby* się nie spóźnić.
+
+ 
+
+*1. Scenariusz*
+1. Użytkownik otwiera ustawienia powiadomień i włącza przypomnienia o wydarzeniach.
+   1a. Jeśli aplikacja nie ma jeszcze zgody na wysyłanie powiadomień, system wyświetla prośbę o zgodę systemową. Użytkownik wyraża zgodę (przejście do kroku 2) albo odmawia (alternatywa 1b).
+   1b. Jeśli użytkownik odmówi zgody, system informuje, że bez niej przypomnienia nie będą wysyłane, i wyłącza przypomnienia. Scenariusz kończy się.
+2. System wyświetla ustawienia przypomnień: rodzaje wydarzeń (zajęcia, praca) i czas wyprzedzenia.
+3. Użytkownik wybiera rodzaje wydarzeń oraz czas wyprzedzenia (np. 15 minut, 30 minut lub godzina przed wydarzeniem) i zatwierdza przyciskiem „Zapisz"".
+   3a. Jeśli użytkownik nie wybierze żadnego rodzaju wydarzeń, system wyświetla komunikat o konieczności wyboru co najmniej jednego. Użytkownik uzupełnia wybór (powrót do kroku 3).
+4. System zapisuje ustawienia i planuje przypomnienia dla nadchodzących wydarzeń wybranych rodzajów.
+   4a. Jeśli zapis się nie powiedzie (np. brak połączenia lub błąd bazy), system wyświetla komunikat o błędzie i zachowuje wybór. Użytkownik ponawia zapis (powrót do kroku 3).
+5. System w ustalonym czasie przed wydarzeniem wysyła powiadomienie z tytułem, godziną rozpoczęcia i miejscem wydarzenia.
+   5a. Jeśli wydarzenie zostało zmienione przed wysłaniem powiadomienia, system wysyła przypomnienie z nową godziną i miejscem. Scenariusz przechodzi do kroku 6.
+   5b. Jeśli wydarzenie zostało usunięte przed wysłaniem powiadomienia, system nie wysyła przypomnienia. Scenariusz kończy się.
+   5c. Jeśli urządzenie jest wyłączone lub bez połączenia w planowanym czasie, system wysyła powiadomienie po przywróceniu połączenia, o ile wydarzenie jeszcze się nie rozpoczęło. W przeciwnym razie przypomnienie zostaje pominięte, a scenariusz kończy się.
+   5d. Jeśli w krótkim odstępie przypada kilka wydarzeń, system łączy przypomnienia w jedno powiadomienie z listą wydarzeń.
+6. Użytkownik otwiera powiadomienie.
+   6a. Jeśli użytkownik wybierze „Odłóż"", system ponawia przypomnienie po kilku minutach, o ile wydarzenie jeszcze się nie rozpoczęło. Scenariusz wraca do kroku 6.
+   6b. Jeśli użytkownik pominie powiadomienie, system zachowuje je w centrum powiadomień do czasu rozpoczęcia wydarzenia. Scenariusz kończy się.
+7. System wyświetla szczegóły wydarzenia w kalendarzu. Scenariusz kończy się.
+
+*2. Ograniczenia typu pre i post*
+
+- Preconditions — warunki wstępne:
+o Użytkownik jest zalogowany do aplikacji.
+o W kalendarzu użytkownika są zaplanowane wydarzenia (zajęcia lub praca).
+o Aplikacja ma zgodę systemową na wysyłanie powiadomień.
+o Urządzenie ma połączenie z internetem w chwili zapisu ustawień.
+- Postconditions — warunki końcowe:
+o Ustawienia przypomnień zostają zapisane w profilu użytkownika.
+o Dla każdego nadchodzącego wydarzenia wybranego rodzaju zaplanowane jest przypomnienie w ustalonym czasie wyprzedzenia.
+o Powiadomienie zawiera aktualne dane wydarzenia (tytuł, godzinę i miejsce).
+o Wysłanie przypomnienia nie zmienia zapisanych wydarzeń.
+o Po usunięciu wydarzenia związane z nim przypomnienie zostaje anulowane.
+o W przypadku odmowy zgody, błędu zapisu lub braku wybranych rodzajów wydarzeń przypomnienia nie są wysyłane, a poprzednie ustawienia pozostają bez zmian.
+
+*3. Potrzeby informacyjne*
+
+- Stan zgody na powiadomienia (przyznana lub odmówiona).
+- Rodzaje wydarzeń objęte przypomnieniami: zajęcia, praca.
+- Czas wyprzedzenia przypomnienia (np. 15 minut, 30 minut, 1 godzina).
+- Lista nadchodzących wydarzeń użytkownika.
+- Dla każdego wydarzenia: tytuł, godzina rozpoczęcia i miejsce.
+- Zaplanowany czas wysłania przypomnienia.
+- Informacja o zmianie lub usunięciu wydarzenia.
+- Stan połączenia urządzenia z internetem.
+- Komunikat o wyniku zapisu ustawień: potwierdzenie albo opis błędu.",,u56651@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z4s:",,,,S23KC2S1P2-6,,
+Informacja o konflikcie,S23KC2S1P2-42,17941,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56603@student.wat.edu.pl,u56603@student.wat.edu.pl,u56603@student.wat.edu.pl,07 paź 2026 21:25 ,09 paź 2026 15:55 ,11 paź 2026 16:53 ,,,,,,,"*Historyjka użytkownika:*
+
+*Jako* student 
+*chcę* otrzymać informację o konflikcie między zaplanowaną pracą a innym wydarzeniem, *aby* móc odpowiednio zmienić swój grafik.
+
+*Scenariusz*
+
+1. Użytkownik dodaje wydarzenie do kalendarza lub zmienia grafik pracy.
+
+2. System odczytuje datę oraz godziny rozpoczęcia i zakończenia wydarzenia lub zmiany.
+
+3. System porównuje termin z innymi wydarzeniami zapisanymi w kalendarzu.
+
+3a. Jeśli wydarzenia nie nakładają się na siebie, system nie wyświetla ostrzeżenia o konflikcie i pozwala kontynuować działanie.
+
+4. System wykrywa konflikt i wskazuje kolidujące pozycje.
+
+4a. Jeśli występuje kilka konfliktów, system przygotowuje listę wszystkich wykrytych kolizji.
+
+5. System wyświetla użytkownikowi informację o konflikcie.
+
+6. Użytkownik otwiera szczegóły konfliktu.
+
+7. System wyświetla nazwy kolidujących wydarzeń, ich daty oraz godziny rozpoczęcia i zakończenia.
+
+8. Użytkownik decyduje, czy chce zmodyfikować grafik.
+
+8a. Jeśli użytkownik nie chce zmieniać grafiku, system pozostawia zapisane wydarzenia bez zmian.
+
+9. Użytkownik wprowadza i zatwierdza zmiany w grafiku.
+
+10. System zapisuje zatwierdzone zmiany i ponownie sprawdza, czy występują konflikty.
+
+10a. Jeśli po zmianach nadal występuje konflikt, system ponownie wyświetla ostrzeżenie i wskazuje kolidujące wydarzenia.
+
+*Ograniczenia typu pre i post*
+
+*Preconditions — warunki wstępne:*
+ * Użytkownik jest zalogowany do aplikacji.
+ * Użytkownik ma dostęp do kalendarza i grafiku pracy.
+ * W kalendarzu znajdują się wydarzenia, z którymi można porównać nową pozycję.
+ * Wydarzenia zawierają daty oraz godziny umożliwiające sprawdzenie nakładania się terminów.
+
+*Postconditions — warunki końcowe:*
+ * System wykrywa konflikty między wydarzeniami o nakładających się terminach.
+ * Użytkownik otrzymuje informację o wykrytych konfliktach.
+ * Szczegóły konfliktu zawierają nazwy wydarzeń oraz ich daty i godziny.
+ * Jeśli użytkownik zatwierdzi zmiany, system zapisuje zaktualizowany grafik i ponownie sprawdza konflikty.
+ * Jeśli użytkownik nie zdecyduje się na zmianę grafiku, zapisane wydarzenia pozostają bez zmian.
+ * Jeśli nie występują konflikty, system nie wyświetla ostrzeżenia o kolizji.
+
+*Potrzeby informacyjne*
+ * Data i godzina rozpoczęcia wydarzenia.
+ * Data i godzina zakończenia wydarzenia.
+ * Lista innych wydarzeń zapisanych w kalendarzu w tym samym okresie.
+ * Nazwy kolidujących wydarzeń.
+ * Data i godziny kolidujących pozycji.
+ * Informacja o liczbie wykrytych konfliktów.
+ * Informacja o tym, które wydarzenia nakładają się na siebie.
+ * Informacja o zmianach wprowadzonych przez użytkownika.
+ * Wynik ponownego sprawdzenia konfliktów.
+ * Status zapisania zmodyfikowanego grafiku.",,u56603@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z4w:",,,,S23KC2S1P2-6,,
+przypomnienie o zmianie w pracy,S23KC2S1P2-48,17954,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56609@student.wat.edu.pl,u56609@student.wat.edu.pl,u56609@student.wat.edu.pl,07 paź 2026 22:09 ,09 paź 2026 15:55 ,09 paź 2026 15:15 ,,,,,,,"*1.6. Przypomnienie o zmianie w pracy*
+
+*Epik:* EPIC 6 — Otrzymywanie powiadomień o planie
+*Zgłoszenie:* S23KC2S1P2-48
+
+*Historyjka użytkownika:*
+*Jako* pracujący student
+*Chcę* otrzymywać przypomnienie przed rozpoczęciem zmiany w pracy
+*Aby* odpowiednio przygotować się i dotrzeć na czas.
+
+*1. Scenariusz*
+ # Użytkownik otwiera ustawienia powiadomień.
+ # System wyświetla aktualne ustawienia przypomnień o zmianach w pracy.
+ # Użytkownik włącza przypomnienia, określa liczbę minut przed rozpoczęciem zmiany i wybiera „Zapisz”.
+ # System sprawdza poprawność ustawień i uprawnienia do powiadomień, zapisuje ustawienia oraz wyznacza terminy przypomnień dla zatwierdzonych, nadchodzących zmian.
+ # Po nadejściu terminu przypomnienia system wyświetla powiadomienie zawierające datę oraz godzinę rozpoczęcia i zakończenia zmiany.
+ # Użytkownik wybiera powiadomienie.
+ # System otwiera szczegóły wskazanej zmiany w kalendarzu.
+
+Krok 5 jest uruchamiany upływem czasu i nie wymaga dodatkowego działania użytkownika.
+
+*Scenariusze alternatywne:*
+
+*3a. Wyłączenie przypomnień:* użytkownik wyłącza przypomnienia i zapisuje ustawienia. System anuluje oczekujące przypomnienia o zmianach w pracy. Scenariusz kończy się.
+
+*3b. Anulowanie edycji:* użytkownik wybiera „Anuluj”. System zachowuje dotychczasowe ustawienia i terminy przypomnień.
+
+*4a. Niepoprawny czas wyprzedzenia:* system wskazuje błąd i nie zapisuje ustawień. Użytkownik poprawia wartość — powrót do kroku 3.
+
+*4b. Brak uprawnień do powiadomień:* system informuje o konieczności udzielenia zgody. Użytkownik przyznaje uprawnienie, a system kontynuuje krok 4. W przypadku odmowy system informuje, że przypomnienia nie mogą być wyświetlane.
+
+*4c. Brak nadchodzących, zatwierdzonych zmian:* system zapisuje ustawienia i informuje o braku zmian wymagających przypomnienia. Po dodaniu lub zatwierdzeniu takiej zmiany wyznacza termin powiadomienia.
+
+*4d. Termin przypomnienia już minął:* jeśli zmiana jeszcze się nie rozpoczęła, system wyświetla przypomnienie niezwłocznie. Jeśli zmiana już się rozpoczęła, nie planuje dla niej przypomnienia.
+
+*5a. Zmiana terminu pracy przed powiadomieniem:* użytkownik zmienia termin pracy i zapisuje wydarzenie. System anuluje poprzednie przypomnienie i wyznacza nowe zgodnie z aktualnym terminem.
+
+*5b. Usunięcie zmiany przed powiadomieniem:* użytkownik usuwa zmianę. System anuluje powiązane przypomnienie.
+
+*7a. Zmiana została usunięta po wyświetleniu powiadomienia:* system informuje, że wydarzenie już nie istnieje, i otwiera kalendarz.
+
+*2. Ograniczenia typu pre i post*
+
+*Preconditions — warunki wstępne:*
+ * Student ma dostęp do własnego kalendarza i ustawień powiadomień.
+
+ * Wyświetlenie przypomnienia wymaga uprawnienia do powiadomień oraz istnienia zatwierdzonej zmiany, która jeszcze się nie rozpoczęła.
+
+*Postconditions — warunki końcowe:*
+ * Poprawnie zapisane ustawienia przypomnień pozostają dostępne po ponownym otwarciu aplikacji.
+
+ * Dla zmian spełniających warunki system wyznacza terminy przypomnień zgodnie z ustawionym wyprzedzeniem.
+
+ * Powiadomienie zawiera aktualną datę oraz godzinę rozpoczęcia i zakończenia zmiany.
+
+ * Wybranie powiadomienia otwiera szczegóły powiązanej zmiany, o ile nadal istnieje.
+
+ * Zmiana terminu pracy aktualizuje oczekujące przypomnienie, a usunięcie zmiany je anuluje.
+
+ * Wyłączenie przypomnień anuluje oczekujące powiadomienia o zmianach w pracy.
+
+ * Anulowanie edycji ustawień nie zmienia dotychczasowej konfiguracji.
+
+ * Obsługa przypomnień nie modyfikuje grafiku pracy.
+
+*3. Potrzeby informacyjne*
+ * Informacja, czy przypomnienia są aktywne i czy aplikacja ma uprawnienie do ich wyświetlania.
+
+ * Informacja o ustawionym wyprzedzeniu, pozwalająca ocenić, czy student ma wystarczająco dużo czasu na przygotowanie i dojazd.
+
+ * Informacja o terminie nadchodzącej zmiany, pozwalająca rozpoznać obowiązek, którego dotyczy przypomnienie.
+
+ * Możliwość przejścia z powiadomienia do szczegółów zmiany w celu sprawdzenia aktualnego planu.
+
+ * Potwierdzenie, że zmiana ustawień lub terminu pracy została uwzględniona w przypomnieniach.
+
+ * Informacja o braku możliwości wyświetlenia powiadomień oraz działaniu potrzebnym do ich uruchomienia.
+
+*Dopuszczalne wartości informacji:*
+ * *Ustawienie przypomnień:* „Włączone” albo „Wyłączone”.
+
+ * *Uprawnienie do powiadomień:* „Nieustalone”, „Przyznane” albo „Odmówione”.
+
+ * *Decyzja w formularzu:* „Zapisz” albo „Anuluj”.
+
+ * *Wynik walidacji ustawień:* „Dane poprawne” albo „Dane wymagają poprawy”.
+
+ * *Stan pojedynczego przypomnienia:* „Zaplanowane”, „Wyświetlone” albo „Anulowane”.
+
+Czas wyprzedzenia jest dodatnią liczbą całkowitą wyrażoną w minutach, a nie typem enumeratywnym. Przykładowe poprawne wartości to 15, 30 i 60 minut.
+
+*Reguły wyznaczania przypomnienia:*
+
+!image-2026-10-09-15-14-53-397.png|width=657,height=340!
+
+Dla zmiany rozpoczynającej się o 14:00 i wyprzedzenia 30 minut przypomnienie przypada na 13:30.
+ * Przypomnienia dotyczą wyłącznie zatwierdzonych, nadchodzących zmian w kategorii „Praca”.
+
+ * System uwzględnia pełną datę i godzinę, również gdy przypomnienie przypada poprzedniego dnia.
+
+ * Dla jednej zmiany może istnieć najwyżej jedno aktywne, oczekujące przypomnienie.
+
+ * Aktualizacja terminu zastępuje poprzednie oczekujące przypomnienie.
+
+ * Wyświetlenie powiadomienia nie oznacza, że użytkownik je przeczytał lub potwierdził obecność w pracy.",,u56609@student.wat.edu.pl,,,,,,,,,,"09 paź 2026 15:14 ;u56609@student.wat.edu.pl;image-2026-10-09-15-14-53-397.png;https://jira.wat.edu.pl/secure/attachment/12008/image-2026-10-09-15-14-53-397.png",,,,,,,,,,,,"0|i00z6i:",,,,S23KC2S1P2-6,,
+Ostrzeżenie o przekroczeniu limitu godzin,S23KC2S1P2-36,17935,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56620@student.wat.edu.pl,u56620@student.wat.edu.pl,u56620@student.wat.edu.pl,07 paź 2026 21:07 ,09 paź 2026 15:55 ,11 paź 2026 16:53 ,,,,,,,"Jako pracownik, chcę otrzymać powiadomienie, gdy zaplanowany grafik przekroczy mój maksymalny limit godzin, aby uniknąć przeładowania pracą.",,u56620@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z6o:",,,,S23KC2S1P2-6,,
+Powiadomienie o braku możliwości realizacji celu godzin,S23KC2S1P2-18,17917,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56649@student.wat.edu.pl,u56649@student.wat.edu.pl,u56649@student.wat.edu.pl,07 paź 2026 20:42 ,09 paź 2026 15:53 ,11 paź 2026 16:53 ,,,,,,,"*Jako* pracujący student 
+*chcę* dostać powiadomienie, gdy w danym tygodniu nie da się zaplanować tylu godzin pracy, ile założyłem, 
+*aby* wcześniej zmienić plany lub cel.
+
+
+
+{*}Scenariusz{*}:
+
+*1.* Użytkownik ustawia tygodniowy cel godzin i klika „Zaplanuj tydzień”.
+
+*2.* System wyświetla powiadomienie, ile godzin brakuje do celu.
+
+*2a.* Cel jest osiągalny. System wyświetla zaplanowany grafik bez powiadomienia. Koniec scenariusza.
+
+*2b.* Użytkownik ma wyłączone powiadomienia push. System wyświetla ostrzeżenie na ekranie planowania. Przejście do kroku 4.
+
+*3.* Użytkownik klika powiadomienie.
+
+*4.* System wyświetla widok tygodnia z wolnymi oknami i liczbą brakujących godzin.
+
+*5.* Użytkownik dodaje zmianę w wolnym oknie albo zmniejsza cel.
+
+*6.* System aktualizuje podsumowanie godzin i ukrywa ostrzeżenie.
+
+*6a.* Dodana zmiana koliduje z zajęciami. System odrzuca ją z komunikatem. Powrót do kroku 5.
+
+*6b.* Nadal brakuje godzin. System aktualizuje liczbę brakujących godzin. Powrót do kroku 5.
+
+
+
+{*}Ograniczenia typu pre{*}: użytkownik ma ustawiony cel godzin, plan zajęć i włączone powiadomienia.
+{*}Ograniczenia typu post{*}: użytkownik wie o braku godzin i może zmienić plan lub cel.
+
+
+
+{*}Potrzeby informacyjne{*}: tygodniowy cel godzin, zaplanowane godziny pracy, plan zajęć, zgoda na powiadomienia, identyfikator urządzenia do wysyłki push.",,u56649@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,"0|i00z6w:",,,,S23KC2S1P2-6,,
+Funkcja do wysyłania powiadomień z aplikacji do użytkownika,S23KC2S1P2-6,17905,Epika,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,,u56603@student.wat.edu.pl,u56603@student.wat.edu.pl,07 paź 2026 19:00 ,09 paź 2026 15:04 ,11 paź 2026 16:53 ,,,,,,,,,u56603@student.wat.edu.pl,,,,,,,,,,,,,,,,,ghx-label-2,EPIC 6 - Otrzymywanie powiadomień o planie,,,,"0|i00z38:",,,,,,
+Funkcja związana z importem danych z naszej aplikacji do Google Calendar,S23KC2S1P2-5,17904,Epika,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,,u56603@student.wat.edu.pl,u56603@student.wat.edu.pl,07 paź 2026 19:00 ,09 paź 2026 15:03 ,11 paź 2026 16:53 ,,,,,,,,,u56603@student.wat.edu.pl,,,,,,,,,,,,,,,,,ghx-label-13,EPIC 5 - Synchronizowanie planu z Google Calendar,,,,"0|i00z30:",,,,,,
+Funkcja związana z automatycznym planowaniem grafiku do pracy,S23KC2S1P2-4,17903,Epika,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,,u56603@student.wat.edu.pl,u56603@student.wat.edu.pl,07 paź 2026 18:59 ,09 paź 2026 15:03 ,11 paź 2026 16:53 ,,,,,,,,,u56603@student.wat.edu.pl,,,,,,,,,,,,,,,,,ghx-label-10,EPIC 4 - Układanie grafiku pracy wokół zajęć,,,,"0|i00z2s:",,,,,,
+Obszar poświęcony wybraniu preferencji dotyczących planowania grafiku do pracy,S23KC2S1P2-3,17902,Epika,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,,u56603@student.wat.edu.pl,u56603@student.wat.edu.pl,07 paź 2026 18:58 ,09 paź 2026 15:02 ,11 paź 2026 16:53 ,,,,,,,,,u56603@student.wat.edu.pl,,,,,,,,,,,,,,,,,ghx-label-6,EPIC 3 - Określanie dostępności i celów pracy,,,,"0|i00z2k:",,,,,,
+Funkcja aplikacji związana z importem kalendarzy z innych platform do naszej aplikacji,S23KC2S1P2-2,17901,Epika,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,,u56603@student.wat.edu.pl,u56603@student.wat.edu.pl,07 paź 2026 18:56 ,09 paź 2026 15:02 ,11 paź 2026 16:53 ,,,,,,,,,u56603@student.wat.edu.pl,,,,,,,,,,,,,,,,,ghx-label-1,EPIC 2 -Importowanie planu zajęć i grafiku pracy,,,,"0|i00z2c:",,,,,,
