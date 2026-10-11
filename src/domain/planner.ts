@@ -44,7 +44,7 @@ export function generatePlan(p: PlannerPreferences, events: CalendarEvent[], mon
     const start = new Date(slot.date.getFullYear(), slot.date.getMonth(), slot.date.getDate(), Math.floor(startMinute / 60), startMinute % 60);
     const end = new Date(start.getTime() + hours * 3600000);
     const time = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-    shifts.push({ id: `shift-${slot.day}-${shifts.length}`, title: 'Zmiana w studiu kampusowym', start: `${localDateKey(start)}T${time(start)}`, end: `${localDateKey(end)}T${time(end)}`, status: 'proposed' }); lastWorkEnd.set(dateKey, startMinute + hours * 60); remaining -= hours;
+    shifts.push({ id: `shift-${slot.day}-${shifts.length}`, title: 'Praca', start: `${localDateKey(start)}T${time(start)}`, end: `${localDateKey(end)}T${time(end)}`, status: 'proposed' }); lastWorkEnd.set(dateKey, startMinute + hours * 60); remaining -= hours;
   }
   return { shifts, possibleHours, missingHours: Math.max(0, remaining), warning: remaining ? 'W wybrane dni nie można zrealizować całego celu.' : null };
 }

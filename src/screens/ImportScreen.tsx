@@ -14,7 +14,7 @@ const classSample: ScanRow[] = [
   { id: 'p2', title: 'Warsztaty baz danych', location: 'Pracownia 3', date: '2026-10-22', start: '13:00', end: '15:00', category: 'Class' },
   { id: 'p3', title: 'Laboratorium bezpieczeństwa sieci', location: 'Wydział Inżynierii 118', date: '2026-10-13', start: '10:00', end: '12:00', category: 'Class' },
 ];
-const workSample: ScanRow[] = [{ id: 'w1', title: 'Zmiana w kawiarni', location: 'Kawiarnia Zachodnia', date: '2026-10-21', start: '16:00', end: '20:00', category: 'Work' }, { id: 'w2', title: 'Zmiana w kawiarni', location: 'Kawiarnia Zachodnia', date: '2026-10-23', start: '15:00', end: '19:00', category: 'Work' }];
+const workSample: ScanRow[] = [{ id: 'w1', title: 'Praca', location: 'Kawiarnia Zachodnia', date: '2026-10-21', start: '16:00', end: '20:00', category: 'Work' }, { id: 'w2', title: 'Praca', location: 'Kawiarnia Zachodnia', date: '2026-10-23', start: '15:00', end: '19:00', category: 'Work' }];
 export default function ImportScreen({ events, setEvents }: Props) {
   const { palette, styles } = useTheme();
   const [tab, setTab] = useState<'google' | 'classes' | 'work'>('google'); const [connected, setConnected] = useState(false); const [calendar, setCalendar] = useState('Uczelniany');

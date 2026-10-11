@@ -10,7 +10,7 @@ type TimetableBlock = {
   time: string;
 };
 
-const semesterStart = new Date(2027, 1, 22);
+const semesterStart = new Date(2026, 1, 23);
 const semesterWeekCount = 22;
 const meetingMinutes = 95;
 
@@ -51,8 +51,9 @@ export const watTimetableEvents: CalendarEvent[] = blocks.flatMap((block, blockI
   const sessions = Math.ceil(block.hours / 2);
   const [hour, minute] = block.time.split(':').map(Number);
   return Array.from({ length: sessions }, (_, sessionIndex) => {
-    const offset = (blockIndex * 5) % semesterWeekCount;
-    const week = (offset + Math.floor(sessionIndex * semesterWeekCount / sessions)) % semesterWeekCount;
+    const offset = blockIndex % 4;
+    const finalWeek = semesterWeekCount - 1;
+    const week = sessions === 1 ? offset : offset + Math.floor(sessionIndex * (finalWeek - offset) / (sessions - 1));
     const start = new Date(semesterStart.getFullYear(), semesterStart.getMonth(), semesterStart.getDate() + week * 7 + block.day - 1, hour, minute);
     const end = new Date(start.getTime() + meetingMinutes * 60_000);
     return {
@@ -61,7 +62,9 @@ export const watTimetableEvents: CalendarEvent[] = blocks.flatMap((block, blockI
       start: `${localDateKey(start)}T${pad(start.getHours())}:${pad(start.getMinutes())}`,
       end: `${localDateKey(end)}T${pad(end.getHours())}:${pad(end.getMinutes())}`,
       category: 'Class',
-      mandatory: true,
+      mandatory: block.form === 'Wykład'
+        ? sessionIndex === 0 || sessionIndex === sessions - 1
+        : true,
       repeatWeekly: false,
       source: 'demo',
       courseCode: block.code,

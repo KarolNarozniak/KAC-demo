@@ -50,21 +50,33 @@ test('weekly candidate checks distant one-off event dates', () => {
 });
 
 test('WAT semester fixture preserves course form hour totals and lecturer metadata', () => {
-  const blocks = new Map<string, { hours: number; sessions: number }>();
+  const blocks = new Map<string, { hours: number; sessions: number; events: typeof watTimetableEvents }>();
   for (const event of watTimetableEvents) {
     assert.ok(event.courseCode && event.courseForm && event.instructor && event.semesterHours);
     const key = `${event.courseCode}|${event.courseForm}|${event.instructor}`;
-    const block = blocks.get(key) ?? { hours: event.semesterHours, sessions: 0 };
+    const block = blocks.get(key) ?? { hours: event.semesterHours, sessions: 0, events: [] };
     block.sessions++;
+    block.events.push(event);
     blocks.set(key, block);
   }
   assert.equal(blocks.size, 25);
-  for (const block of blocks.values()) assert.equal(block.sessions * 2, block.hours);
-  assert.ok(watTimetableEvents.some((event) => event.courseCode === 'Asie' && event.courseForm === 'Wykład' && event.start === '2027-02-22T16:00'));
+  for (const [key, block] of blocks) {
+    assert.equal(block.sessions * 2, block.hours);
+    const form = key.split('|')[1];
+    if (form === 'Wykład') {
+      assert.equal(block.events[0].mandatory, true);
+      assert.equal(block.events.at(-1)?.mandatory, true);
+      assert.ok(block.events.slice(1, -1).every((event) => !event.mandatory));
+    } else if (form === 'Laboratorium' || form === 'Ćwiczenia') {
+      assert.ok(block.events.every((event) => event.mandatory));
+    }
+  }
+  assert.ok(watTimetableEvents.some((event) => event.courseCode === 'Asie' && event.courseForm === 'Wykład' && event.start === '2026-02-23T16:00'));
 });
 
 test('demo opens on the WAT timetable with the requested student profile', () => {
   const demo = createDemoState();
   assert.deepEqual(demo.profile, { name: 'Andrzej Stasiak', email: 'u123456@student.wat.edu.pl', studyProgram: 'Kryptologia i Cyberbezpieczeństwo', timezone: 'Europe/Warsaw' });
   assert.ok(demo.events.length > initialEvents.length);
+  assert.ok(demo.proposal.every((shift) => shift.title === 'Praca'));
 });
