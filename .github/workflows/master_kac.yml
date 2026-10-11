@@ -9,7 +9,7 @@ on:
       - master
   pull_request:
     branches:
-      - 'master'
+      - master
   workflow_dispatch:
 
 jobs:
@@ -24,7 +24,7 @@ jobs:
       - name: Set up Node.js version
         uses: actions/setup-node@v3
         with:
-          node-version: '22.x'
+          node-version: '24.x'
           cache: npm
 
       - name: npm install, build, and test
@@ -32,6 +32,7 @@ jobs:
           npm run typecheck
           npm test
           npm run build:web
+          test -f dist/index.html
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
@@ -59,7 +60,6 @@ jobs:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_ACF6D82F1E154A36B9720554106CD293 }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_3729A1EF6F234538BC1432B980EB2795 }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_45A99EA2BA1A4A9F886230D96E72A1D0 }}
-
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
