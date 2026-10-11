@@ -3,6 +3,7 @@
     "name": "KAC — Kernel Aura Calendar",
     "slug": "kac-kernel-aura-calendar",
     "version": "1.0.0",
+    "icon": "./logo.png",
     "orientation": "default",
     "userInterfaceStyle": "light",
     "splash": {
@@ -10,13 +11,15 @@
     },
     "web": {
       "bundler": "metro",
-      "name": "KAC Calendar"
+      "name": "KAC Calendar",
+      "favicon": "./logo.png"
     },
     "ios": {
       "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
+        "foregroundImage": "./logo.png",
         "backgroundColor": "#f7f8fc"
       }
     },
