@@ -76,17 +76,17 @@ export function useTheme() {
 export function ThemeToggle() {
   const { mode, palette, toggleMode } = useTheme();
   const dark = mode === 'dark';
-  return <Pressable accessibilityRole="switch" accessibilityLabel="Dark mode" accessibilityState={{ checked: dark }} onPress={toggleMode} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 11, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.surface }}>
-    <Text style={{ fontSize: 11, color: palette.muted, fontWeight: '700' }}>{dark ? 'Dark' : 'Light'}</Text>
+  return <Pressable accessibilityRole="switch" accessibilityLabel="Tryb ciemny" accessibilityState={{ checked: dark }} onPress={toggleMode} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 11, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.surface }}>
+    <Text style={{ fontSize: 11, color: palette.muted, fontWeight: '700' }}>{dark ? 'Ciemny' : 'Jasny'}</Text>
     <View style={{ width: 34, height: 20, borderRadius: 99, padding: 3, backgroundColor: dark ? palette.blue : palette.surfaceAlt, justifyContent: 'center', borderWidth: 1, borderColor: dark ? palette.blue : palette.line }}>
       <View style={{ width: 12, height: 12, borderRadius: 99, backgroundColor: '#FFFFFF', alignSelf: dark ? 'flex-end' : 'flex-start' }} />
     </View>
   </Pressable>;
 }
 
-export function Button({ title, onPress, primary = false, danger = false, disabled = false }: { title: string; onPress: () => void; primary?: boolean; danger?: boolean; disabled?: boolean }) {
+export function Button({ title, onPress, primary = false, danger = false, disabled = false, accessibilityLabel }: { title: string; onPress: () => void; primary?: boolean; danger?: boolean; disabled?: boolean; accessibilityLabel?: string }) {
   const { styles } = useTheme();
-  return <Pressable accessibilityRole="button" disabled={disabled} onPress={onPress} style={[styles.button, primary && styles.primary, danger && styles.danger, disabled && { opacity: 0.5 }]}><Text style={[styles.buttonText, primary && styles.primaryText]}>{title}</Text></Pressable>;
+  return <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel} disabled={disabled} onPress={onPress} style={[styles.button, primary && styles.primary, danger && styles.danger, disabled && { opacity: 0.5 }]}><Text style={[styles.buttonText, primary && styles.primaryText]}>{title}</Text></Pressable>;
 }
 
 export function Field({ label, value, onChangeText, placeholder, keyboardType }: { label: string; value: string; onChangeText: (text: string) => void; placeholder?: string; keyboardType?: any }) {
@@ -107,7 +107,7 @@ export function Toggle({ label, value, onValueChange }: { label: string; value: 
 
 export function MockNotice({ children }: { children: React.ReactNode }) {
   const { palette } = useTheme();
-  return <View accessibilityRole="text" style={{ backgroundColor: palette.surfaceAlt, borderRadius: 11, padding: 12, marginBottom: 14, borderLeftWidth: 3, borderLeftColor: palette.muted }}><Text style={{ color: palette.muted, fontSize: 12, lineHeight: 18, fontWeight: '600' }}>MOCK · {children}</Text></View>;
+  return <View accessibilityRole="text" style={{ backgroundColor: palette.surfaceAlt, borderRadius: 11, padding: 12, marginBottom: 14, borderLeftWidth: 3, borderLeftColor: palette.muted }}><Text style={{ color: palette.muted, fontSize: 12, lineHeight: 18, fontWeight: '600' }}>DEMO · {children}</Text></View>;
 }
 
 export function Card({ children, style }: { children: React.ReactNode; style?: any }) {

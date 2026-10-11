@@ -19,11 +19,11 @@ export function parseLocalDateTime(date: string, time: string): Date | null {
   return result.getFullYear() === year && result.getMonth() === month && result.getDate() === day ? result : null;
 }
 export function validateEventInput(input: Pick<CalendarEvent, 'title' | 'start' | 'end'>): string | null {
-  if (!input.title.trim()) return 'Add an event title.';
+  if (!input.title.trim()) return 'Wpisz tytuł wydarzenia.';
   const parse = (value: string) => { const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})$/.exec(value); return m ? parseLocalDateTime(m[1], m[2]) : null; };
   const start = parse(input.start); const end = parse(input.end);
-  if (!start || !end) return 'Enter a valid date and time.';
-  return end <= start ? 'End time must be after the start time.' : null;
+  if (!start || !end) return 'Wpisz poprawną datę i godzinę.';
+  return end <= start ? 'Godzina zakończenia musi być późniejsza niż rozpoczęcia.' : null;
 }
 function eventAtDate(event: CalendarEvent, day: Date): Occurrence | null {
   const base = new Date(event.start); const baseEnd = new Date(event.end);
