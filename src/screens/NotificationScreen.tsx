@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { Text, View } from 'react-native';
 import type { NotificationPreferences } from '../domain/model';
 import { isNotificationAllowed, validateNotificationPreferences } from '../domain/notifications';
-import { Button, Card, Field, MockNotice, Pill, Toggle, palette, styles } from '../components/ui';
+import { Button, Card, Field, MockNotice, Pill, Toggle, useTheme } from '../components/ui';
 type Props = { preferences: NotificationPreferences; setPreferences: (value: NotificationPreferences) => void };
 export default function NotificationScreen({ preferences, setPreferences }: Props) {
+  const { palette, styles } = useTheme();
   const [draft, setDraft] = useState(preferences); const [error, setError] = useState(''); const [sampleTime, setSampleTime] = useState('23:00'); const [preview, setPreview] = useState<boolean | null>(null); const [simulation, setSimulation] = useState('');
   const save = () => { const issue = validateNotificationPreferences(draft); if (issue) { setError(issue); return; } setPreferences(draft); setError(''); setSimulation('Preferences saved in this demo session.'); };
   const cancel = () => { setDraft(preferences); setError(''); setSimulation('Canceled. Previously saved settings are unchanged.'); };

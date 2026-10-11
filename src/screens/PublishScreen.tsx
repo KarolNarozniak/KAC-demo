@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { Modal, Text, View } from 'react-native';
 import type { Shift } from '../domain/model';
-import { Button, Card, MockNotice, Pill, palette, styles } from '../components/ui';
+import { Button, Card, MockNotice, Pill, useTheme } from '../components/ui';
 
 type Props = { shifts: Shift[]; accepted: boolean; setPublished: (value: Shift[]) => void; published: Shift[] };
 
 export default function PublishScreen({ shifts, accepted, setPublished, published }: Props) {
+  const { palette, styles } = useTheme();
   const [connected, setConnected] = useState(false);
   const [calendar, setCalendar] = useState('Work & study');
   const [fail, setFail] = useState(false);
@@ -48,8 +49,8 @@ export default function PublishScreen({ shifts, accepted, setPublished, publishe
     </View>
     <Card><Text style={styles.heading}>What this preview represents</Text><Text style={[styles.body, { marginTop: 8 }]}>The selected calendar name, access result, event count, publish errors and later updates/deletions are all mock state. The accepted proposal in the planner is not changed by a canceled or failed publish.</Text></Card>
     <Modal visible={previewOpen} transparent animationType="fade" onRequestClose={() => setPreviewOpen(false)}>
-      <View style={{ flex: 1, backgroundColor: '#11182788', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-        <View style={{ backgroundColor: '#FFF', borderRadius: 18, width: '100%', maxWidth: 500, padding: 22 }}>
+      <View style={{ flex: 1, backgroundColor: palette.scrim, alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+        <View style={{ backgroundColor: palette.surface, borderRadius: 18, width: '100%', maxWidth: 500, padding: 22 }}>
           <Pill>MOCK PUBLISH PREVIEW</Pill><Text style={[styles.heading, { marginTop: 12 }]}>Review before confirming</Text>
           <Text style={styles.subtitle}>{shifts.length} accepted shift(s) to {calendar}. Nothing changes until you confirm.</Text>
           <View style={{ maxHeight: 250, marginTop: 12 }}>
@@ -65,5 +66,6 @@ export default function PublishScreen({ shifts, accepted, setPublished, publishe
   </View>;
 }
 function PressableCalendar({ value, selected, onPress }: { value: string; selected: boolean; onPress: () => void }) {
-  return <Text accessibilityRole="button" onPress={onPress} style={{ padding: 9, borderRadius: 8, color: selected ? palette.blue : palette.muted, backgroundColor: selected ? palette.blueSoft : '#F2F3F7', fontSize: 12, fontWeight: '700' }}>{value}</Text>;
+  const { palette } = useTheme();
+  return <Text accessibilityRole="button" onPress={onPress} style={{ padding: 9, borderRadius: 8, color: selected ? palette.blue : palette.muted, backgroundColor: selected ? palette.blueSoft : palette.surfaceAlt, fontSize: 12, fontWeight: '700' }}>{value}</Text>;
 }

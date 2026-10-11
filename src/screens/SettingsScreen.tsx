@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Text, View } from 'react-native';
 import type { DemoProfile, PlannerPreferences } from '../domain/model';
-import { Button, Card, Field, MockNotice, Pill, styles } from '../components/ui';
+import { Button, Card, Field, MockNotice, Pill, useTheme } from '../components/ui';
 export default function SettingsScreen({ profile, setProfile, preferences, setPreferences }: { profile: DemoProfile; setProfile: (value: DemoProfile) => void; preferences: PlannerPreferences; setPreferences: (value: PlannerPreferences) => void }) {
+  const { styles } = useTheme();
   const [draft, setDraft] = useState(profile); const [goal, setGoal] = useState(String(preferences.weeklyGoal)); const [maxHours, setMaxHours] = useState(String(preferences.maxHoursPerWeek)); const [message, setMessage] = useState('');
   const save = () => { const goalValue = Number(goal); const maxValue = Number(maxHours); if (!Number.isFinite(goalValue) || goalValue < 0 || !Number.isFinite(maxValue) || maxValue <= 0 || maxValue > 80) { setMessage('Enter a non-negative goal and a weekly maximum from 1 to 80.'); return; } if (!draft.name.trim() || !draft.email.trim() || !draft.timezone.trim()) { setMessage('Name, email and timezone are required.'); return; } setProfile({ ...draft, name: draft.name.trim(), email: draft.email.trim() }); setPreferences({ ...preferences, weeklyGoal: goalValue, maxHoursPerWeek: maxValue }); setMessage('Profile and planning limits updated for this session.'); };
   return <View style={styles.content}><MockNotice>Demo profile and work preferences are in-memory values, not an account or database record.</MockNotice><Pill>PROFILE & WORK SETUP</Pill><Text style={[styles.title, { marginTop: 9 }]}>Set up your corner.</Text><Text style={styles.subtitle}>A little context helps the sample planner feel personal.</Text>

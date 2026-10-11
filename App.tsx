@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, SafeAreaView, ScrollView, StatusBar, Text, View, useWindowDimensions } from 'react-native';
 import CalendarScreen from './src/screens/CalendarScreen';
 import PlannerScreen from './src/screens/PlannerScreen';
@@ -9,7 +9,7 @@ import SettingsScreen from './src/screens/SettingsScreen';
 import { InMemoryDemoRepository } from './src/data/mockRepository';
 import { INITIAL_WEEK } from './src/data/fixtures';
 import type { CalendarEvent, DemoState } from './src/domain/model';
-import { Button, palette } from './src/components/ui';
+import { Button, ThemeProvider, ThemeToggle, useTheme, type ThemeMode } from './src/components/ui';
 type Route = 'calendar' | 'planner' | 'imports' | 'publish' | 'notifications' | 'settings';
 const routes: { id: Route; label: string; short: string }[] = [
   { id: 'calendar', label: 'Week', short: 'Week' }, { id: 'planner', label: 'Work planner', short: 'Plan' },
@@ -18,6 +18,24 @@ const routes: { id: Route; label: string; short: string }[] = [
 ];
 const repository = new InMemoryDemoRepository();
 export default function App() {
+  const [mode, setMode] = useState<ThemeMode>('light');
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem('kac-theme');
+      if (saved === 'dark' || saved === 'light') setMode(saved);
+    } catch {}
+    setLoaded(true);
+  }, []);
+  useEffect(() => {
+    if (!loaded) return;
+    try { window.localStorage.setItem('kac-theme', mode); } catch {}
+  }, [loaded, mode]);
+  return <ThemeProvider mode={mode} toggleMode={() => setMode((current) => current === 'dark' ? 'light' : 'dark')}><DemoApp /></ThemeProvider>;
+}
+
+function DemoApp() {
+  const { palette, mode } = useTheme();
   const compact = useWindowDimensions().width < 850;
   const [state, setState] = useState<DemoState>(() => repository.load());
   const [route, setRoute] = useState<Route>('calendar'); const [week, setWeek] = useState(INITIAL_WEEK); const [resetCount, setResetCount] = useState(0); const [banner, setBanner] = useState('');
@@ -33,14 +51,14 @@ export default function App() {
     if (route === 'notifications') return <NotificationScreen key={`notifications-${resetCount}`} preferences={state.notifications} setPreferences={(notifications) => replace({ notifications })} />;
     return <SettingsScreen key={`settings-${resetCount}`} profile={state.profile} setProfile={(profile) => replace({ profile })} preferences={state.preferences} setPreferences={setPreferences} />;
   };
-  const navigation = <View accessibilityRole="tablist" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, alignItems: 'center' }}>{routes.map((item) => <Pressable key={item.id} accessibilityRole="tab" accessibilityState={{ selected: route === item.id }} onPress={() => { setRoute(item.id); setBanner(''); }} style={{ paddingHorizontal: compact ? 10 : 12, paddingVertical: 9, borderRadius: 9, backgroundColor: route === item.id ? '#EEF0FF' : 'transparent' }}><Text style={{ fontSize: 12, fontWeight: route === item.id ? '800' : '600', color: route === item.id ? palette.blue : palette.muted }}>{compact ? item.short : item.label}</Text></Pressable>)}</View>;
-  return <SafeAreaView style={{ flex: 1, backgroundColor: palette.bg }}><StatusBar barStyle="dark-content" /><View style={{ flex: 1 }}>
-    <View style={{ backgroundColor: '#FFF', borderBottomWidth: 1, borderColor: palette.line, paddingHorizontal: compact ? 12 : 28 }}><View style={{ width: '100%', maxWidth: 1440, alignSelf: 'center', minHeight: 70, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', paddingVertical: 9, gap: 8 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}><View style={{ width: 37, height: 37, borderRadius: 12, backgroundColor: palette.blue, justifyContent: 'center', alignItems: 'center' }}><Text style={{ color: '#FFF', fontWeight: '900', fontSize: 20 }}>k</Text></View><View><Text style={{ color: palette.ink, fontSize: 18, fontWeight: '900', letterSpacing: -0.5 }}>kernel <Text style={{ color: palette.blue }}>aura</Text></Text><Text style={{ color: palette.muted, fontSize: 8, fontWeight: '800', letterSpacing: 1.2 }}>CALM BY DESIGN · DEMO</Text></View></View>
-      {!compact && navigation}<Button title="Reset demo" onPress={reset} />
+  const navigation = <View accessibilityRole="tablist" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>{routes.map((item) => <Pressable key={item.id} accessibilityRole="tab" accessibilityState={{ selected: route === item.id }} onPress={() => { setRoute(item.id); setBanner(''); }} style={{ paddingHorizontal: compact ? 10 : 12, paddingVertical: 9, borderRadius: 10, backgroundColor: route === item.id ? palette.selected : 'transparent' }}><Text style={{ fontSize: 12, fontWeight: route === item.id ? '800' : '600', color: route === item.id ? palette.blue : palette.muted }}>{compact ? item.short : item.label}</Text></Pressable>)}</View>;
+  return <SafeAreaView style={{ flex: 1, backgroundColor: palette.bg }}><StatusBar barStyle={mode === 'dark' ? 'light-content' : 'dark-content'} /><View style={{ flex: 1 }}>
+    <View style={{ backgroundColor: palette.surface, borderBottomWidth: 1, borderColor: palette.line, paddingHorizontal: compact ? 12 : 28 }}><View style={{ width: '100%', maxWidth: 1440, alignSelf: 'center', minHeight: 70, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', paddingVertical: 9, gap: 8 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}><View style={{ width: 37, height: 37, borderRadius: 12, backgroundColor: palette.blue, justifyContent: 'center', alignItems: 'center' }}><Text style={{ color: '#FFFFFF', fontWeight: '900', fontSize: 20 }}>k</Text></View><View><Text style={{ color: palette.ink, fontSize: 18, fontWeight: '900', letterSpacing: -0.5 }}>kernel <Text style={{ color: palette.blue }}>aura</Text></Text><Text style={{ color: palette.muted, fontSize: 8, fontWeight: '800', letterSpacing: 1.2 }}>CALM BY DESIGN · DEMO</Text></View></View>
+      {!compact && navigation}<View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><ThemeToggle /><Button title="Reset demo" onPress={reset} /></View>
     </View>{compact && <View style={{ paddingHorizontal: 12, paddingBottom: 8 }}>{navigation}</View>}</View>
-    {!!banner && <View accessibilityLiveRegion="polite" style={{ backgroundColor: '#E9F7F0', paddingVertical: 9, paddingHorizontal: 16 }}><Text style={{ color: palette.green, textAlign: 'center', fontSize: 12, fontWeight: '700' }}>{banner}</Text></View>}
+    {!!banner && <View accessibilityLiveRegion="polite" style={{ backgroundColor: palette.greenSoft, paddingVertical: 9, paddingHorizontal: 16 }}><Text style={{ color: palette.green, textAlign: 'center', fontSize: 12, fontWeight: '700' }}>{banner}</Text></View>}
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }}>{screen()}</ScrollView>
-    <View style={{ borderTopWidth: 1, borderColor: palette.line, backgroundColor: '#FFF', paddingHorizontal: 16, paddingVertical: 10 }}><Text style={{ color: palette.muted, fontSize: 10, textAlign: 'center' }}>MOCK DEMO · Integrations and saves are simulated · No backend, OAuth, calendar writes or notifications</Text></View>
+    <View style={{ borderTopWidth: 1, borderColor: palette.line, backgroundColor: palette.surface, paddingHorizontal: 16, paddingVertical: 10 }}><Text style={{ color: palette.muted, fontSize: 10, textAlign: 'center' }}>MOCK DEMO · Integrations and saves are simulated · No backend, OAuth, calendar writes or notifications</Text></View>
   </View></SafeAreaView>;
 }
