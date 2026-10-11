@@ -107,7 +107,7 @@ export function Toggle({ label, value, onValueChange }: { label: string; value: 
 
 export function MockNotice({ children }: { children: React.ReactNode }) {
   const { palette } = useTheme();
-  return <View accessibilityRole="text" style={{ backgroundColor: palette.surfaceAlt, borderRadius: 11, padding: 12, marginBottom: 14, borderLeftWidth: 3, borderLeftColor: palette.muted }}><Text style={{ color: palette.muted, fontSize: 12, lineHeight: 18, fontWeight: '600' }}>DEMO · {children}</Text></View>;
+  return <View accessibilityRole="text" style={{ backgroundColor: palette.surfaceAlt, borderRadius: 11, padding: 12, marginBottom: 14, borderLeftWidth: 3, borderLeftColor: palette.muted }}><Text style={{ color: palette.muted, fontSize: 12, lineHeight: 18, fontWeight: '600' }}>MAKIETA · {children}</Text></View>;
 }
 
 export function Card({ children, style }: { children: React.ReactNode; style?: any }) {

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "KAC — Kernel Aura Calendar",
+    "name": "KAC — Kalendarz Kernel Aura",
     "slug": "kac-kernel-aura-calendar",
     "version": "1.0.0",
     "icon": "./logo.png",
@@ -11,7 +11,8 @@
     },
     "web": {
       "bundler": "metro",
-      "name": "KAC Calendar",
+      "lang": "pl",
+      "name": "KAC — Kalendarz",
       "favicon": "./logo.png"
     },
     "ios": {

@@ -4,6 +4,10 @@ export type CalendarEvent = {
   id: string;
   title: string;
   location?: string;
+  courseCode?: string;
+  courseForm?: string;
+  instructor?: string;
+  semesterHours?: number;
   start: string;
   end: string;
   category: Category;

@@ -27,15 +27,15 @@ export default function PublishScreen({ shifts, accepted, setPublished, publishe
     setPreviewOpen(false);
   };
   const revise = (id: string) => { setPublished(published.map((shift) => shift.id === id ? { ...shift, status: 'published', title: `${shift.title} · zaktualizowano` } : shift)); setNotice('Zasymulowano aktualizację opublikowanej zmiany. Nie zmieniono wydarzenia w Google.'); };
-  const remove = (id: string) => { setPublished(published.filter((shift) => shift.id !== id)); setNotice('Zasymulowano usunięcie z listy demo. Nie usunięto wydarzenia z Google.'); };
+  const remove = (id: string) => { setPublished(published.filter((shift) => shift.id !== id)); setNotice('Zasymulowano usunięcie z listy makiety. Nie usunięto wydarzenia z Google.'); };
   const data = published.length ? published : shifts;
   return <View style={styles.content}>
-    <MockNotice>W demo nie ma OAuth Google ani interfejsu do zapisu, aktualizacji lub usuwania wydarzeń w Kalendarzu Google. Publikacja zmienia tylko lokalną symulację.</MockNotice>
+    <MockNotice>W makiecie nie ma OAuth Google ani interfejsu do zapisu, aktualizacji lub usuwania wydarzeń w Kalendarzu Google. Publikacja zmienia tylko lokalną symulację.</MockNotice>
     <Pill>KALENDARZ GOOGLE</Pill><Text style={[styles.title, { marginTop: 9 }]}>Najpierw sprawdź swój plan.</Text><Text style={styles.subtitle}>Przejrzyj zaakceptowane zmiany, wybierz przykładowy kalendarz i zasymuluj publikację.</Text>
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginTop: 20 }}>
       <Card style={{ flex: 1, minWidth: 285 }}>
         <View style={[styles.row, { justifyContent: 'space-between' }]}><Text style={styles.heading}>Podgląd połączenia</Text><Pill color={connected ? palette.green : palette.muted}>{connected ? 'SYMULACJA WŁĄCZONA' : 'ROZŁĄCZONO'}</Pill></View>
-        <Text style={[styles.body, { marginTop: 10 }]}>Konto: alex.demo@example.test</Text><Text style={styles.muted}>Tożsamość demonstracyjna; nie łączymy się z kontem Google.</Text>
+        <Text style={[styles.body, { marginTop: 10 }]}>Konto: u123456@student.wat.edu.pl</Text><Text style={styles.muted}>Tożsamość demonstracyjna; nie łączymy się z kontem Google.</Text>
         <View style={[styles.row, { flexWrap: 'wrap', marginTop: 14 }]}><Button title="Symuluj zgodę na dostęp" primary onPress={authorize} /><Button title="Symuluj odmowę dostępu" onPress={() => { setConnected(false); setNotice('Odmowa dostępu. Zaakceptowany grafik nie został opublikowany.'); }} /></View>
         <Text style={[styles.label, { marginTop: 19 }]}>KALENDARZ DOCELOWY</Text><View style={[styles.row, { flexWrap: 'wrap' }]}>{['Praca i nauka', 'Prywatny', 'Zespołowy'].map((value) => <PressableCalendar key={value} value={value} selected={calendar === value} onPress={() => setCalendar(value)} />)}</View>
         <View style={[styles.row, { flexWrap: 'wrap', marginTop: 17 }]}><Button title="Przejrzyj publikację" primary onPress={openPreview} /></View>
@@ -51,7 +51,7 @@ export default function PublishScreen({ shifts, accepted, setPublished, publishe
     <Modal visible={previewOpen} transparent animationType="fade" onRequestClose={() => setPreviewOpen(false)}>
       <View style={{ flex: 1, backgroundColor: palette.scrim, alignItems: 'center', justifyContent: 'center', padding: 16 }}>
         <View style={{ backgroundColor: palette.surface, borderRadius: 18, width: '100%', maxWidth: 500, padding: 22 }}>
-          <Pill>PODGLĄD PUBLIKACJI · DEMO</Pill><Text style={[styles.heading, { marginTop: 12 }]}>Sprawdź przed potwierdzeniem</Text>
+          <Pill>PODGLĄD PUBLIKACJI · MAKIETA</Pill><Text style={[styles.heading, { marginTop: 12 }]}>Sprawdź przed potwierdzeniem</Text>
           <Text style={styles.subtitle}>
             {shifts.length} zaakceptowanych zmian do kalendarza „{calendar}”. Nic się nie zmieni, dopóki nie potwierdzisz.
           </Text>

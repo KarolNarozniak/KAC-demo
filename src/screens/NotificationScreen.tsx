@@ -7,9 +7,9 @@ type Props = { preferences: NotificationPreferences; setPreferences: (value: Not
 export default function NotificationScreen({ preferences, setPreferences }: Props) {
   const { palette, styles } = useTheme();
   const [draft, setDraft] = useState(preferences); const [error, setError] = useState(''); const [sampleTime, setSampleTime] = useState('23:00'); const [preview, setPreview] = useState<boolean | null>(null); const [simulation, setSimulation] = useState('');
-  const save = () => { const issue = validateNotificationPreferences(draft); if (issue) { setError(issue); return; } setPreferences(draft); setError(''); setSimulation('Ustawienia zapisano w tej sesji demo.'); };
+  const save = () => { const issue = validateNotificationPreferences(draft); if (issue) { setError(issue); return; } setPreferences(draft); setError(''); setSimulation('Ustawienia zapisano w tej sesji.'); };
   const cancel = () => { setDraft(preferences); setError(''); setSimulation('Anulowano. Zapisane wcześniej ustawienia pozostały bez zmian.'); };
-  const send = (kind: string) => setSimulation(isNotificationAllowed(preferences, sampleTime) ? `DEMO · Zaplanowano przypomnienie: ${kind}. Nie wysłano powiadomienia, e-maila ani nie uruchomiono zadania w tle.` : `DEMO · Przypomnienie o ${sampleTime} zablokowane przez ustawienia powiadomień lub godziny ciszy nocnej.`);
+  const send = (kind: string) => setSimulation(isNotificationAllowed(preferences, sampleTime) ? `SYMULACJA · Zaplanowano przypomnienie: ${kind}. Nie wysłano powiadomienia, e-maila ani nie uruchomiono zadania w tle.` : `SYMULACJA · Przypomnienie o ${sampleTime} zablokowane przez ustawienia powiadomień lub godziny ciszy nocnej.`);
   return <View style={styles.content}>
     <MockNotice>Powiadomienia push, wysyłka e-maili, zadania działające w tle i trwały zapis nie są dostępne. Podgląd i przypomnienia są symulowane lokalnie.</MockNotice>
     <Pill>POWIADOMIENIA</Pill><Text style={[styles.title, { marginTop: 9 }]}>Przypomnienia we właściwym momencie.</Text><Text style={styles.subtitle}>Ustaw godziny ciszy nocnej i sprawdź działanie przypomnień.</Text>
