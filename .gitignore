@@ -1,4 +1,10 @@
-node_modules/
-.expo/
-dist/
-web-build/
+**/node_modules/
+**/.expo/
+**/dist/
+**/web-build/
+**/coverage/
+apps/api/deploy/
+apps/web/deploy/
+**/.env
+**/.env.*
+!**/.env.example

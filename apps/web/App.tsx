@@ -67,6 +67,6 @@ function DemoApp({ profile, onSignOut }: { profile: DemoProfile; onSignOut: (pro
     </View>{compact && <View style={{ paddingHorizontal: 12, paddingBottom: 8 }}>{navigation}</View>}</View>
     {!!banner && <View accessibilityLiveRegion="polite" style={{ backgroundColor: palette.greenSoft, paddingVertical: 9, paddingHorizontal: 16 }}><Text style={{ color: palette.green, textAlign: 'center', fontSize: 12, fontWeight: '700' }}>{banner}</Text></View>}
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }}>{screen()}</ScrollView>
-    <View style={{ borderTopWidth: 1, borderColor: palette.line, backgroundColor: palette.surface, paddingHorizontal: 16, paddingVertical: 10 }}><Text style={{ color: palette.muted, fontSize: 10, textAlign: 'center' }}>MAKIETA · Integracje i zapisy są symulowane · Brak backendu, OAuth, synchronizacji kalendarza i powiadomień</Text></View>
+    <View style={{ borderTopWidth: 1, borderColor: palette.line, backgroundColor: palette.surface, paddingHorizontal: 16, paddingVertical: 10 }}><Text style={{ color: palette.muted, fontSize: 10, textAlign: 'center' }}>MAKIETA · Kalendarz nadal działa lokalnie · Logowanie, OAuth Google, synchronizacja, OCR i powiadomienia są symulowane</Text></View>
   </View></SafeAreaView>;
 }

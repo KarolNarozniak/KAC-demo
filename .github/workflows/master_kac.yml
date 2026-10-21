@@ -1,75 +1,147 @@
-# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
-# More GitHub Actions for Azure: https://github.com/Azure/actions
-
-name: Build and deploy Node.js app to Azure Web App - KAC
+name: KAC CI/CD
 
 on:
   push:
-    branches:
-      - master
+    branches: [master]
   pull_request:
-    branches:
-      - master
+    branches: [master]
   workflow_dispatch:
 
 jobs:
-  build:
+  build-and-test:
     runs-on: ubuntu-24.04
     permissions:
-      contents: read #This is required for actions/checkout
+      contents: read
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: kac
+          POSTGRES_PASSWORD: kac_ci_password
+          POSTGRES_DB: kac_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U kac -d kac_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 12
+    env:
+      DATABASE_URL: postgresql://kac:kac_ci_password@localhost:5432/kac_test
+      API_PORT: 4000
+      API_CORS_ORIGINS: http://localhost:8081,http://localhost:8080
+      EXPO_PUBLIC_API_URL: ${{ vars.KAC_API_URL }}
 
     steps:
       - uses: actions/checkout@v7
 
-      - name: Set up Node.js version
+      - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
           node-version: '24.x'
           cache: npm
 
-      - name: Install dependencies
+      - name: Install workspace dependencies
         run: npm ci
 
-      - name: Validate and build web app
+      - name: Check model and apply database migrations
         run: |
-          npm run typecheck
-          npm test
-          npm run build:web
-          test -f dist/index.html
+          npm run db:check
+          npm run db:migrate
+          npm run db:seed
 
-      - name: Upload artifact for deployment job
+      - name: Typecheck all projects
+        run: npm run typecheck
+
+      - name: Test frontend and API
+        run: npm test
+
+      - name: Verify API reads the seeded PostgreSQL calendar
+        run: npm run test:api:db
+
+      - name: Build frontend and backend
+        run: npm run build
+
+      - name: Prepare minimal web deployment package
+        run: npm run package:deploy --workspace @kac/web
+
+      - name: Prepare standalone API deployment package
+        run: npm run package:deploy --workspace @kac/api
+
+      - name: Verify deployment packages
+        run: |
+          test -f apps/web/deploy/dist/index.html
+          test -f apps/web/deploy/server.mjs
+          test -f apps/api/deploy/dist/server.js
+          test -f apps/api/deploy/node_modules/fastify/package.json
+
+      - name: Upload web deployment package
         uses: actions/upload-artifact@v6
         with:
-          name: node-app
-          path: |
-            dist/
-            server.mjs
-            package.json
+          name: kac-web
+          path: apps/web/deploy/
 
-  deploy:
+      - name: Upload API deployment package
+        uses: actions/upload-artifact@v6
+        with:
+          name: kac-api
+          path: apps/api/deploy/
+
+  deploy-web:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-24.04
-    needs: build
+    needs: build-and-test
     permissions:
-      id-token: write #This is required for requesting the JWT
-      contents: read #This is required for actions/checkout
+      contents: read
+      id-token: write
 
     steps:
-      - name: Download artifact from build job
+      - name: Download web package
         uses: actions/download-artifact@v7
         with:
-          name: node-app
-      
-      - name: Azure Login
-        uses: Azure/login@v3.1.0
+          name: kac-web
+          path: web-package
+
+      - name: Sign in to Azure
+        uses: azure/login@v3.1.0
         with:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_94A10D8762FE4A29B43EAEF6FB30E582 }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_348FBFF3B5BD408BBBFD5B656B478EB7 }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_BC4E5D8B5D42471DBFA98CF110CDE0A2 }}
 
-      - name: Deploy to Azure Web App
+      - name: Deploy web frontend to Azure App Service
         uses: azure/webapps-deploy@v3
         with:
-          app-name: 'KAC'
-          slot-name: 'Production'
-          package: .
+          app-name: KAC
+          slot-name: Production
+          package: web-package
+          startup-command: node server.mjs
+
+  deploy-api:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master' && vars.AZURE_API_WEBAPP_NAME != ''
+    runs-on: ubuntu-24.04
+    needs: build-and-test
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Download API package
+        uses: actions/download-artifact@v7
+        with:
+          name: kac-api
+          path: api-package
+
+      - name: Sign in to Azure
+        uses: azure/login@v3.1.0
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_94A10D8762FE4A29B43EAEF6FB30E582 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_348FBFF3B5BD408BBBFD5B656B478EB7 }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_BC4E5D8B5D42471DBFA98CF110CDE0A2 }}
+
+      - name: Deploy API to its separate Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ vars.AZURE_API_WEBAPP_NAME }}
+          package: api-package
+          startup-command: npm start

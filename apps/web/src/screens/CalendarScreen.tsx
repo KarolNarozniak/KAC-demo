@@ -4,6 +4,7 @@ import type { CalendarEvent, Category, Occurrence } from '../domain/model';
 import { addCalendarDays, findCollisions, localDateKey, occurrencesForRange, startOfWeek, validateEventInput } from '../domain/calendar';
 import { INITIAL_WEEK } from '../data/fixtures';
 import { Button, Card, Field, MockNotice, Pill, useTheme } from '../components/ui';
+import BackendConnectionStatus from '../components/BackendConnectionStatus';
 const categories: Category[] = ['Class', 'Work', 'Personal'];
 const labels: Record<Category, string> = { Class: 'Zajęcia', Work: 'Praca', Personal: 'Prywatne' };
 const daysLabel = ['Pon', 'Wt', 'Śr', 'Czw', 'Pt', 'Sob', 'Niedz'];
@@ -42,6 +43,7 @@ export default function CalendarScreen({ events, setEvents, week, setWeek, onPla
   const selectedWeek = `${monday.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' })} – ${addCalendarDays(monday, 6).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short', year: 'numeric' })}`;
   const changeDraft = (field: 'title' | 'location' | 'start' | 'end', value: string) => { if (draft) setDraft({ ...draft, [field]: value }); };
   return <View style={styles.content}>
+    <BackendConnectionStatus />
     <MockNotice>Kalendarz działa tylko w tej sesji. Dane nie są zapisywane ani wysyłane. Powtarzane wydarzenia zachowują lokalny dzień tygodnia i godzinę przy zmianie czasu.</MockNotice>
     <View style={[styles.row, { justifyContent: 'space-between', marginBottom: 18 }]}><View style={{ flex: 1 }}><Pill>TWÓJ TYDZIEŃ</Pill><Text style={[styles.title, { marginTop: 8, fontSize: compact ? 25 : 31 }]}>Spokojniejszy tydzień zaczyna się tutaj.</Text><Text style={styles.subtitle}>Zajęcia, zmiany w pracy i czas dla siebie.</Text></View><Button title="+ Dodaj wydarzenie" primary onPress={() => newEvent(weekDays[dayIndex])} /></View>
     <Card style={{ padding: compact ? 12 : 19 }}>

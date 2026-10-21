@@ -1,0 +1,15 @@
+{
+  "name": "@kac/database",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "migrate": "node scripts/migrate.mjs",
+    "seed": "node scripts/seed.mjs",
+    "check": "node scripts/check-schema.mjs"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "pg": "^8.13.1"
+  }
+}

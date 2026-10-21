@@ -1,59 +1,42 @@
-# KAC — Kernel Aura Calendar
+# KAC monorepo
 
-Responsive calendar demo built with Expo, React Native and TypeScript. The same app can run in a browser and on iOS or Android.
+Kernel 'Aura Kalendar' is split into independently built web and API projects, with the PostgreSQL schema and migrations in a separate database project.
 
-## Run locally
+## Structure
 
-Requirements: Node.js 22 LTS or newer.
+- `apps/web` — Expo / React Native Web front end and existing in-memory demo workflows.
+- `apps/api` — TypeScript/Fastify API. The first vertical slice exposes liveness/readiness and reads demo calendar data from PostgreSQL.
+- `database` — PostgreSQL schema aligned with `KAC_Pelny_Model_Informacyjny_Backlog.xlsx`, SQL migrations and idempotent demo seed.
+- `docker-compose.yml` — local PostgreSQL only. Production should use Azure Database for PostgreSQL Flexible Server, not a SQLite file in an App Service instance.
 
-```sh
-npm install
-npm run web
-```
+## Local development
 
-For browser development, use `npm run web` (or `npm run start:dev` and choose a target in Expo Dev Tools). Native targets are not part of the Azure web export.
+Requirements: Node.js 24 LTS, npm and Docker Desktop (the backend can still run without Docker, but the database panel will report that PostgreSQL is unavailable).
 
-## Demo features
+1. Copy `.env.example` to `.env`; its database password is local-only.
+2. Copy `apps/api/.env.example` to `apps/api/.env` and `apps/web/.env.example` to `apps/web/.env`.
+3. Run `npm install` from the repository root.
+4. Start local PostgreSQL with `npm run db:up`, then apply the model and seed with `npm run db:migrate` and `npm run db:seed`.
+5. Start the API with `npm run api:dev`.
+6. In a second terminal, start Expo Web with `npm run web:dev`.
 
-- Week view with previous/next navigation; initial demo week is 12–18 October 2026.
-- Add events, choose a category, set mandatory lessons and weekly recurrence.
-- Open event details and edit event hours.
-- Detect and warn about overlapping events without discarding either event.
-- Reset demo restores the original in-memory data. No changes are persisted.
-- Category colors: classes `#2563EB`, work `#F97316`, personal `#16A34A`.
+The web app normally runs on the Expo development port (`8081`); the API listens on port `4000`.
 
-## Acceptance checklist
+The calendar and all existing interactions remain a local demo. A small status card calls `GET /api/demo/connection`; when PostgreSQL is configured the API reads a seeded user, calendar, categories and events from the database. `GET /api/demo/calendar` exposes the same read-only sample. This is an integration smoke slice, not a replacement of the calendar’s event logic or implementation of the Jira backlog.
 
-- [ ] Navigate forward/back and see weekly recurring events.
-- [ ] Add and cancel events; verify category color and mandatory label.
-- [ ] Edit an event's hours and reject an end time earlier than its start.
-- [ ] Add an overlapping event and acknowledge the warning.
-- [ ] Open the non-destructive Empty week preview and verify the empty-state message.
-- [ ] Reset the demo and verify the initial events return.
+## Validation
 
-## Azure App Service (static Expo web export)
+- `npm run typecheck` — type-check web and API projects.
+- `npm test` — current front-end and API unit tests.
+- With the local database running: `npm run db:migrate`, `npm run db:seed`, then `npm run test:api:db`.
+- `npm run build` — validate the SQL model and build both API and Expo web export.
+- `npm run package:deploy --workspace @kac/web` — prepare a minimal static web package without Expo build dependencies.
+- `npm run package:deploy --workspace @kac/api` — make a standalone API package for a separate App Service.
 
-This repository targets a browser build, not an iOS/Android deployment bundle. The App Service option is a non-container Node.js static-file server.
+## CI/CD and Azure
 
-```sh
-npm install
-npm run build:web
-npm start
-```
+GitHub Actions builds and type-checks both apps, applies the SQL migrations to a PostgreSQL service container, seeds it, and runs the API-to-PostgreSQL integration smoke test. It always deploys the web App Service. The API deploy job is skipped until the GitHub Actions variable `AZURE_API_WEBAPP_NAME` is set to a separately provisioned Linux Node App Service. Configure that API App Service with `DATABASE_URL`, `PGSSLMODE=require` and `API_CORS_ORIGINS` in App Service settings; grant the workflow's OIDC identity deploy rights to the API App Service. Configure the public GitHub Actions variable `KAC_API_URL` to the API origin; Expo embeds `EXPO_PUBLIC_API_URL` at build time. Without that variable the frontend reports “API not configured” and its existing local demo still works.
 
-For Azure App Service, create a **Linux App Service using a supported Node.js LTS runtime**. Deploy the repository through Deployment Center or your preferred source deployment. Configure the build command as `npm install && npm run build:web` and the startup command as `npm start`. The server binds to the platform-provided `PORT`, serves `dist/`, sets common static MIME types and falls back to Expo's `index.html` for application routes. Alternatively, build `dist/` in CI and deploy the repository plus `dist/` to the App Service with the same `npm start` command. Do not use a container for this option.
+For production, use Azure Database for PostgreSQL Flexible Server rather than putting SQLite in an App Service filesystem. No production database URL, password or API deployment target is committed.
 
-No credentials, secrets, database or backend are required. This demo keeps changes in memory and reset restores the fixture state. Google, notification delivery and import recognition are simulated, not connected integrations.
-
-Azure Static Web Apps can also host the exported static site without the Node server, but that is a separate hosting alternative; this project includes the requested App Service server.
-
-## Demo routes
-
-- **Week:** weekly calendar, event CRUD, category colors, mandatory classes, repeat series, collision warnings, empty weeks and mobile day selection.
-- **Work planner:** profile-like work preferences, capacity/infeasibility, proposed shifts, edits, accept/reject and earnings estimate.
-- **Imports:** sample Google calendar and file/PDF/image previews, field correction, duplicate checks, cancel, denied access, empty range and sync error/retry controls.
-- **Publish:** accepted-shift preview, mock calendar selection and allow/deny/failure/success/update/delete outcomes.
-- **Notifications:** preferences, overnight quiet-hour preview and reminder simulations.
-- **Profile:** demo identity and work planning defaults.
-
-All external operations display a `MOCK` label. See [BACKLOG-COVERAGE.md](BACKLOG-COVERAGE.md) for each Jira story and epic from the supplied CSV snapshot.
+The API demo endpoint is read-only. It deliberately does not implement authentication, calendar CRUD, Google OAuth/Calendar, imports, planning or notifications. Those features remain the current mock workflows and should be implemented in separate vertical slices against the information model.
