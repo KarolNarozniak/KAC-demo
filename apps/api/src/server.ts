@@ -1,8 +1,8 @@
 import { buildApi } from './app.js';
 import { config } from './config.js';
-import { pool, PostgresDemoRepository } from './database.js';
+import { pool, PostgresCalendarRepository } from './database.js';
 
-const repository = pool ? new PostgresDemoRepository(pool) : null;
+const repository = pool ? new PostgresCalendarRepository(pool) : null;
 const app = buildApi(repository, config.corsOrigins);
 
 try {

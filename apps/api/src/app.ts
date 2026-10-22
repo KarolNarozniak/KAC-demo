@@ -1,13 +1,14 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
-import type { DemoCalendarOverview } from './database.js';
+import type { CalendarOverview, EventInput } from './database.js';
 
-export type DemoRepository = {
+export type CalendarRepository = {
+  createEvent?: (input: EventInput) => Promise<EventInput & { id: string }>;
   checkConnection: () => Promise<void>;
-  getOverview: () => Promise<DemoCalendarOverview | null>;
+  getOverview: () => Promise<CalendarOverview | null>;
 };
 
-export function buildApi(repository: DemoRepository | null, allowedOrigins: string[] = []) {
+export function buildApi(repository: CalendarRepository | null, allowedOrigins: string[] = []) {
   const app: FastifyInstance = Fastify({ logger: true });
   const allowAnyOrigin = allowedOrigins.includes('*');
   const origins = new Set(allowedOrigins);
@@ -17,20 +18,10 @@ export function buildApi(repository: DemoRepository | null, allowedOrigins: stri
       if (!origin || allowAnyOrigin || origins.has(origin)) callback(null, true);
       else callback(new Error('Origin is not allowed by KAC API CORS policy'), false);
     },
-    methods: ['GET', 'OPTIONS'],
+    methods: ['GET', 'POST', 'OPTIONS'],
   });
 
   app.get('/api/health/live', async () => ({ api: 'ok' }));
-
-  app.get('/api/demo/connection', async () => {
-    if (!repository) return { api: 'connected', database: 'not-configured', overview: null };
-    try {
-      return { api: 'connected', database: 'connected', overview: await repository.getOverview() };
-    } catch (error) {
-      app.log.error({ err: error }, 'Demo connection check could not read PostgreSQL');
-      return { api: 'connected', database: 'unavailable', overview: null };
-    }
-  });
 
   app.get('/api/health/ready', async (request, reply) => {
     if (!repository) return reply.code(503).send({ api: 'ok', database: 'not-configured' });
@@ -43,15 +34,41 @@ export function buildApi(repository: DemoRepository | null, allowedOrigins: stri
     }
   });
 
-  app.get('/api/demo/calendar', async (_request, reply) => {
+  app.get('/api/calendar', async (_request, reply) => {
     if (!repository) return reply.code(503).send({ error: 'database_not_configured' });
     try {
       const overview = await repository.getOverview();
-      if (!overview) return reply.code(404).send({ error: 'demo_calendar_not_seeded' });
+      if (!overview) return reply.code(404).send({ error: 'calendar_not_found' });
       return overview;
     } catch (error) {
-      app.log.error({ err: error }, 'Failed to read demo calendar from PostgreSQL');
+      app.log.error(error);
       return reply.code(503).send({ error: 'database_unavailable' });
+    }
+  });
+
+  app.post<{ Body: EventInput }>('/api/events', {
+    schema: { body: { type: 'object', additionalProperties: false,
+      required: ['title', 'start', 'end', 'category', 'location', 'mandatory', 'repeatWeekly'],
+      properties: {
+        title: { type: 'string', minLength: 1, maxLength: 200 },
+        start: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$' },
+        end: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$' },
+        category: { type: 'string', enum: ['Class', 'Work', 'Personal'] },
+        location: { type: 'string', maxLength: 500 }, mandatory: { type: 'boolean' }, repeatWeekly: { type: 'boolean' }
+      } } }
+  }, async (request, reply) => {
+    const input = request.body;
+    const validDate = (value: string) => {
+      const parsed = new Date(value + ':00Z');
+      return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 16) === value;
+    };
+    if (!input.title.trim() || !validDate(input.start) || !validDate(input.end) || input.end <= input.start)
+      return reply.code(400).send({ error: 'invalid_event' });
+    if (!repository?.createEvent) return reply.code(503).send({ error: 'database_not_configured' });
+    try { return reply.code(201).send(await repository.createEvent(input)); }
+    catch (error) {
+      app.log.error(error);
+      return reply.code(503).send({ error: 'event_not_saved' });
     }
   });
 

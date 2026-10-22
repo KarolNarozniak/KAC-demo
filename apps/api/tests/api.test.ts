@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildApi, type DemoRepository } from '../src/app.js';
+import { buildApi, type CalendarRepository } from '../src/app.js';
 
 const sample = {
   source: 'postgresql' as const,
@@ -10,7 +10,7 @@ const sample = {
   events: [{ id: 'E001', title: 'Zajęcia pokazowe', start: '2026-02-23T07:00:00.000Z', end: '2026-02-23T08:35:00.000Z', category: 'Zajęcia', color: '#2563EB', mandatory: true }],
 };
 
-const fakeRepository: DemoRepository = {
+const fakeRepository: CalendarRepository = {
   checkConnection: async () => {},
   getOverview: async () => sample,
 };
@@ -31,17 +31,9 @@ test('readiness reports an unconfigured database without crashing the API', asyn
   await app.close();
 });
 
-test('demo connection distinguishes a live API from an unconfigured database', async () => {
-  const app = buildApi(null);
-  const response = await app.inject({ method: 'GET', url: '/api/demo/connection' });
-  assert.equal(response.statusCode, 200);
-  assert.deepEqual(response.json(), { api: 'connected', database: 'not-configured', overview: null });
-  await app.close();
-});
-
-test('demo route returns the repository calendar contract', async () => {
+test('calendar route returns the repository calendar contract', async () => {
   const app = buildApi(fakeRepository);
-  const response = await app.inject({ method: 'GET', url: '/api/demo/calendar' });
+  const response = await app.inject({ method: 'GET', url: '/api/calendar' });
   assert.equal(response.statusCode, 200);
   assert.equal(response.json().source, 'postgresql');
   assert.equal(response.json().counts.events, 1);
@@ -49,11 +41,27 @@ test('demo route returns the repository calendar contract', async () => {
   await app.close();
 });
 
-test('demo connection confirms PostgreSQL data when repository read succeeds', async () => {
-  const app = buildApi(fakeRepository);
-  const response = await app.inject({ method: 'GET', url: '/api/demo/connection' });
-  assert.equal(response.statusCode, 200);
-  assert.equal(response.json().database, 'connected');
-  assert.equal(response.json().overview.counts.events, 1);
-  await app.close();
+const input = { title: 'Weekly meeting', start: '2026-10-22T09:00', end: '2026-10-22T10:00', category: 'Work', location: 'Office', mandatory: false, repeatWeekly: true };
+test('create validates input and returns a persisted series anchor', async () => {
+  let writes = 0;
+  const app = buildApi({ ...fakeRepository, createEvent: async (event) => { writes++; return { id: 'new-event', ...event }; } }, ['http://localhost:8081']);
+  try {
+    for (const body of [{ ...input, title: ' ' }, { ...input, start: '2026-02-30T09:00' }, { ...input, end: input.start }, { ...input, category: 'unknown' }]) {
+      assert.equal((await app.inject({ method: 'POST', url: '/api/events', payload: body })).statusCode, 400);
+    }
+    assert.equal(writes, 0);
+    const response = await app.inject({ method: 'POST', url: '/api/events', payload: input });
+    assert.equal(response.statusCode, 201);
+    assert.equal(response.json().repeatWeekly, true);
+    assert.equal(writes, 1);
+    const preflight = await app.inject({ method: 'OPTIONS', url: '/api/events', headers: { origin: 'http://localhost:8081', 'access-control-request-method': 'POST' } });
+    assert.match(String(preflight.headers['access-control-allow-methods']), /POST/);
+  } finally { await app.close(); }
+});
+test('write failures are reported and never presented as a successful save', async () => {
+  for (const repository of [null, { ...fakeRepository, createEvent: async () => { throw new Error('offline'); } }]) {
+    const app = buildApi(repository);
+    try { assert.equal((await app.inject({ method: 'POST', url: '/api/events', payload: input })).statusCode, 503); }
+    finally { await app.close(); }
+  }
 });
