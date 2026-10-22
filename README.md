@@ -4,16 +4,24 @@ First application slice: a responsive week calendar, today's view, and PostgreSQ
 
 ## Run locally
 
-Use Node.js 24+ and PostgreSQL 16 (Docker Compose is provided).
+Use Node.js 24 LTS (24.3+; `.nvmrc` selects 24) and PostgreSQL 16. Node 25 is not supported by the Expo 58 toolchain. Docker Compose is provided for PostgreSQL.
 
 1. Copy `.env.example` to `.env`, `apps/api/.env.example` to `apps/api/.env`, and `apps/web/.env.example` to `apps/web/.env`. Configure `DATABASE_URL` and `EXPO_PUBLIC_API_URL`.
-2. `npm install`
+2. `npm ci`
 3. `npm run db:up` (or start your own PostgreSQL instance).
 4. `npm run db:migrate` then `npm run db:seed`. Fresh databases start with an empty calendar; seeding does not remove existing events.
 5. `npm run api:dev`
 6. In a second terminal: `npm run web:dev`.
 
 Open the Expo URL, normally `http://localhost:8081`. To use a phone, set `EXPO_PUBLIC_API_URL` to your computer's reachable API address and add the web origin to `API_CORS_ORIGINS`.
+
+## Expo / React upgrade
+
+The frontend uses Expo SDK 58, React 19.3, React Native 0.88 and TypeScript 6 with the SDK-matched native modules. Native splash configuration uses the Expo plugin, and safe-area/status-bar handling supports current mobile layouts. React is deduplicated across the workspace.
+
+For native preview, use `npm run start:dev --workspace @kac/web -- --lan`, with `EXPO_PUBLIC_API_URL` set to the computer's reachable LAN address. Use an Expo Go version that supports SDK 58 or a development build. Store availability can lag the SDK release; see the [Expo 58 release notes](https://expo.dev/changelog/sdk-58).
+
+The dependency audit on 2026-10-22 decreased from **55 findings (1 critical, 37 high, 17 moderate)** to **16 high findings, with no critical or moderate findings**. The remaining dependency chains trace to [braces ≤3.0.3](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) and [node-forge ≤1.4.0](https://github.com/advisories/GHSA-86w9-cpqp-85rv). Those are still the latest published versions at the time of the audit. No forced downgrades or audit exclusions were applied. Run `npm audit` to check the current status.
 
 ## Current behavior
 

@@ -2,6 +2,10 @@
 
 Data przygotowania: 21.10.2026. Źródło backlogu: `Jira 2026-10-11T16_53_41+0200.csv` (migawka 11.10.2026 16:53 (UTC+02:00)).
 
+## Status dokumentacji
+
+Ten katalog zawiera historyczne artefakty Etapu A z 21.10.2026. Opisy makiety przedstawiają stan z dnia ich przygotowania, a nie bieżącą implementację. Aktualna aplikacja zapisuje wydarzenia i serie cotygodniowe w PostgreSQL; frontend korzysta z Expo SDK 58, React 19.3 i React Native 0.88. Wymagania środowiska, instrukcje uruchomienia i ograniczenia opisano w [głównym README](../README.md), a podgląd na urządzeniu w [README frontendu](../apps/web/README.md).
+
 ## Artefakty do przekazania
 
 1. `01_Przedstawienie_problemu_Zamawiajacego_KAC.docx/.pdf` — problem, użytkownicy i oczekiwany zakres.

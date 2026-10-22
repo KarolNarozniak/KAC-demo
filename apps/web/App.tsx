@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { SafeAreaView, Text, View, Pressable, Image } from 'react-native';
+import { Text, View, Pressable, Image } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { WeekLayout } from './src/components/WeekGrid';
 import CalendarScreen from './src/screens/CalendarScreen';
@@ -18,7 +20,7 @@ export default function App() {
     setMode(next);
     void AsyncStorage.setItem('kac-theme', next).catch(() => {});
   };
-  return <ThemeProvider mode={mode} toggleMode={toggleMode}><CalendarApp /></ThemeProvider>;
+  return <SafeAreaProvider><ThemeProvider mode={mode} toggleMode={toggleMode}><StatusBar style={mode === 'dark' ? 'light' : 'dark'} /><CalendarApp /></ThemeProvider></SafeAreaProvider>;
 }
 function CalendarApp() {
   const { palette, styles } = useTheme();

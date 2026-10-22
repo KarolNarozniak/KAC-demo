@@ -5,10 +5,7 @@
     "version": "1.0.0",
     "icon": "./logo.png",
     "orientation": "default",
-    "userInterfaceStyle": "light",
-    "splash": {
-      "backgroundColor": "#f7f8fc"
-    },
+    "userInterfaceStyle": "automatic",
     "web": {
       "bundler": "metro",
       "lang": "pl",
@@ -25,7 +22,13 @@
       }
     },
     "plugins": [
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0B111B"
+        }
+      ]
     ]
   }
 }

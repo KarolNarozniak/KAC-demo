@@ -23,7 +23,7 @@ type Props = {
 export default function WeekGrid({ days, events, layout, now, active, startAtNow = false, hideDayHeader = false, onAdd, onSelect }: Props) {
   const { palette } = useTheme();
   const [size, setSize] = useState({ width: 0, height: 0 });
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const initialScrollKey = useRef('');
   const latestHour = useRef(0);
   const horizontal = layout === 'days-left';
