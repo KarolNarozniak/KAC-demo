@@ -30,13 +30,15 @@ The dependency audit on 2026-10-22 decreased from **55 findings (1 critical, 37 
 - The header shows the logo and the centered current date. Dark mode is the default; the theme switch is in Ustawienia and remembers the chosen theme.
 - Dziś is the home screen, with a welcome and a reserved area for a future agent-generated daily summary. No agent is connected yet.
 - Dziś keeps a day grid visible even when empty, showing only today's events whose start time has not passed according to the device clock, updating while the tab is open.
+- Date and start/end times use platform-native pickers on web, Android and iOS.
+- Open an event to delete it after confirmation. Deleting a weekly event removes the entire series. Database failures keep the event visible and allow retrying.
 - Creation saves to PostgreSQL before updating the calendar. Connection failures keep the form open with the entered data. No in-memory demo fallback.
 - **Powtarzaj co tydzień** stores a series and its first event in one transaction. Occurrences are derived for the visible week, without a fixed end date. Calendar dates and times use the configured account timezone (initially Europe/Warsaw), retaining weekly wall-clock time across daylight-saving changes.
 - Calendar ownership, categories, series and the original relational schema are retained for subsequent features. `DB_DEMO_USER_ID` and `DB_DEMO_CALENDAR_ID` select the initial seeded calendar. There is no authentication yet; these server-selected IDs must be replaced by authenticated account scope when accounts are implemented.
-- Event editing/deletion, account flows, imports, planning and notifications are outside this increment. Their simulated UI and fixtures have been removed.
+- Event editing, account flows, imports, planning and notifications are outside this increment. Their simulated UI and fixtures have been removed.
 
 ## Checks and deployment
 
-`npm run typecheck`, `npm test`, `npm run build`. With PostgreSQL migrated and seeded, run `npm run test:api:db` to verify create/read persistence and series linkage through a fresh API instance. The integration test removes its own records.
+`npm run typecheck`, `npm test`, `npm run build`. With PostgreSQL migrated and seeded, run `npm run test:api:db` to verify create/read/delete persistence, ownership checks and series cleanup through a fresh API instance. The integration test removes its own records.
 
 The API and Expo web deployment scripts and existing GitHub Actions remain. Configure API `DATABASE_URL`, `PGSSLMODE=require` and `API_CORS_ORIGINS`; the web build embeds `EXPO_PUBLIC_API_URL`. Apply database migrations before deploying the updated API.

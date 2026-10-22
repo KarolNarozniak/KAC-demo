@@ -4,6 +4,8 @@ Expo SDK 58, React 19.3, React Native 0.88 and TypeScript 6. Supports web, Andro
 
 See the [root README](../../README.md) for PostgreSQL/API setup, implemented features, deployment and the remaining dependency audit findings.
 
+Event creation uses native date/time pickers. Event details support confirmed deletion; weekly events delete the entire series.
+
 ## Development
 
 Run these commands from the repository root after `npm ci` and starting the database and API:

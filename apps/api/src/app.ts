@@ -3,6 +3,7 @@ import cors from '@fastify/cors';
 import type { CalendarOverview, EventInput } from './database.js';
 
 export type CalendarRepository = {
+  deleteEvent?: (eventId: string) => Promise<string[] | null>;
   createEvent?: (input: EventInput) => Promise<EventInput & { id: string }>;
   checkConnection: () => Promise<void>;
   getOverview: () => Promise<CalendarOverview | null>;
@@ -18,7 +19,7 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
       if (!origin || allowAnyOrigin || origins.has(origin)) callback(null, true);
       else callback(new Error('Origin is not allowed by KAC API CORS policy'), false);
     },
-    methods: ['GET', 'POST', 'OPTIONS'],
+    methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
   });
 
   app.get('/api/health/live', async () => ({ api: 'ok' }));
@@ -69,6 +70,20 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
     catch (error) {
       app.log.error(error);
       return reply.code(503).send({ error: 'event_not_saved' });
+    }
+  });
+
+  app.delete<{ Params: { id: string } }>('/api/events/:id', {
+    schema: { params: { type: 'object', required: ['id'], properties: { id: { type: 'string', minLength: 1, maxLength: 200 } } } },
+  }, async (request, reply) => {
+    if (!repository?.deleteEvent) return reply.code(503).send({ error: 'database_not_configured' });
+    try {
+      const deletedIds = await repository.deleteEvent(request.params.id);
+      if (!deletedIds) return reply.code(404).send({ error: 'event_not_found' });
+      return { deletedIds };
+    } catch (error) {
+      app.log.error(error);
+      return reply.code(503).send({ error: 'event_not_deleted' });
     }
   });
 

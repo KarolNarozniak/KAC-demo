@@ -65,3 +65,28 @@ test('write failures are reported and never presented as a successful save', asy
     finally { await app.close(); }
   }
 });
+
+test('delete returns removed event IDs and permits browser DELETE requests', async () => {
+  const requested: string[] = [];
+  const app = buildApi({ ...fakeRepository, deleteEvent: async (id) => { requested.push(id); return [id, 'series-member']; } }, ['http://localhost:8081']);
+  try {
+    const response = await app.inject({ method: 'DELETE', url: '/api/events/event-123' });
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(response.json(), { deletedIds: ['event-123', 'series-member'] });
+    assert.deepEqual(requested, ['event-123']);
+    const preflight = await app.inject({ method: 'OPTIONS', url: '/api/events/event-123', headers: { origin: 'http://localhost:8081', 'access-control-request-method': 'DELETE' } });
+    assert.match(String(preflight.headers['access-control-allow-methods']), /DELETE/);
+  } finally { await app.close(); }
+});
+
+test('delete distinguishes missing events from unavailable storage', async () => {
+  for (const [repository, status] of [
+    [{ ...fakeRepository, deleteEvent: async () => null }, 404],
+    [null, 503],
+    [{ ...fakeRepository, deleteEvent: async () => { throw new Error('offline'); } }, 503],
+  ] as const) {
+    const app = buildApi(repository);
+    try { assert.equal((await app.inject({ method: 'DELETE', url: '/api/events/missing' })).statusCode, status); }
+    finally { await app.close(); }
+  }
+});

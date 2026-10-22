@@ -7,7 +7,7 @@ const baseUrl = () => {
   throw new Error('Brak konfiguracji adresu API.');
 };
 async function request(path: string, options?: RequestInit) {
-  const response = await fetch(`${baseUrl()}${path}`, { ...options, headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(15000) });
+  const response = await fetch(`${baseUrl()}${path}`, { ...options, headers: { Accept: 'application/json', ...(options?.body ? { 'Content-Type': 'application/json' } : {}) }, signal: AbortSignal.timeout(15000) });
   if (!response.ok) throw new Error('Nie udało się połączyć z kalendarzem. Sprawdź połączenie i spróbuj ponownie.');
   return response.json();
 }
@@ -19,4 +19,9 @@ export async function loadCalendar(): Promise<CalendarEvent[]> {
 export async function createEvent(event: CalendarEvent): Promise<CalendarEvent> {
   const { title, start, end, category, mandatory, repeatWeekly } = event;
   return request('/api/events', { method: 'POST', body: JSON.stringify({ title, start, end, category, mandatory, repeatWeekly, location: event.location ?? '' }) });
+}
+
+export async function deleteEvent(id: string): Promise<string[]> {
+  const result = await request(`/api/events/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  return result.deletedIds;
 }

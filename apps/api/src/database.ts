@@ -67,6 +67,34 @@ export class PostgresCalendarRepository {
     } finally { client.release(); }
   }
 
+  async deleteEvent(eventId: string, userId = config.demoUserId, calendarId = config.demoCalendarId): Promise<string[] | null> {
+    const client = await this.connectionPool.connect();
+    try {
+      await client.query('BEGIN');
+      const selected = await client.query(`select e.id_serii, e.powtarzaj_co_tydzien
+        from t_wydarzenia e join t_kalendarze c on c.id_kalendarza = e.id_kalendarza
+        where e.id_wydarzenia = $1 and c.id_kalendarza = $2 and c.id_uzytkownika = $3
+          and c.aktywny = true and e.status = 'Aktywne' for update of e`, [eventId, calendarId, userId]);
+      if (!selected.rowCount) {
+        await client.query('COMMIT');
+        return null;
+      }
+      const event = selected.rows[0];
+      const removed = event.powtarzaj_co_tydzien && event.id_serii
+        ? await client.query(`delete from t_wydarzenia where id_serii = $1 and id_kalendarza = $2 returning id_wydarzenia`, [event.id_serii, calendarId])
+        : await client.query(`delete from t_wydarzenia where id_wydarzenia = $1 and id_kalendarza = $2 returning id_wydarzenia`, [eventId, calendarId]);
+      if (event.id_serii) {
+        await client.query(`delete from t_serie s where s.id_serii = $1 and s.id_kalendarza = $2
+          and not exists (select 1 from t_wydarzenia e where e.id_serii = s.id_serii)`, [event.id_serii, calendarId]);
+      }
+      await client.query('COMMIT');
+      return removed.rows.map((row) => row.id_wydarzenia as string);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally { client.release(); }
+  }
+
   async checkConnection() {
     await this.connectionPool.query('select 1 as ok');
   }
