@@ -1,8 +1,8 @@
 // Podgląd importu (historyjka S23KC2S1P2-32).
 // Zamienia wiersze odczytane z pliku na odpowiedź dla ekranu: co jest poprawne, a co wymaga poprawy.
-// Niczego nie zapisuje.
+// Dla zmian pracy (S23KC2S1P2-44) pokazuje też zmiany nocne i duplikaty. Niczego nie zapisuje.
 
-import { DEFAULT_TIME_ZONE, resolveRow, type ImportRow, type RowIssue } from './rules.js';
+import { DEFAULT_TIME_ZONE, findDuplicates, resolveRow, type ExistingEvent, type ImportRow, type RowIssue } from './rules.js';
 
 export type PreviewRow = {
   id: string;
@@ -12,14 +12,41 @@ export type PreviewRow = {
   end: string | null;
   location: string | null;
   confidence: number | null;
+  /** Zmiana nocna: koniec przypada następnego dnia i wymaga potwierdzenia (tylko zmiany pracy). */
+  overnight: boolean;
+  /** Duplikaty w kalendarzu (tylko zmiany pracy). */
+  duplicateOfEvents: { id: string; title: string; start: string }[];
+  /** Wcześniejsze wiersze tego importu z tym samym tytułem i początkiem (tylko zmiany pracy). */
+  duplicateOfRows: string[];
 };
 
-export function buildImportPreview(rows: ImportRow[], timeZone = DEFAULT_TIME_ZONE): PreviewRow[] {
-  return rows.map((row) => {
-    const resolved = resolveRow(row, timeZone);
+export function buildImportPreview(rows: ImportRow[], existing: ExistingEvent[] = [], timeZone = DEFAULT_TIME_ZONE): PreviewRow[] {
+  const resolved = rows.map((row) => ({ row, result: resolveRow(row, timeZone) }));
+  const workRows = resolved.flatMap(({ row, result }) => (result.ok && row.category === 'Work' ? [{ id: row.id, title: result.title, start: result.start }] : []));
+  const duplicates = new Map(findDuplicates(workRows, existing).map((info) => [info.rowId, info]));
+  const existingById = new Map(existing.map((event) => [event.id, event]));
+
+  return resolved.map(({ row, result }) => {
     const location = row.location?.trim() || null;
     const confidence = row.confidence ?? null;
-    if (!resolved.ok) return { id: row.id, status: 'error', issues: resolved.issues, start: null, end: null, location, confidence };
-    return { id: row.id, status: 'ok', issues: [], start: resolved.start.toISOString(), end: resolved.end.toISOString(), location, confidence };
+    if (!result.ok) {
+      return { id: row.id, status: 'error', issues: result.issues, start: null, end: null, location, confidence, overnight: false, duplicateOfEvents: [], duplicateOfRows: [] };
+    }
+    const info = duplicates.get(row.id);
+    return {
+      id: row.id,
+      status: 'ok',
+      issues: [],
+      start: result.start.toISOString(),
+      end: result.end.toISOString(),
+      location,
+      confidence,
+      overnight: result.overnight,
+      duplicateOfEvents: (info?.existingIds ?? []).flatMap((id) => {
+        const event = existingById.get(id);
+        return event ? [{ id, title: event.title, start: event.start.toISOString() }] : [];
+      }),
+      duplicateOfRows: info?.batchRowIds ?? [],
+    };
   });
 }

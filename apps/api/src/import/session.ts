@@ -3,7 +3,7 @@
 // Dopóki użytkownik nie zatwierdzi importu, nic nie trafia do t_wydarzenia.
 
 import type { PreviewRow } from './preview.js';
-import type { ImportCategory, ImportRow } from './rules.js';
+import type { DuplicateDecision, ImportCategory, ImportRow } from './rules.js';
 
 /** Sesja wygasa po 15 minutach bez żadnej akcji użytkownika. */
 export const IMPORT_SESSION_TTL_MINUTES = 15;
@@ -14,12 +14,35 @@ export type ImportFormat = 'PDF' | 'Zdjęcie' | 'ICS/CSV';
 export const SOURCE_LABELS: Record<ImportSource, string> = { classes: 'Plan zajęć', work: 'Grafik pracy' };
 
 /** Wiersz zaakceptowany przez użytkownika i sprawdzony regułami tuż przed zapisem. */
-export type AcceptedRow = { id: string; title: string; start: Date; end: Date; category: ImportCategory; location: string | null };
+export type AcceptedRow = {
+  id: string;
+  title: string;
+  start: Date;
+  end: Date;
+  category: ImportCategory;
+  location: string | null;
+  duplicateDecision?: DuplicateDecision;
+};
 
-export type SavedEvent = { id: string; rowId: string; title: string; start: string; end: string; category: ImportCategory; location: string | null };
+/** Co stało się z wierszem przy zapisie: dodany, zastąpił istniejące wydarzenie albo został pominięty jako duplikat. */
+export type SaveAction = 'added' | 'replaced' | 'skipped';
+
+export type SavedEvent = {
+  id: string;
+  rowId: string;
+  action: SaveAction;
+  title: string;
+  start: string;
+  end: string;
+  category: ImportCategory;
+  location: string | null;
+};
+
+export type ImportSummary = { added: number; replaced: number; skipped: number; rejected: number };
 
 export type ConfirmResult =
-  | { kind: 'ok'; saved: SavedEvent[]; rejected: number }
+  | { kind: 'ok'; saved: SavedEvent[]; summary: ImportSummary }
+  | { kind: 'needs-decision'; missingDecisions: string[]; invalidDecisions: string[] }
   | { kind: 'not-found' }
   | { kind: 'expired' }
   | { kind: 'closed' }

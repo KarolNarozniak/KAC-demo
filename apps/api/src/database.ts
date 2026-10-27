@@ -1,6 +1,7 @@
 import { Pool } from 'pg';
 import { config } from './config.js';
-import { CATEGORY_IDS } from './import/rules.js';
+import { CATEGORY_IDS, type ExistingEvent } from './import/rules.js';
+import { planWorkImport, type PlanAction } from './import/work-schedule/plan.js';
 import {
   IMPORT_SESSION_TTL_MINUTES,
   SOURCE_LABELS,
@@ -9,6 +10,7 @@ import {
   type AcceptedRow,
   type ConfirmResult,
   type CreateSessionInput,
+  type SavedEvent,
 } from './import/session.js';
 
 export const pool = config.databaseUrl
@@ -96,8 +98,34 @@ export class PostgresDemoRepository {
     );
   }
 
+  /** Imię i nazwisko użytkownika – służy do rozpoznania jego zmian w grafiku wielu pracowników. */
+  async getImportUserName(userId = config.demoUserId): Promise<string> {
+    const result = await this.connectionPool.query(`select imie, nazwisko from t_uzytkownicy where id_uzytkownika = $1`, [userId]);
+    const row = result.rows[0];
+    return row ? `${row.imie} ${row.nazwisko}`.trim() : '';
+  }
+
+  /** Aktywne wydarzenia kalendarza potrzebne do wykrywania duplikatów. */
+  async listEventsForImport(calendarId = config.demoCalendarId): Promise<ExistingEvent[]> {
+    const result = await this.connectionPool.query(
+      `select id_wydarzenia, tytul, rozpoczecie from t_wydarzenia where id_kalendarza = $1 and status = 'Aktywne'`,
+      [calendarId],
+    );
+    return result.rows.map((event) => ({ id: event.id_wydarzenia, title: event.tytul, start: new Date(event.rozpoczecie) }));
+  }
+
+  /** Anulowanie importu: sesja kończy się bez zmian w kalendarzu (wynik „Anulowano”). */
+  async cancelImportSession(sessionId: string, userId = config.demoUserId): Promise<boolean> {
+    const result = await this.connectionPool.query(
+      `update t_importy set status = 'Anulowany' where id_importu = $1 and id_uzytkownika = $2 and status = 'Podgląd'`,
+      [sessionId, userId],
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
   /**
    * Zatwierdza import w jednej transakcji: albo zapisują się wszystkie zaakceptowane wiersze, albo żaden.
+   * Zmiany pracy będące duplikatami są dodawane, zastępowane albo pomijane zgodnie z decyzją użytkownika.
    * Wiersze sesji, których użytkownik nie zaakceptował, dostają status „Odrzucona”.
    */
   async confirmImportSession(
@@ -139,31 +167,79 @@ export class PostgresDemoRepository {
         return { kind: 'unknown-rows', rowIds: unknown };
       }
 
-      const saved = [];
+      // Zmiany pracy sprawdzamy pod kątem duplikatów (S23KC2S1P2-44). Pozostałe wiersze są po prostu dodawane.
+      const workRows = rows.filter((row) => row.category === 'Work');
+      const actions = new Map<string, PlanAction>(rows.map((row) => [row.id, { kind: 'insert', rowId: row.id }]));
+      if (workRows.length > 0) {
+        const existing = (
+          await client.query(`select id_wydarzenia, tytul, rozpoczecie from t_wydarzenia where id_kalendarza = $1 and status = 'Aktywne'`, [calendarId])
+        ).rows.map((event) => ({ id: event.id_wydarzenia as string, title: event.tytul as string, start: new Date(event.rozpoczecie) }));
+        const plan = planWorkImport(workRows, existing);
+        if (!plan.ok) {
+          await client.query('rollback');
+          return { kind: 'needs-decision', missingDecisions: plan.missingDecisions, invalidDecisions: plan.invalidDecisions };
+        }
+        for (const action of plan.actions) actions.set(action.rowId, action);
+      }
+
+      const saved: SavedEvent[] = [];
       for (const row of rows) {
-        const inserted = await client.query(
-          `insert into t_wydarzenia (id_kalendarza, id_kategorii, tytul, rozpoczecie, zakonczenie, zrodlo, opis)
-           values ($1, $2, $3, $4, $5, 'Import', $6)
-           returning id_wydarzenia`,
-          [calendarId, CATEGORY_IDS[row.category], row.title, row.start, row.end, eventDescription(sessionId, row.location)],
-        );
-        const eventId: string = inserted.rows[0].id_wydarzenia;
+        const action = actions.get(row.id) ?? { kind: 'insert', rowId: row.id };
+        const description = eventDescription(sessionId, row.location);
+        let eventId: string | null = null;
+        if (action.kind === 'insert') {
+          const inserted = await client.query(
+            `insert into t_wydarzenia (id_kalendarza, id_kategorii, tytul, rozpoczecie, zakonczenie, zrodlo, opis)
+             values ($1, $2, $3, $4, $5, 'Import', $6)
+             returning id_wydarzenia`,
+            [calendarId, CATEGORY_IDS[row.category], row.title, row.start, row.end, description],
+          );
+          eventId = inserted.rows[0].id_wydarzenia;
+        } else if (action.kind === 'replace') {
+          // „Zastąp”: istniejące wydarzenie z kalendarza użytkownika dostaje zatwierdzone dane z importu.
+          const updated = await client.query(
+            `update t_wydarzenia
+             set tytul = $3, rozpoczecie = $4, zakonczenie = $5, id_kategorii = $6, opis = $7, updated_at = now()
+             where id_wydarzenia = $1 and id_kalendarza = $2
+             returning id_wydarzenia`,
+            [action.eventId, calendarId, row.title, row.start, row.end, CATEGORY_IDS[row.category], description],
+          );
+          eventId = updated.rows[0]?.id_wydarzenia ?? null;
+          if (!eventId) throw new Error(`Event ${action.eventId} to replace was not found in calendar ${calendarId}`);
+        }
+        const status = action.kind === 'insert' ? 'Zatwierdzona' : action.kind === 'replace' ? 'Zastąpiła' : 'Pominięta (duplikat)';
         await client.query(
           `update t_pozycje_importu
-           set id_wydarzenia = $2, tytul_odczyt = $3, rozpoczecie = $4, zakonczenie = $5, id_kategorii = $6, status_kontroli = 'Zatwierdzona'
+           set id_wydarzenia = $2, tytul_odczyt = $3, rozpoczecie = $4, zakonczenie = $5, id_kategorii = $6,
+               czy_duplikat = $7, status_kontroli = $8
            where id_pozycji = $1`,
-          [positionId(sessionId, row.id), eventId, row.title, row.start, row.end, CATEGORY_IDS[row.category]],
+          [positionId(sessionId, row.id), eventId, row.title, row.start, row.end, CATEGORY_IDS[row.category], action.kind !== 'insert' || Boolean(row.duplicateDecision), status],
         );
-        saved.push({ id: eventId, rowId: row.id, title: row.title, start: row.start.toISOString(), end: row.end.toISOString(), category: row.category, location: row.location });
+        saved.push({
+          id: eventId ?? '',
+          rowId: row.id,
+          action: action.kind === 'insert' ? 'added' : action.kind === 'replace' ? 'replaced' : 'skipped',
+          title: row.title,
+          start: row.start.toISOString(),
+          end: row.end.toISOString(),
+          category: row.category,
+          location: row.location,
+        });
       }
       const rejected = await client.query(
         `update t_pozycje_importu set status_kontroli = 'Odrzucona'
-         where id_importu = $1 and status_kontroli <> 'Zatwierdzona'`,
+         where id_importu = $1 and status_kontroli in ('Do kontroli', 'Błąd odczytu')`,
         [sessionId],
       );
-      await client.query(`update t_importy set status = 'Zakończony', liczba_rekordow = $2 where id_importu = $1`, [sessionId, saved.length]);
+      const summary = {
+        added: saved.filter((item) => item.action === 'added').length,
+        replaced: saved.filter((item) => item.action === 'replaced').length,
+        skipped: saved.filter((item) => item.action === 'skipped').length,
+        rejected: rejected.rowCount ?? 0,
+      };
+      await client.query(`update t_importy set status = 'Zakończony', liczba_rekordow = $2 where id_importu = $1`, [sessionId, summary.added + summary.replaced]);
       await client.query('commit');
-      return { kind: 'ok', saved, rejected: rejected.rowCount ?? 0 };
+      return { kind: 'ok', saved, summary };
     } catch (error) {
       await client.query('rollback');
       throw error;

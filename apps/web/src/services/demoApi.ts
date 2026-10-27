@@ -53,7 +53,13 @@ export type ImportPreviewRow = {
   end: string | null;
   location: string | null;
   confidence: number | null;
+  /** Pola dodane w S23KC2S1P2-44 (wypełniane tylko dla zmian pracy). */
+  overnight?: boolean;
+  duplicateOfEvents?: { id: string; title: string; start: string }[];
+  duplicateOfRows?: string[];
 };
+
+export type DuplicateDecision = 'skip' | 'replace' | 'keepBoth';
 
 export type ImportRowInput = {
   id: string;
@@ -64,6 +70,9 @@ export type ImportRowInput = {
   category: ImportCategory;
   location?: string;
   confidence?: number;
+  employee?: string;
+  overnightConfirmed?: boolean;
+  duplicateDecision?: DuplicateDecision;
 };
 
 async function postJson(path: string, body: unknown, signal?: AbortSignal): Promise<Response> {
@@ -95,16 +104,72 @@ export async function createImportSession(
   return response.json() as Promise<{ importSessionId: string; expiresAt: string; rows: ImportPreviewRow[] }>;
 }
 
-export type ConfirmedEvent = { id: string; rowId: string; title: string; start: string; end: string; category: ImportCategory; location: string | null };
+export type ConfirmedEvent = {
+  id: string;
+  rowId: string;
+  action?: 'added' | 'replaced' | 'skipped';
+  title: string;
+  start: string;
+  end: string;
+  category: ImportCategory;
+  location: string | null;
+};
+
+export type ImportSummary = { added: number; replaced: number; skipped: number; rejected: number };
 
 export type ConfirmImportResult =
-  | { kind: 'saved'; saved: number; rejected: number; events: ConfirmedEvent[] }
-  | { kind: 'invalid-rows' | 'expired' | 'closed' | 'not-found' | 'failed'; status: number };
+  | { kind: 'saved'; saved: number; rejected: number; summary?: ImportSummary; events: ConfirmedEvent[] }
+  | { kind: 'invalid-rows' | 'expired' | 'closed' | 'not-found' | 'failed'; status: number; error?: string };
 
 /** Zatwierdza import: API jeszcze raz sprawdza wiersze i zapisuje zaakceptowane w kalendarzu (wszystkie albo żaden). */
 export async function confirmImport(sessionId: string, rows: ImportRowInput[]): Promise<ConfirmImportResult> {
   const response = await postJson(`/api/import/sessions/${encodeURIComponent(sessionId)}/confirm`, { rows });
   if (response.status === 201) return { kind: 'saved', ...((await response.json()) as { saved: number; rejected: number; events: ConfirmedEvent[] }) };
   const kind = response.status === 422 ? 'invalid-rows' : response.status === 410 ? 'expired' : response.status === 409 ? 'closed' : response.status === 404 ? 'not-found' : 'failed';
-  return { kind, status: response.status };
+  const body = (await response.json().catch(() => ({}))) as { error?: string };
+  return { kind, status: response.status, error: body.error };
+}
+
+// --- Import grafiku pracy (S23KC2S1P2-44) ---
+
+export type ScheduleRow = {
+  id: string;
+  title: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  category: 'Work';
+  location?: string;
+  confidence?: number;
+  employee?: string;
+  isOwn: boolean;
+  incomplete: boolean;
+};
+
+export type ScheduleReadResult =
+  | {
+      kind: 'read';
+      importSessionId: string;
+      fileType: 'JPG' | 'PNG' | 'PDF';
+      readStatus: 'all' | 'partial';
+      readStatusLabel: string;
+      readerIsDemo: boolean;
+      userName: string;
+      rows: ScheduleRow[];
+      preview: ImportPreviewRow[];
+    }
+  | { kind: 'rejected'; error: string }
+  | { kind: 'unavailable' };
+
+/** Wysyła plik z grafikiem do API: API sprawdza plik, odczytuje zmiany i zakłada sesję importu. */
+export async function readWorkSchedule(fileName: string, dataBase64: string): Promise<ScheduleReadResult> {
+  const response = await postJson('/api/import/work-schedule/read', { fileName, dataBase64 });
+  if (response.status === 201) return { kind: 'read', ...((await response.json()) as Omit<Extract<ScheduleReadResult, { kind: 'read' }>, 'kind'>) };
+  if (response.status === 422) return { kind: 'rejected', error: ((await response.json()) as { error: string }).error };
+  return { kind: 'unavailable' };
+}
+
+/** Anuluje import: sesja kończy się bez zmian w kalendarzu. */
+export async function cancelImport(sessionId: string): Promise<void> {
+  await postJson(`/api/import/sessions/${encodeURIComponent(sessionId)}/cancel`, {});
 }

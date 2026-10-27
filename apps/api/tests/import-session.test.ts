@@ -4,7 +4,7 @@ import { buildApi, type DemoRepository } from '../src/app.js';
 import type { AcceptedRow, ConfirmResult } from '../src/import/session.js';
 
 // Atrapa bazy danych: zapamiętuje, co API próbowało zapisać.
-function fakeRepository(result: ConfirmResult = { kind: 'ok', saved: [], rejected: 0 }) {
+function fakeRepository(result: ConfirmResult = { kind: 'ok', saved: [], summary: { added: 0, replaced: 0, skipped: 0, rejected: 0 } }) {
   const calls: { confirmed: AcceptedRow[][]; touched: string[] } = { confirmed: [], touched: [] };
   const repository: DemoRepository = {
     checkConnection: async () => {},
@@ -93,13 +93,14 @@ test('zatwierdzenie z błędnym wierszem jest odrzucane (422) i nic nie trafia d
 });
 
 test('zatwierdzenie przekazuje do zapisu termin, kategorię i miejsce (201)', async () => {
-  const saved = [{ id: 'E-NEW', rowId: 'p1', title: 'Warsztaty baz danych', start: '2026-10-22T11:00:00.000Z', end: '2026-10-22T13:00:00.000Z', category: 'Class' as const, location: 'Pracownia 3' }];
-  const { repository, calls } = fakeRepository({ kind: 'ok', saved, rejected: 1 });
+  const saved = [{ id: 'E-NEW', rowId: 'p1', action: 'added' as const, title: 'Warsztaty baz danych', start: '2026-10-22T11:00:00.000Z', end: '2026-10-22T13:00:00.000Z', category: 'Class' as const, location: 'Pracownia 3' }];
+  const summary = { added: 1, replaced: 0, skipped: 0, rejected: 1 };
+  const { repository, calls } = fakeRepository({ kind: 'ok', saved, summary });
   const app = buildApi(repository);
   try {
     const response = await app.inject({ method: 'POST', url: '/api/import/sessions/IMP-TEST/confirm', payload: { rows: [classRow] } });
     assert.equal(response.statusCode, 201);
-    assert.deepEqual(response.json(), { saved: 1, rejected: 1, events: saved });
+    assert.deepEqual(response.json(), { saved: 1, rejected: 1, summary, events: saved });
     const row = calls.confirmed[0]?.[0];
     assert.equal(row?.category, 'Class');
     assert.equal(row?.location, 'Pracownia 3');
