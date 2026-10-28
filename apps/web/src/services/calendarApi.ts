@@ -21,6 +21,22 @@ export async function createEvent(event: CalendarEvent): Promise<CalendarEvent> 
   return request('/api/events', { method: 'POST', body: JSON.stringify({ title, start, end, category, mandatory, repeatWeekly, location: event.location ?? '' }) });
 }
 
+export async function updateEvent(id: string, event: CalendarEvent): Promise<CalendarEvent> {
+  const { title, start, end, category, mandatory, repeatWeekly, location } = event;
+  return request(`/api/events/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ title, start, end, category, mandatory, repeatWeekly, location: location ?? '' }),
+  });
+}
+
+export async function updateSeriesEvent(id: string, event: CalendarEvent): Promise<CalendarEvent> {
+  const { title, start, end, category, mandatory, repeatWeekly, location } = event;
+  return request(`/api/events/${encodeURIComponent(id)}/series`, {
+    method: 'PUT',
+    body: JSON.stringify({ title, start, end, category, mandatory, repeatWeekly, location: location ?? '' }),
+  });
+}
+
 export async function deleteEvent(id: string): Promise<string[]> {
   const result = await request(`/api/events/${encodeURIComponent(id)}`, { method: 'DELETE' });
   return result.deletedIds;

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import type { CalendarEvent, Category, Occurrence } from '../domain/model';
 import { addCalendarDays, findCollisions, localDateKey, occurrencesForRange, startOfWeek, validateEventInput } from '../domain/calendar';
-import { loadCalendar, createEvent, deleteEvent } from '../services/calendarApi';
+import { loadCalendar, createEvent, updateEvent, updateSeriesEvent, deleteEvent } from '../services/calendarApi';
 import { Button, Field, useTheme } from '../components/ui';
 import DateField from '../components/DateField';
 import TimeField from '../components/TimeField';
@@ -29,7 +29,7 @@ export default function CalendarScreen({ week, setWeek, todayOnly = false, weekL
   const colors: Record<Category, string> = { Class: palette.class, Work: palette.work, Personal: palette.personal };
   const { width: viewportWidth } = useWindowDimensions();
   const compact = viewportWidth < 760;
-  const [dialog, setDialog] = useState<'form' | 'details' | 'collision' | 'delete' | null>(null);
+  const [dialog, setDialog] = useState<'form' | 'details' | 'collision' | 'delete' | 'series_choice' | null>(null);
   const [selected, setSelected] = useState<Occurrence | null>(null); const [draft, setDraft] = useState<CalendarEvent | null>(null);
   const [error, setError] = useState(''); const [conflicts, setConflicts] = useState<string[]>([]); const [pending, setPending] = useState<CalendarEvent | null>(null);
   const monday = startOfWeek(todayOnly ? now : week); const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addCalendarDays(monday, i)), [monday.getTime()]);
@@ -43,16 +43,22 @@ export default function CalendarScreen({ week, setWeek, todayOnly = false, weekL
     setDraft({ id: `evt-${Date.now()}`, title, location: location ?? '', start, end, category, mandatory, repeatWeekly });
     setEditId(selected.id); setError(''); setDialog('form');
   };
-  const commit = async (event: CalendarEvent, force = false) => {
+  const commit = async (event: CalendarEvent, force = false, updateSeries = false) => {
     if (saving) return;
     if (!force) { const found = findCollisions(event, events, editId ?? undefined); if (found.length) { setConflicts(found.map((item) => item.title)); setPending(event); setDialog('collision'); return; } }
     setSaving(true); setError('');
     try {
-      const saved = await createEvent(event);
-      setEvents((current) => [...current, saved]);
       if (editId) {
-        const gone = new Set(await deleteEvent(editId));
-        setEvents((current) => current.filter((item) => !gone.has(item.id)));
+        if (updateSeries) {
+          await updateSeriesEvent(editId, event);
+          await reload();
+        } else {
+          const updated = await updateEvent(editId, event);
+          setEvents((current) => current.map((item) => (item.id === editId ? updated : item)));
+        }
+      } else {
+        const saved = await createEvent(event);
+        setEvents((current) => [...current, saved]);
       }
       close();
     }
@@ -72,7 +78,13 @@ export default function CalendarScreen({ week, setWeek, todayOnly = false, weekL
   };
   const save = () => {
     if (!draft) return; const validation = validateEventInput(draft); if (validation) { setError(validation); return; }
-    commit({ ...draft, title: draft.title.trim(), mandatory: draft.category === 'Class' && draft.mandatory });
+    const eventToSave = { ...draft, title: draft.title.trim(), mandatory: draft.category === 'Class' && draft.mandatory };
+    if (editId && selected?.repeatWeekly) {
+      setPending(eventToSave);
+      setDialog('series_choice');
+      return;
+    }
+    commit(eventToSave);
   };
   const upcoming = list.filter((item) => localDateKey(item.occurrenceStart) === localDateKey(now) && item.occurrenceStart >= now);
   const selectedWeek = `${monday.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' })} – ${addCalendarDays(monday, 6).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short', year: 'numeric' })}`;
@@ -122,7 +134,8 @@ export default function CalendarScreen({ week, setWeek, todayOnly = false, weekL
         </View>
       </>}
       {dialog === 'collision' && <><Text style={[styles.heading, { marginTop: 12 }]}>Wydarzenia nakładają się.</Text><Text style={styles.subtitle}>Nic jeszcze nie zapisano. Możesz zapisać wydarzenie mimo kolizji. Konflikty: {conflicts.join(', ')}.</Text><View style={[styles.row, { justifyContent: 'flex-end', marginTop: 18 }]}><Button title="Wróć do edycji" disabled={saving} onPress={() => { setDialog('form'); setPending(null); }} /><Button title={saving ? 'Zapisywanie…' : editId ? 'Zapisz mimo to' : 'Dodaj mimo to'} disabled={saving} primary onPress={() => pending && commit(pending, true)} /></View></>}
-    </ScrollView></View></Modal>
+	  {dialog === 'series_choice' && pending && <><Text style={[styles.heading, { marginTop: 12 }]}>Edycja serii wydarzeń</Text><Text style={styles.subtitle}>Wydarzenie jest częścią serii cotygodniowej. Jak chcesz zapisać zmiany?</Text><View style={{ marginTop: 18, gap: 8 }}><Button title={saving ? 'Zapisywanie…' : 'Tylko to wydarzenie'} disabled={saving} onPress={() => void commit(pending, false, false)} /><Button title={saving ? 'Zapisywanie…' : 'To i przyszłe wydarzenia'} disabled={saving} primary onPress={() => void commit(pending, false, true)} /><Button title="Anuluj" disabled={saving} onPress={() => { setDialog('form'); }} /></View></>}
+	</ScrollView></View></Modal>
     <WorkScheduleImport visible={importOpen} onClose={() => setImportOpen(false)} onImported={() => void reload()} />
   </View>;
 }
