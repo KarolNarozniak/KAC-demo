@@ -46,10 +46,11 @@ const importRowSchema = {
     employee: { type: 'string', maxLength: 200 },
     overnightConfirmed: { type: 'boolean' },
     duplicateDecision: { type: 'string', enum: ['skip', 'replace', 'keepBoth'] },
+    replacementId: { type: 'string', minLength: 1, maxLength: 200 },
   },
 } as const;
 
-const rowsProperty = { type: 'array', maxItems: 200, items: importRowSchema } as const;
+const rowsProperty = { type: 'array', maxItems: 1000, items: importRowSchema } as const;
 const sessionIdSchema = { type: 'string', minLength: 1, maxLength: 64 } as const;
 
 const importPreviewSchema = {
@@ -102,7 +103,7 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
     options.scheduleReader ?? new DemoScheduleReader(async () => (repository?.getImportUserName ? repository.getImportUserName() : ''));
   // Wydarzenia z kalendarza do wykrywania duplikatów zmian pracy. Bez bazy porównanie jest pomijane.
   const existingEventsFor = async (rows: ImportRow[]): Promise<ExistingEvent[]> => {
-    if (!repository?.listEventsForImport || !rows.some((row) => row.category === 'Work')) return [];
+    if (!repository?.listEventsForImport) return [];
     return repository.listEventsForImport();
   };
   const allowAnyOrigin = allowedOrigins.includes('*');
@@ -230,7 +231,7 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
       if (unconfirmed.length > 0) return reply.code(422).send({ error: 'overnight_not_confirmed', rowIds: unconfirmed });
       const accepted: AcceptedRow[] = resolvedRows.flatMap(({ row, resolved }) =>
         resolved.ok
-          ? [{ id: row.id, title: resolved.title, start: resolved.start, end: resolved.end, category: row.category ?? 'Personal', location: row.location?.trim() || null, duplicateDecision: row.duplicateDecision }]
+          ? [{ id: row.id, title: resolved.title, start: resolved.start, end: resolved.end, category: row.category ?? 'Personal', location: row.location?.trim() || null, duplicateDecision: row.duplicateDecision, replacementId: row.replacementId }]
           : [],
       );
       try {

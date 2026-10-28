@@ -32,6 +32,7 @@ export interface ImportRow {
   overnightConfirmed?: boolean;
   /** Decyzja użytkownika dla duplikatu. */
   duplicateDecision?: DuplicateDecision;
+  replacementId?: string;
 }
 
 /** „Pomiń” – nie dodawaj; „Zastąp” – nadpisz istniejące wydarzenie; „Zachowaj oba” – dodaj jako osobne. */

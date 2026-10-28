@@ -1,7 +1,7 @@
 import { Pool } from 'pg';
 import { config } from './config.js';
 import { CATEGORY_IDS, type ExistingEvent } from './import/rules.js';
-import { planWorkImport, type PlanAction } from './import/work-schedule/plan.js';
+import { planImport, type PlanAction } from './import/plan.js';
 import {
   IMPORT_SESSION_TTL_MINUTES,
   SOURCE_LABELS,
@@ -200,6 +200,12 @@ export class PostgresCalendarRepository {
     const client = await this.connectionPool.connect();
     try {
       await client.query('begin');
+      const owner = await client.query(`select id_kalendarza from t_kalendarze
+        where id_kalendarza = $1 and id_uzytkownika = $2 and aktywny = true for update`, [calendarId, userId]);
+      if (!owner.rowCount) { await client.query('rollback'); return { kind: 'not-found' }; }
+      if (new Set(rows.map(row => row.id)).size !== rows.length) {
+        await client.query('rollback'); return { kind: 'unknown-rows', rowIds: rows.map(row => row.id) };
+      }
       const session = await client.query(
         `select status, data_importu < now() - make_interval(mins => $3) as wygasla
          from t_importy where id_importu = $1 and id_uzytkownika = $2
@@ -230,14 +236,14 @@ export class PostgresCalendarRepository {
         return { kind: 'unknown-rows', rowIds: unknown };
       }
 
-      // Zmiany pracy sprawdzamy pod kątem duplikatów (S23KC2S1P2-44). Pozostałe wiersze są po prostu dodawane.
-      const workRows = rows.filter((row) => row.category === 'Work');
+      // All import categories share the same title/start duplicate rule.
+      const workRows = rows;
       const actions = new Map<string, PlanAction>(rows.map((row) => [row.id, { kind: 'insert', rowId: row.id }]));
       if (workRows.length > 0) {
         const existing = (
           await client.query(`select id_wydarzenia, tytul, rozpoczecie from t_wydarzenia where id_kalendarza = $1 and status = 'Aktywne'`, [calendarId])
         ).rows.map((event) => ({ id: event.id_wydarzenia as string, title: event.tytul as string, start: new Date(event.rozpoczecie) }));
-        const plan = planWorkImport(workRows, existing);
+        const plan = planImport(workRows, existing);
         if (!plan.ok) {
           await client.query('rollback');
           return { kind: 'needs-decision', missingDecisions: plan.missingDecisions, invalidDecisions: plan.invalidDecisions };
