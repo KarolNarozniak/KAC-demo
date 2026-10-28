@@ -54,8 +54,12 @@ test('rozpoznaje zmiany użytkownika w grafiku wielu pracowników', () => {
     ],
     'Student Demo',
   );
-  assert.deepEqual(rows.map((row) => row.isOwn), [true, false, true]);
+  // Wiersz bez nazwiska w grafiku z nazwiskami nie jest zaznaczany domyślnie (może być cudzą zmianą).
+  assert.deepEqual(rows.map((row) => row.isOwn), [true, false, false]);
   assert.ok(rows.every((row) => row.category === 'Work' && row.title === 'Praca'));
+  // Grafik jednej osoby, bez nazwisk – wszystkie zmiany są użytkownika.
+  const single = mapShiftsToRows([{ date: '2026-11-03', startTime: '10:00', endTime: '12:00', confidence: 0.9 }], 'Student Demo');
+  assert.deepEqual(single.rows.map((row) => row.isOwn), [true]);
 });
 
 test('wynik odczytu: wszystkie, część albo żadna zmiana (4b, 4c)', () => {
@@ -68,10 +72,11 @@ test('wynik odczytu: wszystkie, część albo żadna zmiana (4b, 4c)', () => {
 });
 
 test('czytnik demonstracyjny: „pusty” plik nie daje zmian, inne dają przykładowy grafik', async () => {
-  const reader = new DemoScheduleReader(async () => 'Student Demo');
+  const reader = new DemoScheduleReader();
+  const context = { userName: 'Student Demo' };
   assert.equal(reader.real, false);
-  assert.deepEqual(await reader.read({ name: 'grafik-pusty.jpg', type: 'JPG', bytes: jpgBytes() }), []);
-  const shifts = await reader.read({ name: 'grafik.pdf', type: 'PDF', bytes: pdfBytes() });
+  assert.deepEqual(await reader.read({ name: 'grafik-pusty.jpg', type: 'JPG', bytes: jpgBytes() }, context), []);
+  const shifts = await reader.read({ name: 'grafik.pdf', type: 'PDF', bytes: pdfBytes() }, context);
   assert.ok(shifts.some((shift) => shift.employee === 'Student Demo'));
   assert.ok(shifts.some((shift) => shift.employee !== 'Student Demo'));
 });

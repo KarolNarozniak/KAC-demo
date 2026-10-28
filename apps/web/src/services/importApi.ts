@@ -109,9 +109,11 @@ export type ScheduleReadResult =
 
 /** Wysyła plik z grafikiem do API: API sprawdza plik, odczytuje zmiany i zakłada sesję importu. */
 export async function readWorkSchedule(fileName: string, dataBase64: string): Promise<ScheduleReadResult> {
-  const response = await postJson('/api/import/work-schedule/read', { fileName, dataBase64 });
+  // OCR zdjęcia na serwerze może trwać do 60 s, dlatego dłuższy limit niż dla pozostałych żądań.
+  const response = await postJson('/api/import/work-schedule/read', { fileName, dataBase64 }, AbortSignal.timeout(75000));
   if (response.status === 201) return { kind: 'read', ...((await response.json()) as Omit<Extract<ScheduleReadResult, { kind: 'read' }>, 'kind'>) };
-  if (response.status === 422) return { kind: 'rejected', error: ((await response.json()) as { error: string }).error };
+  if (response.status === 422 || response.status === 429) return { kind: 'rejected', error: ((await response.json()) as { error: string }).error };
+  if (response.status === 413) return { kind: 'rejected', error: 'file-too-large' };
   return { kind: 'unavailable' };
 }
 

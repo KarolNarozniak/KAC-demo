@@ -1,13 +1,13 @@
 import { Worker } from 'node:worker_threads';
 import { PdfReadError } from './reader.js';
+import { tryAcquireRecognition } from '../recognition-slot.js';
 import type { Timetable } from './wat.js';
 
-let active = false;
-/** One local OCR worker at a time, no upload persistence or model downloads. */
+/** One local OCR worker at a time (shared with the work-schedule import), no upload persistence or model downloads. */
 export async function readClassImage(bytes: Buffer): Promise<Timetable> {
-  if (active) throw new PdfReadError('reader-busy');
   if (!bytes.length || bytes.length > 5 * 1024 * 1024) throw new PdfReadError('file-too-large');
-  active = true;
+  const release = tryAcquireRecognition();
+  if (!release) throw new PdfReadError('reader-busy');
   let worker: Worker | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
@@ -26,6 +26,6 @@ export async function readClassImage(bytes: Buffer): Promise<Timetable> {
   } finally {
     clearTimeout(timer);
     await worker?.terminate();
-    active = false;
+    release();
   }
 }

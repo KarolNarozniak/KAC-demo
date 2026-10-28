@@ -6,10 +6,15 @@ let activeReaders = 0;
 
 /** No URL input, OCR, external service or file persistence. Always release the worker. */
 export async function readClassPdf(bytes: Buffer): Promise<Timetable> {
+  return parseWatTimetable(await readPdfPages(bytes));
+}
+
+/** Text items of a PDF read in an isolated worker. Shared with the work-schedule import (S23KC2S1P2-44). */
+export async function readPdfPages(bytes: Buffer): Promise<PdfPage[]> {
   if (activeReaders >= 2) throw new PdfReadError('reader-busy');
   activeReaders++;
   try {
-    const pages = await new Promise<PdfPage[]>((resolve, reject) => {
+    return await new Promise<PdfPage[]>((resolve, reject) => {
       const worker = new Worker(new URL('./pdf-worker.mjs', import.meta.url), {
         workerData: bytes, execArgv: [], resourceLimits: { maxOldGenerationSizeMb: 128, maxYoungGenerationSizeMb: 32 },
       });
@@ -29,6 +34,5 @@ export async function readClassPdf(bytes: Buffer): Promise<Timetable> {
       worker.once('error', () => finish(new PdfReadError('unreadable-pdf')));
       worker.once('exit', () => finish(new PdfReadError('unreadable-pdf')));
     });
-    return parseWatTimetable(pages);
   } finally { activeReaders--; }
 }
