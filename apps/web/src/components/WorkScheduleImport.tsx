@@ -90,13 +90,14 @@ export default function WorkScheduleImport({ visible, onClose, onImported }: Pro
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [overnightOk, setOvernightOk] = useState<Record<string, boolean>>({});
   const [decisions, setDecisions] = useState<Record<string, DuplicateDecision>>({});
+  const [replacementIds, setReplacementIds] = useState<Record<string, string>>({});
   const [preview, setPreview] = useState<Record<string, ImportPreviewRow>>({});
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [summary, setSummary] = useState<ImportSummary | null>(null);
 
   const reset = () => {
-    setPhase('idle'); setSession(null); setRows([]); setSelected({}); setOvernightOk({}); setDecisions({}); setPreview({});
+    setPhase('idle'); setSession(null); setRows([]); setSelected({}); setOvernightOk({}); setDecisions({}); setReplacementIds({}); setPreview({});
   };
 
   const toInput = (row: ScheduleRow): ImportRowInput => ({
@@ -175,7 +176,7 @@ export default function WorkScheduleImport({ visible, onClose, onImported }: Pro
     try {
       const result = await confirmImport(
         session.id,
-        chosen.map((row) => ({ ...toInput(row), overnightConfirmed: overnightOk[row.id] || undefined, duplicateDecision: decisions[row.id] })),
+        chosen.map((row) => ({ ...toInput(row), overnightConfirmed: overnightOk[row.id] || undefined, duplicateDecision: decisions[row.id], replacementId: replacementIds[row.id] })),
       );
       if (result.kind === 'saved') {
         setSummary(result.summary ?? { added: result.saved, replaced: 0, skipped: 0, rejected: result.rejected });
@@ -226,7 +227,9 @@ export default function WorkScheduleImport({ visible, onClose, onImported }: Pro
     const duplicateEvents = item?.duplicateOfEvents ?? [];
     const duplicateRows = item?.duplicateOfRows ?? [];
     const hasDuplicate = duplicateEvents.length > 0 || duplicateRows.length > 0;
-    const allowed: DuplicateDecision[] = duplicateEvents.length > 0 ? ['skip', 'replace', 'keepBoth'] : ['skip', 'keepBoth'];
+    const allowed: DuplicateDecision[] = ['skip', 'replace', 'keepBoth'];
+    const targets = [...duplicateEvents.map(event => ({ id: event.id, label: `${event.title}, ${formatInstant(event.start)}${event.repeatWeekly ? ' — cała seria cotygodniowa' : ''}` })),
+      ...duplicateRows.map(id => ({ id: `row:${id}`, label: label(id) }))];
     const decision = decisions[row.id];
     return (
       <View key={row.id} style={{ marginTop: 14, borderTopWidth: 1, borderColor: palette.line, paddingTop: 13, opacity: isSelected ? 1 : 0.6 }}>
@@ -264,6 +267,8 @@ export default function WorkScheduleImport({ visible, onClose, onImported }: Pro
             <View style={[styles.row, { flexWrap: 'wrap', marginTop: 6 }]}>
               {allowed.map((option) => choice(decisionText[option].label, decision === option, () => setDecisions((current) => ({ ...current, [row.id]: option })), option))}
             </View>
+            {decision === 'replace' && targets.length > 1 && targets.map(target => choice(`Zastąp: ${target.label}`, replacementIds[row.id] === target.id, () => setReplacementIds(current => ({ ...current, [row.id]: target.id })), target.id))}
+            {duplicateEvents.some(event => event.repeatWeekly) && <Text style={styles.muted}>Zastąpienie zmienia całą serię cotygodniową. Jedną serię można zastąpić tylko raz w imporcie.</Text>}
             {decision && <Text style={[styles.muted, { marginTop: 4 }]}>{decisionText[decision].label}: {decisionText[decision].effect}.</Text>}
           </View>
         )}

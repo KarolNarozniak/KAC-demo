@@ -12,18 +12,18 @@ export type PreviewRow = {
   end: string | null;
   location: string | null;
   confidence: number | null;
-  /** Zmiana nocna: koniec przypada następnego dnia i wymaga potwierdzenia (tylko zmiany pracy). */
+  /** Zmiana nocna: koniec przypada następnego dnia i wymaga potwierdzenia. */
   overnight: boolean;
-  /** Duplikaty w kalendarzu (tylko zmiany pracy). */
-  duplicateOfEvents: { id: string; title: string; start: string }[];
-  /** Wcześniejsze wiersze tego importu z tym samym tytułem i początkiem (tylko zmiany pracy). */
+  /** Duplikaty w kalendarzu. */
+  duplicateOfEvents: { id: string; title: string; start: string; repeatWeekly?: boolean }[];
+  /** Wcześniejsze wiersze tego importu z tym samym tytułem i początkiem. */
   duplicateOfRows: string[];
 };
 
 export function buildImportPreview(rows: ImportRow[], existing: ExistingEvent[] = [], timeZone = DEFAULT_TIME_ZONE): PreviewRow[] {
   const resolved = rows.map((row) => ({ row, result: resolveRow(row, timeZone) }));
-  const workRows = resolved.flatMap(({ row, result }) => (result.ok && row.category === 'Work' ? [{ id: row.id, title: result.title, start: result.start }] : []));
-  const duplicates = new Map(findDuplicates(workRows, existing).map((info) => [info.rowId, info]));
+  const validRows = resolved.flatMap(({ row, result }) => (result.ok ? [{ id: row.id, title: result.title, start: result.start }] : []));
+  const duplicates = new Map(findDuplicates(validRows, existing, new Set(rows.filter(row => row.duplicateDecision === 'skip').map(row => row.id))).map((info) => [info.rowId, info]));
   const existingById = new Map(existing.map((event) => [event.id, event]));
 
   return resolved.map(({ row, result }) => {
@@ -44,7 +44,7 @@ export function buildImportPreview(rows: ImportRow[], existing: ExistingEvent[] 
       overnight: result.overnight,
       duplicateOfEvents: (info?.existingIds ?? []).flatMap((id) => {
         const event = existingById.get(id);
-        return event ? [{ id, title: event.title, start: event.start.toISOString() }] : [];
+        return event ? [{ id, title: event.title, start: result.start.toISOString(), ...(event.repeatWeekly ? { repeatWeekly: true } : {}) }] : [];
       }),
       duplicateOfRows: info?.batchRowIds ?? [],
     };

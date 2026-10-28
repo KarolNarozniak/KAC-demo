@@ -1,3 +1,6 @@
+import { CollisionError, EventNotFoundError, EventValidationError } from './collisions.js';
+import { readClassImage } from './import/classes/image-reader.js';
+import { readClassPdf, PdfReadError } from './import/classes/reader.js';
 import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import type { CalendarOverview, EventInput } from './database.js';
@@ -10,6 +13,7 @@ import type { AcceptedRow, ConfirmResult, CreateSessionInput, ImportFormat, Impo
 
 export type CalendarRepository = {
   deleteEvent?: (eventId: string) => Promise<string[] | null>;
+  updateEvent?: (id: string, input: EventInput) => Promise<EventInput & { id: string }>;
   createEvent?: (input: EventInput) => Promise<EventInput & { id: string }>;
   checkConnection: () => Promise<void>;
   getOverview: () => Promise<CalendarOverview | null>;
@@ -46,10 +50,11 @@ const importRowSchema = {
     employee: { type: 'string', maxLength: 200 },
     overnightConfirmed: { type: 'boolean' },
     duplicateDecision: { type: 'string', enum: ['skip', 'replace', 'keepBoth'] },
+    replacementId: { type: 'string', minLength: 1, maxLength: 200 },
   },
 } as const;
 
-const rowsProperty = { type: 'array', maxItems: 200, items: importRowSchema } as const;
+const rowsProperty = { type: 'array', maxItems: 1000, items: importRowSchema } as const;
 const sessionIdSchema = { type: 'string', minLength: 1, maxLength: 64 } as const;
 
 const importPreviewSchema = {
@@ -102,7 +107,7 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
     options.scheduleReader ?? new DemoScheduleReader(async () => (repository?.getImportUserName ? repository.getImportUserName() : ''));
   // Wydarzenia z kalendarza do wykrywania duplikatów zmian pracy. Bez bazy porównanie jest pomijane.
   const existingEventsFor = async (rows: ImportRow[]): Promise<ExistingEvent[]> => {
-    if (!repository?.listEventsForImport || !rows.some((row) => row.category === 'Work')) return [];
+    if (!repository?.listEventsForImport) return [];
     return repository.listEventsForImport();
   };
   const allowAnyOrigin = allowedOrigins.includes('*');
@@ -141,31 +146,42 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
     }
   });
 
-  app.post<{ Body: EventInput }>('/api/events', {
-    schema: { body: { type: 'object', additionalProperties: false,
-      required: ['title', 'start', 'end', 'category', 'location', 'mandatory', 'repeatWeekly'],
-      properties: {
-        title: { type: 'string', minLength: 1, maxLength: 200 },
-        start: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$' },
-        end: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$' },
-        category: { type: 'string', enum: ['Class', 'Work', 'Personal'] },
-        location: { type: 'string', maxLength: 500 }, mandatory: { type: 'boolean' }, repeatWeekly: { type: 'boolean' }
-      } } }
-  }, async (request, reply) => {
-    const input = request.body;
-    const validDate = (value: string) => {
-      const parsed = new Date(value + ':00Z');
-      return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 16) === value;
-    };
-    if (!input.title.trim() || !validDate(input.start) || !validDate(input.end) || input.end <= input.start)
-      return reply.code(400).send({ error: 'invalid_event' });
-    if (!repository?.createEvent) return reply.code(503).send({ error: 'database_not_configured' });
-    try { return reply.code(201).send(await repository.createEvent(input)); }
-    catch (error) {
-      app.log.error(error);
-      return reply.code(503).send({ error: 'event_not_saved' });
-    }
-  });
+  const eventBody = { type: 'object', additionalProperties: false,
+    required: ['title', 'start', 'end', 'category', 'location', 'mandatory', 'repeatWeekly'],
+    properties: {
+      title: { type: 'string', minLength: 1, maxLength: 200 },
+      start: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$' },
+      end: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$' },
+      category: { type: 'string', enum: ['Class', 'Work', 'Personal'] },
+      location: { type: 'string', maxLength: 500 }, mandatory: { type: 'boolean' }, repeatWeekly: { type: 'boolean' },
+      collisionToken: { type: 'string', pattern: '^[a-f0-9]{64}$' },
+    },
+  } as const;
+  for (const method of ['POST', 'PUT'] as const) {
+    app.route<{ Body: EventInput; Params: { id?: string } }>({ method, url: method === 'POST' ? '/api/events' : '/api/events/:id',
+      schema: { body: eventBody, ...(method === 'PUT' ? { params: { type: 'object', required: ['id'], properties: { id: { type: 'string', minLength: 1, maxLength: 200 } } } } : {}) },
+      handler: async (request, reply) => {
+        const input = request.body;
+        const validDate = (value: string) => {
+          const parsed = new Date(value + ':00Z');
+          return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0,16) === value;
+        };
+        if (!input.title.trim() || !validDate(input.start) || !validDate(input.end) || input.end <= input.start)
+          return reply.code(400).send({ error: 'invalid_event' });
+        if (!repository?.createEvent || (method === 'PUT' && !repository.updateEvent)) return reply.code(503).send({ error: 'database_not_configured' });
+        try {
+          const saved = method === 'POST' ? await repository.createEvent(input) : await repository.updateEvent!(request.params.id!, input);
+          return reply.code(method === 'POST' ? 201 : 200).send(saved);
+        } catch (error) {
+          if (error instanceof CollisionError) return reply.code(409).send({ error: 'event_collision', conflicts: error.conflicts, collisionToken: error.collisionToken });
+          if (error instanceof EventValidationError) return reply.code(400).send({ error: error.message });
+          if (error instanceof EventNotFoundError) return reply.code(404).send({ error: error.message });
+          request.log.error({ err: error }, 'Event not saved');
+          return reply.code(503).send({ error: 'event_not_saved' });
+        }
+      },
+    });
+  }
 
   app.delete<{ Params: { id: string } }>('/api/events/:id', {
     schema: { params: { type: 'object', required: ['id'], properties: { id: { type: 'string', minLength: 1, maxLength: 200 } } } },
@@ -185,7 +201,7 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
 
   // Podgląd importu: sprawdza wiersze po każdej poprawce użytkownika. Niczego nie zapisuje w kalendarzu.
   // Jeśli podano identyfikator sesji, przedłuża ją (sesja wygasa po 15 minutach bez akcji).
-  app.post<{ Body: { rows: ImportRow[]; importSessionId?: string } }>('/api/import/preview', { schema: importPreviewSchema }, async (request) => {
+  app.post<{ Body: { rows: ImportRow[]; importSessionId?: string } }>('/api/import/preview', { schema: importPreviewSchema }, async (request, reply) => {
     if (request.body.importSessionId && repository?.touchImportSession) {
       await repository.touchImportSession(request.body.importSessionId).catch((error) => request.log.warn({ err: error }, 'Could not extend import session'));
     }
@@ -194,6 +210,7 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
       existing = await existingEventsFor(request.body.rows);
     } catch (error) {
       request.log.warn({ err: error }, 'Import preview could not read calendar events');
+      return reply.code(503).send({ error: 'database_unavailable' });
     }
     return { rows: buildImportPreview(request.body.rows, existing) };
   });
@@ -230,7 +247,7 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
       if (unconfirmed.length > 0) return reply.code(422).send({ error: 'overnight_not_confirmed', rowIds: unconfirmed });
       const accepted: AcceptedRow[] = resolvedRows.flatMap(({ row, resolved }) =>
         resolved.ok
-          ? [{ id: row.id, title: resolved.title, start: resolved.start, end: resolved.end, category: row.category ?? 'Personal', location: row.location?.trim() || null, duplicateDecision: row.duplicateDecision }]
+          ? [{ id: row.id, title: resolved.title, start: resolved.start, end: resolved.end, category: row.category ?? 'Personal', location: row.location?.trim() || null, duplicateDecision: row.duplicateDecision, replacementId: row.replacementId }]
           : [],
       );
       try {
@@ -269,6 +286,27 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
   });
 
   // --- Import grafiku pracy ze zdjęcia lub pliku (S23KC2S1P2-44) ---
+  app.post<{ Body: { fileName: string; dataBase64: string } }>('/api/import/classes/read',
+    { schema: readScheduleSchema, bodyLimit: READ_BODY_LIMIT }, async (request, reply) => {
+      if (!repository?.createImportSession || !repository.listEventsForImport) return reply.code(503).send({ error: 'database_not_configured' });
+      const file = checkScheduleFile(request.body.dataBase64);
+      if (!file.ok) return reply.code(422).send({ error: file.reason });
+      let timetable;
+      try { timetable = await (file.type === 'PDF' ? readClassPdf(file.bytes) : readClassImage(file.bytes)); }
+      catch (error) {
+        const code = error instanceof PdfReadError ? error.message : 'unsupported-layout';
+        return reply.code(code === 'reader-busy' ? 429 : 422).send({ error: code });
+      }
+      try {
+        const preview = buildImportPreview(timetable.rows, await repository.listEventsForImport());
+        const session = await repository.createImportSession({ source: 'classes', format: file.type === 'PDF' ? 'PDF' : 'Zdjęcie', rows: timetable.rows, preview });
+        return reply.code(201).send({ ...timetable, preview, importSessionId: session.id, expiresAt: session.expiresAt.toISOString() });
+      } catch (error) {
+        request.log.error({ err: error }, 'Class import could not create preview');
+        return reply.code(503).send({ error: 'database_unavailable' });
+      }
+    });
+
   // Sprawdza plik, odczytuje zmiany i zakłada sesję importu do kontroli. Kalendarz pozostaje bez zmian.
   app.post<{ Body: { fileName: string; dataBase64: string } }>(
     '/api/import/work-schedule/read',

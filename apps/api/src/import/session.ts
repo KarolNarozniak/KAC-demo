@@ -22,6 +22,7 @@ export type AcceptedRow = {
   category: ImportCategory;
   location: string | null;
   duplicateDecision?: DuplicateDecision;
+  replacementId?: string;
 };
 
 /** Co stało się z wierszem przy zapisie: dodany, zastąpił istniejące wydarzenie albo został pominięty jako duplikat. */

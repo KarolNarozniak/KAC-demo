@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { checkScheduleFile, MAX_SCHEDULE_FILE_BYTES } from '../src/import/work-schedule/file-check.js';
 import { mapShiftsToRows, sameEmployee } from '../src/import/work-schedule/mapping.js';
-import { planWorkImport } from '../src/import/work-schedule/plan.js';
+import { planImport } from '../src/import/plan.js';
 import { DemoScheduleReader } from '../src/import/work-schedule/reader.js';
 import { resolveRow } from '../src/import/rules.js';
 import { buildImportPreview } from '../src/import/preview.js';
@@ -92,7 +92,7 @@ test('dla zajęć koniec przed początkiem nadal jest błędem (historyjka 32 be
   assert.deepEqual(result, { ok: false, id: 'p1', issues: ['end-not-after-start'] });
 });
 
-test('podgląd oznacza duplikat w kalendarzu i powtórzenie w imporcie tylko dla zmian pracy', () => {
+test('podgląd oznacza duplikat w kalendarzu i powtórzenie w imporcie dla wszystkich kategorii', () => {
   const existing = [{ id: 'E002', title: 'Praca', start: new Date('2026-02-23T15:00:00Z') }];
   const work = { title: ' praca ', date: '2026-02-23', startTime: '16:00', endTime: '20:00', category: 'Work' as const };
   const preview = buildImportPreview(
@@ -105,7 +105,7 @@ test('podgląd oznacza duplikat w kalendarzu i powtórzenie w imporcie tylko dla
   );
   assert.deepEqual(preview[0]?.duplicateOfEvents.map((event) => event.id), ['E002']);
   assert.deepEqual(preview[1]?.duplicateOfRows, ['z1']);
-  assert.deepEqual(preview[2]?.duplicateOfEvents, []);
+  assert.equal(preview[2]?.duplicateOfEvents.length, 1);
 });
 
 // --- SUB-10: plan zapisu z decyzjami dla duplikatów ---
@@ -114,12 +114,12 @@ const start = new Date('2026-11-02T15:00:00Z');
 const existing = [{ id: 'E-OLD', title: 'Praca', start }];
 
 test('duplikat bez decyzji blokuje zapis (6b)', () => {
-  const plan = planWorkImport([{ id: 'z1', title: 'Praca', start }], existing);
+  const plan = planImport([{ id: 'z1', title: 'Praca', start }], existing);
   assert.deepEqual(plan, { ok: false, missingDecisions: ['z1'], invalidDecisions: [] });
 });
 
 test('decyzje Pomiń, Zastąp i Zachowaj oba dają odpowiednie akcje', () => {
-  const plan = planWorkImport(
+  const plan = planImport(
     [
       { id: 'z1', title: 'Praca', start, duplicateDecision: 'replace' },
       { id: 'z2', title: 'Praca', start, duplicateDecision: 'skip' },
@@ -139,14 +139,37 @@ test('decyzje Pomiń, Zastąp i Zachowaj oba dają odpowiednie akcje', () => {
   });
 });
 
-test('„Zastąp” dla powtórzenia tylko w imporcie (bez wydarzenia w kalendarzu) jest niepoprawne', () => {
+test('„Zastąp” zastępuje wcześniejszy wiersz w tym samym imporcie', () => {
   const other = new Date('2026-11-05T15:00:00Z');
-  const plan = planWorkImport(
+  const plan = planImport(
     [
       { id: 'z1', title: 'Praca', start: other },
       { id: 'z2', title: 'Praca', start: other, duplicateDecision: 'replace' },
     ],
     [],
   );
-  assert.deepEqual(plan, { ok: false, missingDecisions: [], invalidDecisions: ['z2'] });
+  assert.deepEqual(plan, { ok: true, actions: [{ kind: 'skip', rowId: 'z1' }, { kind: 'insert', rowId: 'z2' }] });
+});
+
+
+test('ambiguous replacements require an explicit matching target', () => {
+  const events = [...existing, { ...existing[0]!, id: 'E-OTHER' }];
+  assert.equal(planImport([{ id: 'r', title: 'Praca', start, duplicateDecision: 'replace' }], events).ok, false);
+  assert.deepEqual(planImport([{ id: 'r', title: 'Praca', start, duplicateDecision: 'replace', replacementId: 'E-OTHER' }], events), {
+    ok: true, actions: [{ kind: 'replace', rowId: 'r', eventId: 'E-OTHER' }],
+  });
+});
+
+
+test('skip remains skip if the original duplicate was removed after preview', () => {
+  assert.deepEqual(planImport([{ id: 'r', title: 'Praca', start, duplicateDecision: 'skip' }], []), {
+    ok: true, actions: [{ kind: 'skip', rowId: 'r' }],
+  });
+});
+
+
+test('a removed replacement target must not silently turn into an insert', () => {
+  assert.deepEqual(planImport([{ id: 'r', title: 'Praca', start, duplicateDecision: 'replace', replacementId: 'gone' }], []), {
+    ok: false, missingDecisions: [], invalidDecisions: ['r'],
+  });
 });

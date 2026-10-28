@@ -35,10 +35,58 @@ The dependency audit on 2026-10-22 decreased from **55 findings (1 critical, 37 
 - Creation saves to PostgreSQL before updating the calendar. Connection failures keep the form open with the entered data. No in-memory demo fallback.
 - **Powtarzaj co tydzień** stores a series and its first event in one transaction. Occurrences are derived for the visible week, without a fixed end date. Calendar dates and times use the configured account timezone (initially Europe/Warsaw), retaining weekly wall-clock time across daylight-saving changes.
 - Calendar ownership, categories, series and the original relational schema are retained for subsequent features. `DB_DEMO_USER_ID` and `DB_DEMO_CALENDAR_ID` select the initial seeded calendar. There is no authentication yet; these server-selected IDs must be replaced by authenticated account scope when accounts are implemented.
-- Event editing, account flows, imports, planning and notifications are outside this increment. Their simulated UI and fixtures have been removed.
+- Event creation and whole-series editing use server-side collision checks. Warnings show titles, categories, full dates/times and overlap intervals. Choose **Popraw termin**, **Zapisz mimo kolizji**, or **Anuluj**. Touching interval endpoints do not collide. An override applies only to the displayed draft and current conflicts. Updates retain event IDs and save atomically. Recurring events retain the account's local wall time; nonexistent spring-DST times are rejected. One-off events may span up to 366 days; weekly events up to 7 days.
+- **Tydzień → Importuj plan** reads text PDFs exported in the WAT mini e-D semester layout locally on the API server. PDF selection works on web, Android and iOS. The reader maps date columns, time blocks, the subject legend and printed page continuations. It uses the academic semester, not the document update date. Dated classes become individual events, without infinite weekly repetition.
+- The paginated import preview supports corrections, selection and duplicate decisions: **Pomiń**, **Zastąp**, **Zachowaj oba**. Uncertain rows start unselected. A duplicate has the same normalized title and start instant; end time is deliberately excluded so a corrected duration can replace an existing event. Matches include derived weekly occurrences. Replacing a weekly match changes the whole series while preserving its anchor; the UI labels this, and a series may be replaced only once per batch. Ambiguous matches require an explicit target. Confirmation rechecks duplicates under the same calendar lock used by manual writes and commits the whole batch atomically.
+- Class import also accepts **PNG/JPG screenshots of the WAT Miniatura grid**. Tesseract.js runs offline on the API host with a packaged English model for subject abbreviations, Roman months and numerical times. Sharp decodes images and applies EXIF orientation; grid segmentation preserves date/time associations. All OCR rows start unselected and require review. Subject codes can be misread; missing rooms and class forms remain blank. Skewed/perspective photos and scanned PDFs remain deferred. Image limits: 5 MB, 20 megapixels, 6000 × 8000 dimensions, one OCR worker, 60-second timeout. No Python or system Tesseract installation is needed.
+- Text PDF limits: Limits: 5 MB, 10 pages, 30,000 text items, 1,000 imported rows, two readers at once and a 15-second worker timeout. The worker has a bounded heap; uploads are neither retained on disk nor sent to third-party services. Native document cache copies are deleted after reading. Existing work-schedule import remains a separately labelled demonstration reader.
+- Authentication remains a later task: the server-selected demo account and calendar remain in use. Planning and notifications are outside this increment.
 
 ## Checks and deployment
 
 `npm run typecheck`, `npm test`, `npm run build`. With PostgreSQL migrated and seeded, run `npm run test:api:db` to verify create/read/delete persistence, ownership checks and series cleanup through a fresh API instance. The integration test removes its own records.
 
 The API and Expo web deployment scripts and existing GitHub Actions remain. Configure API `DATABASE_URL`, `PGSSLMODE=require` and `API_CORS_ORIGINS`; the web build embeds `EXPO_PUBLIC_API_URL`. Apply database migrations before deploying the updated API.
+
+## Feature validation (S23KC2S1P2-43, -14, -38)
+
+Run the checks above and `npm run test:api:db` against a migrated, seeded **test database**. Database suites run sequentially because legacy tests share the demo calendar; new feature scenarios create and remove a separate calendar. They cover concurrent create requests, collision overrides, atomic edits, ownership, recurring duplicate replacement, cancellation and repeated semester imports. The three paired PDF/JSON timetable fixtures live in `apps/api/tests/fixtures/timetables`, named by printed semester and academic year. They contain 166, 212 and 37 entries. Actual-PDF worker and upload tests are mandatory; missing source fixtures fail the tests rather than being skipped.
+
+Native JavaScript bundles can be checked with `npx expo export --platform ios --platform android` from `apps/web`. Native device picker behavior still requires a device/emulator smoke test; a successful bundle export does not establish that a physical-device test passed.
+
+The initial OCR implementation and deferred stages are documented in [the local OCR implementation plan](docs/ocr-implementation-plan.md). Three original screenshot fixtures are in `apps/api/tests/fixtures/ocr`. Tests check all 37, 166 and 212 date/time assignments against the paired PDFs; this does not imply perfect subject-code recognition.
+
+## Build and try the OCR demo locally
+
+Run from the repository root with Node 24 and Docker running. Copy the example
+configuration only when the corresponding local file does not already exist:
+
+```sh
+npm ci
+[ -f .env ] || cp .env.example .env
+[ -f apps/api/.env ] || cp apps/api/.env.example apps/api/.env
+[ -f apps/web/.env ] || cp apps/web/.env.example apps/web/.env
+npm run db:up
+npm run db:migrate
+npm run db:seed
+npm run build
+npm run api:start
+```
+
+In a second terminal at the repository root:
+
+```sh
+npm run web:dev
+```
+
+Open `http://localhost:8081`, choose **Tydzień → Importuj plan → Wybierz PDF lub obraz**,
+and select a PNG from `apps/api/tests/fixtures/ocr`. Check/correct the subject codes,
+select the rows to import and confirm. Nothing enters the calendar before confirmation.
+For the compiled web build instead of Expo development mode, use `npm run web:start`
+(default port 8080). Restart/rebuild the frontend after changing `EXPO_PUBLIC_API_URL`.
+
+For Android/iOS preview, put `EXPO_PUBLIC_API_URL=http://YOUR_COMPUTER_LAN_IP:4000`
+in `apps/web/.env`, then run `npm run start:dev --workspace @kac/web -- --lan`.
+The phone must reach that API address; `localhost` on a phone points to the phone.
+The native file picker accepts PNG/JPG/PDF. Camera capture and on-device OCR are not
+implemented. Use an SDK-compatible Expo client or development build.
