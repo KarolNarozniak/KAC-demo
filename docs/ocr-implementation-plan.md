@@ -1,6 +1,34 @@
 # Local OCR implementation plan
 
-Status: proposal only. No OCR runtime, dependencies or endpoints added in this change.
+Status: initial screenshot OCR implemented following the user's request for a simple
+first version. The broader plan below remains a roadmap, not a statement of shipped features.
+
+## Implemented first version (2026-10-28)
+
+- Original PNG screenshots renamed and stored under `apps/api/tests/fixtures/ocr`.
+- Node worker uses Sharp and Tesseract.js with a bundled English model. This replaces
+  the proposed Python/OpenCV service for this increment: the screenshots have straight
+  grid lines and abbreviated labels, so an extra runtime and Polish prose model are
+  unnecessary. No runtime downloads, external OCR APIs or LLMs.
+- Decode PNG/JPEG, enforce byte/pixel/dimension limits, apply EXIF orientation, detect
+  the complete 7-day/7-block miniature grid, OCR headers and occupied cells independently.
+  Weekly date reconstruction requires a valid Monday anchor and at least 70% matching
+  header dates. Unreadable headers reject the image; unreadable subject codes remain
+  editable rows. Grid detection never uses fixture names, hashes or paired PDF data.
+- Existing `/api/import/classes/read` accepts images and creates the usual preview
+  session. One OCR request runs at a time, with a 60-second timeout and cleanup;
+  overload returns 429. There is no background queue or persistent OCR job state.
+- Web/Android/iOS file pickers accept images. Every OCR row starts unselected;
+  warnings explain corrections and absent rooms/forms. Existing server validation,
+  duplicate decisions and atomic confirmation apply. No automatic calendar writes.
+- The real fixture tests verify all 415 date/start/end assignments and the 37 codes
+  in the smallest screenshot. Dense-grid subject codes remain imperfect. Tests also
+  exercise malformed images, decoded pixel limits, JPEG/EXIF and concurrency.
+- Still deferred: camera capture, perspective/deskew correction, scanned PDFs,
+  legend expansion, source-crop previews, cancellable background jobs, automatic
+  confidence-based selection and physical-device validation. These are not required
+  to try the initial screenshot demo. Build/run instructions are in the root README.
+
 
 ## Scope and architecture
 

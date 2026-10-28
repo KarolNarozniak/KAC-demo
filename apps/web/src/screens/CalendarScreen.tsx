@@ -89,7 +89,7 @@ export default function CalendarScreen({ week, setWeek, todayOnly = false, weekL
     {!!loadError && <View><Text accessibilityRole="alert" style={styles.error}>{loadError}</Text><Button title="Spróbuj ponownie" onPress={() => void reload()} /></View>}
     {!todayOnly && <View style={[styles.row, { justifyContent: 'space-between', paddingVertical: 6 }]}>
       <Text numberOfLines={1} style={[styles.heading, { flex: 1, fontSize: compact ? 14 : 17 }]}>{selectedWeek}</Text>
-      <Button title="Importuj plan PDF" onPress={() => setClassImportOpen(true)} />
+      <Button title="Importuj plan" onPress={() => setClassImportOpen(true)} />
       <Button title="Grafik pracy" accessibilityLabel="Importuj grafik pracy" onPress={() => setImportOpen(true)} />
       <Button title="+" accessibilityLabel="Dodaj wydarzenie" primary onPress={() => newEvent(todayOnly ? new Date() : weekDays.some((date) => localDateKey(date) === localDateKey(new Date())) ? new Date() : monday)} />
     </View>}

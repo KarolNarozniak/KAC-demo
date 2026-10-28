@@ -1,4 +1,5 @@
 import { CollisionError, EventNotFoundError, EventValidationError } from './collisions.js';
+import { readClassImage } from './import/classes/image-reader.js';
 import { readClassPdf, PdfReadError } from './import/classes/reader.js';
 import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
@@ -290,16 +291,15 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
       if (!repository?.createImportSession || !repository.listEventsForImport) return reply.code(503).send({ error: 'database_not_configured' });
       const file = checkScheduleFile(request.body.dataBase64);
       if (!file.ok) return reply.code(422).send({ error: file.reason });
-      if (file.type !== 'PDF') return reply.code(422).send({ error: 'pdf-only' });
       let timetable;
-      try { timetable = await readClassPdf(file.bytes); }
+      try { timetable = await (file.type === 'PDF' ? readClassPdf(file.bytes) : readClassImage(file.bytes)); }
       catch (error) {
         const code = error instanceof PdfReadError ? error.message : 'unsupported-layout';
         return reply.code(code === 'reader-busy' ? 429 : 422).send({ error: code });
       }
       try {
         const preview = buildImportPreview(timetable.rows, await repository.listEventsForImport());
-        const session = await repository.createImportSession({ source: 'classes', format: 'PDF', rows: timetable.rows, preview });
+        const session = await repository.createImportSession({ source: 'classes', format: file.type === 'PDF' ? 'PDF' : 'Zdjęcie', rows: timetable.rows, preview });
         return reply.code(201).send({ ...timetable, preview, importSessionId: session.id, expiresAt: session.expiresAt.toISOString() });
       } catch (error) {
         request.log.error({ err: error }, 'Class import could not create preview');

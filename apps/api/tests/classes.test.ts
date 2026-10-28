@@ -39,13 +39,13 @@ test('actual provided PDF is processed by the isolated local worker', async () =
   assert.deepEqual(result, parseWatTimetable(fixture()));
 });
 
-test('class upload rejects photos and corrupt files before creating a session', async () => {
+test('class upload rejects unsupported images and corrupt PDFs before creating a session', async () => {
   let writes = 0;
   const app = buildApi({ checkConnection: async () => {}, getOverview: async () => null,
     listEventsForImport: async () => [], createImportSession: async () => { writes++; return { id: 's1', expiresAt: new Date() }; } });
   try {
     const photo = await app.inject({ method: 'POST', url: '/api/import/classes/read', payload: { fileName: 'fake.pdf', dataBase64: pngBytes().toString('base64') } });
-    assert.equal(photo.statusCode, 422); assert.equal(photo.json().error, 'pdf-only');
+    assert.equal(photo.statusCode, 422); assert.equal(photo.json().error, 'unsupported-image-layout');
     const corrupt = await app.inject({ method: 'POST', url: '/api/import/classes/read', payload: { fileName: 'bad.pdf', dataBase64: pdfBytes().toString('base64') } });
     assert.equal(corrupt.statusCode, 422);
     assert.equal(writes, 0);

@@ -119,17 +119,21 @@ export type ClassRow = ImportRowInput & { reviewRequired: boolean; sourcePage: n
 export type ClassReadResult = { importSessionId: string; academicYear: string; dateFrom: string; dateTo: string;
   rows: ClassRow[]; preview: ImportPreviewRow[]; warnings: string[] };
 const pdfErrors: Record<string, string> = {
-  'pdf-only': 'W tej wersji importujemy tylko PDF. Zdjęcia będą obsługiwane później.',
-  'unsupported-format': 'Wybierz plik PDF z e-Dziekanatu WAT.',
+  'unreadable-image': 'Nie można odczytać obrazu. Wybierz PNG lub JPG do 20 megapikseli.',
+  'unsupported-image-layout': 'Nie rozpoznano pełnej tabeli Miniatura WAT. Wybierz wyraźny, prosty zrzut ekranu z nagłówkiem semestru.',
+  'unreadable-image-dates': 'Nie można potwierdzić dat. Wybierz wyraźniejszy zrzut całej tabeli.',
+  'unreadable-image-times': 'Nie można odczytać godzin. Wybierz wyraźniejszy zrzut ekranu.',
+  'empty-image-timetable': 'Na obrazie nie znaleziono zajęć.',
+  'unsupported-format': 'Wybierz PDF, PNG lub JPG z e-Dziekanatu WAT.',
   'unsupported-layout': 'Nie rozpoznano planu WAT. Wybierz PDF z tekstem w układzie mini e-D (plan semestru). Skany nie są obsługiwane.',
   'unreadable-pdf': 'Nie można odczytać PDF. Plik może być uszkodzony lub być skanem.',
   'encrypted-pdf': 'PDF zabezpieczony hasłem nie jest obsługiwany.',
-  'file-too-large': 'PDF może mieć maksymalnie 5 MB.',
+  'file-too-large': 'Plik może mieć maksymalnie 5 MB.',
   'reader-busy': 'Trwa odczyt innych plików. Spróbuj za chwilę.',
-  'read-timeout': 'Odczyt PDF trwał zbyt długo. Wybierz mniejszy plik.',
+  'read-timeout': 'Odczyt planu trwał zbyt długo. Wybierz mniejszy plik.',
 };
 export async function readClassSchedule(name: string, base64: string): Promise<ClassReadResult> {
-  const response = await postJson('/api/import/classes/read', { fileName: name, dataBase64: base64 });
+  const response = await postJson('/api/import/classes/read', { fileName: name, dataBase64: base64 }, AbortSignal.timeout(75000));
   const body = await response.json();
   if (!response.ok) throw new Error(pdfErrors[body.error] ?? 'Nie udało się odczytać planu. Sprawdź plik i połączenie, a następnie spróbuj ponownie.');
   return body;

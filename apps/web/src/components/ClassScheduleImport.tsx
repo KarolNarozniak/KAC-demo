@@ -80,7 +80,7 @@ export default function ClassScheduleImport({ visible, onClose, onImported }: {
       setRetry(value => value + 1);
       if (result.kind === 'expired' || result.kind === 'closed') {
         setSession(null); setRows([]);
-        throw new Error('Sesja wygasła lub została już zakończona. Wczytaj PDF ponownie i sprawdź kalendarz.');
+        throw new Error('Sesja wygasła lub została już zakończona. Wczytaj plik ponownie i sprawdź kalendarz.');
       }
       throw new Error(result.error === 'duplicate_decision_required'
         ? 'Kalendarz się zmienił. Sprawdź aktualne duplikaty i ponownie wybierz decyzje. Jedną serię można zastąpić tylko raz w imporcie.'
@@ -94,13 +94,14 @@ export default function ClassScheduleImport({ visible, onClose, onImported }: {
     <View style={{ flex: 1, backgroundColor: palette.scrim, alignItems: 'center', justifyContent: 'center', padding: 16 }}>
       <ScrollView style={{ backgroundColor: palette.surface, borderRadius: 18, width: '100%', maxWidth: 760, maxHeight: '92%' }} contentContainerStyle={{ padding: 20 }}>
         <Text style={styles.heading}>Importuj plan zajęć WAT</Text>
-        <Text style={styles.subtitle}>PDF z tekstem w układzie mini e-D, maks. 5 MB i 10 stron. Zdjęcia i skany będą obsługiwane w kolejnej wersji.</Text>
+        <Text style={styles.subtitle}>PDF z tekstem (do 10 stron) lub zrzut ekranu Miniatura WAT w PNG/JPG (do 20 megapikseli). Maks. 5 MB. OCR działa lokalnie na serwerze i może potrwać do minuty.</Text>
         {!!fileName && <Text style={styles.body}>{fileName}</Text>}
         {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
         {busy && <Text accessibilityLiveRegion="polite" style={styles.body}>Przetwarzanie…</Text>}
         {summary && <Text accessibilityLiveRegion="polite" style={styles.body}>Import zakończony. Dodano: {summary.added} · Zastąpiono: {summary.replaced} · Pominięto: {summary.skipped} · Niewybrane: {summary.rejected}</Text>}
-        {!session && <Button title="Wybierz PDF" primary disabled={busy} onPress={() => void choose()} />}
+        {!session && <Button title="Wybierz PDF lub obraz" primary disabled={busy} onPress={() => void choose()} />}
         {session && <>
+          {session.warnings.map((warning, index) => <Text key={index} style={styles.muted}>{warning}</Text>)}
           <Text style={styles.body}>Rok {session.academicYear} · {session.dateFrom} – {session.dateTo}</Text>
           <Text style={styles.muted}>Wybrano {chosen.length} z {rows.length} zajęć. Zapisujemy konkretne daty z planu. Sprawdź dane przed zatwierdzeniem. Niepewne wiersze wybierz dopiero po sprawdzeniu.</Text>
           <Text style={styles.muted}>Duplikat oznacza ten sam tytuł (bez różnic w wielkości liter i odstępach) oraz początek. Koniec może się różnić — „Zastąp” pozwala poprawić czas trwania.</Text>
