@@ -1,19 +1,30 @@
 import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
+import { Platform } from 'react-native';
+import { readPickedTimetable, type PickedPdf } from './readPickedTimetable';
 
-export type PickedPdf = { name: string; base64: string; size: number };
-const MAX_BYTES = 5 * 1024 * 1024;
+export type { PickedPdf } from './readPickedTimetable';
+const MIME_TYPES = ['application/pdf', 'image/png', 'image/jpeg'];
 
-/** Native picker copies cloud documents into readable app cache; remove that copy after reading. */
 export async function pickPdf(): Promise<PickedPdf | null> {
-  const result = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', 'image/png', 'image/jpeg'], multiple: false, copyToCacheDirectory: true });
+  if (Platform.OS === 'android') {
+    // FileSystem's picker retains the provider URI permission. DocumentPicker's
+    // cache copy can be outside the current experience's sandbox in Expo Go.
+    const selection = await File.pickFileAsync({ mimeTypes: MIME_TYPES, multipleFiles: false });
+    if (selection.canceled) return null;
+    const file = selection.result;
+    // This is the user's original document: do not delete it after reading.
+    return readPickedTimetable(file);
+  }
+
+  const result = await DocumentPicker.getDocumentAsync({
+    type: MIME_TYPES, multiple: false, copyToCacheDirectory: true,
+  });
   if (result.canceled) return null;
   const asset = result.assets[0];
   if (!asset) return null;
   const file = new File(asset.uri);
-  try {
-    const size = asset.size ?? file.size;
-    if (!size || size > MAX_BYTES) throw new Error('Wybierz niepusty PDF, PNG lub JPG do 5 MB.');
-    return { name: asset.name, size, base64: await file.base64() };
-  } finally { if (file.exists) file.delete(); }
+  return readPickedTimetable({
+    name: asset.name, get size() { return file.size; }, base64: () => file.base64(),
+  }, async () => { if (file.exists) await file.delete(); });
 }
