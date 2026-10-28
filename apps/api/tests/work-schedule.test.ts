@@ -159,3 +159,17 @@ test('ambiguous replacements require an explicit matching target', () => {
     ok: true, actions: [{ kind: 'replace', rowId: 'r', eventId: 'E-OTHER' }],
   });
 });
+
+
+test('skip remains skip if the original duplicate was removed after preview', () => {
+  assert.deepEqual(planImport([{ id: 'r', title: 'Praca', start, duplicateDecision: 'skip' }], []), {
+    ok: true, actions: [{ kind: 'skip', rowId: 'r' }],
+  });
+});
+
+
+test('a removed replacement target must not silently turn into an insert', () => {
+  assert.deepEqual(planImport([{ id: 'r', title: 'Praca', start, duplicateDecision: 'replace', replacementId: 'gone' }], []), {
+    ok: false, missingDecisions: [], invalidDecisions: ['r'],
+  });
+});

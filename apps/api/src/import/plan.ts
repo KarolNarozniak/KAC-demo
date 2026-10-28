@@ -1,4 +1,4 @@
-import { isDuplicate, type DuplicateDecision, type ExistingEvent } from './rules.js';
+import { isExistingDuplicate, type DuplicateDecision, type ExistingEvent } from './rules.js';
 
 export type PlannedRow = { id: string; title: string; start: Date; duplicateDecision?: DuplicateDecision; replacementId?: string };
 export type PlanAction =
@@ -16,14 +16,15 @@ export function planImport(rows: PlannedRow[], existing: ExistingEvent[]): Impor
   const missingDecisions: string[] = [];
   const invalidDecisions: string[] = [];
   for (const row of rows) {
-    const matches = effective.filter(event => isDuplicate(row, event));
+    if (row.duplicateDecision === 'skip') { actions.push({ kind: 'skip', rowId: row.id }); continue; }
+    const matches = effective.filter(event => isExistingDuplicate(row, event));
     if (!matches.length) {
+      if (row.duplicateDecision === 'replace') { invalidDecisions.push(row.id); continue; }
       actions.push({ kind: 'insert', rowId: row.id });
       effective.push({ ...row, id: `row:${row.id}`, batch: true });
       continue;
     }
     if (!row.duplicateDecision) { missingDecisions.push(row.id); continue; }
-    if (row.duplicateDecision === 'skip') { actions.push({ kind: 'skip', rowId: row.id }); continue; }
     if (row.duplicateDecision === 'keepBoth') {
       actions.push({ kind: 'insert', rowId: row.id });
       effective.push({ ...row, id: `row:${row.id}`, batch: true });
@@ -32,7 +33,7 @@ export function planImport(rows: PlannedRow[], existing: ExistingEvent[]): Impor
     const target = row.replacementId
       ? matches.find(event => event.id === row.replacementId)
       : matches.length === 1 ? matches[0] : undefined;
-    if (!target) { invalidDecisions.push(row.id); continue; }
+    if (!target || (target.repeatWeekly && actions.some(action => action.kind === 'replace' && action.eventId === target.id))) { invalidDecisions.push(row.id); continue; }
     if (target.batch) {
       const prior = actions.find(action => action.rowId === target.id.slice(4));
       if (!prior) { invalidDecisions.push(row.id); continue; }
@@ -44,7 +45,7 @@ export function planImport(rows: PlannedRow[], existing: ExistingEvent[]): Impor
     } else {
       actions.push({ kind: 'replace', rowId: row.id, eventId: target.id });
     }
-    effective.splice(effective.indexOf(target), 1, { ...row, id: `row:${row.id}`, batch: true });
+    if (!target.repeatWeekly) effective.splice(effective.indexOf(target), 1, { ...row, id: `row:${row.id}`, batch: true });
   }
   return missingDecisions.length || invalidDecisions.length
     ? { ok: false, missingDecisions, invalidDecisions }

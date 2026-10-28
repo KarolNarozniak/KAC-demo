@@ -43,6 +43,8 @@ export interface ExistingEvent {
   id: string;
   title: string;
   start: Date;
+  repeatWeekly?: boolean;
+  timeZone?: string;
 }
 
 export type RowIssue = 'missing-title' | 'invalid-date' | 'invalid-time' | 'end-not-after-start';
@@ -97,6 +99,8 @@ export function toInstant(date: string, time: string, timeZone = DEFAULT_TIME_ZO
   let utc = naive - zoneOffsetMs(new Date(naive), timeZone);
   const corrected = zoneOffsetMs(new Date(utc), timeZone);
   if (naive - corrected !== utc) utc = naive - corrected; // zmiana czasu letni/zimowy
+  // Reject nonexistent wall times rather than silently shifting them across the DST gap.
+  if (utc + zoneOffsetMs(new Date(utc), timeZone) !== naive) return null;
   return new Date(utc);
 }
 
@@ -142,6 +146,20 @@ export function isDuplicate(a: { title: string; start: Date }, b: { title: strin
   return normalizeTitle(a.title) === normalizeTitle(b.title) && a.start.getTime() === b.start.getTime();
 }
 
+/** Match a derived weekly occurrence as well as a stored one-off event. */
+export function isExistingDuplicate(row: { title: string; start: Date }, event: ExistingEvent): boolean {
+  if (isDuplicate(row, event)) return true;
+  if (!event.repeatWeekly || row.start < event.start || normalizeTitle(row.title) !== normalizeTitle(event.title)) return false;
+  const local = (date: Date) => {
+    const parts = new Intl.DateTimeFormat('en-CA', { timeZone: event.timeZone ?? DEFAULT_TIME_ZONE,
+      year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(date);
+    const get = (key: string) => parts.find(part => part.type === key)!.value;
+    return { day: Date.parse(`${get('year')}-${get('month')}-${get('day')}T00:00:00Z`), time: `${get('hour')}:${get('minute')}` };
+  };
+  const candidate = local(row.start), base = local(event.start);
+  return candidate.time === base.time && (candidate.day - base.day) % (7 * 86400000) === 0;
+}
+
 export interface DuplicateInfo {
   rowId: string;
   /** Wydarzenia z kalendarza, których ten wiersz jest duplikatem. */
@@ -151,11 +169,11 @@ export interface DuplicateInfo {
 }
 
 /** Szuka duplikatów w kalendarzu i wśród wierszy tego samego importu (zwraca tylko wiersze z duplikatem). */
-export function findDuplicates(rows: { id: string; title: string; start: Date }[], existing: ExistingEvent[]): DuplicateInfo[] {
+export function findDuplicates(rows: { id: string; title: string; start: Date }[], existing: ExistingEvent[], skippedRowIds: ReadonlySet<string> = new Set()): DuplicateInfo[] {
   const result: DuplicateInfo[] = [];
   rows.forEach((row, index) => {
-    const existingIds = existing.filter((event) => isDuplicate(row, event)).map((event) => event.id);
-    const batchRowIds = rows.slice(0, index).filter((other) => isDuplicate(row, other)).map((other) => other.id);
+    const existingIds = existing.filter((event) => isExistingDuplicate(row, event)).map((event) => event.id);
+    const batchRowIds = rows.slice(0, index).filter((other) => !skippedRowIds.has(other.id) && isDuplicate(row, other)).map((other) => other.id);
     if (existingIds.length > 0 || batchRowIds.length > 0) result.push({ rowId: row.id, existingIds, batchRowIds });
   });
   return result;

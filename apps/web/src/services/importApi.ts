@@ -31,7 +31,7 @@ export type ImportPreviewRow = {
   location: string | null;
   confidence: number | null;
   overnight: boolean;
-  duplicateOfEvents: { id: string; title: string; start: string }[];
+  duplicateOfEvents: { id: string; title: string; start: string; repeatWeekly?: boolean }[];
   duplicateOfRows: string[];
 };
 

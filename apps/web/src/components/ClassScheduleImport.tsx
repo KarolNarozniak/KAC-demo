@@ -83,7 +83,7 @@ export default function ClassScheduleImport({ visible, onClose, onImported }: {
         throw new Error('Sesja wygasła lub została już zakończona. Wczytaj PDF ponownie i sprawdź kalendarz.');
       }
       throw new Error(result.error === 'duplicate_decision_required'
-        ? 'Kalendarz się zmienił. Sprawdź aktualne duplikaty i ponownie wybierz decyzje.'
+        ? 'Kalendarz się zmienił. Sprawdź aktualne duplikaty i ponownie wybierz decyzje. Jedną serię można zastąpić tylko raz w imporcie.'
         : 'Nie potwierdzono zapisu. Sprawdź dane i połączenie. Podgląd został zachowany.');
     }
   });
@@ -109,7 +109,7 @@ export default function ClassScheduleImport({ visible, onClose, onImported }: {
           <View pointerEvents={busy ? 'none' : 'auto'}>
             {rows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map(row => {
               const item = preview.find(item => item.id === row.id);
-              const targets = [...(item?.duplicateOfEvents ?? []).map(event => ({ id: event.id, label: `${event.title} · ${stamp(event.start)}` })),
+              const targets = [...(item?.duplicateOfEvents ?? []).map(event => ({ id: event.id, label: `${event.title} · ${stamp(event.start)}${event.repeatWeekly ? " · seria cotygodniowa — zastąpienie zmieni całą serię" : ""}` })),
                 ...(item?.duplicateOfRows ?? []).map(id => ({ id: `row:${id}`, label: `Wiersz ${rows.findIndex(other => other.id === id) + 1} tego importu` }))];
               return <View key={row.id} style={{ borderTopWidth: 1, borderColor: palette.line, paddingVertical: 12 }}>
                 <Button title={`${selected.has(row.id) ? '☑' : '☐'} Zajęcia ${rows.indexOf(row) + 1} · strona ${row.sourcePage}`} disabled={busy} onPress={() => toggle(row.id)} />

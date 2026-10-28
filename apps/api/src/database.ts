@@ -1,3 +1,4 @@
+import { requireCollisionDecision, validateTimedEvent, EventNotFoundError, type TimedEvent } from './collisions.js';
 import { Pool } from 'pg';
 import { config } from './config.js';
 import { CATEGORY_IDS, type ExistingEvent } from './import/rules.js';
@@ -23,7 +24,7 @@ export const pool = config.databaseUrl
     })
   : null;
 
-export type EventInput = { title: string; start: string; end: string; category: 'Class' | 'Work' | 'Personal'; location: string; mandatory: boolean; repeatWeekly: boolean };
+export type EventInput = { title: string; start: string; end: string; category: 'Class' | 'Work' | 'Personal'; location: string; mandatory: boolean; repeatWeekly: boolean; collisionToken?: string };
 
 export type CalendarOverview = {
   source: 'postgresql';
@@ -46,43 +47,75 @@ export type CalendarOverview = {
 export class PostgresCalendarRepository {
   constructor(private readonly connectionPool: Pool) {}
 
-  // Scope comes from server configuration today; authentication can supply these IDs later.
+  // Account IDs are server selected until authentication is implemented.
   async createEvent(input: EventInput, userId = config.demoUserId, calendarId = config.demoCalendarId) {
+    return this.saveEvent(input, undefined, userId, calendarId);
+  }
+
+  async updateEvent(id: string, input: EventInput, userId = config.demoUserId, calendarId = config.demoCalendarId) {
+    return this.saveEvent(input, id, userId, calendarId);
+  }
+
+  private async saveEvent(input: EventInput, eventId: string | undefined, userId: string, calendarId: string) {
     const client = await this.connectionPool.connect();
     try {
       await client.query('BEGIN');
+      // All writers lock the same owned calendar, including imports and deletions.
       const owner = await client.query(`select u.strefa_czasowa from t_kalendarze c
         join t_uzytkownicy u on u.id_uzytkownika = c.id_uzytkownika
-        where c.id_kalendarza = $1 and c.id_uzytkownika = $2 and c.aktywny = true`, [calendarId, userId]);
-      if (!owner.rowCount) throw new Error('calendar_not_found');
-      const timezone = owner.rows[0].strefa_czasowa;
-      const category = { Class: 'Zajęcia', Work: 'Praca', Personal: 'Prywatne' }[input.category];
-      let seriesId: string | null = null;
-      if (input.repeatWeekly) {
+        where c.id_kalendarza = $1 and c.id_uzytkownika = $2 and c.aktywny = true for update of c`, [calendarId, userId]);
+      if (!owner.rowCount) throw new EventNotFoundError('calendar_not_found');
+      const timezone: string = owner.rows[0].strefa_czasowa;
+      validateTimedEvent(input, timezone);
+      const records = await client.query(`select e.id_wydarzenia, e.id_serii, e.tytul, e.powtarzaj_co_tydzien,
+        k.nazwa as kategoria,
+        to_char(e.rozpoczecie at time zone $2, 'YYYY-MM-DD"T"HH24:MI') as start,
+        to_char(e.zakonczenie at time zone $2, 'YYYY-MM-DD"T"HH24:MI') as end
+        from t_wydarzenia e join t_kategorie k on k.id_kategorii = e.id_kategorii
+        where e.id_kalendarza = $1 and e.status = 'Aktywne'`, [calendarId, timezone]);
+      const current = records.rows.find(row => row.id_wydarzenia === eventId);
+      if (eventId && !current) throw new EventNotFoundError('event_not_found');
+      const events: TimedEvent[] = records.rows.map(row => ({ id: row.id_wydarzenia, title: row.tytul, start: row.start, end: row.end,
+        category: row.kategoria, repeatWeekly: row.powtarzaj_co_tydzien }));
+      requireCollisionDecision(input, events, timezone, eventId);
+      let seriesId: string | null = current?.id_serii ?? null;
+      if (input.repeatWeekly && !seriesId) {
         const series = await client.query(`insert into t_serie
           (id_kalendarza, czestotliwosc, data_poczatku, bezterminowo)
           values ($1, 'WEEKLY', $2::date, true) returning id_serii`, [calendarId, input.start.slice(0, 10)]);
         seriesId = series.rows[0].id_serii;
+      } else if (input.repeatWeekly && seriesId) {
+        await client.query(`update t_serie set data_poczatku = $2::date where id_serii = $1`, [seriesId, input.start.slice(0,10)]);
       }
-      const result = await client.query(`insert into t_wydarzenia
-        (id_kalendarza, id_kategorii, id_serii, tytul, rozpoczecie, zakonczenie,
-         obowiazkowe, powtarzaj_co_tydzien, miejsce)
-        values ($1, (select id_kategorii from t_kategorie where nazwa = $2), $3, $4,
-          $5::timestamp at time zone $10, $6::timestamp at time zone $10, $7, $8, $9)
-        returning id_wydarzenia`, [calendarId, category, seriesId, input.title.trim(), input.start,
-          input.end, input.mandatory, input.repeatWeekly, input.location, timezone]);
+      const category = { Class: 'Zajęcia', Work: 'Praca', Personal: 'Prywatne' }[input.category];
+      const values = [calendarId, category, input.repeatWeekly ? seriesId : null, input.title.trim(), input.start,
+        input.end, input.mandatory, input.repeatWeekly, input.location, timezone];
+      const result = eventId
+        ? await client.query(`update t_wydarzenia set
+            id_kategorii = (select id_kategorii from t_kategorie where nazwa = $2), id_serii = $3, tytul = $4,
+            rozpoczecie = $5::timestamp at time zone $10, zakonczenie = $6::timestamp at time zone $10,
+            obowiazkowe = $7, powtarzaj_co_tydzien = $8, miejsce = $9, updated_at = now()
+            where id_kalendarza = $1 and id_wydarzenia = $11 returning id_wydarzenia`, [...values, eventId])
+        : await client.query(`insert into t_wydarzenia
+            (id_kalendarza, id_kategorii, id_serii, tytul, rozpoczecie, zakonczenie, obowiazkowe, powtarzaj_co_tydzien, miejsce)
+            values ($1, (select id_kategorii from t_kategorie where nazwa = $2), $3, $4,
+            $5::timestamp at time zone $10, $6::timestamp at time zone $10, $7, $8, $9) returning id_wydarzenia`, values);
+      if (!input.repeatWeekly && seriesId) await client.query(`delete from t_serie where id_serii = $1
+        and not exists (select 1 from t_wydarzenia where id_serii = $1)`, [seriesId]);
       await client.query('COMMIT');
-      return { id: result.rows[0].id_wydarzenia, ...input, title: input.title.trim() };
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally { client.release(); }
+      const { collisionToken: _, ...saved } = input;
+      return { id: result.rows[0].id_wydarzenia, ...saved, title: input.title.trim() };
+    } catch (error) { await client.query('ROLLBACK'); throw error; }
+    finally { client.release(); }
   }
 
   async deleteEvent(eventId: string, userId = config.demoUserId, calendarId = config.demoCalendarId): Promise<string[] | null> {
     const client = await this.connectionPool.connect();
     try {
       await client.query('BEGIN');
+      const owner = await client.query(`select id_kalendarza from t_kalendarze
+        where id_kalendarza = $1 and id_uzytkownika = $2 and aktywny = true for update`, [calendarId, userId]);
+      if (!owner.rowCount) { await client.query('ROLLBACK'); return null; }
       const selected = await client.query(`select e.id_serii, e.powtarzaj_co_tydzien
         from t_wydarzenia e join t_kalendarze c on c.id_kalendarza = e.id_kalendarza
         where e.id_wydarzenia = $1 and c.id_kalendarza = $2 and c.id_uzytkownika = $3
@@ -178,12 +211,15 @@ export class PostgresCalendarRepository {
   }
 
   /** Aktywne wydarzenia kalendarza potrzebne do wykrywania duplikatów. */
-  async listEventsForImport(calendarId = config.demoCalendarId): Promise<ExistingEvent[]> {
+  async listEventsForImport(calendarId = config.demoCalendarId, userId = config.demoUserId): Promise<ExistingEvent[]> {
     const result = await this.connectionPool.query(
-      `select id_wydarzenia, tytul, rozpoczecie from t_wydarzenia where id_kalendarza = $1 and status = 'Aktywne'`,
-      [calendarId],
+      `select e.id_wydarzenia, e.tytul, e.rozpoczecie, e.powtarzaj_co_tydzien, u.strefa_czasowa
+       from t_wydarzenia e join t_kalendarze c on c.id_kalendarza = e.id_kalendarza
+       join t_uzytkownicy u on u.id_uzytkownika = c.id_uzytkownika
+       where e.id_kalendarza = $1 and c.id_uzytkownika = $2 and c.aktywny = true and e.status = 'Aktywne'`,
+      [calendarId, userId],
     );
-    return result.rows.map((event) => ({ id: event.id_wydarzenia, title: event.tytul, start: new Date(event.rozpoczecie) }));
+    return result.rows.map((event) => ({ id: event.id_wydarzenia, title: event.tytul, start: new Date(event.rozpoczecie), repeatWeekly: event.powtarzaj_co_tydzien, timeZone: event.strefa_czasowa }));
   }
 
   /**
@@ -200,8 +236,9 @@ export class PostgresCalendarRepository {
     const client = await this.connectionPool.connect();
     try {
       await client.query('begin');
-      const owner = await client.query(`select id_kalendarza from t_kalendarze
-        where id_kalendarza = $1 and id_uzytkownika = $2 and aktywny = true for update`, [calendarId, userId]);
+      const owner = await client.query(`select c.id_kalendarza, u.strefa_czasowa from t_kalendarze c
+        join t_uzytkownicy u on u.id_uzytkownika = c.id_uzytkownika
+        where c.id_kalendarza = $1 and c.id_uzytkownika = $2 and c.aktywny = true for update of c`, [calendarId, userId]);
       if (!owner.rowCount) { await client.query('rollback'); return { kind: 'not-found' }; }
       if (new Set(rows.map(row => row.id)).size !== rows.length) {
         await client.query('rollback'); return { kind: 'unknown-rows', rowIds: rows.map(row => row.id) };
@@ -237,13 +274,15 @@ export class PostgresCalendarRepository {
       }
 
       // All import categories share the same title/start duplicate rule.
-      const workRows = rows;
       const actions = new Map<string, PlanAction>(rows.map((row) => [row.id, { kind: 'insert', rowId: row.id }]));
-      if (workRows.length > 0) {
+      if (rows.length > 0) {
         const existing = (
-          await client.query(`select id_wydarzenia, tytul, rozpoczecie from t_wydarzenia where id_kalendarza = $1 and status = 'Aktywne'`, [calendarId])
-        ).rows.map((event) => ({ id: event.id_wydarzenia as string, title: event.tytul as string, start: new Date(event.rozpoczecie) }));
-        const plan = planImport(workRows, existing);
+          await client.query(`select e.id_wydarzenia, e.tytul, e.rozpoczecie, e.powtarzaj_co_tydzien, u.strefa_czasowa
+            from t_wydarzenia e join t_kalendarze c on c.id_kalendarza = e.id_kalendarza
+            join t_uzytkownicy u on u.id_uzytkownika = c.id_uzytkownika
+            where e.id_kalendarza = $1 and e.status = 'Aktywne'`, [calendarId])
+        ).rows.map((event) => ({ id: event.id_wydarzenia as string, title: event.tytul as string, start: new Date(event.rozpoczecie), repeatWeekly: event.powtarzaj_co_tydzien, timeZone: event.strefa_czasowa }));
+        const plan = planImport(rows, existing);
         if (!plan.ok) {
           await client.query('rollback');
           return { kind: 'needs-decision', missingDecisions: plan.missingDecisions, invalidDecisions: plan.invalidDecisions };
@@ -268,10 +307,16 @@ export class PostgresCalendarRepository {
           // „Zastąp”: istniejące wydarzenie z kalendarza użytkownika dostaje zatwierdzone dane z importu.
           const updated = await client.query(
             `update t_wydarzenia
-             set tytul = $3, rozpoczecie = $4, zakonczenie = $5, id_kategorii = $6, opis = $7, miejsce = $8, updated_at = now()
+             set tytul = $3,
+                 rozpoczecie = case when powtarzaj_co_tydzien then rozpoczecie else $4::timestamptz end,
+                 zakonczenie = case when powtarzaj_co_tydzien then
+                   ((rozpoczecie at time zone $9) + (($5::timestamptz at time zone $9) - ($4::timestamptz at time zone $9))) at time zone $9
+                   else $5::timestamptz end,
+                 id_kategorii = $6, opis = $7, miejsce = $8, updated_at = now()
              where id_wydarzenia = $1 and id_kalendarza = $2
              returning id_wydarzenia`,
-            [action.eventId, calendarId, row.title, row.start, row.end, CATEGORY_IDS[row.category], description, row.location ?? ''],
+            [action.eventId, calendarId, row.title, row.start, row.end, CATEGORY_IDS[row.category], description, row.location ?? '',
+              owner.rows[0].strefa_czasowa],
           );
           eventId = updated.rows[0]?.id_wydarzenia ?? null;
           if (!eventId) throw new Error(`Event ${action.eventId} to replace was not found in calendar ${calendarId}`);

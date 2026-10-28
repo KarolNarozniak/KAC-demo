@@ -1,3 +1,4 @@
+import { CollisionError, EventNotFoundError, EventValidationError } from './collisions.js';
 import { readClassPdf, PdfReadError } from './import/classes/reader.js';
 import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
@@ -11,6 +12,7 @@ import type { AcceptedRow, ConfirmResult, CreateSessionInput, ImportFormat, Impo
 
 export type CalendarRepository = {
   deleteEvent?: (eventId: string) => Promise<string[] | null>;
+  updateEvent?: (id: string, input: EventInput) => Promise<EventInput & { id: string }>;
   createEvent?: (input: EventInput) => Promise<EventInput & { id: string }>;
   checkConnection: () => Promise<void>;
   getOverview: () => Promise<CalendarOverview | null>;
@@ -143,31 +145,42 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
     }
   });
 
-  app.post<{ Body: EventInput }>('/api/events', {
-    schema: { body: { type: 'object', additionalProperties: false,
-      required: ['title', 'start', 'end', 'category', 'location', 'mandatory', 'repeatWeekly'],
-      properties: {
-        title: { type: 'string', minLength: 1, maxLength: 200 },
-        start: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$' },
-        end: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$' },
-        category: { type: 'string', enum: ['Class', 'Work', 'Personal'] },
-        location: { type: 'string', maxLength: 500 }, mandatory: { type: 'boolean' }, repeatWeekly: { type: 'boolean' }
-      } } }
-  }, async (request, reply) => {
-    const input = request.body;
-    const validDate = (value: string) => {
-      const parsed = new Date(value + ':00Z');
-      return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 16) === value;
-    };
-    if (!input.title.trim() || !validDate(input.start) || !validDate(input.end) || input.end <= input.start)
-      return reply.code(400).send({ error: 'invalid_event' });
-    if (!repository?.createEvent) return reply.code(503).send({ error: 'database_not_configured' });
-    try { return reply.code(201).send(await repository.createEvent(input)); }
-    catch (error) {
-      app.log.error(error);
-      return reply.code(503).send({ error: 'event_not_saved' });
-    }
-  });
+  const eventBody = { type: 'object', additionalProperties: false,
+    required: ['title', 'start', 'end', 'category', 'location', 'mandatory', 'repeatWeekly'],
+    properties: {
+      title: { type: 'string', minLength: 1, maxLength: 200 },
+      start: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$' },
+      end: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$' },
+      category: { type: 'string', enum: ['Class', 'Work', 'Personal'] },
+      location: { type: 'string', maxLength: 500 }, mandatory: { type: 'boolean' }, repeatWeekly: { type: 'boolean' },
+      collisionToken: { type: 'string', pattern: '^[a-f0-9]{64}$' },
+    },
+  } as const;
+  for (const method of ['POST', 'PUT'] as const) {
+    app.route<{ Body: EventInput; Params: { id?: string } }>({ method, url: method === 'POST' ? '/api/events' : '/api/events/:id',
+      schema: { body: eventBody, ...(method === 'PUT' ? { params: { type: 'object', required: ['id'], properties: { id: { type: 'string', minLength: 1, maxLength: 200 } } } } : {}) },
+      handler: async (request, reply) => {
+        const input = request.body;
+        const validDate = (value: string) => {
+          const parsed = new Date(value + ':00Z');
+          return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0,16) === value;
+        };
+        if (!input.title.trim() || !validDate(input.start) || !validDate(input.end) || input.end <= input.start)
+          return reply.code(400).send({ error: 'invalid_event' });
+        if (!repository?.createEvent || (method === 'PUT' && !repository.updateEvent)) return reply.code(503).send({ error: 'database_not_configured' });
+        try {
+          const saved = method === 'POST' ? await repository.createEvent(input) : await repository.updateEvent!(request.params.id!, input);
+          return reply.code(method === 'POST' ? 201 : 200).send(saved);
+        } catch (error) {
+          if (error instanceof CollisionError) return reply.code(409).send({ error: 'event_collision', conflicts: error.conflicts, collisionToken: error.collisionToken });
+          if (error instanceof EventValidationError) return reply.code(400).send({ error: error.message });
+          if (error instanceof EventNotFoundError) return reply.code(404).send({ error: error.message });
+          request.log.error({ err: error }, 'Event not saved');
+          return reply.code(503).send({ error: 'event_not_saved' });
+        }
+      },
+    });
+  }
 
   app.delete<{ Params: { id: string } }>('/api/events/:id', {
     schema: { params: { type: 'object', required: ['id'], properties: { id: { type: 'string', minLength: 1, maxLength: 200 } } } },

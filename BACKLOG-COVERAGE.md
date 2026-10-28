@@ -15,7 +15,7 @@ Every row is represented by a visible route/control or by an explicit mock outco
 | S23KC2S1P2-11 | Kategorie i kolory wydarzeń | To do | Week category selector, stable category colors and legend. |
 | S23KC2S1P2-12 | Wykorzystanie istniejącego kalendarza Google | To do | Imports has simulated account/calendar selection and permission-denied control; no OAuth or Google read. |
 | S23KC2S1P2-13 | Otrzymywanie przypomnień przed zajęciami i pracą | To do | Notification preferences and class/work reminder simulation; no delivery. |
-| S23KC2S1P2-14 | Wykrywanie duplikatów wydarzeń | To do | Import preview flags exact title/start/end matches; skip duplicates or import anyway. |
+| S23KC2S1P2-14 | Wykrywanie duplikatów wydarzeń | To do | Implemented: normalized title + start instant across import categories, including weekly occurrences; explicit skip/replace/keep-both, ambiguous target selection, atomic confirmation and counts. End time deliberately excluded. |
 | S23KC2S1P2-15 | Edycja i zapis ustawień profilu | To do | Profile route edits demo identity and saves in-memory for this session. |
 | S23KC2S1P2-16 | Uwzględnienie czasu dojazdu | To do | Commute buffer preference reduces sample planner capacity. |
 | S23KC2S1P2-17 | Obsługa błędów synchronizacji | To do | Imports can force a mock sync failure and retry/reconnect; no network sync. |
@@ -39,12 +39,12 @@ Every row is represented by a visible route/control or by an explicit mock outco
 | S23KC2S1P2-35 | Odłączenie konta i cofnięcie zgody | To do | Disconnect/revoke mock account control; no real token or consent exists. |
 | S23KC2S1P2-36 | Ostrzeżenie o przekroczeniu limitu godzin | To do | Planner maximum constrains proposed capacity; feasibility result is local. |
 | S23KC2S1P2-37 | Wyświetlanie tygodnia | To do | Responsive weekly view, next/previous navigation, empty state and seven-day mobile selector. |
-| S23KC2S1P2-38 | Import planu zajęć z PDF/zdjęcia | To do | Named sample PDF/photo preview and correction path; no upload/OCR. |
+| S23KC2S1P2-38 | Import planu zajęć z PDF/zdjęcia | To do | PDF demo implemented: local fixed-layout WAT mini e-D reader, editable preview and transactional save; PDF selection on web/Android/iOS. Photos, scanned PDFs and OCR deferred by scope decision. |
 | S23KC2S1P2-39 | Określenie celu godzin | To do | Editable weekly work goal in Planner and Profile routes. |
 | S23KC2S1P2-40 | Uwzględnienie zajęć | To do | Required class fixtures are shown and avoid planner time. |
 | S23KC2S1P2-41 | Wybór kalendarzy | To do | Simulated University/Personal/Empty source and publish destination choices. |
 | S23KC2S1P2-42 | Informacja o konflikcie | To do | Event details and overlap warning list conflicts. Pending creates/edits are described accurately; user can keep editing or explicitly accept the conflict. |
-| S23KC2S1P2-43 | wykrywanie kolizji | To do | Half-open interval checks include recurring events outside nearby weeks. |
+| S23KC2S1P2-43 | wykrywanie kolizji | To do | Implemented: server-authoritative half-open collision checks, weekly recurrence, detailed overlap warnings, explicit snapshot-bound override, cancellation and atomic whole-series editing. |
 | S23KC2S1P2-44 | import grafiku pracy ze zdjęcia lub pliku | To do | Work-shift sample photo/PDF/CSV preview, corrections and duplicate choice; no parser/OCR. |
 | S23KC2S1P2-45 | określenie stawki godzinowej | To do | Hourly rate and computed proposal earnings in Planner. |
 | S23KC2S1P2-46 | akceptacja grafiku | To do | Accept/reject proposal state; accepted shifts unlock simulated publish. |
