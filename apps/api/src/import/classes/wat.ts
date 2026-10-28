@@ -5,7 +5,7 @@ export type PdfPage = { width: number; items: PdfText[] };
 export type ClassRow = ImportRow & { category: 'Class'; reviewRequired: boolean; sourcePage: number };
 export type Timetable = { rows: ClassRow[]; academicYear: string; dateFrom: string; dateTo: string; warnings: string[] };
 const MONTHS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
-const FORMS: Record<string, string> = { w: 'wykład', L: 'laboratorium', P: 'projekt', 'ć': 'ćwiczenia', S: 'seminarium', E: 'egzamin', Zp: 'zaliczenie poprawkowe', IN: 'inne' };
+const FORMS: Record<string, string> = { w: 'wykład', L: 'laboratorium', P: 'projekt', 'ć': 'ćwiczenia', S: 'seminarium', E: 'egzamin', Ep: 'egzamin poprawkowy', SO: 'spotkanie organizacyjne', Zp: 'zaliczenie poprawkowe', IN: 'inne' };
 const center = (item: PdfText) => item.x + item.w / 2;
 
 /** Join adjacent glyph runs without inserting spaces inside Polish words. */
@@ -35,7 +35,11 @@ export function parseWatTimetable(input: PdfPage[]): Timetable {
     for (const item of page.items) {
       if (!legendStarted && (!legend || item.y < legend.y)) continue;
       if (item.x < 80 || item.x > 96 || !/^[\p{L}\d.]+$/u.test(item.text.trim())) continue;
-      const name = lineText(page.items.filter(other => Math.abs(other.y - item.y) < 1 && other.x >= 100 && other.x < 250));
+      // PDF text runs can cross table cells (e.g. subject + 'Laboratorium').
+      // Read the complete line before removing its form/instructor/hour columns;
+      // a fixed right-hand coordinate truncates narrow legends and leaks columns.
+      const line = lineText(page.items.filter(other => Math.abs(other.y - item.y) < 1 && other.x >= 100));
+      const name = line.replace(/\s+(?:Wykład|Laboratorium|Projekt|Ćwiczenia|Seminarium|Egzamin(?: poprawkowy)?|zal popr|INNE|Spotkanie organizacy(?:jne)?)(?:\s.*)?$/u, '').trim();
       if (name) names.set(item.text.trim(), name);
     }
     if (legend) legendStarted = true;
@@ -78,7 +82,15 @@ export function parseWatTimetable(input: PdfPage[]): Timetable {
         const code = atLine(form.y - 5.63);
         const formCode = form.text.trim().slice(1, -1);
         const fullName = names.get(code);
-        const location = atLine(form.y + 5.07);
+        const locations = [atLine(form.y + 5.07)];
+        // Resit cells may list several rooms before the instructor abbreviation.
+        // Preserve each room, stopping at instructor/sequence text or an empty line.
+        for (let line = 2; line <= 8; line++) {
+          const extraRoom = atLine(form.y + line * 5.067);
+          if (!/^\d[\p{L}\d .\/-]*$/u.test(extraRoom)) break;
+          locations.push(extraRoom);
+        }
+        const location = locations.filter(Boolean).join(', ');
         const reviewRequired = !fullName || !FORMS[formCode] || !location;
         const row: ClassRow = {
           id: `class-${rows.length + 1}`, title: `${fullName ?? code}${FORMS[formCode] ? ` — ${FORMS[formCode]}` : ` (${formCode})`}`,
