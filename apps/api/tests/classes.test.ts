@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { parseWatTimetable, type PdfPage } from '../src/import/classes/wat.js';
 import { readClassPdf } from '../src/import/classes/reader.js';
 import { buildImportPreview } from '../src/import/preview.js';
 import { buildApi } from '../src/app.js';
 import { pngBytes, pdfBytes } from './fixtures.js';
-const fixture = (): PdfPage[] => JSON.parse(readFileSync(new URL('./fixtures/wat-grid.json', import.meta.url), 'utf8'));
+const fixture = (): PdfPage[] => JSON.parse(readFileSync(new URL('./fixtures/timetables/wat-plan-lato-2025-2026.json', import.meta.url), 'utf8'));
 
 test('WAT semester grid: 166 populated cells, calendar dates, Polish legend, split glyphs and page continuation', () => {
   const result = parseWatTimetable(fixture());
@@ -33,8 +33,8 @@ test('PDF processing rejects corrupt input without hanging', async () => {
   await assert.rejects(readClassPdf(pdfBytes()), /unreadable-pdf/);
 });
 
-const sample = new URL('../../../Wojskowa Akademia Techniczna, e-Dziekanat.pdf', import.meta.url);
-test('actual provided PDF is processed by the isolated local worker', { skip: !existsSync(sample) }, async () => {
+const sample = new URL('./fixtures/timetables/wat-plan-lato-2025-2026.pdf', import.meta.url);
+test('actual provided PDF is processed by the isolated local worker', async () => {
   const result = await readClassPdf(readFileSync(sample));
   assert.deepEqual(result, parseWatTimetable(fixture()));
 });
@@ -52,12 +52,12 @@ test('class upload rejects photos and corrupt files before creating a session', 
   } finally { await app.close(); }
 });
 
-const namedFixture = (name: string): PdfPage[] => JSON.parse(readFileSync(new URL(`./fixtures/${name}.json`, import.meta.url), 'utf8'));
+const namedFixture = (name: string): PdfPage[] => JSON.parse(readFileSync(new URL(`./fixtures/timetables/${name}.json`, import.meta.url), 'utf8'));
 const eventKey = (row: { title: string; date: string; startTime: string; endTime: string; location?: string }) =>
   [row.date, row.startTime, row.endTime, row.title, row.location].join('|');
 
 // Manually transcribed from the 2026/2027 grid, independently of the parser output.
-// The filename says "lato", but the printed semester is zimowy.
+// The fixture name follows the printed winter semester, not its original upload name.
 const autumn2026Expected = () => {
   const rows: { title: string; date: string; startTime: string; endTime: string; location: string }[] = [];
   const blocks = { 1: ['08:00', '09:35'], 2: ['09:50', '11:25'], 3: ['11:40', '13:15'], 4: ['13:30', '15:05'], 5: ['16:00', '17:35'] } as const;
@@ -81,7 +81,7 @@ const autumn2026Expected = () => {
 };
 
 test('2026 PDF: all 37 exact dates, blocks, subject names and rooms match the printed grid', () => {
-  const result = parseWatTimetable(namedFixture('wat-plan-lato-2026'));
+  const result = parseWatTimetable(namedFixture('wat-plan-zima-2026-2027'));
   assert.equal(result.academicYear, '2026/2027');
   assert.equal(result.dateFrom, '2026-10-05');
   assert.equal(result.dateTo, '2026-11-26');
@@ -110,7 +110,7 @@ const winter2025Counts: Record<string, Record<string, number>> = {
 };
 
 test('winter 2025 PDF: 212 cells agree with the legend, with year rollover and page continuation', () => {
-  const result = parseWatTimetable(namedFixture('wat-plan-zima-2025'));
+  const result = parseWatTimetable(namedFixture('wat-plan-zima-2025-2026'));
   assert.equal(result.rows.length, 212);
   assert.equal(result.academicYear, '2025/2026');
   assert.equal(result.dateFrom, '2025-10-01');
@@ -136,9 +136,9 @@ test('winter 2025 PDF: 212 cells agree with the legend, with year rollover and p
   ]);
 });
 
-for (const name of ['wat-plan-zima-2025', 'wat-plan-lato-2026']) {
-  const path = new URL(`../../../${name}.pdf`, import.meta.url);
-  test(`${name}: actual PDF worker matches the regression fixture`, { skip: !existsSync(path) }, async () => {
+for (const name of ['wat-plan-zima-2025-2026', 'wat-plan-zima-2026-2027']) {
+  const path = new URL(`./fixtures/timetables/${name}.pdf`, import.meta.url);
+  test(`${name}: actual PDF worker matches the regression fixture`, async () => {
     const expected = parseWatTimetable(namedFixture(name));
     assert.deepEqual(await readClassPdf(readFileSync(path)), expected);
     let sessionsCreated = 0;
@@ -163,7 +163,7 @@ for (const name of ['wat-plan-zima-2025', 'wat-plan-lato-2026']) {
 
 
 test('winter import preview validates all 212 rows and preserves local times across DST', () => {
-  const timetable = parseWatTimetable(namedFixture('wat-plan-zima-2025'));
+  const timetable = parseWatTimetable(namedFixture('wat-plan-zima-2025-2026'));
   const preview = buildImportPreview(timetable.rows);
   assert.equal(preview.length, 212);
   assert.ok(preview.every(row => row.status === 'ok'));

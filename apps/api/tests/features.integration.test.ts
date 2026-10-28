@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { config } from '../src/config.js';
 import { buildApi } from '../src/app.js';
 import { pool, PostgresCalendarRepository, type EventInput } from '../src/database.js';
@@ -97,18 +97,13 @@ test('atomic editing, collision decisions, concurrent writes, import rechecks an
     assert.equal((await scoped.getOverview())?.events.length, countBeforeFailure);
     assert.equal((await pool.query('select status from t_importy where id_importu = $1', [rollbackSession.id])).rows[0].status, 'Podgląd');
     // Complete semester import and repeat import: no duplicate calendar copies.
-    const fixture = JSON.parse(readFileSync(new URL('./fixtures/wat-grid.json', import.meta.url), 'utf8'));
+    const fixture = JSON.parse(readFileSync(new URL('./fixtures/timetables/wat-plan-lato-2025-2026.json', import.meta.url), 'utf8'));
     const semester = parseWatTimetable(fixture);
     const fullRows = semester.rows.map(({ id, title, date, startTime, endTime, category, location }) => ({ id, title, date, startTime, endTime, category, location }));
-    const sample = new URL('../../../Wojskowa Akademia Techniczna, e-Dziekanat.pdf', import.meta.url);
-    let fullSessionId: string;
-    if (existsSync(sample)) {
-      const upload = await app.inject({ method: 'POST', url: '/api/import/classes/read', payload: { fileName: 'semester.pdf', dataBase64: readFileSync(sample).toString('base64') } });
-      assert.equal(upload.statusCode, 201); assert.equal(upload.json().rows.length, 166);
-      fullSessionId = upload.json().importSessionId;
-    } else {
-      fullSessionId = (await scoped.createImportSession({ source: 'classes', format: 'PDF', rows: fullRows, preview: buildImportPreview(fullRows) })).id;
-    }
+    const sample = new URL('./fixtures/timetables/wat-plan-lato-2025-2026.pdf', import.meta.url);
+    const upload = await app.inject({ method: 'POST', url: '/api/import/classes/read', payload: { fileName: 'semester.pdf', dataBase64: readFileSync(sample).toString('base64') } });
+    assert.equal(upload.statusCode, 201); assert.equal(upload.json().rows.length, 166);
+    const fullSessionId: string = upload.json().importSessionId;
     sessions.push(fullSessionId);
     const importedAll = await app.inject({ method: 'POST', url: `/api/import/sessions/${fullSessionId}/confirm`, payload: { rows: fullRows } });
     assert.equal(importedAll.statusCode, 201); assert.equal(importedAll.json().summary.added, 166);

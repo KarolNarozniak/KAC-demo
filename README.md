@@ -49,6 +49,8 @@ The API and Expo web deployment scripts and existing GitHub Actions remain. Conf
 
 ## Feature validation (S23KC2S1P2-43, -14, -38)
 
-Run the checks above and `npm run test:api:db` against a migrated, seeded **test database**. Database suites run sequentially because legacy tests share the demo calendar; new feature scenarios create and remove a separate calendar. They cover concurrent create requests, collision overrides, atomic edits, ownership, recurring duplicate replacement, cancellation and repeated semester imports. The provided WAT PDF contains 166 populated class cells; the committed regression fixture contains timetable text positions without student identity or full instructor names. If the original local PDF is present, tests also exercise the actual PDF worker; otherwise that one optional test is skipped.
+Run the checks above and `npm run test:api:db` against a migrated, seeded **test database**. Database suites run sequentially because legacy tests share the demo calendar; new feature scenarios create and remove a separate calendar. They cover concurrent create requests, collision overrides, atomic edits, ownership, recurring duplicate replacement, cancellation and repeated semester imports. The three paired PDF/JSON timetable fixtures live in `apps/api/tests/fixtures/timetables`, named by printed semester and academic year. They contain 166, 212 and 37 entries. Actual-PDF worker and upload tests are mandatory; missing source fixtures fail the tests rather than being skipped.
 
 Native JavaScript bundles can be checked with `npx expo export --platform ios --platform android` from `apps/web`. Native device picker behavior still requires a device/emulator smoke test; a successful bundle export does not establish that a physical-device test passed.
+
+The proposed next increment is documented in [the local OCR implementation plan](docs/ocr-implementation-plan.md). OCR remains unimplemented until the plan is approved.
