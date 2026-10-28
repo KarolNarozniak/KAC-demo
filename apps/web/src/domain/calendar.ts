@@ -65,9 +65,4 @@ export function findCollisions(candidate: CalendarEvent, events: CalendarEvent[]
     }
   }
   return [...collisions.values()];
-}export function setEventTime(event: CalendarEvent, occurrenceDate: Date, startTime: string, endTime: string, series: boolean): CalendarEvent | null {
-  const date = localDateKey(series ? new Date(event.start) : occurrenceDate);
-  const start = parseLocalDateTime(date, startTime); const end = parseLocalDateTime(date, endTime);
-  if (!start || !end || end <= start) return null;
-  return { ...event, start: `${date}T${startTime}`, end: `${date}T${endTime}` };
 }

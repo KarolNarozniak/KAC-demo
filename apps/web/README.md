@@ -1,61 +1,29 @@
-# KAC — Kernel 'Aura Kalendar' · Frontend
+# Calendar frontend
 
-Expo / React Native Web frontend. The current calendar workflows remain a local in-memory demo; the small environment panel performs a read-only request to the separate KAC API when `EXPO_PUBLIC_API_URL` is configured.
+Expo SDK 58, React 19.3, React Native 0.88 and TypeScript 6. Supports web, Android and iOS. Use Node.js 24 LTS (24.3+); the repository's `.nvmrc` selects Node 24.
 
-## Run locally
+See the [root README](../../README.md) for PostgreSQL/API setup, implemented features, deployment and the remaining dependency audit findings.
 
-Requirements: Node.js 24 LTS and npm. See the monorepo README for the API and PostgreSQL setup.
+Event creation uses native date/time pickers. Event details support confirmed deletion; weekly events delete the entire series.
 
-Run these commands from the repository root:
+## Development
 
-```sh
-npm install
-npm run web:dev
-```
+Run these commands from the repository root after `npm ci` and starting the database and API:
 
-For browser development, use `npm run web:dev` (or `npm run start:dev --workspace @kac/web` and choose a target in Expo Dev Tools). Native targets are not part of the Azure web export.
+- Web: `npm run web:dev`
+- Native device preview: `npm run start:dev --workspace @kac/web -- --lan`
+- Restart with a cleared Metro cache after upgrading: `npm run start:dev --workspace @kac/web -- --clear`
 
-## Demo features
+Configure `apps/web/.env` with `EXPO_PUBLIC_API_URL`. On a physical device, use the computer's reachable LAN IP rather than `localhost` and connect both devices to the same network. For mobile web, add its web origin to the API's `API_CORS_ORIGINS` and restart the API.
 
-- Week view with previous/next navigation; initial demo week is 12–18 October 2026.
-- Add events, choose a category, set mandatory lessons and weekly recurrence.
-- Open event details and edit event hours.
-- Detect and warn about overlapping events without discarding either event.
-- Reset demo restores the original in-memory data. No changes are persisted.
-- Category colors: classes `#2563EB`, work `#F97316`, personal `#16A34A`.
+Native preview requires an Expo Go version compatible with SDK 58 or a development build. See the [Expo 58 release notes](https://expo.dev/changelog/sdk-58) for Expo Go availability.
 
-## Acceptance checklist
+## Validation
 
-- [ ] Navigate forward/back and see weekly recurring events.
-- [ ] Add and cancel events; verify category color and mandatory label.
-- [ ] Edit an event's hours and reject an end time earlier than its start.
-- [ ] Add an overlapping event and acknowledge the warning.
-- [ ] Open the non-destructive Empty week preview and verify the empty-state message.
-- [ ] Reset the demo and verify the initial events return.
+- `npm run typecheck:web`
+- `npm run test:web`
+- `npm run build:web`
+- SDK/configuration checks: `cd apps/web` then `npx expo-doctor@latest`
+- Bundle all platforms: `cd apps/web` then `npx expo export --platform all --output-dir /tmp/kac-export`
 
-## Azure App Service (static Expo web export)
-
-This project targets a browser build, not an iOS/Android deployment bundle. The frontend App Service uses the managed Linux Node runtime and a static-file server; it does not require a custom container.
-
-```sh
-npm ci
-npm run build:web
-npm run web:start
-```
-
-For Azure App Service, create a **Linux Web App using the Node 24 LTS runtime**. The frontend package is `apps/web`; its start script runs the static server, which binds to the platform-provided `PORT`, serves `dist/` and falls back to Expo's `index.html` for application routes.
-
-The core calendar remains in-memory and reset restores fixture state. Authentication, Google OAuth/Calendar, import recognition, scheduling, and notifications remain mock flows. The status panel makes a read-only request to `GET /api/demo/calendar`; its failure does not block the app.
-
-The separate API is in `apps/api`; database schema and migrations are in `database/`.
-
-## Demo routes
-
-- **Week:** weekly calendar, event CRUD, category colors, mandatory classes, repeat series, collision warnings, empty weeks and mobile day selection.
-- **Work planner:** profile-like work preferences, capacity/infeasibility, proposed shifts, edits, accept/reject and earnings estimate.
-- **Imports:** sample Google calendar and file/PDF/image previews, field correction, duplicate checks, cancel, denied access, empty range and sync error/retry controls.
-- **Publish:** accepted-shift preview, mock calendar selection and allow/deny/failure/success/update/delete outcomes.
-- **Notifications:** preferences, overnight quiet-hour preview and reminder simulations.
-- **Profile:** demo identity and work planning defaults.
-
-All external operations display a `MOCK` label. See [BACKLOG-COVERAGE.md](BACKLOG-COVERAGE.md) for each Jira story and epic from the supplied CSV snapshot.
+Web, Android and iOS bundle exports pass after the upgrade. Native bundle export does not replace testing on a real device.

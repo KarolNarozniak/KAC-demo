@@ -1,72 +1,68 @@
 import React, { useEffect, useState } from 'react';
-import { Image, Pressable, SafeAreaView, ScrollView, StatusBar, Text, View, useWindowDimensions } from 'react-native';
+import { Text, View, Pressable, Image } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import type { WeekLayout } from './src/components/WeekGrid';
 import CalendarScreen from './src/screens/CalendarScreen';
-import PlannerScreen from './src/screens/PlannerScreen';
-import ImportScreen from './src/screens/ImportScreen';
-import PublishScreen from './src/screens/PublishScreen';
-import NotificationScreen from './src/screens/NotificationScreen';
-import SettingsScreen from './src/screens/SettingsScreen';
-import AuthFlowScreen from './src/screens/AuthFlowScreen';
-import { InMemoryDemoRepository } from './src/data/mockRepository';
-import { INITIAL_WEEK } from './src/data/fixtures';
-import type { CalendarEvent, DemoProfile, DemoState } from './src/domain/model';
-import { Button, ThemeProvider, ThemeToggle, useTheme, type ThemeMode } from './src/components/ui';
-type Route = 'calendar' | 'planner' | 'imports' | 'publish' | 'notifications' | 'settings';
-const routes: { id: Route; label: string; short: string }[] = [
-  { id: 'calendar', label: 'Kalendarz', short: 'Kalendarz' }, { id: 'planner', label: 'Plan pracy', short: 'Plan' },
-  { id: 'imports', label: 'Importy', short: 'Importy' }, { id: 'publish', label: 'Publikacja', short: 'Publikacja' },
-  { id: 'notifications', label: 'Powiadomienia', short: 'Alerty' }, { id: 'settings', label: 'Profil', short: 'Profil' },
-];
-const repository = new InMemoryDemoRepository();
+import ScreenTransition from './src/components/ScreenTransition';
+import { ThemeProvider, ThemeToggle, useTheme, type ThemeMode } from './src/components/ui';
+const tabs = ['Dziś', 'Tydzień', 'Ustawienia', 'Asystent'] as const;
 export default function App() {
-  const [mode, setMode] = useState<ThemeMode>('light');
-  const [loaded, setLoaded] = useState(false);
+  const [mode, setMode] = useState<ThemeMode>('dark');
   useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem('kac-theme');
-      if (saved === 'dark' || saved === 'light') setMode(saved);
-    } catch {}
-    setLoaded(true);
+    AsyncStorage.getItem('kac-theme').then((value) => {
+      if (value === 'dark' || value === 'light') setMode(value);
+    }).catch(() => {});
   }, []);
-  useEffect(() => {
-    if (!loaded) return;
-    try { window.localStorage.setItem('kac-theme', mode); } catch {}
-  }, [loaded, mode]);
-  return <ThemeProvider mode={mode} toggleMode={() => setMode((current) => current === 'dark' ? 'light' : 'dark')}><ApplicationFlow /></ThemeProvider>;
-}
-
-function ApplicationFlow() {
-  const [profile, setProfile] = useState<DemoProfile | null>(null);
-  const [lastProfile, setLastProfile] = useState<DemoProfile | null>(null);
-  if (!profile) return <AuthFlowScreen existingProfile={lastProfile} onComplete={(nextProfile) => { setLastProfile(nextProfile); setProfile(nextProfile); }} />;
-  return <DemoApp key={profile.email} profile={profile} onSignOut={(lastProfile) => { setLastProfile(lastProfile); setProfile(null); }} />;
-}
-
-function DemoApp({ profile, onSignOut }: { profile: DemoProfile; onSignOut: (profile: DemoProfile) => void }) {
-  const { palette, mode } = useTheme();
-  const compact = useWindowDimensions().width < 850;
-  const [state, setState] = useState<DemoState>(() => ({ ...repository.load(), profile }));
-  const [route, setRoute] = useState<Route>('calendar'); const [week, setWeek] = useState(INITIAL_WEEK); const [resetCount, setResetCount] = useState(0); const [banner, setBanner] = useState('');
-  const replace = (part: Partial<DemoState>) => setState((current) => ({ ...current, ...part }));
-  const setPreferences = (preferences: DemoState["preferences"]) => setState((current) => ({ ...current, preferences, accepted: false, events: current.accepted ? current.events.filter((event) => event.source !== 'planner') : current.events }));
-  const setEvents = (value: CalendarEvent[] | ((current: CalendarEvent[]) => CalendarEvent[])) => setState((current) => ({ ...current, events: typeof value === 'function' ? value(current.events) : value, accepted: false }));
-  const reset = () => { setState({ ...repository.reset(), profile }); setWeek(INITIAL_WEEK); setRoute('calendar'); setResetCount((n) => n + 1); setBanner('Makieta zresetowana. Przywrócono wydarzenia oraz ustawienia planera i powiadomień.'); };
-  const screen = () => {
-    if (route === 'calendar') return <CalendarScreen key={`calendar-${resetCount}`} events={state.events} setEvents={setEvents} week={week} setWeek={setWeek} onPlanner={() => setRoute('planner')} />;
-    if (route === 'planner') return <PlannerScreen key={`planner-${resetCount}`} preferences={state.preferences} setPreferences={setPreferences} events={state.events} proposal={state.proposal} setProposal={(proposal) => replace({ proposal })} accepted={state.accepted} setAccepted={(accepted) => setState((current) => ({ ...current, accepted, events: [...current.events.filter((event) => event.source !== 'planner'), ...(accepted ? current.proposal.map((shift) => ({ ...shift, id: `plan-${shift.id}`, category: 'Work' as const, mandatory: false, repeatWeekly: false, source: 'planner' as const })) : [])] }))} week={week} />;
-    if (route === 'imports') return <ImportScreen key={`imports-${resetCount}`} events={state.events} setEvents={setEvents} />;
-    if (route === 'publish') return <PublishScreen key={`publish-${resetCount}`} shifts={state.proposal} accepted={state.accepted} published={state.published} setPublished={(published) => replace({ published })} />;
-    if (route === 'notifications') return <NotificationScreen key={`notifications-${resetCount}`} preferences={state.notifications} setPreferences={(notifications) => replace({ notifications })} />;
-    return <SettingsScreen key={`settings-${resetCount}`} profile={state.profile} setProfile={(profile) => replace({ profile })} preferences={state.preferences} setPreferences={setPreferences} />;
+  const toggleMode = () => {
+    const next = mode === 'dark' ? 'light' : 'dark';
+    setMode(next);
+    void AsyncStorage.setItem('kac-theme', next).catch(() => {});
   };
-  const navigation = <View accessibilityRole="tablist" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>{routes.map((item) => <Pressable key={item.id} accessibilityRole="tab" accessibilityState={{ selected: route === item.id }} onPress={() => { setRoute(item.id); setBanner(''); }} style={{ paddingHorizontal: compact ? 10 : 12, paddingVertical: 9, borderRadius: 10, backgroundColor: route === item.id ? palette.selected : 'transparent' }}><Text style={{ fontSize: 12, fontWeight: route === item.id ? '800' : '600', color: route === item.id ? palette.blue : palette.muted }}>{compact ? item.short : item.label}</Text></Pressable>)}</View>;
-  return <SafeAreaView style={{ flex: 1, backgroundColor: palette.bg }}><StatusBar barStyle={mode === 'dark' ? 'light-content' : 'dark-content'} /><View style={{ flex: 1 }}>
-    <View style={{ backgroundColor: palette.surface, borderBottomWidth: 1, borderColor: palette.line, paddingHorizontal: compact ? 12 : 28 }}><View style={{ width: '100%', maxWidth: 1440, alignSelf: 'center', minHeight: 70, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', paddingVertical: 9, gap: 8 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}><View style={{ width: 46, height: 46, borderRadius: 14, backgroundColor: palette.surface, borderWidth: 1, borderColor: palette.line, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }}><Image accessibilityLabel="Logo KAC — Kernel 'Aura Kalendar'" source={require('./logo.png')} resizeMode="contain" style={{ width: 44, height: 44 }} /></View><View><Text style={{ color: palette.ink, fontSize: 18, fontWeight: '900', letterSpacing: -0.5 }}>Kernel <Text style={{ color: palette.blue }}>'Aura Kalendar'</Text></Text><Text style={{ color: palette.muted, fontSize: 8, fontWeight: '800', letterSpacing: 1.2 }}>SPOKÓJ W PLANOWANIU · WAT</Text></View></View>
-      {!compact && navigation}<View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}><ThemeToggle /><Button title="Resetuj makietę" onPress={reset} /><Button title="Wyloguj" onPress={() => onSignOut(state.profile)} /></View>
-    </View>{compact && <View style={{ paddingHorizontal: 12, paddingBottom: 8 }}>{navigation}</View>}</View>
-    {!!banner && <View accessibilityLiveRegion="polite" style={{ backgroundColor: palette.greenSoft, paddingVertical: 9, paddingHorizontal: 16 }}><Text style={{ color: palette.green, textAlign: 'center', fontSize: 12, fontWeight: '700' }}>{banner}</Text></View>}
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }}>{screen()}</ScrollView>
-    <View style={{ borderTopWidth: 1, borderColor: palette.line, backgroundColor: palette.surface, paddingHorizontal: 16, paddingVertical: 10 }}><Text style={{ color: palette.muted, fontSize: 10, textAlign: 'center' }}>MAKIETA · Kalendarz nadal działa lokalnie · Logowanie, OAuth Google, synchronizacja, OCR i powiadomienia są symulowane</Text></View>
-  </View></SafeAreaView>;
+  return <SafeAreaProvider><ThemeProvider mode={mode} toggleMode={toggleMode}><StatusBar style={mode === 'dark' ? 'light' : 'dark'} /><CalendarApp /></ThemeProvider></SafeAreaProvider>;
+}
+function CalendarApp() {
+  const { palette, styles } = useTheme();
+  const [tab, setTab] = useState<typeof tabs[number]>('Dziś');
+  const [week, setWeek] = useState(new Date());
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const [weekLayout, setWeekLayout] = useState<WeekLayout>('days-left');
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [storageError, setStorageError] = useState('');
+  useEffect(() => {
+    AsyncStorage.getItem('kac-week-layout').then((value) => {
+      if (value === 'days-left' || value === 'days-top') setWeekLayout(value);
+    }).catch(() => setStorageError('Nie udało się wczytać ustawień.')).finally(() => setSettingsLoaded(true));
+  }, []);
+  const changeWeekLayout = async (layout: WeekLayout) => {
+    setWeekLayout(layout); setStorageError('');
+    try { await AsyncStorage.setItem('kac-week-layout', layout); }
+    catch { setStorageError('Nie udało się zapisać ustawienia na urządzeniu.'); }
+  };
+  return <SafeAreaView style={{ flex: 1, backgroundColor: palette.bg }}>
+    <View style={{ paddingHorizontal: 12, paddingVertical: 6, backgroundColor: palette.surface, borderBottomWidth: 1, borderColor: palette.line, flexDirection: 'row', alignItems: 'center' }}>
+      <Image accessibilityLabel="Logo Aura Kalendar" source={require('./logo.png')} resizeMode="contain" style={{ width: 36, height: 36 }} />
+      <Text numberOfLines={1} style={[styles.heading, { flex: 1, textAlign: 'center', fontSize: 15 }]}>{now.toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' })}</Text>
+      <View style={{ width: 36 }} />
+    </View>
+    <ScreenTransition screenIndex={tabs.indexOf(tab)} renderScreen={(index, active) => {
+      const route = tabs[index];
+      return (route === 'Dziś' || route === 'Tydzień' ? <CalendarScreen active={active} now={now} weekLayout={weekLayout} todayOnly={route === 'Dziś'} week={week} setWeek={setWeek} /> : route === 'Ustawienia' ? <View style={[styles.content, { padding: 16 }]}>
+        <View style={[styles.row, { justifyContent: 'space-between', marginBottom: 20 }]}><Text style={styles.heading}>Motyw</Text><ThemeToggle /></View>
+        <Text style={[styles.heading, { marginBottom: 12 }]}>Układ tygodnia</Text>
+        <View accessibilityRole="radiogroup" style={{ gap: 8 }}>
+          {([{ id: 'days-left', label: 'Dni po lewej · godziny u góry' }, { id: 'days-top', label: 'Dni u góry · godziny po lewej' }] as const).map((option) => <Pressable key={option.id} accessibilityRole="radio" accessibilityState={{ checked: weekLayout === option.id, disabled: !settingsLoaded }} disabled={!settingsLoaded} onPress={() => void changeWeekLayout(option.id)} style={{ padding: 14, borderRadius: 8, borderWidth: 1, borderColor: weekLayout === option.id ? palette.blue : palette.line, backgroundColor: weekLayout === option.id ? palette.blueSoft : palette.surface }}><Text style={styles.body}>{weekLayout === option.id ? '◉' : '○'} {option.label}</Text></Pressable>)}
+        </View>
+        {!!storageError && <Text accessibilityRole="alert" style={styles.error}>{storageError}</Text>}
+      </View> : <View style={[styles.content, { padding: 16 }]}><Text style={styles.heading}>Asystent</Text><Text style={styles.subtitle}>Wkrótce</Text></View>);
+    }} />
+    <View accessibilityRole="tablist" style={{ flexDirection: 'row', backgroundColor: palette.surface, borderTopWidth: 1, borderColor: palette.line, paddingTop: 4, paddingBottom: 4 }}>
+      {tabs.map((item, i) => <Pressable key={item} accessibilityRole="tab" accessibilityState={{ selected: tab === item }} onPress={() => setTab(item)} style={{ flex: 1, minWidth: 0, minHeight: 48, justifyContent: 'center', alignItems: 'center', gap: 4 }}><View style={{ width: 28, height: 24, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: 20, lineHeight: 24, includeFontPadding: false, textAlign: 'center', color: tab === item ? palette.blue : palette.muted }}>{['◷', '▦', '⚙︎', '✧'][i]}</Text></View><Text style={{ width: '100%', height: 16, lineHeight: 16, includeFontPadding: false, textAlign: 'center', fontSize: 12, fontWeight: '700', color: tab === item ? palette.blue : palette.muted }}>{item}</Text></Pressable>)}
+    </View>
+  </SafeAreaView>;
 }

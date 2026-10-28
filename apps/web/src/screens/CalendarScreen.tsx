@@ -1,78 +1,109 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import type { CalendarEvent, Category, Occurrence } from '../domain/model';
 import { addCalendarDays, findCollisions, localDateKey, occurrencesForRange, startOfWeek, validateEventInput } from '../domain/calendar';
-import { INITIAL_WEEK } from '../data/fixtures';
-import { Button, Card, Field, MockNotice, Pill, useTheme } from '../components/ui';
-import BackendConnectionStatus from '../components/BackendConnectionStatus';
+import { loadCalendar, createEvent, deleteEvent } from '../services/calendarApi';
+import { Button, Field, useTheme } from '../components/ui';
+import DateField from '../components/DateField';
+import TimeField from '../components/TimeField';
+import WeekGrid, { type WeekLayout } from '../components/WeekGrid';
 const categories: Category[] = ['Class', 'Work', 'Personal'];
 const labels: Record<Category, string> = { Class: 'Zajęcia', Work: 'Praca', Personal: 'Prywatne' };
-const daysLabel = ['Pon', 'Wt', 'Śr', 'Czw', 'Pt', 'Sob', 'Niedz'];
-const pad = (n: number) => String(n).padStart(2, '0');
-type Props = { events: CalendarEvent[]; setEvents: (value: CalendarEvent[] | ((current: CalendarEvent[]) => CalendarEvent[])) => void; week: Date; setWeek: (value: Date) => void; onPlanner: () => void };
-export default function CalendarScreen({ events, setEvents, week, setWeek, onPlanner }: Props) {
+type Props = { week: Date; setWeek: (value: Date) => void; todayOnly?: boolean; weekLayout: WeekLayout; now: Date; active: boolean };
+export default function CalendarScreen({ week, setWeek, todayOnly = false, weekLayout, now, active }: Props) {
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const reload = async () => {
+    setLoading(true); setLoadError('');
+    try { setEvents(await loadCalendar()); }
+    catch (error) { setLoadError(error instanceof Error ? error.message : 'Nie udało się wczytać wydarzeń.'); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { if (active) void reload(); }, [active]);
   const { palette, styles } = useTheme();
   const colors: Record<Category, string> = { Class: palette.class, Work: palette.work, Personal: palette.personal };
   const { width: viewportWidth } = useWindowDimensions();
   const compact = viewportWidth < 760;
-  const gridWidth = compact ? undefined : Math.max(800, Math.min(viewportWidth, 1440) - 90);
-  const dayColumnWidth = compact ? undefined : ((gridWidth ?? 800) - 51) / 7;
-  const [dayIndex, setDayIndex] = useState(0); const [dialog, setDialog] = useState<'form' | 'details' | 'collision' | 'delete' | null>(null);
-  const [selected, setSelected] = useState<Occurrence | null>(null); const [draft, setDraft] = useState<CalendarEvent | null>(null); const [isNew, setIsNew] = useState(true); const [emptyPreview, setEmptyPreview] = useState(false);
+  const [dialog, setDialog] = useState<'form' | 'details' | 'collision' | 'delete' | null>(null);
+  const [selected, setSelected] = useState<Occurrence | null>(null); const [draft, setDraft] = useState<CalendarEvent | null>(null);
   const [error, setError] = useState(''); const [conflicts, setConflicts] = useState<string[]>([]); const [pending, setPending] = useState<CalendarEvent | null>(null);
-  const monday = startOfWeek(week); const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addCalendarDays(monday, i)), [monday.getTime()]);
-  const list = useMemo(() => emptyPreview ? [] : occurrencesForRange(events, { start: monday, end: addCalendarDays(monday, 7) }), [events, monday.getTime(), emptyPreview]);
+  const monday = startOfWeek(todayOnly ? now : week); const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addCalendarDays(monday, i)), [monday.getTime()]);
+  const list = useMemo(() => occurrencesForRange(events, { start: monday, end: addCalendarDays(monday, 7) }), [events, monday.getTime()]);
   const close = () => { setDialog(null); setDraft(null); setSelected(null); setPending(null); setError(''); };
-  const newEvent = (date: Date) => { setEmptyPreview(false); const key = localDateKey(date); setDraft({ id: `evt-${Date.now()}`, title: '', location: '', start: `${key}T09:00`, end: `${key}T10:00`, category: 'Class', mandatory: false, repeatWeekly: false, source: 'demo' }); setIsNew(true); setDialog('form'); };
+  const newEvent = (date: Date) => { const key = localDateKey(date); setDraft({ id: `evt-${Date.now()}`, title: '', location: '', start: `${key}T09:00`, end: `${key}T10:00`, category: 'Class', mandatory: false, repeatWeekly: false }); setDialog('form'); };
   const details = (item: Occurrence) => { setSelected(item); setDialog('details'); };
-  const edit = () => {
-    if (!selected) return;
-    const start = new Date(selected.start); const end = new Date(selected.end); const key = localDateKey(start);
-    setDraft({ ...selected, start: `${key}T${pad(start.getHours())}:${pad(start.getMinutes())}`, end: `${localDateKey(end)}T${pad(end.getHours())}:${pad(end.getMinutes())}` }); setIsNew(false); setDialog('form');
+  const commit = async (event: CalendarEvent, force = false) => {
+    if (saving) return;
+    if (!force) { const found = findCollisions(event, events); if (found.length) { setConflicts(found.map((item) => item.title)); setPending(event); setDialog('collision'); return; } }
+    setSaving(true); setError('');
+    try { const saved = await createEvent(event); setEvents((current) => [...current, saved]); close(); }
+    catch (error) { setError(error instanceof Error ? error.message : 'Nie udało się zapisać wydarzenia.'); setDialog('form'); }
+    finally { setSaving(false); }
   };
-  const commit = (event: CalendarEvent, force = false) => {
-    if (!force) { const found = findCollisions(event, events, isNew ? undefined : event.id); if (found.length) { setConflicts(found.map((item) => item.title)); setPending(event); setDialog('collision'); return; } }
-    setEvents((current) => isNew ? [...current, event] : current.map((item) => item.id === event.id ? event : item)); close();
+  const remove = async () => {
+    if (!selected || saving) return;
+    setSaving(true); setError('');
+    try {
+      const deletedIds = new Set(await deleteEvent(selected.id));
+      setEvents((current) => current.filter((event) => !deletedIds.has(event.id)));
+      close();
+    } catch {
+      setError('Nie udało się usunąć wydarzenia. Spróbuj ponownie.');
+    } finally { setSaving(false); }
   };
   const save = () => {
     if (!draft) return; const validation = validateEventInput(draft); if (validation) { setError(validation); return; }
     commit({ ...draft, title: draft.title.trim(), mandatory: draft.category === 'Class' && draft.mandatory });
   };
-  const remove = () => { if (selected) setEvents((current) => current.filter((event) => event.id !== selected.id)); close(); };
-  const shownDays = compact ? [weekDays[dayIndex]] : weekDays; const scale = compact ? 61 : 57;
+  const upcoming = list.filter((item) => localDateKey(item.occurrenceStart) === localDateKey(now) && item.occurrenceStart >= now);
   const selectedWeek = `${monday.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' })} – ${addCalendarDays(monday, 6).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short', year: 'numeric' })}`;
-  const changeDraft = (field: 'title' | 'location' | 'start' | 'end', value: string) => { if (draft) setDraft({ ...draft, [field]: value }); };
-  return <View style={styles.content}>
-    <BackendConnectionStatus />
-    <MockNotice>Kalendarz działa tylko w tej sesji. Dane nie są zapisywane ani wysyłane. Powtarzane wydarzenia zachowują lokalny dzień tygodnia i godzinę przy zmianie czasu.</MockNotice>
-    <View style={[styles.row, { justifyContent: 'space-between', marginBottom: 18 }]}><View style={{ flex: 1 }}><Pill>TWÓJ TYDZIEŃ</Pill><Text style={[styles.title, { marginTop: 8, fontSize: compact ? 25 : 31 }]}>Spokojniejszy tydzień zaczyna się tutaj.</Text><Text style={styles.subtitle}>Zajęcia, zmiany w pracy i czas dla siebie.</Text></View><Button title="+ Dodaj wydarzenie" primary onPress={() => newEvent(weekDays[dayIndex])} /></View>
-    <Card style={{ padding: compact ? 12 : 19 }}>
-      <View style={[styles.row, { justifyContent: compact ? 'flex-start' : 'space-between', marginBottom: 14, flexWrap: 'wrap' }]}><View style={{ flex: 1, width: compact ? '100%' : undefined }}><Text style={styles.heading}>{selectedWeek}</Text><Text style={styles.muted}>Tydzień od poniedziałku · czas lokalny</Text></View><View style={[styles.row, { flexWrap: 'wrap', justifyContent: compact ? 'space-between' : 'flex-end', width: compact ? '100%' : undefined }]}><Button title="‹" accessibilityLabel="Poprzedni tydzień" onPress={() => { setWeek(addCalendarDays(monday, -7)); setDayIndex(0); setEmptyPreview(false); }} /><Button title="Plan WAT" accessibilityLabel="Przejdź do początku semestralnego planu WAT" onPress={() => { setWeek(INITIAL_WEEK); setDayIndex(0); setEmptyPreview(false); }} /><Button title="Paź 2026" accessibilityLabel="Przejdź do przykładowego tygodnia z października 2026" onPress={() => { setWeek(new Date(2026, 9, 12)); setDayIndex(0); setEmptyPreview(false); }} /><Button title="Pusty tydzień" onPress={() => { setWeek(new Date(2027, 9, 4)); setDayIndex(0); setEmptyPreview(true); }} /><Button title="›" accessibilityLabel="Następny tydzień" onPress={() => { setWeek(addCalendarDays(monday, 7)); setDayIndex(0); setEmptyPreview(false); }} /></View></View>
-      {compact && <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 7, paddingBottom: 11 }}>{weekDays.map((date, i) => <Pressable key={localDateKey(date)} accessibilityRole="button" accessibilityState={{ selected: dayIndex === i }} onPress={() => setDayIndex(i)} style={{ minWidth: 49, alignItems: 'center', paddingVertical: 8, borderRadius: 11, backgroundColor: i === dayIndex ? palette.blue : palette.surfaceAlt }}><Text style={{ fontSize: 10, color: i === dayIndex ? '#FFFFFF' : palette.muted, fontWeight: '800' }}>{daysLabel[i].slice(0, 1)}</Text><Text style={{ marginTop: 2, color: i === dayIndex ? '#FFFFFF' : palette.ink, fontWeight: '800' }}>{date.getDate()}</Text></Pressable>)}</ScrollView>}
-      <ScrollView horizontal={!compact} showsHorizontalScrollIndicator={false}><View style={{ flexDirection: 'row', width: compact ? '100%' : gridWidth, minWidth: compact ? undefined : 800 }}>
-        <View style={{ width: compact ? 43 : 51 }}><View style={{ height: 46 }} />{Array.from({ length: 15 }, (_, i) => <View key={i} style={{ height: scale }}><Text style={{ color: palette.muted, fontSize: 9 }}>{pad(i + 6)}:00</Text></View>)}</View>
-        {shownDays.map((date) => { const index = weekDays.findIndex((d) => localDateKey(d) === localDateKey(date)); const items = list.filter((item) => localDateKey(item.occurrenceStart) === localDateKey(date)); return <View key={localDateKey(date)} style={{ flex: 1, width: dayColumnWidth, minWidth: dayColumnWidth }}>
-          <View style={{ height: 46, justifyContent: 'center', alignItems: 'center', borderBottomWidth: 1, borderColor: palette.line }}><Text style={styles.label}>{daysLabel[index].toUpperCase()}</Text><Text style={{ color: palette.ink, fontWeight: '800' }}>{date.getDate()}</Text></View>
-          <View style={{ height: scale * 15, position: 'relative', borderRightWidth: 1, borderColor: palette.line }}>{Array.from({ length: 15 }, (_, i) => <View key={i} style={{ position: 'absolute', top: i * scale, left: 0, right: 0, borderTopWidth: 1, borderColor: palette.grid, height: scale }} />)}{items.map((item) => { const from = item.occurrenceStart.getHours() + item.occurrenceStart.getMinutes() / 60; const to = item.occurrenceEnd.getHours() + item.occurrenceEnd.getMinutes() / 60; return <Pressable key={`${item.id}-${localDateKey(date)}`} accessibilityRole="button" onPress={() => details(item)} style={{ position: 'absolute', top: Math.max(0, (from - 6) * scale), left: 3, right: 3, height: Math.max(39, (to - from) * scale), padding: 6, overflow: 'hidden', borderRadius: 8, backgroundColor: `${colors[item.category]}18`, borderLeftWidth: item.mandatory ? 4 : 3, borderLeftColor: colors[item.category], borderWidth: item.mandatory ? 1 : 0, borderColor: colors[item.category] }}><Text numberOfLines={2} style={{ fontSize: 10, fontWeight: '800', color: palette.ink }}>{item.title}</Text><Text style={{ fontSize: 9, color: palette.muted, marginTop: 3 }}>{item.occurrenceStart.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}–{item.occurrenceEnd.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}</Text>{item.mandatory && <Text style={{ fontSize: 8, color: colors.Class, fontWeight: '800' }}>OBOWIĄZKOWE</Text>}</Pressable>; })}</View>
-        </View>; })}
-      </View></ScrollView>
-      {!list.length && <View style={{ alignItems: 'center', padding: 20 }}><Text style={styles.heading}>Tydzień z miejscem na oddech</Text><Text style={styles.subtitle}>{emptyPreview ? 'Podgląd pustego tygodnia; wydarzenia nie zostały zmienione. ' : ''}Brak zaplanowanych wydarzeń w tym tygodniu.</Text></View>}
-      <View style={[styles.row, { flexWrap: 'wrap', borderTopWidth: 1, borderColor: palette.line, marginTop: 10, paddingTop: 13 }]}>{categories.map((category) => <View key={category} style={[styles.row, { marginRight: 12 }]}><View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: colors[category] }} /><Text style={styles.muted}>{labels[category]}</Text></View>)}<Text style={styles.muted}>◆ zajęcia obowiązkowe</Text></View>
-    </Card>
-    <View style={[styles.row, { justifyContent: 'space-between', flexWrap: 'wrap' }]}><Text style={styles.muted}>Zmiana wydarzenia cyklicznego aktualizuje całą serię od daty początkowej.</Text><Button title="Ułóż plan pracy →" onPress={onPlanner} /></View>
-    <Modal visible={dialog !== null} transparent animationType="fade" onRequestClose={close}><View style={{ flex: 1, backgroundColor: palette.scrim, alignItems: 'center', justifyContent: 'center', padding: 16 }}><ScrollView style={{ backgroundColor: palette.surface, borderRadius: 18, width: '100%', maxWidth: 480, maxHeight: '92%' }} contentContainerStyle={{ padding: 21 }}>
-      {dialog === 'form' && draft && <><Text style={styles.heading}>{isNew ? 'Dodaj wydarzenie' : 'Edytuj wydarzenie'}</Text><Text style={styles.subtitle}>{!isNew && draft.repeatWeekly ? 'Edycja serii: zmiana obejmie wszystkie tygodnie. Zachowujemy pierwotną datę i dzień tygodnia; wyjątki dla pojedynczych wystąpień nie są obsługiwane.' : 'Zmiany dotyczą wyłącznie tego demonstracyjnego kalendarza.'}</Text><View style={{ marginTop: 16 }}>
+  const changeDraft = (field: 'title' | 'location', value: string) => setDraft((current) => current ? { ...current, [field]: value } : current);
+  const changeDate = (value: string) => setDraft((current) => current ? { ...current, start: `${value}T${current.start.split('T')[1]}`, end: `${value}T${current.end.split('T')[1]}` } : current);
+  const changeTime = (field: 'start' | 'end', value: string) => setDraft((current) => current ? { ...current, [field]: `${current[field].split('T')[0]}T${value}` } : current);
+  return <View style={{ flex: 1, minHeight: 0, width: '100%', maxWidth: 1440, alignSelf: 'center', paddingHorizontal: compact ? 8 : 16 }}>
+    {loading && <Text accessibilityLiveRegion="polite" style={styles.muted}>Wczytywanie…</Text>}
+    {!!loadError && <View><Text accessibilityRole="alert" style={styles.error}>{loadError}</Text><Button title="Spróbuj ponownie" onPress={() => void reload()} /></View>}
+    {!todayOnly && <View style={[styles.row, { justifyContent: 'space-between', paddingVertical: 6 }]}>
+      <Text numberOfLines={1} style={[styles.heading, { flex: 1, fontSize: compact ? 14 : 17 }]}>{selectedWeek}</Text>
+      <Button title="+" accessibilityLabel="Dodaj wydarzenie" primary onPress={() => newEvent(todayOnly ? new Date() : weekDays.some((date) => localDateKey(date) === localDateKey(new Date())) ? new Date() : monday)} />
+    </View>}
+    {!todayOnly && <View style={[styles.row, { justifyContent: 'space-between', paddingBottom: 6 }]}>
+      <Button title="‹" accessibilityLabel="Poprzedni tydzień" onPress={() => setWeek(addCalendarDays(monday, -7))} />
+      <Button title="Dzisiaj" onPress={() => setWeek(new Date())} />
+      <Button title="›" accessibilityLabel="Następny tydzień" onPress={() => setWeek(addCalendarDays(monday, 7))} />
+    </View>}
+    {todayOnly ? <View style={{ flex: 1, minHeight: 0 }}>
+      <View style={[styles.row, { justifyContent: 'space-between', paddingVertical: 8 }]}><Text style={styles.heading}>Dzień dobry!</Text><Button title="+" accessibilityLabel="Dodaj wydarzenie" primary onPress={() => newEvent(now)} /></View>
+      <View accessibilityLabel="Podsumowanie dnia od asystenta" style={{ backgroundColor: palette.blueSoft, borderRadius: 8, padding: 12, marginBottom: 14, minHeight: 88 }}>
+        <Text style={[styles.body, { fontWeight: '700' }]}>Twój dzień w skrócie</Text>
+        <Text style={styles.muted}>Tutaj pojawi się podsumowanie wydarzeń od asystenta.</Text>
+      </View>
+      <WeekGrid active={active} days={[addCalendarDays(now, 0)]} events={upcoming} layout="days-top" now={now} startAtNow hideDayHeader onAdd={newEvent} onSelect={details} />
+    </View> : <WeekGrid active={active} days={weekDays} events={list} layout={weekLayout} now={now} onAdd={newEvent} onSelect={details} />}
+    <Modal visible={dialog !== null} transparent animationType="fade" onRequestClose={() => { if (!saving) close(); }}><View style={{ flex: 1, backgroundColor: palette.scrim, alignItems: 'center', justifyContent: 'center', padding: 16 }}><ScrollView style={{ backgroundColor: palette.surface, borderRadius: 18, width: '100%', maxWidth: 480, maxHeight: '92%' }} contentContainerStyle={{ padding: 21 }}>
+      {dialog === 'form' && draft && <><Text style={styles.heading}>Dodaj wydarzenie</Text><View style={{ marginTop: 16 }}>
         <Field label="TYTUŁ WYDARZENIA" value={draft.title} onChangeText={(v) => changeDraft('title', v)} placeholder="Spotkanie projektowe" /><Field label="MIEJSCE" value={draft.location ?? ''} onChangeText={(v) => changeDraft('location', v)} placeholder="np. Gmach Północny 204" />
-        <Field label="DATA (RRRR-MM-DD)" value={draft.start.slice(0, 10)} onChangeText={(v) => { if (draft) setDraft({ ...draft, start: `${v}T${draft.start.slice(11)}`, end: `${v}T${draft.end.slice(11)}` }); }} />
-        <View style={styles.row}><Field label="POCZĄTEK" value={draft.start.slice(11, 16)} onChangeText={(v) => changeDraft('start', `${draft.start.slice(0, 10)}T${v}`)} /><Field label="KONIEC" value={draft.end.slice(11, 16)} onChangeText={(v) => changeDraft('end', `${draft.end.slice(0, 10)}T${v}`)} /></View>
+        <DateField label="DATA" value={draft.start.split('T')[0]} onChange={changeDate} />
+        <View style={styles.row}><TimeField label="POCZĄTEK" value={draft.start.split('T')[1]} onChange={(v) => changeTime('start', v)} /><TimeField label="KONIEC" value={draft.end.split('T')[1]} onChange={(v) => changeTime('end', v)} /></View>
         <Text style={styles.label}>KATEGORIA</Text><View style={[styles.row, { flexWrap: 'wrap', marginBottom: 8 }]}>{categories.map((category) => <Pressable key={category} onPress={() => setDraft({ ...draft, category, mandatory: category === 'Class' && draft.mandatory })} style={{ padding: 9, borderRadius: 8, borderWidth: 1, borderColor: draft.category === category ? colors[category] : palette.line, backgroundColor: draft.category === category ? `${colors[category]}18` : palette.surfaceAlt }}><Text style={{ color: colors[category], fontWeight: '700', fontSize: 12 }}>{labels[category]}</Text></Pressable>)}</View>
         <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: draft.repeatWeekly }} onPress={() => setDraft({ ...draft, repeatWeekly: !draft.repeatWeekly })} style={{ paddingVertical: 8 }}><Text style={styles.body}>{draft.repeatWeekly ? '☑' : '☐'} Powtarzaj co tydzień</Text></Pressable>
-        {draft.category === 'Class' && <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: draft.mandatory }} onPress={() => setDraft({ ...draft, mandatory: !draft.mandatory })} style={{ paddingVertical: 8 }}><Text style={styles.body}>{draft.mandatory ? '☑' : '☐'} Obowiązkowe · planer unika tego terminu</Text></Pressable>}
-        {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}<View style={[styles.row, { justifyContent: 'flex-end', marginTop: 12 }]}><Button title="Anuluj" onPress={close} /><Button title={isNew ? 'Zapisz wydarzenie' : 'Zapisz zmiany'} primary onPress={save} /></View>
+        {draft.category === 'Class' && <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: draft.mandatory }} onPress={() => setDraft({ ...draft, mandatory: !draft.mandatory })} style={{ paddingVertical: 8 }}><Text style={styles.body}>{draft.mandatory ? '☑' : '☐'} Zajęcia obowiązkowe</Text></Pressable>}
+        {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}<View style={[styles.row, { justifyContent: 'flex-end', marginTop: 12 }]}><Button title="Anuluj" disabled={saving} onPress={close} /><Button title={saving ? 'Zapisywanie…' : 'Zapisz wydarzenie'} disabled={saving || loading || !!loadError} primary onPress={save} /></View>
       </View></>}
-      {dialog === 'details' && selected && <><Pill color={colors[selected.category]}>{labels[selected.category].toUpperCase()}</Pill><Text style={[styles.heading, { marginTop: 12 }]}>{selected.title}</Text><Text style={styles.subtitle}>{selected.occurrenceStart.toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' })} · {selected.occurrenceStart.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}–{selected.occurrenceEnd.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}</Text><Text style={[styles.subtitle, { marginTop: 8 }]}>{selected.location ? `Miejsce: ${selected.location}` : 'Nie podano miejsca.'}</Text>{selected.courseForm && <Text style={[styles.body, { marginTop: 10 }]}>{selected.courseCode} · Forma zajęć: {selected.courseForm}</Text>}{selected.instructor && <Text style={[styles.body, { marginTop: 5 }]}>Prowadzący: {selected.instructor}</Text>}{selected.semesterHours && <Text style={[styles.body, { marginTop: 5 }]}>Suma godzin w okresie: {selected.semesterHours} godz.</Text>}<Text style={[styles.body, { marginTop: 12 }]}>{selected.repeatWeekly ? 'Seria cotygodniowa · edycja zmienia serię od daty początkowej.' : 'Wydarzenie jednorazowe.'} {selected.mandatory ? 'Zajęcia obowiązkowe; wykluczone z planowania pracy.' : ''}</Text><View style={[styles.row, { justifyContent: 'flex-end', flexWrap: 'wrap', marginTop: 18 }]}><Button title="Usuń" danger onPress={() => setDialog('delete')} /><Button title="Zamknij" onPress={close} /><Button title="Edytuj godzinę" primary onPress={edit} /></View></>}
-      {dialog === 'delete' && selected && <><Text style={styles.heading}>Usunąć {selected.repeatWeekly ? 'całą serię' : 'to wydarzenie'}?</Text><Text style={styles.subtitle}>Wydarzenie zostanie usunięte tylko z kalendarza w tej sesji.</Text><View style={[styles.row, { justifyContent: 'flex-end', marginTop: 18 }]}><Button title="Zachowaj wydarzenie" onPress={() => setDialog('details')} /><Button title="Usuń" danger onPress={remove} /></View></>}
-      {dialog === 'collision' && <><Pill color={palette.amber}>KOLIZJA W PLANIE</Pill><Text style={[styles.heading, { marginTop: 12 }]}>Wydarzenia nakładają się.</Text><Text style={styles.subtitle}>{isNew ? 'Nic jeszcze nie zapisano. Dodanie wydarzenia mimo to umieści je obok istniejących kolidujących wydarzeń.' : 'Dotychczasowe wydarzenie pozostaje bez zmian do chwili zapisu. Zapis zastąpi jego godzinę; kolidujące wydarzenie pozostanie.'} Konflikty: {conflicts.join(', ')}.</Text><View style={[styles.row, { justifyContent: 'flex-end', marginTop: 18 }]}><Button title="Wróć do edycji" onPress={() => { setDialog('form'); setPending(null); }} /><Button title={isNew ? 'Dodaj mimo to' : 'Zapisz mimo kolizji'} primary onPress={() => pending && commit(pending, true)} /></View></>}
+      {dialog === 'details' && selected && <><Text style={[styles.heading, { marginTop: 12 }]}>{selected.title}</Text><Text style={styles.subtitle}>{selected.occurrenceStart.toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' })} · {selected.occurrenceStart.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}–{selected.occurrenceEnd.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}</Text><Text style={[styles.subtitle, { marginTop: 8 }]}>{selected.location ? `Miejsce: ${selected.location}` : 'Nie podano miejsca.'}</Text><Text style={[styles.body, { marginTop: 12 }]}>{selected.repeatWeekly ? 'Seria cotygodniowa.' : 'Wydarzenie jednorazowe.'} {selected.mandatory ? 'Zajęcia obowiązkowe.' : ''}</Text><View style={[styles.row, { justifyContent: 'flex-end', flexWrap: 'wrap', marginTop: 18 }]}><Button title={selected.repeatWeekly ? 'Usuń serię' : 'Usuń wydarzenie'} danger onPress={() => { setError(''); setDialog('delete'); }} /><Button title="Zamknij" onPress={close} /></View></>}
+      {dialog === 'delete' && selected && <>
+        <Text style={styles.heading}>{selected.repeatWeekly ? 'Usunąć całą serię?' : 'Usunąć wydarzenie?'}</Text>
+        <Text style={styles.subtitle}>{selected.title}</Text>
+        <Text style={styles.body}>{selected.repeatWeekly ? 'Wszystkie cotygodniowe wystąpienia zostaną usunięte.' : 'Wydarzenie zostanie usunięte z kalendarza.'}</Text>
+        {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
+        <View style={[styles.row, { justifyContent: 'flex-end', flexWrap: 'wrap', marginTop: 16 }]}>
+          <Button title="Anuluj" disabled={saving} onPress={() => { setError(''); setDialog('details'); }} />
+          <Button title={saving ? 'Usuwanie…' : selected.repeatWeekly ? 'Usuń całą serię' : 'Usuń wydarzenie'} danger disabled={saving} onPress={() => void remove()} />
+        </View>
+      </>}
+      {dialog === 'collision' && <><Text style={[styles.heading, { marginTop: 12 }]}>Wydarzenia nakładają się.</Text><Text style={styles.subtitle}>Nic jeszcze nie zapisano. Możesz dodać wydarzenie mimo kolizji. Konflikty: {conflicts.join(', ')}.</Text><View style={[styles.row, { justifyContent: 'flex-end', marginTop: 18 }]}><Button title="Wróć do edycji" disabled={saving} onPress={() => { setDialog('form'); setPending(null); }} /><Button title={saving ? 'Zapisywanie…' : 'Dodaj mimo to'} disabled={saving} primary onPress={() => pending && commit(pending, true)} /></View></>}
     </ScrollView></View></Modal>
   </View>;
 }

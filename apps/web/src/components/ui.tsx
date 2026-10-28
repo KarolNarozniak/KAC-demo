@@ -93,24 +93,3 @@ export function Field({ label, value, onChangeText, placeholder, keyboardType, s
   const { palette, styles } = useTheme();
   return <View style={{ flex: 1, minWidth: 100, marginBottom: 12 }}><Text style={styles.label}>{label}</Text><TextInput accessibilityLabel={label} value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor={palette.placeholder} keyboardType={keyboardType} secureTextEntry={secureTextEntry} autoCapitalize={autoCapitalize} style={styles.input} /></View>;
 }
-
-export function Pill({ children, color }: { children: React.ReactNode; color?: string }) {
-  const { palette } = useTheme();
-  const accent = color ?? palette.blue;
-  return <View style={{ alignSelf: 'flex-start', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 99, backgroundColor: `${accent}18` }}><Text style={{ fontSize: 10, color: accent, fontWeight: '800', letterSpacing: 0.5 }}>{children}</Text></View>;
-}
-
-export function Toggle({ label, value, onValueChange }: { label: string; value: boolean; onValueChange: (value: boolean) => void }) {
-  const { palette } = useTheme();
-  return <Pressable accessibilityRole="switch" accessibilityState={{ checked: value }} onPress={() => onValueChange(!value)} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 9 }}><Text style={{ color: palette.ink, fontSize: 14 }}>{label}</Text><View style={{ width: 42, height: 24, borderRadius: 99, padding: 3, backgroundColor: value ? palette.blue : palette.surfaceAlt, justifyContent: 'center', borderWidth: 1, borderColor: palette.line }}><View style={{ width: 18, height: 18, borderRadius: 99, backgroundColor: '#FFFFFF', alignSelf: value ? 'flex-end' : 'flex-start' }} /></View></Pressable>;
-}
-
-export function MockNotice({ children }: { children: React.ReactNode }) {
-  const { palette } = useTheme();
-  return <View accessibilityRole="text" style={{ backgroundColor: palette.surfaceAlt, borderRadius: 11, padding: 12, marginBottom: 14, borderLeftWidth: 3, borderLeftColor: palette.muted }}><Text style={{ color: palette.muted, fontSize: 12, lineHeight: 18, fontWeight: '600' }}>MAKIETA · {children}</Text></View>;
-}
-
-export function Card({ children, style }: { children: React.ReactNode; style?: any }) {
-  const { styles } = useTheme();
-  return <View style={[styles.card, style]}>{children}</View>;
-}

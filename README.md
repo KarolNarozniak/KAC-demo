@@ -1,42 +1,44 @@
-# KAC monorepo
+# Aura Kalendar
 
-Kernel 'Aura Kalendar' is split into independently built web and API projects, with the PostgreSQL schema and migrations in a separate database project.
+First application slice: a responsive week calendar, today's view, and PostgreSQL-backed event creation. Bottom navigation contains **Dziś**, **Tydzień**, **Ustawienia**, **Asystent**. The cog tab contains calendar layout settings; assistant integration is reserved for a later increment.
 
-## Structure
+## Run locally
 
-- `apps/web` — Expo / React Native Web front end and existing in-memory demo workflows.
-- `apps/api` — TypeScript/Fastify API. The first vertical slice exposes liveness/readiness and reads demo calendar data from PostgreSQL.
-- `database` — PostgreSQL schema aligned with `KAC_Pelny_Model_Informacyjny_Backlog.xlsx`, SQL migrations and idempotent demo seed.
-- `docker-compose.yml` — local PostgreSQL only. Production should use Azure Database for PostgreSQL Flexible Server, not a SQLite file in an App Service instance.
+Use Node.js 24 LTS (24.3+; `.nvmrc` selects 24) and PostgreSQL 16. Node 25 is not supported by the Expo 58 toolchain. Docker Compose is provided for PostgreSQL.
 
-## Local development
+1. Copy `.env.example` to `.env`, `apps/api/.env.example` to `apps/api/.env`, and `apps/web/.env.example` to `apps/web/.env`. Configure `DATABASE_URL` and `EXPO_PUBLIC_API_URL`.
+2. `npm ci`
+3. `npm run db:up` (or start your own PostgreSQL instance).
+4. `npm run db:migrate` then `npm run db:seed`. Fresh databases start with an empty calendar; seeding does not remove existing events.
+5. `npm run api:dev`
+6. In a second terminal: `npm run web:dev`.
 
-Requirements: Node.js 24 LTS, npm and Docker Desktop (the backend can still run without Docker, but the database panel will report that PostgreSQL is unavailable).
+Open the Expo URL, normally `http://localhost:8081`. To use a phone, set `EXPO_PUBLIC_API_URL` to your computer's reachable API address and add the web origin to `API_CORS_ORIGINS`.
 
-1. Copy `.env.example` to `.env`; its database password is local-only.
-2. Copy `apps/api/.env.example` to `apps/api/.env` and `apps/web/.env.example` to `apps/web/.env`.
-3. Run `npm install` from the repository root.
-4. Start local PostgreSQL with `npm run db:up`, then apply the model and seed with `npm run db:migrate` and `npm run db:seed`.
-5. Start the API with `npm run api:dev`.
-6. In a second terminal, start Expo Web with `npm run web:dev`.
+## Expo / React upgrade
 
-The web app normally runs on the Expo development port (`8081`); the API listens on port `4000`.
+The frontend uses Expo SDK 58, React 19.3, React Native 0.88 and TypeScript 6 with the SDK-matched native modules. Native splash configuration uses the Expo plugin, and safe-area/status-bar handling supports current mobile layouts. React is deduplicated across the workspace.
 
-The calendar and all existing interactions remain a local demo. A small status card calls `GET /api/demo/connection`; when PostgreSQL is configured the API reads a seeded user, calendar, categories and events from the database. `GET /api/demo/calendar` exposes the same read-only sample. This is an integration smoke slice, not a replacement of the calendar’s event logic or implementation of the Jira backlog.
+For native preview, use `npm run start:dev --workspace @kac/web -- --lan`, with `EXPO_PUBLIC_API_URL` set to the computer's reachable LAN address. Use an Expo Go version that supports SDK 58 or a development build. Store availability can lag the SDK release; see the [Expo 58 release notes](https://expo.dev/changelog/sdk-58).
 
-## Validation
+The dependency audit on 2026-10-22 decreased from **55 findings (1 critical, 37 high, 17 moderate)** to **16 high findings, with no critical or moderate findings**. The remaining dependency chains trace to [braces ≤3.0.3](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) and [node-forge ≤1.4.0](https://github.com/advisories/GHSA-86w9-cpqp-85rv). Those are still the latest published versions at the time of the audit. No forced downgrades or audit exclusions were applied. Run `npm audit` to check the current status.
 
-- `npm run typecheck` — type-check web and API projects.
-- `npm test` — current front-end and API unit tests.
-- With the local database running: `npm run db:migrate`, `npm run db:seed`, then `npm run test:api:db`.
-- `npm run build` — validate the SQL model and build both API and Expo web export.
-- `npm run package:deploy --workspace @kac/web` — prepare a minimal static web package without Expo build dependencies.
-- `npm run package:deploy --workspace @kac/api` — make a standalone API package for a separate App Service.
+## Current behavior
 
-## CI/CD and Azure
+- The week keeps time slots readable with at least 80 pixels per hour horizontally (48 vertically in the alternate layout), scrolling along the time axis with fixed day labels. The single-day home view shows only upcoming events, from the current device time to midnight, with at least 48 pixels per hour and vertical scrolling. It has no repeated day header. The current week opens near the device time and displays a line across all days: thin gray on other days and thicker red on today. Manual scrolling is preserved as the clock updates. By default, days run down the left and hours across the top. The cog tab offers a switch to days across the top; the choice is saved on the device. Tap a day label to add an event or an event to open details.
+- Tabs slide out and in together, retaining visited screens and respecting reduced-motion settings.
+- The header shows the logo and the centered current date. Dark mode is the default; the theme switch is in Ustawienia and remembers the chosen theme.
+- Dziś is the home screen, with a welcome and a reserved area for a future agent-generated daily summary. No agent is connected yet.
+- Dziś keeps a day grid visible even when empty, showing only today's events whose start time has not passed according to the device clock, updating while the tab is open.
+- Date and start/end times use platform-native pickers on web, Android and iOS.
+- Open an event to delete it after confirmation. Deleting a weekly event removes the entire series. Database failures keep the event visible and allow retrying.
+- Creation saves to PostgreSQL before updating the calendar. Connection failures keep the form open with the entered data. No in-memory demo fallback.
+- **Powtarzaj co tydzień** stores a series and its first event in one transaction. Occurrences are derived for the visible week, without a fixed end date. Calendar dates and times use the configured account timezone (initially Europe/Warsaw), retaining weekly wall-clock time across daylight-saving changes.
+- Calendar ownership, categories, series and the original relational schema are retained for subsequent features. `DB_DEMO_USER_ID` and `DB_DEMO_CALENDAR_ID` select the initial seeded calendar. There is no authentication yet; these server-selected IDs must be replaced by authenticated account scope when accounts are implemented.
+- Event editing, account flows, imports, planning and notifications are outside this increment. Their simulated UI and fixtures have been removed.
 
-GitHub Actions builds and type-checks both apps, applies the SQL migrations to a PostgreSQL service container, seeds it, and runs the API-to-PostgreSQL integration smoke test. It always deploys the web App Service. The API deploy job is skipped until the GitHub Actions variable `AZURE_API_WEBAPP_NAME` is set to a separately provisioned Linux Node App Service. Configure that API App Service with `DATABASE_URL`, `PGSSLMODE=require` and `API_CORS_ORIGINS` in App Service settings; grant the workflow's OIDC identity deploy rights to the API App Service. Configure the public GitHub Actions variable `KAC_API_URL` to the API origin; Expo embeds `EXPO_PUBLIC_API_URL` at build time. Without that variable the frontend reports “API not configured” and its existing local demo still works.
+## Checks and deployment
 
-For production, use Azure Database for PostgreSQL Flexible Server rather than putting SQLite in an App Service filesystem. No production database URL, password or API deployment target is committed.
+`npm run typecheck`, `npm test`, `npm run build`. With PostgreSQL migrated and seeded, run `npm run test:api:db` to verify create/read/delete persistence, ownership checks and series cleanup through a fresh API instance. The integration test removes its own records.
 
-The API demo endpoint is read-only. It deliberately does not implement authentication, calendar CRUD, Google OAuth/Calendar, imports, planning or notifications. Those features remain the current mock workflows and should be implemented in separate vertical slices against the information model.
+The API and Expo web deployment scripts and existing GitHub Actions remain. Configure API `DATABASE_URL`, `PGSSLMODE=require` and `API_CORS_ORIGINS`; the web build embeds `EXPO_PUBLIC_API_URL`. Apply database migrations before deploying the updated API.
