@@ -118,7 +118,13 @@ export async function readWorkSchedule(fileName: string, dataBase64: string): Pr
 export type ClassRow = ImportRowInput & { reviewRequired: boolean; sourcePage: number };
 export type ClassReadResult = { importSessionId: string; academicYear: string; dateFrom: string; dateTo: string;
   rows: ClassRow[]; preview: ImportPreviewRow[]; warnings: string[] };
-const pdfErrors: Record<string, string> = {
+const classReadErrors: Record<string, string> = {
+  'database_unavailable': 'Nie można połączyć się z bazą danych. Uruchom PostgreSQL i sprawdź konfigurację API. Plik nie został zapisany.',
+  'database_not_configured': 'Serwer nie ma skonfigurowanej bazy danych. Sprawdź DATABASE_URL i uruchom API ponownie.',
+  'empty-file': 'Wybrany plik jest pusty. Pobierz oryginał i wybierz go ponownie.',
+  'corrupted-file': 'Plik jest uszkodzony lub niekompletny. Pobierz oryginał jako plik, bez konwersji, i wybierz go ponownie.',
+  'FST_ERR_VALIDATION': 'Serwer odrzucił dane przesłanego pliku. Spróbuj ponownie wybrać plik z krótszą nazwą.',
+  'FST_ERR_CTP_BODY_TOO_LARGE': 'Przesłany plik przekracza limit 5 MB.',
   'unreadable-image': 'Nie można odczytać obrazu. Wybierz PNG lub JPG do 20 megapikseli.',
   'unsupported-image-layout': 'Nie rozpoznano pełnej tabeli Miniatura WAT. Wybierz wyraźny, prosty zrzut ekranu z nagłówkiem semestru.',
   'unreadable-image-dates': 'Nie można potwierdzić dat. Wybierz wyraźniejszy zrzut całej tabeli.',
@@ -134,7 +140,14 @@ const pdfErrors: Record<string, string> = {
 };
 export async function readClassSchedule(name: string, base64: string): Promise<ClassReadResult> {
   const response = await postJson('/api/import/classes/read', { fileName: name, dataBase64: base64 }, AbortSignal.timeout(75000));
-  const body = await response.json();
-  if (!response.ok) throw new Error(pdfErrors[body.error] ?? 'Nie udało się odczytać planu. Sprawdź plik i połączenie, a następnie spróbuj ponownie.');
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    const code = typeof body?.error === 'string' ? body.error : '';
+    const fallback = response.status === 503 ? classReadErrors.database_unavailable
+      : response.status === 413 ? classReadErrors.FST_ERR_CTP_BODY_TOO_LARGE
+      : `Serwer nie zakończył importu (HTTP ${response.status}). Sprawdź komunikat w terminalu API.`;
+    throw new Error(classReadErrors[code] ?? fallback);
+  }
+  if (!body || !Array.isArray(body.rows)) throw new Error('Serwer zwrócił niepoprawny wynik importu. Sprawdź terminal API.');
   return body;
 }

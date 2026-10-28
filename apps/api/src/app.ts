@@ -290,11 +290,15 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
     { schema: readScheduleSchema, bodyLimit: READ_BODY_LIMIT }, async (request, reply) => {
       if (!repository?.createImportSession || !repository.listEventsForImport) return reply.code(503).send({ error: 'database_not_configured' });
       const file = checkScheduleFile(request.body.dataBase64);
-      if (!file.ok) return reply.code(422).send({ error: file.reason });
+      if (!file.ok) {
+        request.log.warn({ stage: 'file-validation', reason: file.reason }, 'Class import rejected');
+        return reply.code(422).send({ error: file.reason });
+      }
       let timetable;
       try { timetable = await (file.type === 'PDF' ? readClassPdf(file.bytes) : readClassImage(file.bytes)); }
       catch (error) {
         const code = error instanceof PdfReadError ? error.message : 'unsupported-layout';
+        request.log.warn({ stage: 'recognition', fileType: file.type, bytes: file.bytes.length, reason: code }, 'Class import rejected');
         return reply.code(code === 'reader-busy' ? 429 : 422).send({ error: code });
       }
       try {
