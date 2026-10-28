@@ -6,7 +6,7 @@ const MAX_BYTES = 5 * 1024 * 1024;
 export async function readPickedTimetable(file: ReadableTimetable, cleanup?: () => void | Promise<void>): Promise<PickedPdf> {
   try {
     if (!Number.isSafeInteger(file.size) || file.size <= 0 || file.size > MAX_BYTES) {
-      throw new Error('Wybierz niepusty PDF, PNG lub JPG do 5 MB.');
+      throw new Error('Wybierz niepusty plik (PDF, PNG, JPG lub ICS) do 5 MB.');
     }
     const base64 = await file.base64();
     const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0;

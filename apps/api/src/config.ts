@@ -24,4 +24,15 @@ export const config = {
   demoCalendarId: process.env.DB_DEMO_CALENDAR_ID || 'K001',
   /** Odczyt grafiku pracy: 'local' (PDF + OCR na serwerze) albo 'demo' (przykładowy grafik, bez OCR). */
   workScheduleReader: process.env.WORK_SCHEDULE_READER?.trim().toLowerCase() === 'demo' ? 'demo' as const : 'local' as const,
+  /**
+   * Import z Google Calendar (S23KC2S1P2-27). Bez GOOGLE_CLIENT_ID i GOOGLE_CLIENT_SECRET działa konto demonstracyjne.
+   * GOOGLE_REDIRECT_URI musi być dodany w Google Cloud Console jako „Authorized redirect URI”.
+   */
+  google: process.env.GOOGLE_CLIENT_ID?.trim() && process.env.GOOGLE_CLIENT_SECRET?.trim()
+    ? {
+      clientId: process.env.GOOGLE_CLIENT_ID.trim(),
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET.trim(),
+      redirectUri: process.env.GOOGLE_REDIRECT_URI?.trim() || 'http://localhost:4000/api/import/google/callback',
+    }
+    : null,
 };

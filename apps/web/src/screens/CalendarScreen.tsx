@@ -9,6 +9,7 @@ import TimeField from '../components/TimeField';
 import WeekGrid, { type WeekLayout } from '../components/WeekGrid';
 import ClassScheduleImport from '../components/ClassScheduleImport';
 import WorkScheduleImport from '../components/WorkScheduleImport';
+import GoogleCalendarImport from '../components/GoogleCalendarImport';
 const categories: Category[] = ['Class', 'Work', 'Personal'];
 const labels: Record<Category, string> = { Class: 'Zajęcia', Work: 'Praca', Personal: 'Prywatne' };
 type Props = { week: Date; setWeek: (value: Date) => void; todayOnly?: boolean; weekLayout: WeekLayout; now: Date; active: boolean };
@@ -19,6 +20,7 @@ export default function CalendarScreen({ week, setWeek, todayOnly = false, weekL
   const [saving, setSaving] = useState(false);
   const [classImportOpen, setClassImportOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [googleImportOpen, setGoogleImportOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const reload = async () => {
     setLoading(true); setLoadError('');
@@ -87,10 +89,11 @@ export default function CalendarScreen({ week, setWeek, todayOnly = false, weekL
     {!!notice && <Text accessibilityLiveRegion="polite" style={styles.muted}>{notice}</Text>}
     {loading && <Text accessibilityLiveRegion="polite" style={styles.muted}>Wczytywanie…</Text>}
     {!!loadError && <View><Text accessibilityRole="alert" style={styles.error}>{loadError}</Text><Button title="Spróbuj ponownie" onPress={() => void reload()} /></View>}
-    {!todayOnly && <View style={[styles.row, { justifyContent: 'space-between', paddingVertical: 6 }]}>
-      <Text numberOfLines={1} style={[styles.heading, { flex: 1, fontSize: compact ? 14 : 17 }]}>{selectedWeek}</Text>
+    {!todayOnly && <View style={[styles.row, { justifyContent: 'space-between', paddingVertical: 6, flexWrap: 'wrap' }]}>
+      <Text numberOfLines={1} style={[styles.heading, { flex: 1, minWidth: compact ? '100%' : 160, fontSize: compact ? 14 : 17 }]}>{selectedWeek}</Text>
       <Button title="Importuj plan" onPress={() => setClassImportOpen(true)} />
       <Button title="Grafik pracy" accessibilityLabel="Importuj grafik pracy" onPress={() => setImportOpen(true)} />
+      <Button title="Google" accessibilityLabel="Importuj z Google Calendar" onPress={() => setGoogleImportOpen(true)} />
       <Button title="+" accessibilityLabel="Dodaj wydarzenie" primary onPress={() => newEvent(todayOnly ? new Date() : weekDays.some((date) => localDateKey(date) === localDateKey(new Date())) ? new Date() : monday)} />
     </View>}
     {!todayOnly && <View style={[styles.row, { justifyContent: 'space-between', paddingBottom: 6 }]}>
@@ -145,5 +148,6 @@ export default function CalendarScreen({ week, setWeek, todayOnly = false, weekL
     </ScrollView></View></Modal>
     <ClassScheduleImport visible={classImportOpen} onClose={() => setClassImportOpen(false)} onImported={() => void reload()} />
     <WorkScheduleImport visible={importOpen} onClose={() => setImportOpen(false)} onImported={() => void reload()} />
+    <GoogleCalendarImport visible={googleImportOpen} onClose={() => setGoogleImportOpen(false)} onImported={() => void reload()} />
   </View>;
 }

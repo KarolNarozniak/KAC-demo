@@ -244,7 +244,7 @@ export class PostgresCalendarRepository {
         await client.query('rollback'); return { kind: 'unknown-rows', rowIds: rows.map(row => row.id) };
       }
       const session = await client.query(
-        `select status, data_importu < now() - make_interval(mins => $3) as wygasla
+        `select status, zrodlo, data_importu < now() - make_interval(mins => $3) as wygasla
          from t_importy where id_importu = $1 and id_uzytkownika = $2
          for update`,
         [sessionId, userId, IMPORT_SESSION_TTL_MINUTES],
@@ -298,9 +298,11 @@ export class PostgresCalendarRepository {
         if (action.kind === 'insert') {
           const inserted = await client.query(
             `insert into t_wydarzenia (id_kalendarza, id_kategorii, tytul, rozpoczecie, zakonczenie, zrodlo, opis, miejsce)
-             values ($1, $2, $3, $4, $5, 'Import', $6, $7)
+             values ($1, $2, $3, $4, $5, $8, $6, $7)
              returning id_wydarzenia`,
-            [calendarId, CATEGORY_IDS[row.category], row.title, row.start, row.end, description, row.location ?? ''],
+            [calendarId, CATEGORY_IDS[row.category], row.title, row.start, row.end, description, row.location ?? '',
+              // Pochodzenie wydarzenia (t_wydarzenia.zrodlo): „Google” dla importu z Google Calendar, „Import” dla plików.
+              current.zrodlo === SOURCE_LABELS.google ? 'Google' : 'Import'],
           );
           eventId = inserted.rows[0].id_wydarzenia;
         } else if (action.kind === 'replace') {

@@ -4,13 +4,28 @@ import { Button, Field, useTheme } from './ui';
 import DateField from './DateField';
 import TimeField from './TimeField';
 import { pickPdf } from '../services/pickPdf';
-import { cancelImport, confirmImport, previewImport, readClassSchedule,
-  type ClassReadResult, type ClassRow, type DuplicateDecision, type ImportPreviewRow, type ImportRowInput, type ImportSummary } from '../services/importApi';
+import { cancelImport, confirmImport, invalidFields, previewImport, readClassSchedule,
+  type ClassReadResult, type ClassRow, type DuplicateDecision, type ImportIssue, type ImportPreviewRow, type ImportRowInput, type ImportSummary } from '../services/importApi';
+
+// Import planu zajęć z pliku: PDF/zdjęcie (historyjka S23KC2S1P2-38) oraz ICS (S23KC2S1P2-8),
+// z korektą błędnie odczytanych danych (S23KC2S1P2-20) w podglądzie z historyjki S23KC2S1P2-32.
+
+const issueText: Record<ImportIssue, string> = {
+  'missing-title': 'wpisz nazwę przedmiotu',
+  'invalid-date': 'wybierz poprawną datę',
+  'invalid-time': 'uzupełnij godziny',
+  'end-not-after-start': 'koniec musi być później niż początek',
+};
+const skipText: Record<string, string> = {
+  'all-day': 'całodniowe (bez godzin)', 'missing-time': 'bez godziny zakończenia',
+  'invalid-date': 'z błędną datą', 'unsupported-repeat': 'z nieobsługiwanym powtarzaniem',
+};
+const shortStamp = (iso: string) => new Date(iso).toLocaleString('pl-PL', { timeZone: 'Europe/Warsaw', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
 const PAGE_SIZE = 10;
 const stamp = (iso: string) => new Date(iso).toLocaleString('pl-PL', { timeZone: 'Europe/Warsaw' });
 const rowInput = (row: ClassRow): ImportRowInput => ({ id: row.id, title: row.title, date: row.date,
-  startTime: row.startTime, endTime: row.endTime, category: 'Class', location: row.location,
+  startTime: row.startTime, endTime: row.endTime, ...(row.endDate ? { endDate: row.endDate } : {}), category: 'Class', location: row.location,
   duplicateDecision: row.duplicateDecision, replacementId: row.replacementId });
 
 export default function ClassScheduleImport({ visible, onClose, onImported }: {
@@ -26,6 +41,8 @@ export default function ClassScheduleImport({ visible, onClose, onImported }: {
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState('');
   const [summary, setSummary] = useState<ImportSummary | null>(null);
+  // Status importu (S23KC2S1P2-20): zakończony, nieudany albo anulowany.
+  const [status, setStatus] = useState<'' | 'failed' | 'cancelled'>('');
   const [fileName, setFileName] = useState('');
   const [page, setPage] = useState(0);
   const [retry, setRetry] = useState(0);
@@ -53,6 +70,7 @@ export default function ClassScheduleImport({ visible, onClose, onImported }: {
   const choose = () => run(async () => {
     const file = await pickPdf();
     if (!file) return;
+    setStatus('');
     const result = await readClassSchedule(file.name, file.base64);
     setFileName(file.name); setSummary(null); setSession(result); setRows(result.rows);
     setSelected(new Set(result.rows.filter(row => !row.reviewRequired).map(row => row.id)));
@@ -60,7 +78,12 @@ export default function ClassScheduleImport({ visible, onClose, onImported }: {
   });
   const close = () => run(async () => {
     if (session) await cancelImport(session.importSessionId);
-    setSession(null); setRows([]); setPreview([]); setSummary(null); setFileName(''); onClose();
+    setSession(null); setRows([]); setPreview([]); setSummary(null); setFileName(''); setStatus(''); onClose();
+  });
+  // „Anuluj import” kończy sesję bez zapisu, ale zostawia okno z informacją o wyniku (7a).
+  const cancel = () => run(async () => {
+    if (session) await cancelImport(session.importSessionId).catch(() => undefined);
+    setSession(null); setRows([]); setPreview([]); setSummary(null); setStatus('cancelled');
   });
   const update = (id: string, change: Partial<ClassRow>) => {
     setChecking(true); setError('');
@@ -72,12 +95,16 @@ export default function ClassScheduleImport({ visible, onClose, onImported }: {
   };
   const save = () => run(async () => {
     if (!session || checking) return;
-    const result = await confirmImport(session.importSessionId, chosen.map(rowInput));
+    let result: Awaited<ReturnType<typeof confirmImport>>;
+    try { result = await confirmImport(session.importSessionId, chosen.map(rowInput)); }
+    catch { setStatus('failed'); throw new Error('Import nieudany – brak połączenia z serwerem. Nic nie zapisano, podgląd został zachowany. Spróbuj ponownie.'); }
     if (result.kind === 'saved') {
+      setStatus('');
       setSummary(result.summary ?? { added: result.saved, replaced: 0, skipped: 0, rejected: result.rejected });
       setSession(null); setRows([]); onImported();
     } else {
       setRetry(value => value + 1);
+      setStatus('failed');
       if (result.kind === 'expired' || result.kind === 'closed') {
         setSession(null); setRows([]);
         throw new Error('Sesja wygasła lub została już zakończona. Wczytaj plik ponownie i sprawdź kalendarz.');
@@ -93,16 +120,23 @@ export default function ClassScheduleImport({ visible, onClose, onImported }: {
   return <Modal visible={visible} transparent animationType="fade" onRequestClose={() => { if (!busy) void close(); }}>
     <View style={{ flex: 1, backgroundColor: palette.scrim, alignItems: 'center', justifyContent: 'center', padding: 16 }}>
       <ScrollView style={{ backgroundColor: palette.surface, borderRadius: 18, width: '100%', maxWidth: 760, maxHeight: '92%' }} contentContainerStyle={{ padding: 20 }}>
-        <Text style={styles.heading}>Importuj plan zajęć WAT</Text>
-        <Text style={styles.subtitle}>PDF z tekstem (do 10 stron) lub zrzut ekranu Miniatura WAT w PNG/JPG (do 20 megapikseli). Maks. 5 MB. OCR działa lokalnie na serwerze i może potrwać do minuty.</Text>
+        <Text style={styles.heading}>Importuj plan zajęć</Text>
+        <Text style={styles.subtitle}>Plik ICS (np. eksport z USOS, Google Calendar, Outlooka), PDF planu WAT z tekstem (do 10 stron) lub zrzut ekranu Miniatura WAT w PNG/JPG. Maks. 5 MB. Odczyt zdjęcia (OCR) może potrwać do minuty.</Text>
         {!!fileName && <Text style={styles.body}>{fileName}</Text>}
         {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
         {busy && <Text accessibilityLiveRegion="polite" style={styles.body}>Przetwarzanie…</Text>}
-        {summary && <Text accessibilityLiveRegion="polite" style={styles.body}>Import zakończony. Dodano: {summary.added} · Zastąpiono: {summary.replaced} · Pominięto: {summary.skipped} · Niewybrane: {summary.rejected}</Text>}
-        {!session && <Button title="Wybierz PDF lub obraz" primary disabled={busy} onPress={() => void choose()} />}
+        {summary && <Text accessibilityLiveRegion="polite" style={styles.body}>Import zakończony. Zaimportowano: {summary.added + summary.replaced} (dodano: {summary.added} · zastąpiono: {summary.replaced}) · Pominięto duplikaty: {summary.skipped} · Niewybrane: {summary.rejected}</Text>}
+        {status === 'cancelled' && <Text accessibilityLiveRegion="polite" style={styles.body}>Import anulowany. Kalendarz pozostał bez zmian.</Text>}
+        {status === 'failed' && !error && <Text accessibilityRole="alert" style={styles.error}>Import nieudany. Nic nie zapisano – popraw dane i zatwierdź ponownie.</Text>}
+        {!session && <Button title="Wybierz plik (ICS, PDF lub zdjęcie)" primary disabled={busy} onPress={() => void choose()} />}
         {session && <>
           {session.warnings.map((warning, index) => <Text key={index} style={styles.muted}>{warning}</Text>)}
-          <Text style={styles.body}>Rok {session.academicYear} · {session.dateFrom} – {session.dateTo}</Text>
+          {session.source === 'ics' ? <>
+            <Text style={styles.body}>{session.calendarName ?? 'Plik ICS'} · {session.dateFrom} – {session.dateTo}</Text>
+            <Text style={styles.muted}>Wydarzenia w pliku: {session.eventCount ?? rows.length} · wystąpienia do importu: {rows.length}{session.skipped?.count
+              ? ` · pominięte: ${session.skipped.count} (${Object.entries(session.skipped.reasons).map(([reason, count]) => `${skipText[reason] ?? reason}: ${count}`).join(', ')})` : ''}</Text>
+          </> : <Text style={styles.body}>Rok {session.academicYear} · {session.dateFrom} – {session.dateTo}</Text>}
+          {Object.keys(session.collisions ?? {}).length > 0 && <Text style={styles.muted}>Część zajęć koliduje z wydarzeniami w kalendarzu – są oznaczone poniżej. Możesz je zaimportować mimo to albo odznaczyć.</Text>}
           <Text style={styles.muted}>Wybrano {chosen.length} z {rows.length} zajęć. Zapisujemy konkretne daty z planu. Sprawdź dane przed zatwierdzeniem. Niepewne wiersze wybierz dopiero po sprawdzeniu.</Text>
           <Text style={styles.muted}>Duplikat oznacza ten sam tytuł (bez różnic w wielkości liter i odstępach) oraz początek. Koniec może się różnić — „Zastąp” pozwala poprawić czas trwania.</Text>
           {checking && <Text accessibilityLiveRegion="polite" style={styles.muted}>Sprawdzanie danych…</Text>}
@@ -110,17 +144,21 @@ export default function ClassScheduleImport({ visible, onClose, onImported }: {
           <View pointerEvents={busy ? 'none' : 'auto'}>
             {rows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map(row => {
               const item = preview.find(item => item.id === row.id);
+              const bad = invalidFields(row, item?.status === 'error' ? item.issues : []);
+              const collisions = session.collisions?.[row.id] ?? [];
               const targets = [...(item?.duplicateOfEvents ?? []).map(event => ({ id: event.id, label: `${event.title} · ${stamp(event.start)}${event.repeatWeekly ? " · seria cotygodniowa — zastąpienie zmieni całą serię" : ""}` })),
                 ...(item?.duplicateOfRows ?? []).map(id => ({ id: `row:${id}`, label: `Wiersz ${rows.findIndex(other => other.id === id) + 1} tego importu` }))];
               return <View key={row.id} style={{ borderTopWidth: 1, borderColor: palette.line, paddingVertical: 12 }}>
-                <Button title={`${selected.has(row.id) ? '☑' : '☐'} Zajęcia ${rows.indexOf(row) + 1} · strona ${row.sourcePage}`} disabled={busy} onPress={() => toggle(row.id)} />
+                <Button title={`${selected.has(row.id) ? '☑' : '☐'} Zajęcia ${rows.indexOf(row) + 1}${session.source === 'ics' ? '' : ` · strona ${row.sourcePage}`}`} disabled={busy} onPress={() => toggle(row.id)} />
                 {row.reviewRequired && <Text style={styles.error}>Odczyt niepewny — sprawdź i uzupełnij dane.</Text>}
-                {item?.status === 'error' && <Text style={styles.error}>Sprawdź tytuł, datę i godziny. Koniec musi być późniejszy od początku.</Text>}
-                <Field label="PRZEDMIOT" value={row.title} maxLength={200} editable={!busy} onChangeText={title => update(row.id, { title })} />
-                <DateField label="DATA" value={row.date} onChange={date => update(row.id, { date })} />
+                {item?.status === 'error' && <Text style={styles.error}>Popraw zaznaczone pola: {item.issues.map(issue => issueText[issue]).join(', ')}.</Text>}
+                {!!row.repeat && <Text style={styles.muted}>Powtarzanie w pliku: {row.repeat}</Text>}
+                {collisions.length > 0 && <Text style={[styles.muted, { color: palette.amber }]}>KOLIZJA z: {collisions.map(other => `${other.title}${other.mandatory ? ' (obowiązkowe)' : ''} ${shortStamp(other.start)}–${shortStamp(other.end).slice(-5)}`).join('; ')}</Text>}
+                <Field label="PRZEDMIOT" value={row.title} maxLength={200} editable={!busy} invalid={bad.title} onChangeText={title => update(row.id, { title })} />
+                <DateField label="DATA" value={row.date} invalid={bad.date} onChange={date => update(row.id, { date, endDate: undefined })} />
                 <View style={styles.row}>
-                  <TimeField label="POCZĄTEK" value={row.startTime} onChange={startTime => update(row.id, { startTime })} />
-                  <TimeField label="KONIEC" value={row.endTime} onChange={endTime => update(row.id, { endTime })} />
+                  <TimeField label="POCZĄTEK" value={row.startTime} invalid={bad.start} onChange={startTime => update(row.id, { startTime })} />
+                  <TimeField label="KONIEC" value={row.endTime} invalid={bad.end} onChange={endTime => update(row.id, { endTime })} />
                 </View>
                 <Field label="MIEJSCE" value={row.location ?? ''} maxLength={200} editable={!busy} onChangeText={location => update(row.id, { location })} />
                 {targets.length > 0 && <>
@@ -146,7 +184,8 @@ export default function ClassScheduleImport({ visible, onClose, onImported }: {
           </View>
           <Button title={`Zatwierdź import (${chosen.length})`} primary disabled={busy || checking || !validPreview || undecided} onPress={() => void save()} />
         </>}
-        <Button title={session ? 'Anuluj import' : 'Zamknij'} disabled={busy} onPress={() => void close()} />
+        {session ? <Button title="Anuluj import" disabled={busy} onPress={() => void cancel()} />
+          : <Button title="Zamknij" disabled={busy} onPress={() => void close()} />}
       </ScrollView>
     </View>
   </Modal>;

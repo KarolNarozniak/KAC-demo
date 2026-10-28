@@ -8,10 +8,10 @@ import type { DuplicateDecision, ImportCategory, ImportRow } from './rules.js';
 /** Sesja wygasa po 15 minutach bez żadnej akcji użytkownika. */
 export const IMPORT_SESSION_TTL_MINUTES = 15;
 
-export type ImportSource = 'classes' | 'work';
-export type ImportFormat = 'PDF' | 'Zdjęcie' | 'ICS/CSV';
+export type ImportSource = 'classes' | 'work' | 'google';
+export type ImportFormat = 'PDF' | 'Zdjęcie' | 'ICS/CSV' | 'Google';
 
-export const SOURCE_LABELS: Record<ImportSource, string> = { classes: 'Plan zajęć', work: 'Grafik pracy' };
+export const SOURCE_LABELS: Record<ImportSource, string> = { classes: 'Plan zajęć', work: 'Grafik pracy', google: 'Google Calendar' };
 
 /** Wiersz zaakceptowany przez użytkownika i sprawdzony regułami tuż przed zapisem. */
 export type AcceptedRow = {

@@ -4,6 +4,9 @@ import { readClassPdf, PdfReadError } from './import/classes/reader.js';
 import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import type { CalendarOverview, EventInput } from './database.js';
+import { importCollisions } from './import/collisions-preview.js';
+import { registerGoogleImport, type GoogleImportOptions } from './import/google/routes.js';
+import { decodeIcsFile, IcsError, looksLikeIcs, parseIcs } from './import/ics/parse.js';
 import { buildImportPreview } from './import/preview.js';
 import { resolveRow, type ExistingEvent, type ImportRow } from './import/rules.js';
 import { checkScheduleFile, MAX_SCHEDULE_FILE_BYTES } from './import/work-schedule/file-check.js';
@@ -34,6 +37,8 @@ export type ApiOptions = {
    * Bez tej opcji działa czytnik demonstracyjny – używają go testy, żeby nie uruchamiać OCR.
    */
   scheduleReader?: ScheduleReader;
+  /** Import z Google Calendar (S23KC2S1P2-27): klient OAuth; bez niego działa konto demonstracyjne. */
+  google?: GoogleImportOptions;
 };
 
 // Ograniczenia danych wejściowych importu: chronią API przed zbyt dużymi lub dziwnymi żądaniami.
@@ -121,7 +126,7 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
       if (!origin || allowAnyOrigin || origins.has(origin)) callback(null, true);
       else callback(new Error('Origin is not allowed by KAC API CORS policy'), false);
     },
-    methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   });
 
   app.get('/api/health/live', async () => ({ api: 'ok' }));
@@ -199,6 +204,9 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
       return reply.code(503).send({ error: 'event_not_deleted' });
     }
   });
+
+  // --- Jednorazowy import z Google Calendar (S23KC2S1P2-27) ---
+  registerGoogleImport(app, repository, options.google);
 
   // --- Import: kontrola rozpoznanych danych przed zapisem (S23KC2S1P2-32) ---
 
@@ -292,6 +300,53 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
   app.post<{ Body: { fileName: string; dataBase64: string } }>('/api/import/classes/read',
     { schema: readScheduleSchema, bodyLimit: READ_BODY_LIMIT }, async (request, reply) => {
       if (!repository?.createImportSession || !repository.listEventsForImport) return reply.code(503).send({ error: 'database_not_configured' });
+
+      // Plik ICS (S23KC2S1P2-8) rozpoznajemy po treści – ten sam przycisk importu planu przyjmuje PDF, zdjęcie i ICS.
+      if (looksLikeIcs(request.body.dataBase64)) {
+        const ics = decodeIcsFile(request.body.dataBase64, MAX_SCHEDULE_FILE_BYTES);
+        if (!ics.ok) return reply.code(422).send({ error: ics.reason });
+        let overview: CalendarOverview | null;
+        try { overview = await repository.getOverview(); }
+        catch (error) {
+          request.log.error({ err: error }, 'ICS import could not read calendar');
+          return reply.code(503).send({ error: 'database_unavailable' });
+        }
+        const zone = overview?.user.timezone ?? 'Europe/Warsaw';
+        let parsed;
+        try { parsed = parseIcs(ics.text, { timeZone: zone }); }
+        catch (error) {
+          return reply.code(422).send({ error: error instanceof IcsError ? error.message : 'corrupted-file' });
+        }
+        // 3b: plik bez wydarzeń; 4a: wszystkie wydarzenia niepełne – podajemy, ile pominięto.
+        if (parsed.rows.length === 0) {
+          return reply.code(422).send({ error: parsed.eventCount === 0 ? 'empty-calendar' : 'no-importable-events', skipped: parsed.skipped });
+        }
+        try {
+          const preview = buildImportPreview(parsed.rows, await repository.listEventsForImport());
+          const session = await repository.createImportSession({ source: 'classes', format: 'ICS/CSV', rows: parsed.rows, preview });
+          return reply.code(201).send({
+            source: 'ics',
+            rows: parsed.rows.map((row) => ({ ...row, reviewRequired: false, sourcePage: 1 })),
+            preview,
+            importSessionId: session.id,
+            expiresAt: session.expiresAt.toISOString(),
+            academicYear: parsed.calendarName ?? 'Plik ICS',
+            calendarName: parsed.calendarName,
+            dateFrom: parsed.dateFrom,
+            dateTo: parsed.dateTo,
+            eventCount: parsed.eventCount,
+            skipped: parsed.skipped,
+            fileTimeZone: parsed.fileTimeZone,
+            userTimeZone: parsed.userTimeZone,
+            warnings: parsed.warnings,
+            collisions: importCollisions(parsed.rows, overview?.events ?? [], zone),
+          });
+        } catch (error) {
+          request.log.error({ err: error }, 'ICS import could not create preview');
+          return reply.code(503).send({ error: 'database_unavailable' });
+        }
+      }
+
       const file = checkScheduleFile(request.body.dataBase64);
       if (!file.ok) {
         request.log.warn({ stage: 'file-validation', reason: file.reason }, 'Class import rejected');
@@ -307,7 +362,9 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
       try {
         const preview = buildImportPreview(timetable.rows, await repository.listEventsForImport());
         const session = await repository.createImportSession({ source: 'classes', format: file.type === 'PDF' ? 'PDF' : 'Zdjęcie', rows: timetable.rows, preview });
-        return reply.code(201).send({ ...timetable, preview, importSessionId: session.id, expiresAt: session.expiresAt.toISOString() });
+        const overview = await repository.getOverview().catch(() => null);
+        return reply.code(201).send({ ...timetable, preview, importSessionId: session.id, expiresAt: session.expiresAt.toISOString(),
+          collisions: importCollisions(timetable.rows, overview?.events ?? [], overview?.user.timezone ?? 'Europe/Warsaw') });
       } catch (error) {
         request.log.error({ err: error }, 'Class import could not create preview');
         return reply.code(503).send({ error: 'database_unavailable' });

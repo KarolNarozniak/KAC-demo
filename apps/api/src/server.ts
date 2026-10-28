@@ -12,7 +12,7 @@ const printText = (source: string, lines: { text: string; confidence: number }[]
 const scheduleReader = config.workScheduleReader === 'demo'
   ? new DemoScheduleReader()
   : new LocalScheduleReader(process.env.WORK_SCHEDULE_DEBUG === '1' ? { onText: printText } : {});
-const app = buildApi(repository, config.corsOrigins, { scheduleReader });
+const app = buildApi(repository, config.corsOrigins, { scheduleReader, google: { oauth: config.google } });
 
 try {
   await app.listen({ host: '0.0.0.0', port: config.port });
