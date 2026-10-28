@@ -13,6 +13,9 @@ export type CalendarRepository = {
   createEvent?: (input: EventInput) => Promise<EventInput & { id: string }>;
   checkConnection: () => Promise<void>;
   getOverview: () => Promise<CalendarOverview | null>;
+  updateEvent?: (eventId: string, input: EventInput) => Promise<EventInput & { id: string }>;
+  getEventOrSeries?: (eventId: string) => Promise<any>;
+  updateSeriesFrom?: (eventId: string, input: EventInput) => Promise<EventInput & { id: string }>;
   // Import (S23KC2S1P2-32): sesja, przedłużanie, zatwierdzenie i anulowanie.
   createImportSession?: (input: CreateSessionInput) => Promise<{ id: string; expiresAt: Date }>;
   touchImportSession?: (sessionId: string) => Promise<void>;
@@ -178,6 +181,62 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
     } catch (error) {
       app.log.error(error);
       return reply.code(503).send({ error: 'event_not_deleted' });
+    }
+  });
+  
+  app.put<{ Params: { id: string }, Body: EventInput }>('/api/events/:id', {
+    schema: {
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'string', minLength: 1, maxLength: 200 } } },
+      body: {
+        type: 'object', additionalProperties: false,
+        required: ['title', 'start', 'end', 'category', 'location', 'mandatory', 'repeatWeekly'],
+        properties: {
+          title: { type: 'string', minLength: 1, maxLength: 200 },
+          start: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$' },
+          end: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$' },
+          category: { type: 'string', enum: ['Class', 'Work', 'Personal'] },
+          location: { type: 'string', maxLength: 500 },
+          mandatory: { type: 'boolean' },
+          repeatWeekly: { type: 'boolean' }
+        }
+      }
+    }
+  }, async (request, reply) => {
+    if (!repository?.updateEvent) return reply.code(503).send({ error: 'database_not_configured' });
+    try {
+      const updated = await repository.updateEvent(request.params.id, request.body);
+      return updated;
+    } catch (error) {
+      app.log.error(error);
+      return reply.code(404).send({ error: 'event_not_updated' });
+    }
+  });
+
+  app.put<{ Params: { id: string }, Body: EventInput }>('/api/events/:id/series', {
+    schema: {
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'string', minLength: 1, maxLength: 200 } } },
+      body: {
+        type: 'object', additionalProperties: false,
+        required: ['title', 'start', 'end', 'category', 'location', 'mandatory', 'repeatWeekly'],
+        properties: {
+          title: { type: 'string', minLength: 1, maxLength: 200 },
+          start: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$' },
+          end: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$' },
+          category: { type: 'string', enum: ['Class', 'Work', 'Personal'] },
+          location: { type: 'string', maxLength: 500 },
+          mandatory: { type: 'boolean' },
+          repeatWeekly: { type: 'boolean' }
+        }
+      }
+    }
+  }, async (request, reply) => {
+    if (!repository?.updateSeriesFrom) return reply.code(503).send({ error: 'database_not_configured' });
+    try {
+      const updated = await repository.updateSeriesFrom(request.params.id, request.body);
+      return updated;
+    } catch (error) {
+      app.log.error(error);
+      return reply.code(404).send({ error: 'series_not_updated' });
     }
   });
 

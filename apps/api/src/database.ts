@@ -106,6 +106,164 @@ export class PostgresCalendarRepository {
       throw error;
     } finally { client.release(); }
   }
+  
+  async getEventOrSeries(eventId: string, userId = config.demoUserId, calendarId = config.demoCalendarId) {
+    const client = await this.connectionPool.connect();
+    try {
+      const selected = await client.query(
+        `select e.id_serii 
+         from t_wydarzenia e 
+         join t_kalendarze c on c.id_kalendarza = e.id_kalendarza
+         where e.id_wydarzenia = $1 and c.id_kalendarza = $2 and c.id_uzytkownika = $3 and c.aktywny = true`,
+        [eventId, calendarId, userId]
+      );
+      if (!selected.rowCount) return null;
+      const seriesId = selected.rows[0].id_serii;
+
+      const query = seriesId
+        ? `select e.id_wydarzenia, e.tytul, e.rozpoczecie, e.zakonczenie,
+                  e.obowiazkowe, e.powtarzaj_co_tydzien, e.miejsce,
+                  to_char(e.rozpoczecie at time zone u.strefa_czasowa, 'YYYY-MM-DD"T"HH24:MI') as local_start,
+                  to_char(e.zakonczenie at time zone u.strefa_czasowa, 'YYYY-MM-DD"T"HH24:MI') as local_end, 
+                  k.nazwa as kategoria, k.kolor_hex
+           from t_wydarzenia e
+           join t_kategorie k on k.id_kategorii = e.id_kategorii
+           join t_kalendarze c on c.id_kalendarza = e.id_kalendarza
+           join t_uzytkownicy u on u.id_uzytkownika = c.id_uzytkownika
+           where e.id_serii = $1 and e.id_kalendarza = $2 and e.status = 'Aktywne'
+           order by e.rozpoczecie asc`
+        : `select e.id_wydarzenia, e.tytul, e.rozpoczecie, e.zakonczenie,
+                  e.obowiazkowe, e.powtarzaj_co_tydzien, e.miejsce,
+                  to_char(e.rozpoczecie at time zone u.strefa_czasowa, 'YYYY-MM-DD"T"HH24:MI') as local_start,
+                  to_char(e.zakonczenie at time zone u.strefa_czasowa, 'YYYY-MM-DD"T"HH24:MI') as local_end, 
+                  k.nazwa as kategoria, k.kolor_hex
+           from t_wydarzenia e
+           join t_kategorie k on k.id_kategorii = e.id_kategorii
+           join t_kalendarze c on c.id_kalendarza = e.id_kalendarza
+           join t_uzytkownicy u on u.id_uzytkownika = c.id_uzytkownika
+           where e.id_wydarzenia = $1 and c.id_kalendarza = $2 and e.status = 'Aktywne'`;
+
+      const params = seriesId ? [seriesId, calendarId] : [eventId, calendarId];
+      const eventsResult = await client.query(query, params);
+
+      return {
+        seriesId: seriesId ?? null,
+        events: eventsResult.rows.map((event) => ({
+          id: event.id_wydarzenia,
+          title: event.tytul,
+          start: event.local_start,
+          end: event.local_end,
+          category: event.kategoria,
+          color: event.kolor_hex,
+          mandatory: event.obowiazkowe,
+          repeatWeekly: event.powtarzaj_co_tydzien,
+          location: event.miejsce ?? '',
+        })),
+      };
+    } finally {
+      client.release();
+    }
+  }
+
+  async updateEvent(eventId: string, input: EventInput, userId = config.demoUserId, calendarId = config.demoCalendarId) {
+    const client = await this.connectionPool.connect();
+    try {
+      await client.query('BEGIN');
+      const owner = await client.query(`
+        select u.strefa_czasowa from t_kalendarze c
+        join t_uzytkownicy u on u.id_uzytkownika = c.id_uzytkownika
+        where c.id_kalendarza = $1 and c.id_uzytkownika = $2 and c.aktywny = true
+      `, [calendarId, userId]);
+      if (!owner.rowCount) throw new Error('calendar_not_found');
+      const timezone = owner.rows[0].strefa_czasowa;
+
+      const category = { Class: 'Zajęcia', Work: 'Praca', Personal: 'Prywatne' }[input.category];
+
+      await client.query(`
+        update t_wydarzenia 
+        set tytul = $1, rozpoczecie = $2::timestamp at time zone $9, zakonczenie = $3::timestamp at time zone $9, 
+            id_kategorii = (select id_kategorii from t_kategorie where nazwa = $4),
+            miejsce = $5, obowiazkowe = $6, powtarzaj_co_tydzien = $7
+        where id_wydarzenia = $8 and id_kalendarza = $10
+      `, [input.title.trim(), input.start, input.end, category, input.location, input.mandatory, input.repeatWeekly, eventId, timezone, calendarId]);
+
+      await client.query('COMMIT');
+      return { id: eventId, ...input, title: input.title.trim() };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally { 
+      client.release(); 
+    }
+  }
+
+	async updateSeriesFrom(eventId: string, input: EventInput, userId = config.demoUserId, calendarId = config.demoCalendarId) {
+		const client = await this.connectionPool.connect();
+		try {
+		  await client.query('BEGIN');
+		  const owner = await client.query(`
+			select u.strefa_czasowa from t_kalendarze c
+			join t_uzytkownicy u on u.id_uzytkownika = c.id_uzytkownika
+			where c.id_kalendarza = $1 and c.id_uzytkownika = $2 and c.aktywny = true
+		  `, [calendarId, userId]);
+		  if (!owner.rowCount) throw new Error('calendar_not_found');
+		  const timezone = owner.rows[0].strefa_czasowa;
+
+		  // Pobieramy identyfikator serii oraz datę rozpoczęcia wybranego wystąpienia
+		  const targetEvent = await client.query(`
+			select id_serii, rozpoczecie from t_wydarzenia
+			where id_wydarzenia = $1 and id_kalendarza = $2
+		  `, [eventId, calendarId]);
+		  if (!targetEvent.rowCount) throw new Error('event_not_found');
+		  const { id_serii, rozpoczecie } = targetEvent.rows[0];
+
+		  const category = { Class: 'Zajęcia', Work: 'Praca', Personal: 'Prywatne' }[input.category];
+
+		  if (id_serii) {
+			// Aktualizujemy to wydarzenie oraz wszystkie następne w serii (rozpoczecie >= wybrane)
+			await client.query(`
+			  update t_wydarzenia
+			  set tytul = $1, 
+				  rozpoczecie = $2::timestamp at time zone $6, 
+				  zakonczenie = $3::timestamp at time zone $6, 
+				  id_kategorii = (select id_kategorii from t_kategorie where nazwa = $4),
+				  miejsce = $5, 
+				  obowiazkowe = $7, 
+				  powtarzaj_co_tydzien = $8
+			  where id_serii = $9 and id_kalendarza = $10 and rozpoczecie >= $11
+			`, [
+			  input.title.trim(), 
+			  input.start, 
+			  input.end, 
+			  category, 
+			  input.location, 
+			  timezone, 
+			  input.mandatory, 
+			  input.repeatWeekly, 
+			  id_serii, 
+			  calendarId, 
+			  rozpoczecie
+			]);
+		  } else {
+			// Jeśli wydarzenie nie należy do serii, traktujemy je jako zwykłe pojedyncze wydarzenie
+			await client.query(`
+			  update t_wydarzenia 
+			  set tytul = $1, rozpoczecie = $2::timestamp at time zone $6, zakonczenie = $3::timestamp at time zone $6, 
+				  id_kategorii = (select id_kategorii from t_kategorie where nazwa = $4),
+				  miejsce = $5, obowiazkowe = $7, powtarzaj_co_tydzien = $8
+			  where id_wydarzenia = $9 and id_kalendarza = $10
+			`, [input.title.trim(), input.start, input.end, category, input.location, input.mandatory, input.repeatWeekly, eventId, timezone, calendarId]);
+		  }
+
+		  await client.query('COMMIT');
+		  return { id: eventId, ...input, title: input.title.trim() };
+		} catch (error) {
+		  await client.query('ROLLBACK');
+		  throw error;
+		} finally { 
+		  client.release(); 
+		}
+	  }
 
   // --- Import: kontrola rozpoznanych danych przed zapisem (S23KC2S1P2-32) ---
 
