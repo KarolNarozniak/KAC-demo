@@ -8,6 +8,7 @@ import { buildImportPreview } from './import/preview.js';
 import { resolveRow, type ExistingEvent, type ImportRow } from './import/rules.js';
 import { checkScheduleFile, MAX_SCHEDULE_FILE_BYTES } from './import/work-schedule/file-check.js';
 import { mapShiftsToRows, READ_STATUS_LABELS } from './import/work-schedule/mapping.js';
+import { ScheduleReadError } from './import/work-schedule/local-reader.js';
 import { DemoScheduleReader, type ScheduleReader } from './import/work-schedule/reader.js';
 import type { AcceptedRow, ConfirmResult, CreateSessionInput, ImportFormat, ImportSource } from './import/session.js';
 
@@ -28,7 +29,10 @@ export type CalendarRepository = {
 };
 
 export type ApiOptions = {
-  /** Mechanizm odczytu grafiku (S23KC2S1P2-44). Domyślnie czytnik demonstracyjny. */
+  /**
+   * Mechanizm odczytu grafiku (S23KC2S1P2-44). Serwer (server.ts) podaje LocalScheduleReader (PDF + OCR).
+   * Bez tej opcji działa czytnik demonstracyjny – używają go testy, żeby nie uruchamiać OCR.
+   */
   scheduleReader?: ScheduleReader;
 };
 
@@ -103,8 +107,7 @@ const cancelSchema = { params: { type: 'object', required: ['id'], properties: {
 
 export function buildApi(repository: CalendarRepository | null, allowedOrigins: string[] = [], options: ApiOptions = {}) {
   const app: FastifyInstance = Fastify({ logger: true });
-  const scheduleReader: ScheduleReader =
-    options.scheduleReader ?? new DemoScheduleReader(async () => (repository?.getImportUserName ? repository.getImportUserName() : ''));
+  const scheduleReader: ScheduleReader = options.scheduleReader ?? new DemoScheduleReader();
   // Wydarzenia z kalendarza do wykrywania duplikatów zmian pracy. Bez bazy porównanie jest pomijane.
   const existingEventsFor = async (rows: ImportRow[]): Promise<ExistingEvent[]> => {
     if (!repository?.listEventsForImport) return [];
@@ -319,9 +322,23 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
       const file = checkScheduleFile(request.body.dataBase64);
       if (!file.ok) return reply.code(422).send({ error: file.reason });
       if (!repository?.createImportSession) return reply.code(503).send({ error: 'database_not_configured' });
+      let userName = '';
       try {
-        const userName = repository.getImportUserName ? await repository.getImportUserName() : '';
-        const shifts = await scheduleReader.read({ name: request.body.fileName, type: file.type, bytes: file.bytes });
+        userName = repository.getImportUserName ? await repository.getImportUserName() : '';
+      } catch (error) {
+        request.log.error({ err: error }, 'Could not read import user');
+        return reply.code(503).send({ error: 'database_unavailable' });
+      }
+      // Odczyt pliku jest oddzielony od bazy: błąd odczytu to problem z plikiem (422/429), a nie z serwerem (503).
+      let shifts;
+      try {
+        shifts = await scheduleReader.read({ name: request.body.fileName, type: file.type, bytes: file.bytes }, { userName });
+      } catch (error) {
+        const code = error instanceof ScheduleReadError ? error.code : file.type === 'PDF' ? 'unreadable-pdf' : 'unreadable-image';
+        request.log.warn({ stage: 'recognition', fileType: file.type, bytes: file.bytes.length, reason: code, err: error instanceof ScheduleReadError ? undefined : error }, 'Work schedule not read');
+        return reply.code(code === 'reader-busy' ? 429 : 422).send({ error: code });
+      }
+      try {
         const { readStatus, rows } = mapShiftsToRows(shifts, userName);
         if (readStatus === 'none') return reply.code(422).send({ error: 'nothing_recognized', readStatusLabel: READ_STATUS_LABELS.none });
         const preview = buildImportPreview(rows, await existingEventsFor(rows));
@@ -338,7 +355,7 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
           preview,
         });
       } catch (error) {
-        request.log.error({ err: error }, 'Could not read work schedule');
+        request.log.error({ err: error }, 'Could not create work schedule import session');
         return reply.code(503).send({ error: 'database_unavailable' });
       }
     },

@@ -28,6 +28,14 @@
         {
           "backgroundColor": "#0B111B"
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "KAC używa aparatu, żeby zrobić zdjęcie grafiku pracy do importu.",
+          "photosPermission": false,
+          "microphonePermission": false
+        }
       ]
     ]
   }

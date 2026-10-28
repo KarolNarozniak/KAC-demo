@@ -22,4 +22,6 @@ export const config = {
     .filter(Boolean),
   demoUserId: process.env.DB_DEMO_USER_ID || 'U001',
   demoCalendarId: process.env.DB_DEMO_CALENDAR_ID || 'K001',
+  /** Odczyt grafiku pracy: 'local' (PDF + OCR na serwerze) albo 'demo' (przykładowy grafik, bez OCR). */
+  workScheduleReader: process.env.WORK_SCHEDULE_READER?.trim().toLowerCase() === 'demo' ? 'demo' as const : 'local' as const,
 };
