@@ -1,3 +1,4 @@
+import { readClassPdf, PdfReadError } from './import/classes/reader.js';
 import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import type { CalendarOverview, EventInput } from './database.js';
@@ -186,7 +187,7 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
 
   // Podgląd importu: sprawdza wiersze po każdej poprawce użytkownika. Niczego nie zapisuje w kalendarzu.
   // Jeśli podano identyfikator sesji, przedłuża ją (sesja wygasa po 15 minutach bez akcji).
-  app.post<{ Body: { rows: ImportRow[]; importSessionId?: string } }>('/api/import/preview', { schema: importPreviewSchema }, async (request) => {
+  app.post<{ Body: { rows: ImportRow[]; importSessionId?: string } }>('/api/import/preview', { schema: importPreviewSchema }, async (request, reply) => {
     if (request.body.importSessionId && repository?.touchImportSession) {
       await repository.touchImportSession(request.body.importSessionId).catch((error) => request.log.warn({ err: error }, 'Could not extend import session'));
     }
@@ -195,6 +196,7 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
       existing = await existingEventsFor(request.body.rows);
     } catch (error) {
       request.log.warn({ err: error }, 'Import preview could not read calendar events');
+      return reply.code(503).send({ error: 'database_unavailable' });
     }
     return { rows: buildImportPreview(request.body.rows, existing) };
   });
@@ -270,6 +272,28 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
   });
 
   // --- Import grafiku pracy ze zdjęcia lub pliku (S23KC2S1P2-44) ---
+  app.post<{ Body: { fileName: string; dataBase64: string } }>('/api/import/classes/read',
+    { schema: readScheduleSchema, bodyLimit: READ_BODY_LIMIT }, async (request, reply) => {
+      if (!repository?.createImportSession || !repository.listEventsForImport) return reply.code(503).send({ error: 'database_not_configured' });
+      const file = checkScheduleFile(request.body.dataBase64);
+      if (!file.ok) return reply.code(422).send({ error: file.reason });
+      if (file.type !== 'PDF') return reply.code(422).send({ error: 'pdf-only' });
+      let timetable;
+      try { timetable = await readClassPdf(file.bytes); }
+      catch (error) {
+        const code = error instanceof PdfReadError ? error.message : 'unsupported-layout';
+        return reply.code(code === 'reader-busy' ? 429 : 422).send({ error: code });
+      }
+      try {
+        const preview = buildImportPreview(timetable.rows, await repository.listEventsForImport());
+        const session = await repository.createImportSession({ source: 'classes', format: 'PDF', rows: timetable.rows, preview });
+        return reply.code(201).send({ ...timetable, preview, importSessionId: session.id, expiresAt: session.expiresAt.toISOString() });
+      } catch (error) {
+        request.log.error({ err: error }, 'Class import could not create preview');
+        return reply.code(503).send({ error: 'database_unavailable' });
+      }
+    });
+
   // Sprawdza plik, odczytuje zmiany i zakłada sesję importu do kontroli. Kalendarz pozostaje bez zmian.
   app.post<{ Body: { fileName: string; dataBase64: string } }>(
     '/api/import/work-schedule/read',

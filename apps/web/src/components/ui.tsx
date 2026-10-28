@@ -89,7 +89,7 @@ export function Button({ title, onPress, primary = false, danger = false, disabl
   return <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel} disabled={disabled} onPress={onPress} style={[styles.button, primary && styles.primary, danger && styles.danger, disabled && { opacity: 0.5 }]}><Text style={[styles.buttonText, primary && styles.primaryText]}>{title}</Text></Pressable>;
 }
 
-export function Field({ label, value, onChangeText, placeholder, keyboardType, secureTextEntry = false, autoCapitalize }: { label: string; value: string; onChangeText: (text: string) => void; placeholder?: string; keyboardType?: any; secureTextEntry?: boolean; autoCapitalize?: any }) {
+export function Field({ label, value, onChangeText, placeholder, keyboardType, secureTextEntry = false, autoCapitalize, maxLength, editable }: { label: string; value: string; onChangeText: (text: string) => void; placeholder?: string; keyboardType?: any; secureTextEntry?: boolean; autoCapitalize?: any; maxLength?: number; editable?: boolean }) {
   const { palette, styles } = useTheme();
-  return <View style={{ flex: 1, minWidth: 100, marginBottom: 12 }}><Text style={styles.label}>{label}</Text><TextInput accessibilityLabel={label} value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor={palette.placeholder} keyboardType={keyboardType} secureTextEntry={secureTextEntry} autoCapitalize={autoCapitalize} style={styles.input} /></View>;
+  return <View style={{ flex: 1, minWidth: 100, marginBottom: 12 }}><Text style={styles.label}>{label}</Text><TextInput maxLength={maxLength} editable={editable} accessibilityLabel={label} value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor={palette.placeholder} keyboardType={keyboardType} secureTextEntry={secureTextEntry} autoCapitalize={autoCapitalize} style={styles.input} /></View>;
 }

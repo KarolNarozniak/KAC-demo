@@ -7,6 +7,7 @@ import { Button, Field, useTheme } from '../components/ui';
 import DateField from '../components/DateField';
 import TimeField from '../components/TimeField';
 import WeekGrid, { type WeekLayout } from '../components/WeekGrid';
+import ClassScheduleImport from '../components/ClassScheduleImport';
 import WorkScheduleImport from '../components/WorkScheduleImport';
 const categories: Category[] = ['Class', 'Work', 'Personal'];
 const labels: Record<Category, string> = { Class: 'Zajęcia', Work: 'Praca', Personal: 'Prywatne' };
@@ -16,6 +17,7 @@ export default function CalendarScreen({ week, setWeek, todayOnly = false, weekL
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [classImportOpen, setClassImportOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const reload = async () => {
@@ -84,7 +86,8 @@ export default function CalendarScreen({ week, setWeek, todayOnly = false, weekL
     {!!loadError && <View><Text accessibilityRole="alert" style={styles.error}>{loadError}</Text><Button title="Spróbuj ponownie" onPress={() => void reload()} /></View>}
     {!todayOnly && <View style={[styles.row, { justifyContent: 'space-between', paddingVertical: 6 }]}>
       <Text numberOfLines={1} style={[styles.heading, { flex: 1, fontSize: compact ? 14 : 17 }]}>{selectedWeek}</Text>
-      <Button title="Importuj" accessibilityLabel="Importuj grafik pracy" onPress={() => setImportOpen(true)} />
+      <Button title="Importuj plan PDF" onPress={() => setClassImportOpen(true)} />
+      <Button title="Grafik pracy" accessibilityLabel="Importuj grafik pracy" onPress={() => setImportOpen(true)} />
       <Button title="+" accessibilityLabel="Dodaj wydarzenie" primary onPress={() => newEvent(todayOnly ? new Date() : weekDays.some((date) => localDateKey(date) === localDateKey(new Date())) ? new Date() : monday)} />
     </View>}
     {!todayOnly && <View style={[styles.row, { justifyContent: 'space-between', paddingBottom: 6 }]}>
@@ -123,6 +126,7 @@ export default function CalendarScreen({ week, setWeek, todayOnly = false, weekL
       </>}
       {dialog === 'collision' && <><Text style={[styles.heading, { marginTop: 12 }]}>Wydarzenia nakładają się.</Text><Text style={styles.subtitle}>Nic jeszcze nie zapisano. Możesz zapisać wydarzenie mimo kolizji. Konflikty: {conflicts.join(', ')}.</Text><View style={[styles.row, { justifyContent: 'flex-end', marginTop: 18 }]}><Button title="Wróć do edycji" disabled={saving} onPress={() => { setDialog('form'); setPending(null); }} /><Button title={saving ? 'Zapisywanie…' : editId ? 'Zapisz mimo to' : 'Dodaj mimo to'} disabled={saving} primary onPress={() => pending && commit(pending, true)} /></View></>}
     </ScrollView></View></Modal>
+    <ClassScheduleImport visible={classImportOpen} onClose={() => setClassImportOpen(false)} onImported={() => void reload()} />
     <WorkScheduleImport visible={importOpen} onClose={() => setImportOpen(false)} onImported={() => void reload()} />
   </View>;
 }

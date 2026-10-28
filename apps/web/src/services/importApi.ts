@@ -47,6 +47,7 @@ export type ImportRowInput = {
   employee?: string;
   overnightConfirmed?: boolean;
   duplicateDecision?: DuplicateDecision;
+  replacementId?: string;
 };
 
 /** Sprawdza wiersze po poprawkach użytkownika. Nic nie zapisuje; przedłuża sesję importu, jeśli ją podano. */
@@ -73,7 +74,8 @@ export async function confirmImport(sessionId: string, rows: ImportRowInput[]): 
 
 /** Anuluje import: sesja kończy się bez zmian w kalendarzu. */
 export async function cancelImport(sessionId: string): Promise<void> {
-  await postJson(`/api/import/sessions/${encodeURIComponent(sessionId)}/cancel`, {});
+  const response = await postJson(`/api/import/sessions/${encodeURIComponent(sessionId)}/cancel`, {});
+  if (!response.ok) throw new Error('Nie udało się anulować sesji importu.');
 }
 
 export type ScheduleRow = {
@@ -111,4 +113,24 @@ export async function readWorkSchedule(fileName: string, dataBase64: string): Pr
   if (response.status === 201) return { kind: 'read', ...((await response.json()) as Omit<Extract<ScheduleReadResult, { kind: 'read' }>, 'kind'>) };
   if (response.status === 422) return { kind: 'rejected', error: ((await response.json()) as { error: string }).error };
   return { kind: 'unavailable' };
+}
+
+export type ClassRow = ImportRowInput & { reviewRequired: boolean; sourcePage: number };
+export type ClassReadResult = { importSessionId: string; academicYear: string; dateFrom: string; dateTo: string;
+  rows: ClassRow[]; preview: ImportPreviewRow[]; warnings: string[] };
+const pdfErrors: Record<string, string> = {
+  'pdf-only': 'W tej wersji importujemy tylko PDF. Zdjęcia będą obsługiwane później.',
+  'unsupported-format': 'Wybierz plik PDF z e-Dziekanatu WAT.',
+  'unsupported-layout': 'Nie rozpoznano planu WAT. Wybierz PDF z tekstem w układzie mini e-D (plan semestru). Skany nie są obsługiwane.',
+  'unreadable-pdf': 'Nie można odczytać PDF. Plik może być uszkodzony lub być skanem.',
+  'encrypted-pdf': 'PDF zabezpieczony hasłem nie jest obsługiwany.',
+  'file-too-large': 'PDF może mieć maksymalnie 5 MB.',
+  'reader-busy': 'Trwa odczyt innych plików. Spróbuj za chwilę.',
+  'read-timeout': 'Odczyt PDF trwał zbyt długo. Wybierz mniejszy plik.',
+};
+export async function readClassSchedule(name: string, base64: string): Promise<ClassReadResult> {
+  const response = await postJson('/api/import/classes/read', { fileName: name, dataBase64: base64 });
+  const body = await response.json();
+  if (!response.ok) throw new Error(pdfErrors[body.error] ?? 'Nie udało się odczytać planu. Sprawdź plik i połączenie, a następnie spróbuj ponownie.');
+  return body;
 }
