@@ -13,6 +13,7 @@ import TimeField from './TimeField';
 import {
   cancelImport,
   confirmImport,
+  invalidFields,
   previewImport,
   readWorkSchedule,
   type DuplicateDecision,
@@ -215,6 +216,8 @@ export default function WorkScheduleImport({ visible, onClose, onImported }: Pro
     const targets = [...duplicateEvents.map(event => ({ id: event.id, label: `${event.title}, ${formatInstant(event.start)}${event.repeatWeekly ? ' — cała seria cotygodniowa' : ''}` })),
       ...duplicateRows.map(id => ({ id: `row:${id}`, label: label(id) }))];
     const decision = decisions[row.id];
+    // Pola wymagające poprawy są podświetlone (tak jak w imporcie planu – historyjka S23KC2S1P2-20).
+    const bad = invalidFields(row, item?.status === 'error' ? item.issues : []);
     return (
       <View key={row.id} style={{ marginTop: 14, borderTopWidth: 1, borderColor: palette.line, paddingTop: 13, opacity: isSelected ? 1 : 0.6 }}>
         <View style={[styles.row, { flexWrap: 'wrap' }]}>
@@ -259,12 +262,12 @@ export default function WorkScheduleImport({ visible, onClose, onImported }: Pro
         )}
 
         <View style={{ marginTop: 8 }}>
-          <DateField label="DATA" value={row.date} onChange={(value) => update(row.id, 'date', value)} />
+          <DateField label="DATA" value={row.date} invalid={bad.date} onChange={(value) => update(row.id, 'date', value)} />
           <View style={styles.row}>
-            <TimeField label="POCZĄTEK" value={row.startTime} onChange={(value) => update(row.id, 'startTime', value)} />
-            <TimeField label="KONIEC" value={row.endTime} onChange={(value) => update(row.id, 'endTime', value)} />
+            <TimeField label="POCZĄTEK" value={row.startTime} invalid={bad.start} onChange={(value) => update(row.id, 'startTime', value)} />
+            <TimeField label="KONIEC" value={row.endTime} invalid={bad.end} onChange={(value) => update(row.id, 'endTime', value)} />
           </View>
-          <Field label="TYTUŁ" value={row.title} onChangeText={(value) => update(row.id, 'title', value)} />
+          <Field label="TYTUŁ" value={row.title} invalid={bad.title} onChangeText={(value) => update(row.id, 'title', value)} />
           <Field label="MIEJSCE" value={row.location ?? ''} onChangeText={(value) => update(row.id, 'location', value)} />
         </View>
       </View>

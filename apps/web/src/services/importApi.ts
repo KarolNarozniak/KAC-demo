@@ -9,6 +9,9 @@ const baseUrl = () => {
   throw new Error('Brak konfiguracji adresu API.');
 };
 
+/** Adres API – wspólny dla klientów importu (także Google Calendar). */
+export const apiBaseUrl = baseUrl;
+
 async function postJson(path: string, body: unknown, signal?: AbortSignal): Promise<Response> {
   return fetch(`${baseUrl()}${path}`, {
     method: 'POST',
@@ -41,6 +44,8 @@ export type ImportRowInput = {
   date: string;
   startTime: string;
   endTime: string;
+  /** Data końca, gdy wydarzenie kończy się następnego dnia (np. z pliku ICS lub Google Calendar). */
+  endDate?: string;
   category: ImportCategory;
   location?: string;
   confidence?: number;
@@ -117,9 +122,32 @@ export async function readWorkSchedule(fileName: string, dataBase64: string): Pr
   return { kind: 'unavailable' };
 }
 
-export type ClassRow = ImportRowInput & { reviewRequired: boolean; sourcePage: number };
+/** Wydarzenie z kalendarza, z którym koliduje importowany wiersz (informacja, nie blokuje importu). */
+export type ImportCollision = { id: string; title: string; category: string; mandatory: boolean; start: string; end: string };
+
+export type ClassRow = ImportRowInput & { reviewRequired: boolean; sourcePage: number; endDate?: string;
+  /** Tylko ICS: opis powtarzania, np. „co tydzień (pn), do 31.01.2027”. */
+  repeat?: string | null };
 export type ClassReadResult = { importSessionId: string; academicYear: string; dateFrom: string; dateTo: string;
-  rows: ClassRow[]; preview: ImportPreviewRow[]; warnings: string[] };
+  rows: ClassRow[]; preview: ImportPreviewRow[]; warnings: string[];
+  /** Kolizje z wydarzeniami już zapisanymi w kalendarzu, według identyfikatora wiersza. */
+  collisions?: Record<string, ImportCollision[]>;
+  // Tylko dla pliku ICS (historyjka S23KC2S1P2-8):
+  source?: 'ics'; calendarName?: string | null; eventCount?: number;
+  skipped?: { count: number; reasons: Partial<Record<'all-day' | 'missing-time' | 'invalid-date' | 'unsupported-repeat', number>> } };
+
+/** Pola formularza, które wymagają poprawy (historyjka S23KC2S1P2-20: system wskazuje pola). */
+export type InvalidFields = { title: boolean; date: boolean; start: boolean; end: boolean };
+const timePattern = /^([01]\d|2[0-3]):[0-5]\d$/;
+export function invalidFields(row: { title: string; date: string; startTime: string; endTime: string }, issues: ImportIssue[] = []): InvalidFields {
+  const timeIssue = issues.includes('invalid-time');
+  return {
+    title: issues.includes('missing-title'),
+    date: issues.includes('invalid-date'),
+    start: timeIssue && !timePattern.test(row.startTime),
+    end: (timeIssue && !timePattern.test(row.endTime)) || issues.includes('end-not-after-start'),
+  };
+}
 const classReadErrors: Record<string, string> = {
   'database_unavailable': 'Nie można połączyć się z bazą danych. Uruchom PostgreSQL i sprawdź konfigurację API. Plik nie został zapisany.',
   'database_not_configured': 'Serwer nie ma skonfigurowanej bazy danych. Sprawdź DATABASE_URL i uruchom API ponownie.',
@@ -132,7 +160,9 @@ const classReadErrors: Record<string, string> = {
   'unreadable-image-dates': 'Nie można potwierdzić dat. Wybierz wyraźniejszy zrzut całej tabeli.',
   'unreadable-image-times': 'Nie można odczytać godzin. Wybierz wyraźniejszy zrzut ekranu.',
   'empty-image-timetable': 'Na obrazie nie znaleziono zajęć.',
-  'unsupported-format': 'Wybierz PDF, PNG lub JPG z e-Dziekanatu WAT.',
+  'unsupported-format': 'Nieobsługiwany format. Wybierz plik ICS (np. z USOS lub Google Calendar), PDF, PNG lub JPG.',
+  'empty-calendar': 'Plik ICS nie zawiera żadnych wydarzeń. Wybierz inny plik.',
+  'no-importable-events': 'Żadnego wydarzenia z pliku ICS nie można zaimportować – brakuje im godzin (np. wydarzenia całodniowe). Wybierz inny plik.',
   'unsupported-layout': 'Nie rozpoznano planu WAT. Wybierz PDF z tekstem w układzie mini e-D (plan semestru). Skany nie są obsługiwane.',
   'unreadable-pdf': 'Nie można odczytać PDF. Plik może być uszkodzony lub być skanem.',
   'encrypted-pdf': 'PDF zabezpieczony hasłem nie jest obsługiwany.',

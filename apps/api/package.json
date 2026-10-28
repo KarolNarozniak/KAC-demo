@@ -9,8 +9,8 @@
     "start": "node dist/server.js",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "tsx --test tests/api.test.ts tests/import-rules.test.ts tests/import-session.test.ts tests/work-schedule.test.ts tests/work-schedule-api.test.ts tests/work-schedule-reader.test.ts tests/classes.test.ts tests/collisions.test.ts tests/ocr.test.ts",
-    "test:db": "tsx --test --test-concurrency=1 tests/postgres.integration.test.ts tests/import.integration.test.ts tests/work-schedule.integration.test.ts tests/features.integration.test.ts",
+    "test": "tsx --test tests/api.test.ts tests/import-rules.test.ts tests/import-session.test.ts tests/work-schedule.test.ts tests/work-schedule-api.test.ts tests/work-schedule-reader.test.ts tests/ics.test.ts tests/google.test.ts tests/classes.test.ts tests/collisions.test.ts tests/ocr.test.ts",
+    "test:db": "tsx --test --test-concurrency=1 tests/postgres.integration.test.ts tests/import.integration.test.ts tests/work-schedule.integration.test.ts tests/features.integration.test.ts tests/imports-ics-google.integration.test.ts",
     "package:deploy": "node scripts/package-deploy.mjs"
   },
   "dependencies": {

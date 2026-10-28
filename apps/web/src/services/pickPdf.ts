@@ -4,7 +4,8 @@ import { Platform } from 'react-native';
 import { readPickedTimetable, type PickedPdf } from './readPickedTimetable';
 
 export type { PickedPdf } from './readPickedTimetable';
-const MIME_TYPES = ['application/pdf', 'image/png', 'image/jpeg'];
+// text/calendar i pokrewne – plik ICS z planem zajęć (historyjka S23KC2S1P2-8).
+const MIME_TYPES = ['application/pdf', 'image/png', 'image/jpeg', 'text/calendar', 'application/ics', 'text/x-vcalendar'];
 
 export async function pickPdf(): Promise<PickedPdf | null> {
   if (Platform.OS === 'android') {
