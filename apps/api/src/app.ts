@@ -13,6 +13,7 @@ import { checkScheduleFile, MAX_SCHEDULE_FILE_BYTES } from './import/work-schedu
 import { mapShiftsToRows, READ_STATUS_LABELS } from './import/work-schedule/mapping.js';
 import { ScheduleReadError } from './import/work-schedule/local-reader.js';
 import { DemoScheduleReader, type ScheduleReader } from './import/work-schedule/reader.js';
+import { ProfileValidationError, type WeeklyHourLimits } from './profile/validation.js';
 import type { AcceptedRow, ConfirmResult, CreateSessionInput, ImportFormat, ImportSource } from './import/session.js';
 
 export type CalendarRepository = {
@@ -21,6 +22,9 @@ export type CalendarRepository = {
   createEvent?: (input: EventInput) => Promise<EventInput & { id: string }>;
   checkConnection: () => Promise<void>;
   getOverview: () => Promise<CalendarOverview | null>;
+    // Limit godzin pracy w tygodniu (user story: ustawienie limitu godzin).
+  getWeeklyHourLimits?: () => Promise<WeeklyHourLimits>;
+  setMaxWeeklyWorkHours?: (maxHours: number | null) => Promise<WeeklyHourLimits>;
   // Import (S23KC2S1P2-32): sesja, przedłużanie, zatwierdzenie i anulowanie.
   createImportSession?: (input: CreateSessionInput) => Promise<{ id: string; expiresAt: Date }>;
   touchImportSession?: (sessionId: string) => Promise<void>;
@@ -202,6 +206,29 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
     } catch (error) {
       app.log.error(error);
       return reply.code(503).send({ error: 'event_not_deleted' });
+    }
+  });
+
+    // --- Limit godzin pracy w tygodniu (user story: ustawienie limitu godzin) ---
+  app.get('/api/profile/weekly-work-limit', async (_request, reply) => {
+    if (!repository?.getWeeklyHourLimits) return reply.code(503).send({ error: 'database_not_configured' });
+    try { return await repository.getWeeklyHourLimits(); }
+    catch (error) { app.log.error(error); return reply.code(503).send({ error: 'database_unavailable' }); }
+  });
+
+  const weeklyWorkLimitBody = {
+    type: 'object', additionalProperties: false, required: ['maxHours'],
+    properties: { maxHours: { type: ['number', 'null'], exclusiveMinimum: 0, maximum: 168 } },
+  } as const;
+
+  app.put<{ Body: { maxHours: number | null } }>('/api/profile/weekly-work-limit', { schema: { body: weeklyWorkLimitBody } }, async (request, reply) => {
+    if (!repository?.setMaxWeeklyWorkHours) return reply.code(503).send({ error: 'database_not_configured' });
+    try {
+      return await repository.setMaxWeeklyWorkHours(request.body.maxHours);
+    } catch (error) {
+      if (error instanceof ProfileValidationError) return reply.code(400).send({ error: error.message, field: error.field });
+      request.log.error({ err: error }, 'Weekly work limit not saved');
+      return reply.code(503).send({ error: 'profile_not_saved' });
     }
   });
 

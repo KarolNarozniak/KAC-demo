@@ -2,6 +2,7 @@ import { requireCollisionDecision, validateTimedEvent, EventNotFoundError, type 
 import { Pool } from 'pg';
 import { config } from './config.js';
 import { CATEGORY_IDS, type ExistingEvent } from './import/rules.js';
+import { validateWeeklyHourLimits, type WeeklyHourLimits } from './profile/validation.js';
 import { planImport, type PlanAction } from './import/plan.js';
 import {
   IMPORT_SESSION_TTL_MINUTES,
@@ -416,5 +417,48 @@ export class PostgresCalendarRepository {
         location: event.miejsce ?? '',
       })),
     };
+  }
+
+  // --- Limit godzin pracy w tygodniu (user story: ustawienie limitu godzin) ---
+
+  private readonly numOrNull = (value: unknown): number | null => value === null || value === undefined ? null : Number(value);
+
+  async getWeeklyHourLimits(userId = config.demoUserId): Promise<WeeklyHourLimits> {
+    const result = await this.connectionPool.query(
+      `select min_godzin_tydzien, cel_godzin_tydzien, max_godzin_tydzien
+       from t_profile_pracy where id_uzytkownika = $1 and aktywny = true
+       order by created_at desc limit 1`, [userId]);
+    const row = result.rows[0];
+    return {
+      minGodzinTydzien: this.numOrNull(row?.min_godzin_tydzien),
+      celGodzinTydzien: this.numOrNull(row?.cel_godzin_tydzien),
+      maxGodzinTydzien: this.numOrNull(row?.max_godzin_tydzien),
+    };
+  }
+
+  async setMaxWeeklyWorkHours(maxGodzinTydzien: number | null, userId = config.demoUserId): Promise<WeeklyHourLimits> {
+    const client = await this.connectionPool.connect();
+    try {
+      await client.query('BEGIN');
+      const current = await client.query(
+        `select id_profilu, min_godzin_tydzien, cel_godzin_tydzien
+         from t_profile_pracy where id_uzytkownika = $1 and aktywny = true
+         order by created_at desc limit 1 for update`, [userId]);
+      const minGodzinTydzien = this.numOrNull(current.rows[0]?.min_godzin_tydzien);
+      const celGodzinTydzien = this.numOrNull(current.rows[0]?.cel_godzin_tydzien);
+      validateWeeklyHourLimits({ minGodzinTydzien, celGodzinTydzien, maxGodzinTydzien });
+      if (current.rows[0]) {
+        await client.query(
+          `update t_profile_pracy set max_godzin_tydzien = $2, updated_at = now() where id_profilu = $1`,
+          [current.rows[0].id_profilu, maxGodzinTydzien]);
+      } else {
+        await client.query(
+          `insert into t_profile_pracy (id_uzytkownika, max_godzin_tydzien) values ($1, $2)`,
+          [userId, maxGodzinTydzien]);
+      }
+      await client.query('COMMIT');
+      return { minGodzinTydzien, celGodzinTydzien, maxGodzinTydzien };
+    } catch (error) { await client.query('ROLLBACK'); throw error; }
+    finally { client.release(); }
   }
 }
