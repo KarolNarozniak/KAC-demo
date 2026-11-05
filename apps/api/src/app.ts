@@ -1,3 +1,6 @@
+import { registerWorkProfile } from './profile/routes.js';
+import type { WorkProfileRepository } from './profile/repository.js';
+import { config } from './config.js';
 import { CollisionError, EventNotFoundError, EventValidationError } from './collisions.js';
 import { readClassImage } from './import/classes/image-reader.js';
 import { readClassPdf, PdfReadError } from './import/classes/reader.js';
@@ -32,6 +35,7 @@ export type CalendarRepository = {
 };
 
 export type ApiOptions = {
+  workProfile?: WorkProfileRepository | null;
   /**
    * Mechanizm odczytu grafiku (S23KC2S1P2-44). Serwer (server.ts) podaje LocalScheduleReader (PDF + OCR).
    * Bez tej opcji działa czytnik demonstracyjny – używają go testy, żeby nie uruchamiać OCR.
@@ -128,6 +132,8 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
     },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   });
+
+  registerWorkProfile(app, options.workProfile ?? null, config.demoUserId);
 
   app.get('/api/health/live', async () => ({ api: 'ok' }));
 

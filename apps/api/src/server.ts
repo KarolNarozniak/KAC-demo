@@ -1,3 +1,4 @@
+import { WorkProfileRepository } from './profile/repository.js';
 import { buildApi } from './app.js';
 import { config } from './config.js';
 import { pool, PostgresCalendarRepository } from './database.js';
@@ -12,7 +13,7 @@ const printText = (source: string, lines: { text: string; confidence: number }[]
 const scheduleReader = config.workScheduleReader === 'demo'
   ? new DemoScheduleReader()
   : new LocalScheduleReader(process.env.WORK_SCHEDULE_DEBUG === '1' ? { onText: printText } : {});
-const app = buildApi(repository, config.corsOrigins, { scheduleReader, google: { oauth: config.google } });
+const app = buildApi(repository, config.corsOrigins, { workProfile: pool ? new WorkProfileRepository(pool) : null, scheduleReader, google: { oauth: config.google } });
 
 try {
   await app.listen({ host: '0.0.0.0', port: config.port });
