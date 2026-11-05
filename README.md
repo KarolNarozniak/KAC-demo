@@ -94,3 +94,21 @@ in `apps/web/.env`, then run `npm run start:dev --workspace @kac/web -- --lan`.
 The phone must reach that API address; `localhost` on a phone points to the phone.
 The native file picker accepts PNG/JPG/PDF. The work-schedule import can also take a photo
 with the camera. On-device OCR is not implemented. Use an SDK-compatible Expo client or development build.
+
+## Profil pracy i planowanie — sprint 204
+
+Po aktualizacji uruchom `npm run db:migrate` (migracje 003–004) i dla nowej lokalnej bazy `npm run db:seed`.
+W **Ustawieniach → Profil pracy** ustaw stawkę PLN, brutto/netto, dojazd (0 jest poprawne),
+cel i limity godzin oraz dostępność tygodniową. Nowy profil jest niekompletny do chwili podania tych ustawień.
+W **Asystencie** wybierz poniedziałek tygodnia, wygeneruj propozycję, popraw zmiany i zaakceptuj lub odrzuć.
+Można też wczytać zapisane grafiki z danego tygodnia. Zmiana profilu nie przelicza ich historycznych kwot.
+
+- Kontrakt OpenAPI: [`docs/openapi-work-planning.json`](docs/openapi-work-planning.json).
+- Wymagania i UC-07/UC-08: [`docs/requirements/sprint-204-kozlowski.md`](docs/requirements/sprint-204-kozlowski.md).
+- Decyzje, pokrycie 18 zgłoszeń i wyniki: [`docs/sprint-204-report.md`](docs/sprint-204-report.md).
+- Testy nowych modułów: `node_modules/.bin/tsx --test apps/api/tests/work-profile.test.ts apps/api/tests/scheduling.test.ts`.
+- Test transakcji i snapshotów: `node_modules/.bin/tsx --test apps/api/tests/planning.integration.test.ts` — wymaga `DATABASE_URL`
+  i uprawnienia do tworzenia schematu; używa osobnego schematu, profili i kalendarza, sprząta własne dane.
+
+Tożsamość użytkownika nadal wybierana jest po stronie serwera przez konfigurację konta demonstracyjnego,
+tak jak w dotychczasowym API. Parametry żądań nie pozwalają wskazać cudzego właściciela.
