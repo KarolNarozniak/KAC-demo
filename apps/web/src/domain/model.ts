@@ -14,6 +14,7 @@ export type CalendarEvent = {
 export type Occurrence = CalendarEvent & {
   occurrenceStart: Date;
   occurrenceEnd: Date;
+  preview?: boolean;
 };
 
 export type TimeRange = { start: Date; end: Date };

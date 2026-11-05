@@ -11,6 +11,8 @@ const migrationFiles = [
   '004_solution_status.sql',
   '005_work_modes.sql',
   '006_schedule_approval.sql',
+  '007_daily_hours_and_rejection.sql',
+  '008_schedule_workflow_status.sql',
 ];
 const sql = (await Promise.all(migrationFiles.map((file) => readFile(resolve(migrationsDir, file), 'utf8')))).join('\n');
 const expectedTables = [
@@ -24,7 +26,7 @@ const missing = expectedTables.filter((name) => !new RegExp(`create table if not
 if (missing.length) throw new Error(`Schema missing model tables: ${missing.join(', ')}`);
 const fkCount = (sql.match(/references\s+t_[a-z_]+\s*\(/gi) || []).length;
 if (fkCount < 30) throw new Error(`Expected relational foreign keys; found ${fkCount}.`);
-for (const field of ['target_minutes', 'existing_work_minutes', 'proposed_minutes', 'total_minutes', 'shortfall_minutes', 'solution_status', 'approved_at timestamptz', 'szczegoly jsonb']) {
+for (const field of ['target_minutes', 'existing_work_minutes', 'proposed_minutes', 'total_minutes', 'shortfall_minutes', 'solution_status', 'approved_at timestamptz', 'rejected_at timestamptz', 'max_godzin_dzien', 'szczegoly jsonb']) {
   if (!sql.toLowerCase().includes(field.toLowerCase())) throw new Error(`Schedule persistence field is missing: ${field}.`);
 }
 console.log(`Schema check passed: ${expectedTables.length} model/extension tables, ${fkCount} FK constraints and schedule result fields.`);

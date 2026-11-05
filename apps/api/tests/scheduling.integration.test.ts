@@ -20,21 +20,33 @@ test('PostgreSQL schedule persistence, retrieval, edits and version conflicts', 
   const app = buildApi(null, [], { scheduleRepository: {
     getPlanningContext: () => repository.getPlanningContext(config.demoUserId, calendarId, profileId),
     getLatestSchedule: (weekStart) => repository.getLatestSchedule(weekStart, calendarId),
+    getScheduleById: repository.getScheduleById.bind(repository),
+    listSchedules: (filters) => repository.listSchedules(filters, calendarId),
+    getApprovedShiftEventIds: (weekStart) => repository.getApprovedShiftEventIds(weekStart, calendarId),
     saveSchedule: repository.saveSchedule.bind(repository),
     saveSettings: repository.saveSettings.bind(repository),
     approveSchedule: (weekStart, expectedVersion) => repository.approveSchedule(weekStart, expectedVersion, calendarId),
+    rejectSchedule: (weekStart, expectedVersion) => repository.rejectSchedule(weekStart, expectedVersion, calendarId),
   } });
   try {
+    const currentSettings = await app.inject({ method: 'GET', url: '/api/scheduling/settings' });
+    assert.equal(currentSettings.statusCode, 200);
     const settings = await app.inject({ method: 'PUT', url: '/api/scheduling/settings', payload: {
+      ...currentSettings.json(),
       mode: 'elastyczny', minimumHours: 2, targetHours: 4, maximumHours: 8, commuteBufferMinutes: 0, minimumRestMinutes: 0,
-      minimumShiftMinutes: 120, maximumSlotMinutes: 360, shiftTemplates: [{ id: 'test-am', name: 'Zmiana testowa', startTime: '08:00', endTime: '16:00', endsNextDay: false, daysOfWeek: [1, 2, 3, 4, 5], active: true }],
+      minimumShiftMinutes: 120, maximumSlotMinutes: 360, maxHoursPerDay: 8,
+      shiftTemplates: [{ id: 'test-am', name: 'Zmiana testowa', startTime: '08:00', endTime: '16:00', endsNextDay: false, daysOfWeek: [1, 2, 3, 4, 5], active: true }],
     } });
     assert.equal(settings.statusCode, 200, settings.body);
     assert.equal(settings.json().shiftTemplates[0].name, 'Zmiana testowa');
-    const generated = await app.inject({ method: 'POST', url: '/api/schedules/generate', payload: { weekStart: '2026-11-02' } });
+    const savedAvailability = settings.json().availability;
+    const noClasses = await app.inject({ method: 'POST', url: '/api/schedules/generate', payload: { weekStart: '2026-11-02', profileVersion: settings.json().profileVersion } });
+    assert.equal(noClasses.statusCode, 409);
+    const generated = await app.inject({ method: 'POST', url: '/api/schedules/generate', payload: { weekStart: '2026-11-02', profileVersion: settings.json().profileVersion, confirmNoClasses: true } });
     assert.equal(generated.statusCode, 201, generated.body);
     assert.equal(generated.json().version, 1);
     assert.equal(generated.json().solutionStatus, 'target_met');
+    assert.equal(generated.json().workflowStatus, 'proposed');
     const persisted = await pool.query('select id_profilu, id_kalendarza, tydzien_od::text, version from t_grafiki where id_kalendarza = $1', [calendarId]);
     assert.equal(persisted.rowCount, 1, JSON.stringify(persisted.rows));
     assert.equal(persisted.rows[0].id_profilu, profileId);
@@ -49,6 +61,12 @@ test('PostgreSQL schedule persistence, retrieval, edits and version conflicts', 
     assert.equal(loaded.json().shifts.length, generated.json().shifts.length);
     const current = loaded.json();
     assert.equal(current.weekStart, '2026-11-02');
+    assert.equal((await app.inject({ method: 'GET', url: `/api/schedules/id/${current.scheduleId}` })).statusCode, 200);
+    const page = await app.inject({ method: 'GET', url: '/api/schedules?from=2026-11-01&to=2026-11-30&limit=1&offset=0' });
+    assert.equal(page.statusCode, 200);
+    assert.equal(page.json().total, 1);
+    assert.equal(page.json().items.length, 1);
+    assert.equal(page.json().items[0].status, 'proposed');
     const edit = { expectedVersion: current.version, shifts: current.shifts.map((shift: { candidateId: string; startLocal: string; endLocal: string }) => ({
       id: shift.candidateId, startLocal: shift.startLocal, endLocal: shift.endLocal,
     })) };
@@ -57,9 +75,16 @@ test('PostgreSQL schedule persistence, retrieval, edits and version conflicts', 
     assert.equal(saved.json().version, 2);
     const stale = await app.inject({ method: 'PUT', url: '/api/schedules/2026-11-02', payload: edit });
     assert.equal(stale.statusCode, 409);
+    await pool.query('delete from t_dostepnosc where id_profilu = $1 and rodzaj = $2', [profileId, 'Dostępny']);
+    const invalidated = await app.inject({ method: 'POST', url: '/api/schedules/2026-11-02/approve', payload: { expectedVersion: 2 } });
+    assert.equal(invalidated.statusCode, 422);
+    for (const window of savedAvailability) await pool.query(`insert into t_dostepnosc
+      (id_dostepnosci, id_profilu, dzien_tygodnia, od_godzina, do_godzina, rodzaj)
+      values ($1, $2, $3, $4::time, $5::time, 'Dostępny')`, [window.id, profileId, window.dayOfWeek, window.startTime, window.endTime]);
     const approved = await app.inject({ method: 'POST', url: '/api/schedules/2026-11-02/approve', payload: { expectedVersion: 2 } });
     assert.equal(approved.statusCode, 200, approved.body);
     assert.equal(approved.json().isApproved, true);
+    assert.equal(approved.json().workflowStatus, 'accepted');
     const calendarEvents = await pool.query(`select id_wydarzenia from t_wydarzenia where id_kalendarza = $1 and zrodlo = 'Plan pracy'`, [calendarId]);
     assert.equal(calendarEvents.rowCount, approved.json().shifts.length);
     const calendarView = await new PostgresCalendarRepository(pool).getOverview(config.demoUserId, calendarId);
@@ -71,10 +96,46 @@ test('PostgreSQL schedule persistence, retrieval, edits and version conflicts', 
     assert.equal(editedApproved.statusCode, 200, editedApproved.body);
     assert.equal(editedApproved.json().version, 3);
     assert.equal(editedApproved.json().isApproved, false);
-    assert.equal((await pool.query(`select id_wydarzenia from t_wydarzenia where id_kalendarza = $1 and zrodlo = 'Plan pracy'`, [calendarId])).rowCount, 0);
+    assert.equal((await pool.query(`select id_wydarzenia from t_wydarzenia where id_kalendarza = $1 and zrodlo = 'Plan pracy'`, [calendarId])).rowCount, calendarEvents.rowCount);
     const approvedAgain = await app.inject({ method: 'POST', url: '/api/schedules/2026-11-02/approve', payload: { expectedVersion: 3 } });
     assert.equal(approvedAgain.statusCode, 200);
     assert.equal((await pool.query(`select id_wydarzenia from t_wydarzenia where id_kalendarza = $1 and zrodlo = 'Plan pracy'`, [calendarId])).rowCount, approvedAgain.json().shifts.length);
+
+    const currentProfile = await app.inject({ method: 'GET', url: '/api/scheduling/settings' });
+    const lowerTargetSettings = await app.inject({ method: 'PUT', url: '/api/scheduling/settings', payload: {
+      ...currentProfile.json(), minimumHours: 1, targetHours: 2, maximumHours: 8,
+    } });
+    assert.equal(lowerTargetSettings.statusCode, 200, lowerTargetSettings.body);
+    const oldEventsBeforeReplacement = (await pool.query(`select id_wydarzenia from t_wydarzenia where id_kalendarza = $1 and zrodlo = 'Plan pracy'`, [calendarId])).rowCount;
+    const lowerDraft = await app.inject({ method: 'POST', url: '/api/schedules/generate', payload: {
+      weekStart: '2026-11-02', profileVersion: lowerTargetSettings.json().profileVersion, confirmNoClasses: true,
+    } });
+    assert.equal(lowerDraft.statusCode, 201, lowerDraft.body);
+    assert.equal(lowerDraft.json().version, 4);
+    assert.equal(lowerDraft.json().existingWorkMinutes, 0);
+    assert.equal(lowerDraft.json().targetMinutes, 120);
+    assert.equal(lowerDraft.json().proposedMinutes, 120);
+    assert.equal((await pool.query(`select id_wydarzenia from t_wydarzenia where id_kalendarza = $1 and zrodlo = 'Plan pracy'`, [calendarId])).rowCount, oldEventsBeforeReplacement);
+
+    const rejected = await app.inject({ method: 'POST', url: '/api/schedules/2026-11-02/reject', payload: { expectedVersion: 4 } });
+    assert.equal(rejected.statusCode, 200, rejected.body);
+    assert.equal(rejected.json().schedule.version, 3);
+    assert.equal(rejected.json().schedule.isApproved, true);
+    assert.equal(rejected.json().schedule.workflowStatus, 'accepted');
+    assert.equal((await pool.query(`select id_wydarzenia from t_wydarzenia where id_kalendarza = $1 and zrodlo = 'Plan pracy'`, [calendarId])).rowCount, oldEventsBeforeReplacement);
+
+    const finalDraft = await app.inject({ method: 'POST', url: '/api/schedules/generate', payload: {
+      weekStart: '2026-11-02', profileVersion: lowerTargetSettings.json().profileVersion, confirmNoClasses: true,
+    } });
+    assert.equal(finalDraft.statusCode, 201, finalDraft.body);
+    assert.equal(finalDraft.json().version, 5);
+    assert.equal(finalDraft.json().existingWorkMinutes, 0);
+    assert.equal(finalDraft.json().proposedMinutes, 120);
+    const finalApproved = await app.inject({ method: 'POST', url: '/api/schedules/2026-11-02/approve', payload: { expectedVersion: 5 } });
+    assert.equal(finalApproved.statusCode, 200, finalApproved.body);
+    assert.equal(finalApproved.json().isApproved, true);
+    assert.equal(finalApproved.json().proposedMinutes, 120);
+    assert.equal((await pool.query(`select id_wydarzenia from t_wydarzenia where id_kalendarza = $1 and zrodlo = 'Plan pracy'`, [calendarId])).rowCount, finalApproved.json().shifts.length);
   } finally {
     await app.close();
     await pool.query('delete from t_profile_pracy where id_profilu = $1', [profileId]);

@@ -6,6 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { WeekLayout } from './src/components/WeekGrid';
 import CalendarScreen from './src/screens/CalendarScreen';
 import ScheduleScreen from './src/screens/ScheduleScreen';
+import type { WeeklySchedule } from './src/services/scheduleApi';
 import ScreenTransition from './src/components/ScreenTransition';
 import { ThemeProvider, ThemeToggle, useTheme, type ThemeMode } from './src/components/ui';
 const tabs = ['Dziś', 'Tydzień', 'Grafik', 'Ustawienia', 'Asystent'] as const;
@@ -27,6 +28,7 @@ function CalendarApp() {
   const { palette, styles } = useTheme();
   const [tab, setTab] = useState<typeof tabs[number]>('Dziś');
   const [week, setWeek] = useState(new Date());
+  const [schedulePreview, setSchedulePreview] = useState<WeeklySchedule | null>(null);
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
@@ -53,7 +55,7 @@ function CalendarApp() {
     </View>
     <ScreenTransition screenIndex={tabs.indexOf(tab)} renderScreen={(index, active) => {
       const route = tabs[index];
-      return (route === 'Dziś' || route === 'Tydzień' ? <CalendarScreen active={active} now={now} weekLayout={weekLayout} todayOnly={route === 'Dziś'} week={week} setWeek={setWeek} /> : route === 'Grafik' ? <ScheduleScreen active={active} now={now} week={week} setWeek={setWeek} onApproved={() => setTab('Tydzień')} /> : route === 'Ustawienia' ? <View style={[styles.content, { padding: 16 }]}>
+      return (route === 'Dziś' || route === 'Tydzień' ? <CalendarScreen active={active} now={now} weekLayout={weekLayout} todayOnly={route === 'Dziś'} week={week} setWeek={setWeek} draftSchedule={schedulePreview} /> : route === 'Grafik' ? <ScheduleScreen active={active} now={now} week={week} setWeek={setWeek} onPreview={setSchedulePreview} onApproved={() => setTab('Tydzień')} /> : route === 'Ustawienia' ? <View style={[styles.content, { padding: 16 }]}>
         <View style={[styles.row, { justifyContent: 'space-between', marginBottom: 20 }]}><Text style={styles.heading}>Motyw</Text><ThemeToggle /></View>
         <Text style={[styles.heading, { marginBottom: 12 }]}>Układ tygodnia</Text>
         <View accessibilityRole="radiogroup" style={{ gap: 8 }}>

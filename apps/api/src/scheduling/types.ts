@@ -1,5 +1,6 @@
 export type WorkMode = 'elastyczny' | 'zmianowy';
 export type SolutionStatus = 'target_met' | 'proven_infeasible' | 'not_found';
+export type ScheduleWorkflowStatus = 'proposed' | 'accepted' | 'rejected' | 'superseded';
 export type ScheduleCategory = 'Class' | 'Work' | 'Personal';
 
 export interface PlanningProfile {
@@ -16,6 +17,8 @@ export interface PlanningProfile {
   mode: WorkMode;
   minimumShiftMinutes: number;
   maximumSlotMinutes: number;
+  maxHoursPerDay: number;
+  profileVersion: string;
 }
 
 export interface AvailabilityWindow {
@@ -49,6 +52,7 @@ export interface PlanningEvent {
   category: ScheduleCategory;
   mandatory: boolean;
   repeatWeekly: boolean;
+  source?: string;
   seriesEndDate?: string | null;
 }
 
@@ -72,6 +76,7 @@ export interface PlanningContext {
 }
 
 export interface PlannerOverrides {
+  profileVersion?: string;
   mode?: WorkMode;
   minimumHours?: number;
   targetHours?: number;
@@ -80,8 +85,26 @@ export interface PlannerOverrides {
   minimumRestMinutes?: number;
   minimumShiftMinutes?: number;
   maximumSlotMinutes?: number;
+  maxHoursPerDay?: number;
+  candidateStepMinutes?: number;
   shiftTemplates?: ShiftTemplate[];
   workaholic?: boolean;
+}
+
+export interface ScheduleProfileSettings extends PlannerOverrides {
+  minimumHours: number;
+  targetHours: number;
+  maximumHours: number;
+  commuteBufferMinutes: number;
+  minimumRestMinutes: number;
+  minimumShiftMinutes: number;
+  maximumSlotMinutes: number;
+  maxHoursPerDay: number;
+  profileVersion: string;
+  availability: AvailabilityWindow[];
+  preferredWorkWindows: PreferredWorkWindow[];
+  blockedPeriods: BlockedPeriod[];
+  shiftTemplates: ShiftTemplate[];
 }
 
 export interface CandidateShift {
@@ -113,6 +136,7 @@ export interface ScheduleGenerationResult {
   scheduleId?: string;
   version?: number;
   isApproved: boolean;
+  workflowStatus: ScheduleWorkflowStatus;
   approvedAt?: string;
   maximumCapacityMinutes: number;
   weekStart: string;
@@ -147,6 +171,7 @@ export interface ManualShiftInput {
   id: string;
   startLocal: string;
   endLocal: string;
+  templateId?: string;
 }
 
 export interface ValidationResult {

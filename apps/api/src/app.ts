@@ -15,9 +15,9 @@ import { ScheduleReadError } from './import/work-schedule/local-reader.js';
 import { DemoScheduleReader, type ScheduleReader } from './import/work-schedule/reader.js';
 import type { AcceptedRow, ConfirmResult, CreateSessionInput, ImportFormat, ImportSource } from './import/session.js';
 import { generateSchedule, validateSchedule } from './scheduling/generator.js';
-import { validWeekStart, localInstant } from './scheduling/time.js';
-import { ScheduleVersionConflictError, type ScheduleRepository } from './scheduling/repository.js';
-import type { CandidateShift, ManualShiftInput, PlannerOverrides, ScheduleGenerationResult, ShiftTemplate } from './scheduling/types.js';
+import { expandEventsForWeek, validWeekStart, localInstant } from './scheduling/time.js';
+import { ProfileVersionConflictError, ScheduleAlreadyApprovedError, ScheduleVersionConflictError, type ScheduleRepository } from './scheduling/repository.js';
+import type { CandidateShift, ManualShiftInput, PlannerOverrides, PlanningContext, ScheduleGenerationResult, ScheduleProfileSettings, ShiftTemplate } from './scheduling/types.js';
 
 export type CalendarRepository = {
   deleteEvent?: (eventId: string) => Promise<string[] | null>;
@@ -126,6 +126,7 @@ const schedulerOverridesSchema = {
     minimumRestMinutes: { type: 'integer', minimum: 0, maximum: 1440 },
     minimumShiftMinutes: { type: 'integer', minimum: 120, maximum: 720 },
     maximumSlotMinutes: { type: 'integer', minimum: 120, maximum: 720 },
+    maxHoursPerDay: { type: 'number', exclusiveMinimum: 0, maximum: 24 },
     workaholic: { type: 'boolean' },
     shiftTemplates: { type: 'array', maxItems: 12, items: { type: 'object', required: ['id', 'name', 'startTime', 'endTime', 'endsNextDay', 'daysOfWeek', 'active'], additionalProperties: false,
       properties: { id: { type: 'string', minLength: 1, maxLength: 100 }, name: { type: 'string', minLength: 1, maxLength: 80 },
@@ -133,19 +134,40 @@ const schedulerOverridesSchema = {
         endsNextDay: { type: 'boolean' }, daysOfWeek: { type: 'array', minItems: 1, maxItems: 7, uniqueItems: true, items: { type: 'integer', minimum: 1, maximum: 7 } }, active: { type: 'boolean' } } } },
   },
 } as const;
-const generateScheduleSchema = { body: { type: 'object', required: ['weekStart'], additionalProperties: false,
-  properties: { weekStart: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' }, overrides: schedulerOverridesSchema } } } as const;
+const generateScheduleSchema = { body: { type: 'object', required: ['weekStart', 'profileVersion'], additionalProperties: false,
+  properties: { weekStart: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' }, profileVersion: { type: 'string', minLength: 1 }, confirmNoClasses: { type: 'boolean' }, overrides: schedulerOverridesSchema } } } as const;
 const updateScheduleSchema = { params: { type: 'object', required: ['weekStart'], additionalProperties: false,
   properties: { weekStart: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' } } },
   body: { type: 'object', required: ['shifts', 'expectedVersion'], additionalProperties: false, properties: {
     expectedVersion: { type: 'integer', minimum: 1 },
-    shifts: { type: 'array', maxItems: 14, items: { type: 'object', required: ['id', 'startLocal', 'endLocal'], additionalProperties: false,
-      properties: { id: { type: 'string', minLength: 1, maxLength: 100 }, startLocal: { type: 'string', maxLength: 16 }, endLocal: { type: 'string', maxLength: 16 } } } },
+     shifts: { type: 'array', maxItems: 14, items: { type: 'object', required: ['id', 'startLocal', 'endLocal'], additionalProperties: false,
+       properties: { id: { type: 'string', minLength: 1, maxLength: 100 }, startLocal: { type: 'string', maxLength: 16 }, endLocal: { type: 'string', maxLength: 16 }, templateId: { type: 'string', maxLength: 100 } } } },
   } } } as const;
-const settingsSchema = { body: { type: 'object', required: ['mode', 'minimumHours', 'targetHours', 'maximumHours', 'commuteBufferMinutes', 'minimumRestMinutes', 'minimumShiftMinutes', 'maximumSlotMinutes', 'shiftTemplates'], additionalProperties: false,
-  properties: schedulerOverridesSchema.properties } } as const;
+const settingsSchema = { body: { type: 'object', required: ['mode', 'minimumHours', 'targetHours', 'maximumHours', 'commuteBufferMinutes', 'minimumRestMinutes', 'minimumShiftMinutes', 'maximumSlotMinutes', 'maxHoursPerDay', 'profileVersion', 'availability', 'preferredWorkWindows', 'blockedPeriods', 'shiftTemplates'], additionalProperties: false,
+  properties: { ...schedulerOverridesSchema.properties,
+    profileVersion: { type: 'string', minLength: 1 },
+    availability: { type: 'array', maxItems: 70, items: { type: 'object', required: ['id', 'dayOfWeek', 'startTime', 'endTime'], additionalProperties: false,
+      properties: { id: { type: 'string', minLength: 1, maxLength: 100 }, dayOfWeek: { type: 'integer', minimum: 1, maximum: 7 }, startTime: { type: 'string', pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' }, endTime: { type: 'string', pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' } } } },
+    preferredWorkWindows: { type: 'array', maxItems: 70, items: { type: 'object', required: ['id', 'dayOfWeek', 'startTime', 'endTime', 'weight'], additionalProperties: false,
+      properties: { id: { type: 'string', minLength: 1, maxLength: 100 }, dayOfWeek: { type: 'integer', minimum: 1, maximum: 7 }, startTime: { type: 'string', pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' }, endTime: { type: 'string', pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' }, weight: { type: 'number', minimum: 0, maximum: 100 } } } },
+    blockedPeriods: { type: 'array', maxItems: 100, items: { type: 'object', required: ['id', 'type', 'start', 'end'], additionalProperties: false,
+      properties: { id: { type: 'string', minLength: 1, maxLength: 100 }, type: { type: 'string', minLength: 1, maxLength: 80 }, start: { type: 'string', format: 'date-time' }, end: { type: 'string', format: 'date-time' }, reason: { type: 'string', maxLength: 200 } } } },
+  } } } as const;
 const approveScheduleSchema = { params: { type: 'object', required: ['weekStart'], properties: { weekStart: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' } } },
   body: { type: 'object', required: ['expectedVersion'], additionalProperties: false, properties: { expectedVersion: { type: 'integer', minimum: 1 } } } } as const;
+const listSchedulesSchema = { querystring: { type: 'object', required: ['from', 'to'], additionalProperties: false, properties: {
+  from: { type: 'string', format: 'date' }, to: { type: 'string', format: 'date' }, limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 }, offset: { type: 'integer', minimum: 0, default: 0 },
+} } } as const;
+
+const profileSettingsFromContext = (context: PlanningContext): ScheduleProfileSettings => ({
+  mode: context.profile.mode, minimumHours: context.profile.minimumHours, targetHours: context.profile.targetHours,
+  maximumHours: context.profile.maximumHours, commuteBufferMinutes: context.profile.commuteBufferMinutes,
+  minimumRestMinutes: context.profile.minimumRestMinutes, minimumShiftMinutes: context.profile.minimumShiftMinutes,
+  maximumSlotMinutes: context.profile.maximumSlotMinutes, maxHoursPerDay: context.profile.maxHoursPerDay,
+  profileVersion: context.profile.profileVersion,
+  availability: context.availability, preferredWorkWindows: context.preferredWorkWindows, blockedPeriods: context.blockedPeriods,
+  shiftTemplates: context.shiftTemplates,
+});
 
 export function buildApi(repository: CalendarRepository | null, allowedOrigins: string[] = [], options: ApiOptions = {}) {
   const app: FastifyInstance = Fastify({ logger: true });
@@ -169,44 +191,63 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
   app.get('/api/health/live', async () => ({ api: 'ok' }));
 
   const scheduleRepository = options.scheduleRepository;
+  const planningContextFor = async (weekStart: string): Promise<PlanningContext | null> => {
+    const context = await scheduleRepository?.getPlanningContext();
+    if (!context) return null;
+    const generatedShiftIds = await scheduleRepository!.getApprovedShiftEventIds(weekStart, context.profile.calendarId);
+    if (!generatedShiftIds.length) return context;
+    const ids = new Set(generatedShiftIds);
+    return { ...context, events: context.events.filter((event) => !ids.has(event.id)) };
+  };
   app.get('/api/scheduling/settings', async (_request, reply) => {
     if (!scheduleRepository) return reply.code(503).send({ error: 'scheduling_not_configured' });
     try {
       const context = await scheduleRepository.getPlanningContext();
-      return context ? { profile: context.profile, shiftTemplates: context.shiftTemplates } : reply.code(404).send({ error: 'work_profile_not_found' });
+      return context ? profileSettingsFromContext(context) : reply.code(404).send({ error: 'work_profile_not_found' });
     } catch (error) {
       app.log.error({ err: error }, 'Schedule settings lookup failed');
       return reply.code(503).send({ error: 'schedule_settings_lookup_failed' });
     }
   });
 
-  app.put<{ Body: PlannerOverrides }>('/api/scheduling/settings', { schema: settingsSchema }, async (request, reply) => {
+  app.put<{ Body: ScheduleProfileSettings }>('/api/scheduling/settings', { schema: settingsSchema }, async (request, reply) => {
     if (!scheduleRepository) return reply.code(503).send({ error: 'scheduling_not_configured' });
     const settings = request.body;
     if (settings.minimumHours === undefined || settings.targetHours === undefined || settings.maximumHours === undefined ||
       settings.minimumHours > settings.targetHours || settings.targetHours > settings.maximumHours ||
-      settings.minimumShiftMinutes === undefined || settings.maximumSlotMinutes === undefined || settings.maximumSlotMinutes < settings.minimumShiftMinutes) {
+      settings.minimumShiftMinutes === undefined || settings.maximumSlotMinutes === undefined || settings.maximumSlotMinutes < settings.minimumShiftMinutes ||
+      !settings.availability.every((window) => window.endTime > window.startTime) ||
+      !settings.preferredWorkWindows.every((window) => window.endTime > window.startTime) ||
+      !settings.blockedPeriods.every((period) => new Date(period.end).getTime() > new Date(period.start).getTime())) {
       return reply.code(400).send({ error: 'invalid_scheduler_settings' });
     }
     try {
       const context = await scheduleRepository.getPlanningContext();
       if (!context) return reply.code(404).send({ error: 'work_profile_not_found' });
+      if (settings.profileVersion !== context.profile.profileVersion) return reply.code(409).send({ error: 'profile_version_conflict', profileVersion: context.profile.profileVersion });
       await scheduleRepository.saveSettings(context, settings);
       const updated = await scheduleRepository.getPlanningContext();
-      return updated ? { profile: updated.profile, shiftTemplates: updated.shiftTemplates } : reply.code(404).send({ error: 'work_profile_not_found' });
+      return updated ? profileSettingsFromContext(updated) : reply.code(404).send({ error: 'work_profile_not_found' });
     } catch (error) {
+      if (error instanceof ProfileVersionConflictError) return reply.code(409).send({ error: 'profile_version_conflict' });
       request.log.error({ err: error }, 'Schedule settings update failed');
       return reply.code(400).send({ error: 'schedule_settings_update_failed' });
     }
   });
 
-  app.post<{ Body: { weekStart: string; overrides?: PlannerOverrides } }>('/api/schedules/generate', { schema: generateScheduleSchema }, async (request, reply) => {
+  app.post<{ Body: { weekStart: string; profileVersion: string; confirmNoClasses?: boolean; overrides?: PlannerOverrides } }>('/api/schedules/generate', { schema: generateScheduleSchema }, async (request, reply) => {
     if (!scheduleRepository) return reply.code(503).send({ error: 'scheduling_not_configured' });
     if (!validWeekStart(request.body.weekStart)) return reply.code(400).send({ error: 'invalid_week_start' });
     try {
-      const context = await scheduleRepository.getPlanningContext();
+      const context = await planningContextFor(request.body.weekStart);
       if (!context) return reply.code(404).send({ error: 'work_profile_not_found' });
+      if (request.body.profileVersion !== context.profile.profileVersion) return reply.code(409).send({ error: 'profile_version_conflict', profileVersion: context.profile.profileVersion });
+      const missing = [context.availability.length ? null : 'availability', context.profile.targetHours > 0 ? null : 'target'].filter(Boolean);
+      if (missing.length) return reply.code(409).send({ error: 'profile_setup_required', missing });
+      const classes = expandEventsForWeek(context, request.body.weekStart).filter((event) => event.category === 'Class');
+      if (!classes.length && !request.body.confirmNoClasses) return reply.code(409).send({ error: 'no_classes_for_week', requiresConfirmation: true });
       const generated = generateSchedule(context, request.body.weekStart, request.body.overrides ?? {});
+      generated.parameters.profileVersion = context.profile.profileVersion;
       return reply.code(201).send(await scheduleRepository.saveSchedule(context, generated));
     } catch (error) {
       if (error instanceof Error && error.message.includes('Ustawienia')) return reply.code(400).send({ error: 'invalid_scheduler_settings', message: error.message });
@@ -219,13 +260,53 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
     if (!scheduleRepository) return reply.code(503).send({ error: 'scheduling_not_configured' });
     if (!validWeekStart(request.params.weekStart)) return reply.code(400).send({ error: 'invalid_week_start' });
     try {
+      const [context, latest] = await Promise.all([planningContextFor(request.params.weekStart), scheduleRepository.getLatestSchedule(request.params.weekStart)]);
+      if (!context) return reply.code(404).send({ error: 'work_profile_not_found' });
+      if (!latest) return reply.code(404).send({ error: 'schedule_not_found' });
+      if (latest.version !== request.body.expectedVersion) return reply.code(409).send({ error: 'schedule_version_conflict', currentVersion: latest.version });
+      if (latest.parameters.profileVersion !== context.profile.profileVersion) return reply.code(409).send({ error: 'profile_version_conflict', profileVersion: context.profile.profileVersion });
+      const validation = validateSchedule(context, request.params.weekStart, latest.shifts.map((shift) => ({ id: shift.candidateId, startLocal: shift.startLocal, endLocal: shift.endLocal, templateId: shift.templateId })), {
+        mode: latest.mode, minimumHours: latest.minimumMinutes / 60, targetHours: latest.targetMinutes / 60,
+        maximumHours: latest.maximumMinutes / 60, maxHoursPerDay: Number(latest.parameters.maxHoursPerDay ?? context.profile.maxHoursPerDay),
+      });
+      if (validation.errors.length) return reply.code(422).send({ error: 'invalid_schedule', errors: validation.errors, warnings: validation.warnings });
       const schedule = await scheduleRepository.approveSchedule(request.params.weekStart, request.body.expectedVersion);
       return schedule ? schedule : reply.code(404).send({ error: 'schedule_not_found' });
     } catch (error) {
+      if (error instanceof ScheduleAlreadyApprovedError) return reply.code(409).send({ error: 'schedule_already_approved' });
       if (error instanceof ScheduleVersionConflictError) return reply.code(409).send({ error: 'schedule_version_conflict', currentVersion: error.actualVersion });
       request.log.error({ err: error }, 'Schedule approval failed');
       return reply.code(503).send({ error: 'schedule_approval_failed' });
     }
+  });
+
+  app.post<{ Params: { weekStart: string }; Body: { expectedVersion: number } }>('/api/schedules/:weekStart/reject', { schema: approveScheduleSchema }, async (request, reply) => {
+    if (!scheduleRepository) return reply.code(503).send({ error: 'scheduling_not_configured' });
+    if (!validWeekStart(request.params.weekStart)) return reply.code(400).send({ error: 'invalid_week_start' });
+    try {
+      const result = await scheduleRepository.rejectSchedule(request.params.weekStart, request.body.expectedVersion);
+      return { rejected: true, schedule: result };
+    } catch (error) {
+      if (error instanceof ScheduleVersionConflictError) return reply.code(409).send({ error: 'schedule_version_conflict', currentVersion: error.actualVersion });
+      if (error instanceof ScheduleAlreadyApprovedError) return reply.code(409).send({ error: 'schedule_already_approved' });
+      request.log.error({ err: error }, 'Schedule rejection failed');
+      return reply.code(503).send({ error: 'schedule_rejection_failed' });
+    }
+  });
+
+  app.get<{ Querystring: { from: string; to: string; limit?: number; offset?: number } }>('/api/schedules', { schema: listSchedulesSchema }, async (request, reply) => {
+    if (!scheduleRepository) return reply.code(503).send({ error: 'scheduling_not_configured' });
+    if (request.query.from > request.query.to) return reply.code(400).send({ error: 'invalid_date_range' });
+    try { return await scheduleRepository.listSchedules({ from: request.query.from, to: request.query.to, limit: request.query.limit ?? 20, offset: request.query.offset ?? 0 }); }
+    catch (error) { request.log.error({ err: error }, 'Schedule list failed'); return reply.code(503).send({ error: 'schedule_list_failed' }); }
+  });
+
+  app.get<{ Params: { id: string } }>('/api/schedules/id/:id', async (request, reply) => {
+    if (!scheduleRepository) return reply.code(503).send({ error: 'scheduling_not_configured' });
+    try {
+      const schedule = await scheduleRepository.getScheduleById(request.params.id);
+      return schedule ? schedule : reply.code(404).send({ error: 'schedule_not_found' });
+    } catch (error) { request.log.error({ err: error }, 'Schedule lookup failed'); return reply.code(503).send({ error: 'schedule_lookup_failed' }); }
   });
 
   app.get<{ Params: { weekStart: string } }>('/api/schedules/:weekStart', async (request, reply) => {
@@ -245,13 +326,13 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
     const { weekStart } = request.params;
     if (!validWeekStart(weekStart)) return reply.code(400).send({ error: 'invalid_week_start' });
     try {
-      const [context, latest] = await Promise.all([scheduleRepository.getPlanningContext(), scheduleRepository.getLatestSchedule(weekStart)]);
+      const [context, latest] = await Promise.all([planningContextFor(weekStart), scheduleRepository.getLatestSchedule(weekStart)]);
       if (!context) return reply.code(404).send({ error: 'work_profile_not_found' });
       if (!latest) return reply.code(404).send({ error: 'schedule_not_found' });
-      const publishedEventIds = new Set(latest.shifts.map((shift) => shift.calendarEventId).filter((id): id is string => Boolean(id)));
-      const validationContext = publishedEventIds.size ? { ...context, events: context.events.filter((event) => !publishedEventIds.has(event.id)) } : context;
-      const validation = validateSchedule(validationContext, weekStart, request.body.shifts, { mode: latest.mode,
-        minimumHours: latest.minimumMinutes / 60, targetHours: latest.targetMinutes / 60, maximumHours: latest.maximumMinutes / 60 });
+      if (latest.parameters.profileVersion !== context.profile.profileVersion) return reply.code(409).send({ error: 'profile_version_conflict', profileVersion: context.profile.profileVersion });
+      const validation = validateSchedule(context, weekStart, request.body.shifts, { mode: latest.mode,
+        minimumHours: latest.minimumMinutes / 60, targetHours: latest.targetMinutes / 60, maximumHours: latest.maximumMinutes / 60,
+        maxHoursPerDay: Number(latest.parameters.maxHoursPerDay ?? context.profile.maxHoursPerDay) });
       if (validation.errors.length) return reply.code(422).send({ error: 'invalid_schedule', errors: validation.errors, warnings: validation.warnings });
       const shifts: CandidateShift[] = request.body.shifts.flatMap((input) => {
         const startMatch = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})$/.exec(input.startLocal);
@@ -264,13 +345,14 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
         const optionalViolation = validation.warnings.find((warning) => warning.code === 'optional_lecture_conflict' && warning.candidateIds.includes(input.id));
         const optionalLectureIds = optionalViolation?.eventIds ?? [];
         return [{ candidateId: input.id, title: 'Praca', start: start.toISOString(), end: end.toISOString(), startLocal: input.startLocal,
-          endLocal: input.endLocal, durationMinutes, workDate: input.startLocal.slice(0, 10), mode: latest.mode, optionalLectureIds,
+          endLocal: input.endLocal, durationMinutes, workDate: input.startLocal.slice(0, 10), mode: latest.mode, templateId: input.templateId, optionalLectureIds,
           softPenalty: typeof optionalViolation?.details.penalty === 'number' ? optionalViolation.details.penalty : 0 }];
       });
       const solutionStatus = validation.totalMinutes >= validation.targetMinutes ? 'target_met' : 'not_found';
       const edited: ScheduleGenerationResult = { ...latest, version: undefined, shifts, solutionStatus,
         existingWorkMinutes: validation.existingWorkMinutes, proposedMinutes: validation.proposedMinutes, totalMinutes: validation.totalMinutes,
         shortfallMinutes: validation.shortfallMinutes, minimumShortfallMinutes: validation.minimumShortfallMinutes,
+        parameters: { ...latest.parameters, profileVersion: context.profile.profileVersion },
         optionalLecturesSkipped: [...new Set(shifts.flatMap((shift) => shift.optionalLectureIds))].sort(),
         workdaysUsed: new Set(shifts.map((shift) => shift.workDate)).size,
         violations: validation.warnings, generatedAt: new Date().toISOString() };

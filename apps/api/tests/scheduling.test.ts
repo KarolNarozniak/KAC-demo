@@ -7,7 +7,7 @@ const context = (overrides: Partial<PlanningContext> = {}): PlanningContext => (
   profile: {
     id: 'P1', userId: 'U1', calendarId: 'K1', timeZone: 'Europe/Warsaw', minimumHours: 8,
     targetHours: 12, maximumHours: 20, hourlyRatePln: 30, commuteBufferMinutes: 15,
-    minimumRestMinutes: 30, mode: 'elastyczny', minimumShiftMinutes: 120, maximumSlotMinutes: 360,
+    minimumRestMinutes: 30, mode: 'elastyczny', minimumShiftMinutes: 120, maximumSlotMinutes: 360, maxHoursPerDay: 8, profileVersion: 'v1',
   },
   availability: [1, 2, 3, 4, 5, 6, 7].map((dayOfWeek) => ({ id: `a${dayOfWeek}`, dayOfWeek, startTime: '08:00', endTime: '22:00' })),
   preferredWorkWindows: [], blockedPeriods: [], events: [], shiftTemplates: [],
@@ -31,6 +31,24 @@ test('workaholic option fills the maximum feasible weekly capacity', () => {
   assert.equal(result.targetMinutes, result.maximumCapacityMinutes);
   assert.equal(result.totalMinutes, result.maximumCapacityMinutes);
   assert.equal(result.parameters.workaholic, true);
+});
+
+test('daily maximum caps generated work and rejects manual overbooking', () => {
+  const input = context({
+    profile: { ...context().profile, minimumHours: 4, targetHours: 8, maximumHours: 12, maxHoursPerDay: 4 },
+    availability: [
+      { id: 'mon', dayOfWeek: 1, startTime: '08:00', endTime: '18:00' },
+      { id: 'tue', dayOfWeek: 2, startTime: '08:00', endTime: '18:00' },
+    ],
+  });
+  const result = generateSchedule(input, '2026-11-02');
+  assert.equal(result.totalMinutes, 480);
+  assert.ok(result.shifts.every((shift) => shift.durationMinutes <= 240));
+  const validation = validateSchedule(input, '2026-11-02', [
+    { id: 'first', startLocal: '2026-11-02T08:00', endLocal: '2026-11-02T11:00' },
+    { id: 'second', startLocal: '2026-11-02T12:00', endLocal: '2026-11-02T15:00' },
+  ]);
+  assert.ok(validation.errors.some((error) => error.code === 'daily_maximum_hours'));
 });
 
 test('existing work counts toward the weekly target', () => {

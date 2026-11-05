@@ -11,6 +11,7 @@ type EffectiveProfile = {
   minimumMinutes: number;
   targetMinutes: number;
   maximumMinutes: number;
+  maximumDailyMinutes: number;
   commuteBufferMinutes: number;
   minimumRestMinutes: number;
   minimumShiftMinutes: number;
@@ -29,6 +30,7 @@ function profileFor(context: PlanningContext, overrides: PlannerOverrides): Effe
     minimumMinutes: hoursToMinutes(overrides.minimumHours ?? p.minimumHours),
     targetMinutes: hoursToMinutes(overrides.workaholic ? overrides.maximumHours ?? p.maximumHours : overrides.targetHours ?? p.targetHours),
     maximumMinutes: hoursToMinutes(overrides.maximumHours ?? p.maximumHours),
+    maximumDailyMinutes: hoursToMinutes(overrides.maxHoursPerDay ?? p.maxHoursPerDay),
     commuteBufferMinutes: overrides.commuteBufferMinutes ?? p.commuteBufferMinutes,
     minimumRestMinutes: overrides.minimumRestMinutes ?? p.minimumRestMinutes,
     minimumShiftMinutes: overrides.minimumShiftMinutes ?? p.minimumShiftMinutes,
@@ -38,10 +40,28 @@ function profileFor(context: PlanningContext, overrides: PlannerOverrides): Effe
   if (result.minimumMinutes < 0 || result.targetMinutes < result.minimumMinutes || result.maximumMinutes < result.targetMinutes) {
     throw new Error('Ustawienia muszą spełniać: 0 ≤ minimum ≤ cel ≤ maksimum w tygodniu.');
   }
-  if (result.commuteBufferMinutes < 0 || result.minimumRestMinutes < 0 || result.minimumShiftMinutes < 120 || result.maximumSlotMinutes < result.minimumShiftMinutes) {
+  if (result.commuteBufferMinutes < 0 || result.minimumRestMinutes < 0 || result.maximumDailyMinutes <= 0 || result.minimumShiftMinutes < 120 || result.maximumSlotMinutes < result.minimumShiftMinutes) {
     throw new Error('Niepoprawne ustawienia bufora, odpoczynku lub długości slotu.');
   }
   return result;
+}
+
+function dailyMinutes(start: Date, end: Date, timeZone: string): Map<string, number> {
+  const result = new Map<string, number>();
+  let cursor = start;
+  while (cursor < end) {
+    const date = localDateKey(cursor, timeZone);
+    const nextDay = localInstant(addLocalDays(date, 1), '00:00', timeZone);
+    const boundary = nextDay && nextDay > cursor ? nextDay : new Date(cursor.getTime() + 86_400_000);
+    const segmentEnd = end < boundary ? end : boundary;
+    result.set(date, (result.get(date) ?? 0) + (segmentEnd.getTime() - cursor.getTime()) / 60_000);
+    cursor = segmentEnd;
+  }
+  return result;
+}
+
+function addUsage(target: Map<string, number>, incoming: Map<string, number>) {
+  for (const [date, minutes] of incoming) target.set(date, (target.get(date) ?? 0) + minutes);
 }
 
 function asIntervals(periods: BlockedPeriod[]): Interval[] {
@@ -234,7 +254,13 @@ function buildCandidates(context: PlanningContext, weekStart: string, profile: E
     .filter((interval) => interval.end > weekStartInstant && interval.start < weekEndInstant)
     .map((interval) => localDateTimeString(interval.start, timeZone).slice(0, 10)));
 
-  return { candidates, hardBlocks, optionalLectures, existingWork, existingWorkMinutes, existingDays, weekStartInstant, weekEndInstant };
+  const existingWorkDailyMinutes = new Map<string, number>();
+  for (const interval of existingWork) {
+    const start = interval.start < weekStartInstant ? weekStartInstant : interval.start;
+    const end = interval.end > weekEndInstant ? weekEndInstant : interval.end;
+    if (end > start) addUsage(existingWorkDailyMinutes, dailyMinutes(start, end, timeZone));
+  }
+  return { candidates, hardBlocks, optionalLectures, existingWork, existingWorkMinutes, existingDays, existingWorkDailyMinutes, weekStartInstant, weekEndInstant };
 }
 
 function canAdd(candidate: CandidateShift, selected: CandidateShift[], hardBlocks: Interval[], profile: EffectiveProfile) {
@@ -247,17 +273,24 @@ function canAdd(candidate: CandidateShift, selected: CandidateShift[], hardBlock
   });
 }
 
+function fitsDailyLimit(candidate: CandidateShift, usage: Map<string, number>, profile: EffectiveProfile, timeZone: string) {
+  const projected = dailyMinutes(new Date(candidate.start), new Date(candidate.end), timeZone);
+  return [...projected].every(([date, minutes]) => (usage.get(date) ?? 0) + minutes <= profile.maximumDailyMinutes);
+}
+
 function selectCandidates(candidates: CandidateShift[], context: PlanningContext, profile: EffectiveProfile,
-  existingDays: Set<string>, hardBlocks: Interval[], totalBefore: number): CandidateShift[] {
+  existingDays: Set<string>, hardBlocks: Interval[], existingDailyMinutes: Map<string, number>, totalBefore: number): CandidateShift[] {
   const selected: CandidateShift[] = [];
   const days = new Set(existingDays);
+  const dailyUsage = new Map(existingDailyMinutes);
   let total = totalBefore;
   const choose = (allowOptional: boolean) => {
     while (total < profile.targetMinutes && total < profile.maximumMinutes) {
       const viable = candidates.filter((candidate) => !selected.some((chosen) => chosen.candidateId === candidate.candidateId))
         .filter((candidate) => allowOptional || candidate.optionalLectureIds.length === 0)
-        .filter((candidate) => total + candidate.durationMinutes <= profile.maximumMinutes)
-        .filter((candidate) => canAdd(candidate, selected, hardBlocks, profile))
+         .filter((candidate) => total + candidate.durationMinutes <= profile.maximumMinutes)
+         .filter((candidate) => canAdd(candidate, selected, hardBlocks, profile))
+         .filter((candidate) => fitsDailyLimit(candidate, dailyUsage, profile, context.profile.timeZone))
         .map((candidate) => {
           const optionalPenalty = candidate.optionalLectureIds.length * DEFAULT_SCHEDULER_PENALTIES.optionalLecturePenalty;
           const dayPenalty = profile.mode === 'elastyczny' && !days.has(candidate.workDate)
@@ -271,7 +304,8 @@ function selectCandidates(candidates: CandidateShift[], context: PlanningContext
       if (!viable.length) return;
       const chosen = viable[0]?.candidate;
       if (!chosen) return;
-      selected.push(chosen);
+       selected.push(chosen);
+       addUsage(dailyUsage, dailyMinutes(new Date(chosen.start), new Date(chosen.end), context.profile.timeZone));
       days.add(chosen.workDate);
       total += chosen.durationMinutes;
     }
@@ -288,12 +322,12 @@ export function generateSchedule(context: PlanningContext, weekStart: string, ov
   const existingWorkMinutes = generated.existingWorkMinutes;
   const candidates = generated.candidates;
   const capacityPlan = existingWorkMinutes > profile.maximumMinutes ? [] : selectCandidates(candidates, context,
-    { ...profile, targetMinutes: profile.maximumMinutes }, generated.existingDays, generated.hardBlocks, existingWorkMinutes);
+    { ...profile, targetMinutes: profile.maximumMinutes }, generated.existingDays, generated.hardBlocks, generated.existingWorkDailyMinutes, existingWorkMinutes);
   const maximumCapacityMinutes = Math.min(profile.maximumMinutes, existingWorkMinutes + capacityPlan.reduce((sum, shift) => sum + shift.durationMinutes, 0));
   if (overrides.workaholic) profile.targetMinutes = maximumCapacityMinutes;
   const selected = existingWorkMinutes > profile.maximumMinutes
     ? []
-    : selectCandidates(candidates, context, profile, generated.existingDays, generated.hardBlocks, existingWorkMinutes);
+    : selectCandidates(candidates, context, profile, generated.existingDays, generated.hardBlocks, generated.existingWorkDailyMinutes, existingWorkMinutes);
   const proposedMinutes = selected.reduce((sum, shift) => sum + shift.durationMinutes, 0);
   const totalMinutes = existingWorkMinutes + proposedMinutes;
   const shortfallMinutes = Math.max(0, profile.targetMinutes - totalMinutes);
@@ -307,6 +341,13 @@ export function generateSchedule(context: PlanningContext, weekStart: string, ov
       : upperBoundMinutes < profile.targetMinutes ? 'proven_infeasible' : 'not_found';
   const optionalLecturesSkipped = [...new Set(selected.flatMap((shift) => shift.optionalLectureIds))].sort();
   const violations: ScheduleViolation[] = [];
+  const sharedValidation = validateSchedule(context, weekStart, selected.map((shift) => ({ id: shift.candidateId,
+    startLocal: shift.startLocal, endLocal: shift.endLocal, templateId: shift.templateId })), {
+    ...overrides, mode: profile.mode, minimumHours: profile.minimumMinutes / 60, targetHours: profile.targetMinutes / 60,
+    maximumHours: profile.maximumMinutes / 60, maxHoursPerDay: profile.maximumDailyMinutes / 60,
+    minimumShiftMinutes: profile.minimumShiftMinutes, maximumSlotMinutes: profile.maximumSlotMinutes,
+  });
+  violations.push(...sharedValidation.errors);
   if (optionalLecturesSkipped.length) violations.push({
     code: 'optional_lectures_skipped', severity: 'warning',
     message: 'Aby zbliżyć się do celu, propozycja pomija część nieobowiązkowych zajęć.',
@@ -344,6 +385,8 @@ export function generateSchedule(context: PlanningContext, weekStart: string, ov
     minimumRestMinutes: profile.minimumRestMinutes,
     minimumShiftMinutes: profile.minimumShiftMinutes,
     maximumSlotMinutes: profile.maximumSlotMinutes,
+    maxHoursPerDay: profile.maximumDailyMinutes / 60,
+    candidateStepMinutes: DEFAULT_SCHEDULER_PENALTIES.candidateStepMinutes,
     workaholic: overrides.workaholic === true,
     shiftTemplateIds: profile.templates.map((template) => template.id),
     optionalLecturePenalty: DEFAULT_SCHEDULER_PENALTIES.optionalLecturePenalty,
@@ -352,6 +395,7 @@ export function generateSchedule(context: PlanningContext, weekStart: string, ov
   return {
     weekStart,
     isApproved: false,
+    workflowStatus: 'proposed',
     maximumCapacityMinutes,
     timeZone: context.profile.timeZone,
     mode: profile.mode,
@@ -414,6 +458,13 @@ export function validateSchedule(context: PlanningContext, weekStart: string, sh
     if (profile.mode === 'elastyczny' && wallMinutes > profile.maximumSlotMinutes) {
       errors.push({ code: 'above_maximum_slot', severity: 'error', message: `Maksymalna długość zmiany to ${profile.maximumSlotMinutes} minut.`, candidateIds: [input.id], eventIds: [], details: { wallMinutes } });
     }
+    if (profile.mode === 'zmianowy') {
+      const template = profile.templates.find((item) => item.id === input.templateId && item.active);
+      const dayOfWeek = ((new Date(`${startDate}T00:00:00Z`).getUTCDay() + 6) % 7) + 1;
+      if (!template || template.startTime !== startTime || template.endTime !== endTime || template.endsNextDay !== (dayOffset === 1) || !template.daysOfWeek.includes(dayOfWeek)) {
+        errors.push({ code: 'shift_template_mismatch', severity: 'error', message: 'Zmiana musi odpowiadać aktywnemu szablonowi i jego dniowi tygodnia.', candidateIds: [input.id], eventIds: [], details: { templateId: input.templateId ?? null, dayOfWeek } });
+      }
+    }
     if (!intervalCovered(start, end, availabilityRanges(context.availability, weekStart, context.profile.timeZone))) {
       errors.push({ code: 'outside_availability', severity: 'error', message: 'Zmiana wykracza poza dostępność studenta.', candidateIds: [input.id], eventIds: [], details: {} });
     }
@@ -445,7 +496,20 @@ export function validateSchedule(context: PlanningContext, weekStart: string, sh
   const existingWorkMinutes = generated.existingWork.reduce((sum, event) => sum + overlapMinutes(event.start, event.end, bounds.start, bounds.end), 0);
   const proposedMinutes = normalized.reduce((sum, shift) => sum + shift.durationMinutes, 0);
   const totalMinutes = existingWorkMinutes + proposedMinutes;
-  if (totalMinutes > profile.maximumMinutes) errors.push({ code: 'maximum_hours', severity: 'error', message: 'Łączny czas pracy przekracza maksymalny limit tygodniowy.', candidateIds: normalized.map((shift) => shift.candidateId), eventIds: [], details: { maximumMinutes: profile.maximumMinutes, totalMinutes } });
+    if (totalMinutes > profile.maximumMinutes) errors.push({ code: 'maximum_hours', severity: 'error', message: 'Łączny czas pracy przekracza maksymalny limit tygodniowy.', candidateIds: normalized.map((shift) => shift.candidateId), eventIds: [], details: { maximumMinutes: profile.maximumMinutes, totalMinutes } });
+  const dailyUsage = new Map(generated.existingWorkDailyMinutes);
+  const shiftsByDay = new Map<string, string[]>();
+  for (const shift of normalized) {
+    const usage = dailyMinutes(new Date(shift.start), new Date(shift.end), context.profile.timeZone);
+    addUsage(dailyUsage, usage);
+    for (const date of usage.keys()) shiftsByDay.set(date, [...(shiftsByDay.get(date) ?? []), shift.candidateId]);
+  }
+  for (const [date, minutes] of dailyUsage) {
+    if (minutes > profile.maximumDailyMinutes) errors.push({ code: 'daily_maximum_hours', severity: 'error',
+      message: `Limit pracy na dzień ${date} wynosi ${profile.maximumDailyMinutes} minut.`, candidateIds: shiftsByDay.get(date) ?? [],
+      eventIds: generated.existingWork.filter((event) => localDateKey(event.start, context.profile.timeZone) === date).map((event) => event.id),
+      details: { date, maximumMinutes: profile.maximumDailyMinutes, totalMinutes: minutes } });
+  }
   if (totalMinutes < profile.minimumMinutes) warnings.push({ code: 'minimum_shortfall', severity: 'warning', message: 'Nie osiągnięto minimalnego tygodniowego wymiaru pracy.', candidateIds: normalized.map((shift) => shift.candidateId), eventIds: [], details: { minimumMinutes: profile.minimumMinutes, totalMinutes } });
   if (totalMinutes < profile.targetMinutes) warnings.push({ code: 'target_shortfall', severity: 'warning', message: 'Propozycja jest poniżej celu godzinowego.', candidateIds: normalized.map((shift) => shift.candidateId), eventIds: [], details: { targetMinutes: profile.targetMinutes, totalMinutes } });
   return { errors, warnings, minimumMinutes: profile.minimumMinutes, targetMinutes: profile.targetMinutes, maximumMinutes: profile.maximumMinutes, existingWorkMinutes, proposedMinutes, totalMinutes, shortfallMinutes: Math.max(0, profile.targetMinutes - totalMinutes), minimumShortfallMinutes: Math.max(0, profile.minimumMinutes - totalMinutes) };
