@@ -23,6 +23,16 @@ test('weekly generation reaches target without exceeding maximum', () => {
   assert.ok(result.shifts.every((shift) => shift.durationMinutes >= 120));
 });
 
+test('workaholic option fills the maximum feasible weekly capacity', () => {
+  const result = generateSchedule(context({ availability: [
+    { id: 'mon', dayOfWeek: 1, startTime: '08:00', endTime: '18:00' },
+    { id: 'tue', dayOfWeek: 2, startTime: '08:00', endTime: '18:00' },
+  ] }), '2026-11-02', { workaholic: true });
+  assert.equal(result.targetMinutes, result.maximumCapacityMinutes);
+  assert.equal(result.totalMinutes, result.maximumCapacityMinutes);
+  assert.equal(result.parameters.workaholic, true);
+});
+
 test('existing work counts toward the weekly target', () => {
   const result = generateSchedule(context({ events: [{
     id: 'work-1', title: 'Existing shift', start: '2026-11-03T09:00', end: '2026-11-03T13:00',

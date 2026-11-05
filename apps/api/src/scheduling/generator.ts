@@ -27,7 +27,7 @@ function profileFor(context: PlanningContext, overrides: PlannerOverrides): Effe
   const result: EffectiveProfile = {
     mode: overrides.mode ?? p.mode,
     minimumMinutes: hoursToMinutes(overrides.minimumHours ?? p.minimumHours),
-    targetMinutes: hoursToMinutes(overrides.targetHours ?? p.targetHours),
+    targetMinutes: hoursToMinutes(overrides.workaholic ? overrides.maximumHours ?? p.maximumHours : overrides.targetHours ?? p.targetHours),
     maximumMinutes: hoursToMinutes(overrides.maximumHours ?? p.maximumHours),
     commuteBufferMinutes: overrides.commuteBufferMinutes ?? p.commuteBufferMinutes,
     minimumRestMinutes: overrides.minimumRestMinutes ?? p.minimumRestMinutes,
@@ -287,6 +287,10 @@ export function generateSchedule(context: PlanningContext, weekStart: string, ov
   const generated = buildCandidates(context, weekStart, profile);
   const existingWorkMinutes = generated.existingWorkMinutes;
   const candidates = generated.candidates;
+  const capacityPlan = existingWorkMinutes > profile.maximumMinutes ? [] : selectCandidates(candidates, context,
+    { ...profile, targetMinutes: profile.maximumMinutes }, generated.existingDays, generated.hardBlocks, existingWorkMinutes);
+  const maximumCapacityMinutes = Math.min(profile.maximumMinutes, existingWorkMinutes + capacityPlan.reduce((sum, shift) => sum + shift.durationMinutes, 0));
+  if (overrides.workaholic) profile.targetMinutes = maximumCapacityMinutes;
   const selected = existingWorkMinutes > profile.maximumMinutes
     ? []
     : selectCandidates(candidates, context, profile, generated.existingDays, generated.hardBlocks, existingWorkMinutes);
@@ -340,12 +344,15 @@ export function generateSchedule(context: PlanningContext, weekStart: string, ov
     minimumRestMinutes: profile.minimumRestMinutes,
     minimumShiftMinutes: profile.minimumShiftMinutes,
     maximumSlotMinutes: profile.maximumSlotMinutes,
+    workaholic: overrides.workaholic === true,
     shiftTemplateIds: profile.templates.map((template) => template.id),
     optionalLecturePenalty: DEFAULT_SCHEDULER_PENALTIES.optionalLecturePenalty,
     extraWorkdayPenalty: DEFAULT_SCHEDULER_PENALTIES.extraWorkdayPenalty,
   };
   return {
     weekStart,
+    isApproved: false,
+    maximumCapacityMinutes,
     timeZone: context.profile.timeZone,
     mode: profile.mode,
     solutionStatus,

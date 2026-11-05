@@ -15,9 +15,18 @@ test('schedule API generates and persists a validated weekly proposal', async ()
   const app = buildApi(null, [], { scheduleRepository: {
     getPlanningContext: async () => context,
     getLatestSchedule: async () => saved ?? null,
+    saveSettings: async () => {},
+    approveSchedule: async () => saved ? (saved = { ...saved, isApproved: true, approvedAt: new Date().toISOString() }) : null,
     saveSchedule: async (_context, schedule) => { saved = { ...schedule, scheduleId: 'G1', version: (saved?.version ?? 0) + 1 }; return saved; },
   } });
   try {
+    const settings = await app.inject({ method: 'GET', url: '/api/scheduling/settings' });
+    assert.equal(settings.statusCode, 200);
+    const savedSettings = await app.inject({ method: 'PUT', url: '/api/scheduling/settings', payload: {
+      mode: 'elastyczny', minimumHours: 4, targetHours: 8, maximumHours: 12, commuteBufferMinutes: 0, minimumRestMinutes: 0,
+      minimumShiftMinutes: 120, maximumSlotMinutes: 360, shiftTemplates: [],
+    } });
+    assert.equal(savedSettings.statusCode, 200);
     const invalid = await app.inject({ method: 'POST', url: '/api/schedules/generate', payload: { weekStart: '2026-11-03' } });
     assert.equal(invalid.statusCode, 400);
     const response = await app.inject({ method: 'POST', url: '/api/schedules/generate', payload: { weekStart: '2026-11-02' } });
@@ -36,5 +45,8 @@ test('schedule API generates and persists a validated weekly proposal', async ()
       expectedVersion: 2, shifts: [{ id: 'bad', startLocal: '2026-11-02T06:00', endLocal: '2026-11-02T10:00' }],
     } });
     assert.equal(invalidEdit.statusCode, 422);
+    const approved = await app.inject({ method: 'POST', url: '/api/schedules/2026-11-02/approve', payload: { expectedVersion: 2 } });
+    assert.equal(approved.statusCode, 200);
+    assert.equal(approved.json().isApproved, true);
   } finally { await app.close(); }
 });

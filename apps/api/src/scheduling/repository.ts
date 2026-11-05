@@ -1,14 +1,14 @@
 import type { Pool } from 'pg';
 import { config } from '../config.js';
 import { localDateTimeString } from './time.js';
-import type { PlanningContext, ScheduleGenerationResult } from './types.js';
+import type { PlanningContext, PlannerOverrides, ScheduleGenerationResult } from './types.js';
 
 export class ScheduleNotFoundError extends Error {}
 export class ScheduleVersionConflictError extends Error {
   constructor(public expectedVersion: number, public actualVersion: number) { super('schedule_version_conflict'); }
 }
 
-export type ScheduleRepository = Pick<PostgresScheduleRepository, 'getPlanningContext' | 'saveSchedule' | 'getLatestSchedule'>;
+export type ScheduleRepository = Pick<PostgresScheduleRepository, 'getPlanningContext' | 'saveSchedule' | 'getLatestSchedule' | 'saveSettings' | 'approveSchedule'>;
 
 export class PostgresScheduleRepository {
   constructor(private readonly connectionPool: Pool) {}
@@ -39,7 +39,7 @@ export class PostgresScheduleRepository {
           k.nazwa as category, s.data_konca::text as series_end_date
         from t_wydarzenia e join t_kategorie k on k.id_kategorii = e.id_kategorii
         left join t_serie s on s.id_serii = e.id_serii
-        where e.id_kalendarza = $1 and e.status = 'Aktywne' order by e.rozpoczecie`, [config.demoCalendarId, profile.strefa_czasowa]),
+        where e.id_kalendarza = $1 and e.status = 'Aktywne' order by e.rozpoczecie`, [profile.id_kalendarza, profile.strefa_czasowa]),
       this.connectionPool.query(`select id_szablonu, nazwa, godzina_od, godzina_do, koniec_nastepnego_dnia, dni_tygodnia, aktywna
         from t_szablony_zmian where id_profilu = $1 order by nazwa`, [profileId]),
     ]);
@@ -72,6 +72,37 @@ export class PostgresScheduleRepository {
     };
   }
 
+  async saveSettings(context: PlanningContext, settings: PlannerOverrides): Promise<void> {
+    const client = await this.connectionPool.connect();
+    try {
+      await client.query('begin');
+      await client.query(`update t_profile_pracy set
+        min_godzin_tydzien = $2, cel_godzin_tydzien = $3, max_godzin_tydzien = $4,
+        czas_dojazdu_min = $5, min_odpoczynku_min = $6, tryb_pracy = $7,
+        min_slot_min = $8, max_slot_min = $9, updated_at = now()
+        where id_profilu = $1`, [context.profile.id, settings.minimumHours, settings.targetHours, settings.maximumHours,
+        settings.commuteBufferMinutes, settings.minimumRestMinutes, settings.mode, settings.minimumShiftMinutes, settings.maximumSlotMinutes]);
+      if (settings.shiftTemplates) {
+        const ids = settings.shiftTemplates.map((template) => template.id);
+        await client.query(`delete from t_szablony_zmian where id_profilu = $1 and not (id_szablonu = any($2::text[]))`, [context.profile.id, ids]);
+        for (const template of settings.shiftTemplates) {
+          await client.query(`insert into t_szablony_zmian
+            (id_szablonu, id_profilu, nazwa, godzina_od, godzina_do, koniec_nastepnego_dnia, dni_tygodnia, aktywna)
+            values ($1, $2, $3, $4::time, $5::time, $6, $7::smallint[], $8)
+            on conflict (id_szablonu) do update set nazwa = excluded.nazwa, godzina_od = excluded.godzina_od,
+              godzina_do = excluded.godzina_do, koniec_nastepnego_dnia = excluded.koniec_nastepnego_dnia,
+              dni_tygodnia = excluded.dni_tygodnia, aktywna = excluded.aktywna
+            where t_szablony_zmian.id_profilu = excluded.id_profilu`, [template.id, context.profile.id, template.name,
+            template.startTime, template.endTime, template.endsNextDay, template.daysOfWeek, template.active]);
+        }
+      }
+      await client.query('commit');
+    } catch (error) {
+      await client.query('rollback');
+      throw error;
+    } finally { client.release(); }
+  }
+
   async saveSchedule(context: PlanningContext, schedule: ScheduleGenerationResult, expectedVersion?: number): Promise<ScheduleGenerationResult> {
     const client = await this.connectionPool.connect();
     try {
@@ -80,10 +111,20 @@ export class PostgresScheduleRepository {
       const latest = await client.query(`select coalesce(max(version), 0)::integer as version from t_grafiki where id_kalendarza = $1 and tydzien_od = $2`, [context.profile.calendarId, schedule.weekStart]);
       const currentVersion = Number(latest.rows[0].version);
       if (expectedVersion !== undefined && expectedVersion !== currentVersion) throw new ScheduleVersionConflictError(expectedVersion, currentVersion);
+      if (expectedVersion !== undefined && currentVersion > 0) {
+        const previous = await client.query(`select id_grafiku, approved_at from t_grafiki
+          where id_kalendarza = $1 and tydzien_od = $2::date and version = $3 for update`,
+        [context.profile.calendarId, schedule.weekStart, currentVersion]);
+        if (previous.rows[0]?.approved_at) {
+          await client.query(`delete from t_wydarzenia where zrodlo = 'Plan pracy' and id_wydarzenia = any(
+            select id_wydarzenia from t_zmiany_pracy where id_grafiku = $1 and id_wydarzenia is not null)`, [previous.rows[0].id_grafiku]);
+          await client.query(`update t_zmiany_pracy set status = 'Zastąpiona' where id_grafiku = $1`, [previous.rows[0].id_grafiku]);
+        }
+      }
       const version = currentVersion + 1;
       const snapshot = { ...schedule.parameters, upperBoundMinutes: schedule.upperBoundMinutes,
         minimumShortfallMinutes: schedule.minimumShortfallMinutes, optionalLecturesSkipped: schedule.optionalLecturesSkipped,
-        workdaysUsed: schedule.workdaysUsed, context };
+        workdaysUsed: schedule.workdaysUsed, maximumCapacityMinutes: schedule.maximumCapacityMinutes, context };
       const inserted = await client.query(`insert into t_grafiki
         (id_profilu, id_kalendarza, tydzien_od, tydzien_do, status, cel_godzin, plan_godzin, szac_placa_pln, czy_osiagalny,
          min_godzin, max_godzin, target_minutes, existing_work_minutes, proposed_minutes, total_minutes, shortfall_minutes,
@@ -110,7 +151,39 @@ export class PostgresScheduleRepository {
           violation.code, JSON.stringify({ ...violation.details, candidateIds: violation.candidateIds, eventIds: violation.eventIds })]);
       }
       await client.query('commit');
-      return { ...schedule, scheduleId, version };
+      return { ...schedule, scheduleId, version, isApproved: false, approvedAt: undefined };
+    } catch (error) {
+      await client.query('rollback');
+      throw error;
+    } finally { client.release(); }
+  }
+
+  async approveSchedule(weekStart: string, expectedVersion: number, calendarId = config.demoCalendarId): Promise<ScheduleGenerationResult | null> {
+    const client = await this.connectionPool.connect();
+    try {
+      await client.query('begin');
+      await client.query('select id_kalendarza from t_kalendarze where id_kalendarza = $1 for update', [calendarId]);
+      const latest = await client.query(`select id_grafiku, version, approved_at from t_grafiki
+        where id_kalendarza = $1 and tydzien_od = $2::date order by version desc limit 1 for update`, [calendarId, weekStart]);
+      const row = latest.rows[0];
+      if (!row) { await client.query('rollback'); return null; }
+      if (Number(row.version) !== expectedVersion) throw new ScheduleVersionConflictError(expectedVersion, Number(row.version));
+      if (row.approved_at) {
+        await client.query('commit');
+        return this.getLatestSchedule(weekStart, calendarId);
+      }
+      const shifts = await client.query(`select id_zmiany, rozpoczecie, zakonczenie from t_zmiany_pracy
+        where id_grafiku = $1 and id_wydarzenia is null order by rozpoczecie`, [row.id_grafiku]);
+      for (const shift of shifts.rows) {
+        const event = await client.query(`insert into t_wydarzenia
+          (id_kalendarza, id_kategorii, tytul, rozpoczecie, zakonczenie, obowiazkowe, powtarzaj_co_tydzien, zrodlo, status, miejsce)
+          values ($1, (select id_kategorii from t_kategorie where nazwa = 'Praca' limit 1), 'Zmiana pracy',
+            $2, $3, false, false, 'Plan pracy', 'Aktywne', '') returning id_wydarzenia`, [calendarId, shift.rozpoczecie, shift.zakonczenie]);
+        await client.query(`update t_zmiany_pracy set id_wydarzenia = $2, status = 'Zatwierdzona' where id_zmiany = $1`, [shift.id_zmiany, event.rows[0].id_wydarzenia]);
+      }
+      await client.query('update t_grafiki set approved_at = now() where id_grafiku = $1', [row.id_grafiku]);
+      await client.query('commit');
+      return this.getLatestSchedule(weekStart, calendarId);
     } catch (error) {
       await client.query('rollback');
       throw error;
@@ -121,7 +194,7 @@ export class PostgresScheduleRepository {
     const result = await this.connectionPool.query(`select g.*, to_char(g.tydzien_od, 'YYYY-MM-DD') as week_start,
         (select coalesce(jsonb_agg(jsonb_build_object(
         'candidateId', z.candidate_id, 'templateId', z.template_id, 'optionalLectureIds', z.optional_lecture_ids,
-        'softPenalty', z.soft_penalty, 'title', 'Praca', 'start', z.rozpoczecie, 'end', z.zakonczenie,
+        'softPenalty', z.soft_penalty, 'calendarEventId', z.id_wydarzenia, 'title', 'Praca', 'start', z.rozpoczecie, 'end', z.zakonczenie,
         'durationMinutes', round(z.godziny * 60)::integer, 'mode', g.tryb_pracy)), '[]'::jsonb) from t_zmiany_pracy z where z.id_grafiku = g.id_grafiku) as shift_rows,
         (select coalesce(jsonb_agg(jsonb_build_object('code', o.kod, 'severity', o.typ, 'message', o.opis,
         'candidateIds', o.szczegoly->'candidateIds', 'eventIds', o.szczegoly->'eventIds', 'details', o.szczegoly)), '[]'::jsonb) from t_ograniczenia_grafiku o where o.id_grafiku = g.id_grafiku) as violation_rows
@@ -138,10 +211,12 @@ export class PostgresScheduleRepository {
       const endLocal = localDateTimeString(end, snapshotContext.profile?.timeZone ?? 'Europe/Warsaw');
       return { candidateId: shift.candidateId as string, title: 'Praca', start: start.toISOString(), end: end.toISOString(), startLocal, endLocal,
         durationMinutes: Number(shift.durationMinutes), workDate: startLocal.slice(0, 10), mode: row.tryb_pracy,
-        templateId: shift.templateId as string | undefined, optionalLectureIds: shift.optionalLectureIds as string[] ?? [], softPenalty: Number(shift.softPenalty ?? 0) };
+        templateId: shift.templateId as string | undefined, calendarEventId: shift.calendarEventId as string | undefined,
+        optionalLectureIds: shift.optionalLectureIds as string[] ?? [], softPenalty: Number(shift.softPenalty ?? 0) };
     });
     return {
-      scheduleId: row.id_grafiku, version: Number(row.version), weekStart: row.week_start,
+      scheduleId: row.id_grafiku, version: Number(row.version), isApproved: Boolean(row.approved_at), approvedAt: row.approved_at?.toISOString(), weekStart: row.week_start,
+      maximumCapacityMinutes: Number(snapshot.maximumCapacityMinutes ?? row.total_minutes),
       timeZone: snapshotContext.profile?.timeZone ?? 'Europe/Warsaw', mode: row.tryb_pracy, solutionStatus: row.solution_status,
       minimumMinutes: Number(row.min_godzin) * 60, targetMinutes: Number(row.target_minutes), maximumMinutes: Number(row.max_godzin) * 60,
       existingWorkMinutes: Number(row.existing_work_minutes), proposedMinutes: Number(row.proposed_minutes), totalMinutes: Number(row.total_minutes),

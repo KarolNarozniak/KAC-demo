@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { buildApi } from '../src/app.js';
 import { config } from '../src/config.js';
-import { pool } from '../src/database.js';
+import { pool, PostgresCalendarRepository } from '../src/database.js';
 import { PostgresScheduleRepository } from '../src/scheduling/repository.js';
 
 test('PostgreSQL schedule persistence, retrieval, edits and version conflicts', { skip: !config.databaseUrl }, async () => {
@@ -21,8 +21,16 @@ test('PostgreSQL schedule persistence, retrieval, edits and version conflicts', 
     getPlanningContext: () => repository.getPlanningContext(config.demoUserId, calendarId, profileId),
     getLatestSchedule: (weekStart) => repository.getLatestSchedule(weekStart, calendarId),
     saveSchedule: repository.saveSchedule.bind(repository),
+    saveSettings: repository.saveSettings.bind(repository),
+    approveSchedule: (weekStart, expectedVersion) => repository.approveSchedule(weekStart, expectedVersion, calendarId),
   } });
   try {
+    const settings = await app.inject({ method: 'PUT', url: '/api/scheduling/settings', payload: {
+      mode: 'elastyczny', minimumHours: 2, targetHours: 4, maximumHours: 8, commuteBufferMinutes: 0, minimumRestMinutes: 0,
+      minimumShiftMinutes: 120, maximumSlotMinutes: 360, shiftTemplates: [{ id: 'test-am', name: 'Zmiana testowa', startTime: '08:00', endTime: '16:00', endsNextDay: false, daysOfWeek: [1, 2, 3, 4, 5], active: true }],
+    } });
+    assert.equal(settings.statusCode, 200, settings.body);
+    assert.equal(settings.json().shiftTemplates[0].name, 'Zmiana testowa');
     const generated = await app.inject({ method: 'POST', url: '/api/schedules/generate', payload: { weekStart: '2026-11-02' } });
     assert.equal(generated.statusCode, 201, generated.body);
     assert.equal(generated.json().version, 1);
@@ -49,6 +57,24 @@ test('PostgreSQL schedule persistence, retrieval, edits and version conflicts', 
     assert.equal(saved.json().version, 2);
     const stale = await app.inject({ method: 'PUT', url: '/api/schedules/2026-11-02', payload: edit });
     assert.equal(stale.statusCode, 409);
+    const approved = await app.inject({ method: 'POST', url: '/api/schedules/2026-11-02/approve', payload: { expectedVersion: 2 } });
+    assert.equal(approved.statusCode, 200, approved.body);
+    assert.equal(approved.json().isApproved, true);
+    const calendarEvents = await pool.query(`select id_wydarzenia from t_wydarzenia where id_kalendarza = $1 and zrodlo = 'Plan pracy'`, [calendarId]);
+    assert.equal(calendarEvents.rowCount, approved.json().shifts.length);
+    const calendarView = await new PostgresCalendarRepository(pool).getOverview(config.demoUserId, calendarId);
+    assert.equal(calendarView?.events.filter((event) => event.title === 'Zmiana pracy').length, approved.json().shifts.length);
+    const reapproved = await app.inject({ method: 'POST', url: '/api/schedules/2026-11-02/approve', payload: { expectedVersion: 2 } });
+    assert.equal(reapproved.statusCode, 200);
+    assert.equal((await pool.query(`select id_wydarzenia from t_wydarzenia where id_kalendarza = $1 and zrodlo = 'Plan pracy'`, [calendarId])).rowCount, calendarEvents.rowCount);
+    const editedApproved = await app.inject({ method: 'PUT', url: '/api/schedules/2026-11-02', payload: { ...edit, expectedVersion: 2 } });
+    assert.equal(editedApproved.statusCode, 200, editedApproved.body);
+    assert.equal(editedApproved.json().version, 3);
+    assert.equal(editedApproved.json().isApproved, false);
+    assert.equal((await pool.query(`select id_wydarzenia from t_wydarzenia where id_kalendarza = $1 and zrodlo = 'Plan pracy'`, [calendarId])).rowCount, 0);
+    const approvedAgain = await app.inject({ method: 'POST', url: '/api/schedules/2026-11-02/approve', payload: { expectedVersion: 3 } });
+    assert.equal(approvedAgain.statusCode, 200);
+    assert.equal((await pool.query(`select id_wydarzenia from t_wydarzenia where id_kalendarza = $1 and zrodlo = 'Plan pracy'`, [calendarId])).rowCount, approvedAgain.json().shifts.length);
   } finally {
     await app.close();
     await pool.query('delete from t_profile_pracy where id_profilu = $1', [profileId]);

@@ -17,7 +17,7 @@ import type { AcceptedRow, ConfirmResult, CreateSessionInput, ImportFormat, Impo
 import { generateSchedule, validateSchedule } from './scheduling/generator.js';
 import { validWeekStart, localInstant } from './scheduling/time.js';
 import { ScheduleVersionConflictError, type ScheduleRepository } from './scheduling/repository.js';
-import type { CandidateShift, ManualShiftInput, PlannerOverrides, ScheduleGenerationResult } from './scheduling/types.js';
+import type { CandidateShift, ManualShiftInput, PlannerOverrides, ScheduleGenerationResult, ShiftTemplate } from './scheduling/types.js';
 
 export type CalendarRepository = {
   deleteEvent?: (eventId: string) => Promise<string[] | null>;
@@ -126,6 +126,11 @@ const schedulerOverridesSchema = {
     minimumRestMinutes: { type: 'integer', minimum: 0, maximum: 1440 },
     minimumShiftMinutes: { type: 'integer', minimum: 120, maximum: 720 },
     maximumSlotMinutes: { type: 'integer', minimum: 120, maximum: 720 },
+    workaholic: { type: 'boolean' },
+    shiftTemplates: { type: 'array', maxItems: 12, items: { type: 'object', required: ['id', 'name', 'startTime', 'endTime', 'endsNextDay', 'daysOfWeek', 'active'], additionalProperties: false,
+      properties: { id: { type: 'string', minLength: 1, maxLength: 100 }, name: { type: 'string', minLength: 1, maxLength: 80 },
+        startTime: { type: 'string', pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' }, endTime: { type: 'string', pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' },
+        endsNextDay: { type: 'boolean' }, daysOfWeek: { type: 'array', minItems: 1, maxItems: 7, uniqueItems: true, items: { type: 'integer', minimum: 1, maximum: 7 } }, active: { type: 'boolean' } } } },
   },
 } as const;
 const generateScheduleSchema = { body: { type: 'object', required: ['weekStart'], additionalProperties: false,
@@ -137,6 +142,10 @@ const updateScheduleSchema = { params: { type: 'object', required: ['weekStart']
     shifts: { type: 'array', maxItems: 14, items: { type: 'object', required: ['id', 'startLocal', 'endLocal'], additionalProperties: false,
       properties: { id: { type: 'string', minLength: 1, maxLength: 100 }, startLocal: { type: 'string', maxLength: 16 }, endLocal: { type: 'string', maxLength: 16 } } } },
   } } } as const;
+const settingsSchema = { body: { type: 'object', required: ['mode', 'minimumHours', 'targetHours', 'maximumHours', 'commuteBufferMinutes', 'minimumRestMinutes', 'minimumShiftMinutes', 'maximumSlotMinutes', 'shiftTemplates'], additionalProperties: false,
+  properties: schedulerOverridesSchema.properties } } as const;
+const approveScheduleSchema = { params: { type: 'object', required: ['weekStart'], properties: { weekStart: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' } } },
+  body: { type: 'object', required: ['expectedVersion'], additionalProperties: false, properties: { expectedVersion: { type: 'integer', minimum: 1 } } } } as const;
 
 export function buildApi(repository: CalendarRepository | null, allowedOrigins: string[] = [], options: ApiOptions = {}) {
   const app: FastifyInstance = Fastify({ logger: true });
@@ -160,6 +169,37 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
   app.get('/api/health/live', async () => ({ api: 'ok' }));
 
   const scheduleRepository = options.scheduleRepository;
+  app.get('/api/scheduling/settings', async (_request, reply) => {
+    if (!scheduleRepository) return reply.code(503).send({ error: 'scheduling_not_configured' });
+    try {
+      const context = await scheduleRepository.getPlanningContext();
+      return context ? { profile: context.profile, shiftTemplates: context.shiftTemplates } : reply.code(404).send({ error: 'work_profile_not_found' });
+    } catch (error) {
+      app.log.error({ err: error }, 'Schedule settings lookup failed');
+      return reply.code(503).send({ error: 'schedule_settings_lookup_failed' });
+    }
+  });
+
+  app.put<{ Body: PlannerOverrides }>('/api/scheduling/settings', { schema: settingsSchema }, async (request, reply) => {
+    if (!scheduleRepository) return reply.code(503).send({ error: 'scheduling_not_configured' });
+    const settings = request.body;
+    if (settings.minimumHours === undefined || settings.targetHours === undefined || settings.maximumHours === undefined ||
+      settings.minimumHours > settings.targetHours || settings.targetHours > settings.maximumHours ||
+      settings.minimumShiftMinutes === undefined || settings.maximumSlotMinutes === undefined || settings.maximumSlotMinutes < settings.minimumShiftMinutes) {
+      return reply.code(400).send({ error: 'invalid_scheduler_settings' });
+    }
+    try {
+      const context = await scheduleRepository.getPlanningContext();
+      if (!context) return reply.code(404).send({ error: 'work_profile_not_found' });
+      await scheduleRepository.saveSettings(context, settings);
+      const updated = await scheduleRepository.getPlanningContext();
+      return updated ? { profile: updated.profile, shiftTemplates: updated.shiftTemplates } : reply.code(404).send({ error: 'work_profile_not_found' });
+    } catch (error) {
+      request.log.error({ err: error }, 'Schedule settings update failed');
+      return reply.code(400).send({ error: 'schedule_settings_update_failed' });
+    }
+  });
+
   app.post<{ Body: { weekStart: string; overrides?: PlannerOverrides } }>('/api/schedules/generate', { schema: generateScheduleSchema }, async (request, reply) => {
     if (!scheduleRepository) return reply.code(503).send({ error: 'scheduling_not_configured' });
     if (!validWeekStart(request.body.weekStart)) return reply.code(400).send({ error: 'invalid_week_start' });
@@ -172,6 +212,19 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
       if (error instanceof Error && error.message.includes('Ustawienia')) return reply.code(400).send({ error: 'invalid_scheduler_settings', message: error.message });
       request.log.error({ err: error }, 'Schedule generation failed');
       return reply.code(503).send({ error: 'schedule_generation_failed' });
+    }
+  });
+
+  app.post<{ Params: { weekStart: string }; Body: { expectedVersion: number } }>('/api/schedules/:weekStart/approve', { schema: approveScheduleSchema }, async (request, reply) => {
+    if (!scheduleRepository) return reply.code(503).send({ error: 'scheduling_not_configured' });
+    if (!validWeekStart(request.params.weekStart)) return reply.code(400).send({ error: 'invalid_week_start' });
+    try {
+      const schedule = await scheduleRepository.approveSchedule(request.params.weekStart, request.body.expectedVersion);
+      return schedule ? schedule : reply.code(404).send({ error: 'schedule_not_found' });
+    } catch (error) {
+      if (error instanceof ScheduleVersionConflictError) return reply.code(409).send({ error: 'schedule_version_conflict', currentVersion: error.actualVersion });
+      request.log.error({ err: error }, 'Schedule approval failed');
+      return reply.code(503).send({ error: 'schedule_approval_failed' });
     }
   });
 
@@ -195,7 +248,9 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
       const [context, latest] = await Promise.all([scheduleRepository.getPlanningContext(), scheduleRepository.getLatestSchedule(weekStart)]);
       if (!context) return reply.code(404).send({ error: 'work_profile_not_found' });
       if (!latest) return reply.code(404).send({ error: 'schedule_not_found' });
-      const validation = validateSchedule(context, weekStart, request.body.shifts, { mode: latest.mode,
+      const publishedEventIds = new Set(latest.shifts.map((shift) => shift.calendarEventId).filter((id): id is string => Boolean(id)));
+      const validationContext = publishedEventIds.size ? { ...context, events: context.events.filter((event) => !publishedEventIds.has(event.id)) } : context;
+      const validation = validateSchedule(validationContext, weekStart, request.body.shifts, { mode: latest.mode,
         minimumHours: latest.minimumMinutes / 60, targetHours: latest.targetMinutes / 60, maximumHours: latest.maximumMinutes / 60 });
       if (validation.errors.length) return reply.code(422).send({ error: 'invalid_schedule', errors: validation.errors, warnings: validation.warnings });
       const shifts: CandidateShift[] = request.body.shifts.flatMap((input) => {

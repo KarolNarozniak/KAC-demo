@@ -81,6 +81,7 @@ export interface PlannerOverrides {
   minimumShiftMinutes?: number;
   maximumSlotMinutes?: number;
   shiftTemplates?: ShiftTemplate[];
+  workaholic?: boolean;
 }
 
 export interface CandidateShift {
@@ -94,6 +95,7 @@ export interface CandidateShift {
   workDate: string;
   mode: WorkMode;
   templateId?: string;
+  calendarEventId?: string;
   optionalLectureIds: string[];
   softPenalty: number;
 }
@@ -110,6 +112,9 @@ export interface ScheduleViolation {
 export interface ScheduleGenerationResult {
   scheduleId?: string;
   version?: number;
+  isApproved: boolean;
+  approvedAt?: string;
+  maximumCapacityMinutes: number;
   weekStart: string;
   timeZone: string;
   mode: WorkMode;

@@ -1,4 +1,16 @@
 export type WorkMode = 'elastyczny' | 'zmianowy';
+export type ShiftTemplate = { id: string; name: string; startTime: string; endTime: string; endsNextDay: boolean; daysOfWeek: number[]; active: boolean };
+export type ScheduleSettings = {
+  mode: WorkMode;
+  minimumHours: number;
+  targetHours: number;
+  maximumHours: number;
+  commuteBufferMinutes: number;
+  minimumRestMinutes: number;
+  minimumShiftMinutes: number;
+  maximumSlotMinutes: number;
+  shiftTemplates: ShiftTemplate[];
+};
 export type ScheduleShift = {
   candidateId: string;
   title: string;
@@ -17,6 +29,9 @@ export type ScheduleViolation = { code: string; severity: 'warning' | 'error'; m
 export type WeeklySchedule = {
   scheduleId?: string;
   version?: number;
+  isApproved: boolean;
+  approvedAt?: string;
+  maximumCapacityMinutes: number;
   weekStart: string;
   timeZone: string;
   mode: WorkMode;
@@ -29,6 +44,7 @@ export type WeeklySchedule = {
   totalMinutes: number;
   shortfallMinutes: number;
   optionalLecturesSkipped: string[];
+  parameters: { workaholic?: boolean };
   shifts: ScheduleShift[];
   violations: ScheduleViolation[];
 };
@@ -52,9 +68,31 @@ export async function loadSchedule(weekStart: string): Promise<WeeklySchedule | 
   return response.json();
 }
 
-export async function generateSchedule(weekStart: string, mode: WorkMode, targetHours: number): Promise<WeeklySchedule> {
-  const response = await request('/api/schedules/generate', { method: 'POST', body: JSON.stringify({ weekStart, overrides: { mode, targetHours } }) });
+export async function loadScheduleSettings(): Promise<ScheduleSettings> {
+  const response = await request('/api/scheduling/settings');
+  if (!response.ok) throw new Error('Nie udało się wczytać ustawień planu.');
+  const result = await response.json();
+  return { ...result.profile, shiftTemplates: result.shiftTemplates };
+}
+
+export async function saveScheduleSettings(settings: ScheduleSettings): Promise<ScheduleSettings> {
+  const response = await request('/api/scheduling/settings', { method: 'PUT', body: JSON.stringify(settings) });
+  if (!response.ok) throw new Error('Nie udało się zapisać ustawień planu. Sprawdź zakresy i szablony zmian.');
+  const result = await response.json();
+  return { ...result.profile, shiftTemplates: result.shiftTemplates };
+}
+
+export async function generateSchedule(weekStart: string, settings: ScheduleSettings, workaholic: boolean): Promise<WeeklySchedule> {
+  const { shiftTemplates, ...overrides } = settings;
+  const response = await request('/api/schedules/generate', { method: 'POST', body: JSON.stringify({ weekStart, overrides: { ...overrides, shiftTemplates, workaholic } }) });
   if (!response.ok) throw new Error('Nie udało się wygenerować grafiku. Sprawdź profil pracy i ustawienia tygodnia.');
+  return response.json();
+}
+
+export async function approveSchedule(weekStart: string, expectedVersion: number): Promise<WeeklySchedule> {
+  const response = await request(`/api/schedules/${weekStart}/approve`, { method: 'POST', body: JSON.stringify({ expectedVersion }) });
+  if (response.status === 409) throw new Error('Grafik zmienił się w międzyczasie. Odśwież go przed zatwierdzeniem.');
+  if (!response.ok) throw new Error('Nie udało się dodać zatwierdzonych zmian do kalendarza.');
   return response.json();
 }
 
