@@ -29,7 +29,7 @@ export class SchedulingRepository {
             throw new ProfileError('max_hours_exceeded');
     }
     async read(c: PoolClient, id: string, user: string) {
-        const r = await c.query(`select g.*,to_char(g.tydzien_od,'YYYY-MM-DD') as week from t_grafiki g join t_profile_pracy p using(id_profilu) where g.id_grafiku=$1 and p.id_uzytkownika=$2`, [id, user]);
+        const r = await c.query(`select g.*,to_char(g.tydzien_od,'YYYY-MM-DD') as week from t_grafiki g join t_profile_pracy p using(id_profilu) where g.id_grafiku=$1 and p.id_uzytkownika=$2 for share of g`, [id, user]);
         if (!r.rowCount)
             throw new ProfileError('schedule_not_found', 404);
         const g = r.rows[0];

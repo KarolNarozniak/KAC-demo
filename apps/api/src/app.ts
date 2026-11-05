@@ -6,7 +6,7 @@ import { config } from './config.js';
 import { CollisionError, EventNotFoundError, EventValidationError } from './collisions.js';
 import { readClassImage } from './import/classes/image-reader.js';
 import { readClassPdf, PdfReadError } from './import/classes/reader.js';
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyError } from 'fastify';
 import cors from '@fastify/cors';
 import type { CalendarOverview, EventInput } from './database.js';
 import { importCollisions } from './import/collisions-preview.js';
@@ -119,6 +119,10 @@ const cancelSchema = { params: { type: 'object', required: ['id'], properties: {
 
 export function buildApi(repository: CalendarRepository | null, allowedOrigins: string[] = [], options: ApiOptions = {}) {
   const app: FastifyInstance = Fastify({ logger: true, ajv: { customOptions: { removeAdditional: false, coerceTypes: false } } });
+  app.setErrorHandler<FastifyError>((error, _request, reply) => {
+    if (error.validation) return reply.code(400).send({ error: 'invalid_request', details: error.validation });
+    return reply.send(error);
+  });
   const scheduleReader: ScheduleReader = options.scheduleReader ?? new DemoScheduleReader();
   // Wydarzenia z kalendarza do wykrywania duplikatów zmian pracy. Bez bazy porównanie jest pomijane.
   const existingEventsFor = async (rows: ImportRow[]): Promise<ExistingEvent[]> => {

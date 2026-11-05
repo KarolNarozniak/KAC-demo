@@ -34,7 +34,7 @@ test('isolated PostgreSQL: ownership, rollback, concurrent version, snapshots an
         assert.equal((await profiles.listAvailability(config.demoUserId)).intervals.length, 4);
         // Force an INSERT failure after DELETE using a trigger scoped only to this disposable schema.
         await pool.query(`create function fail_insert() returns trigger language plpgsql as $$ begin if NEW.od_godzina='13:00' then raise exception 'forced insert failure'; end if; return NEW; end $$; create trigger test_failure before insert on t_dostepnosc for each row execute function fail_insert()`);
-        await assert.rejects(profiles.replaceAvailability(config.demoUserId, [{ dayOfWeek: 1, startTime: '13:00', endTime: '14:00' }], a.version), /forced insert failure/);
+        await assert.rejects(profiles.replaceAvailability(config.demoUserId, [{ dayOfWeek: 1, startTime: '08:00', endTime: '09:00' }, { dayOfWeek: 1, startTime: '13:00', endTime: '14:00' }], a.version), /forced insert failure/);
         assert.deepEqual(await profiles.listAvailability(config.demoUserId), a);
         await pool.query('drop trigger test_failure on t_dostepnosc');
         const concurrent = await Promise.allSettled([profiles.replaceAvailability(config.demoUserId, a.intervals, a.version), profiles.replaceAvailability(config.demoUserId, a.intervals, a.version)]);
@@ -87,6 +87,23 @@ test('isolated PostgreSQL: ownership, rollback, concurrent version, snapshots an
         const cleared = await profiles.replaceAvailability(config.demoUserId, [], currentA.version);
         assert.deepEqual(cleared.intervals, []);
         assert.equal((await planning.generate(config.demoUserId, config.demoCalendarId, '2026-11-23')).estimatedPayPln, 0);
+        // A neighbor from Sunday is read even though the requested week starts Monday.
+        const boundaryProfile = await profiles.getProfile(config.demoUserId);
+        await profiles.saveProfile(config.demoUserId, { ...boundaryProfile, commuteMinutes: 30, targetHours: 0.5 });
+        const boundaryA = await profiles.listAvailability(config.demoUserId);
+        await profiles.replaceAvailability(config.demoUserId, [
+            { dayOfWeek: 1, startTime: '00:00', endTime: '03:00' },
+            { dayOfWeek: 7, startTime: '22:00', endTime: '24:00' }
+        ], boundaryA.version);
+        await pool.query(`insert into t_wydarzenia(id_kalendarza,id_kategorii,tytul,rozpoczecie,zakonczenie,miejsce) values($1,'class','Sunday class','2026-11-29T21:00:00Z','2026-11-29T22:45:00Z','')`, [config.demoCalendarId]);
+        const boundary = await planning.generate(config.demoUserId, config.demoCalendarId, '2026-11-30');
+        assert.equal(boundary.shifts[0]?.start, '2026-11-29T23:15:00.000Z');
+        const tooEarly = await request('PUT', `/api/schedules/${boundary.id}/shifts/${boundary.shifts[0]!.id}`, {
+            start: '2026-11-29T23:14:00Z', end: '2026-11-29T23:44:00Z'
+        });
+        assert.equal(tooEarly.statusCode, 422);
+        assert.equal(tooEarly.json().details.violations[0].actualMinutes, 29);
+        await planning.change(config.demoUserId, config.demoCalendarId, boundary.id, 'accept');
     }
     finally {
         await app?.close();
