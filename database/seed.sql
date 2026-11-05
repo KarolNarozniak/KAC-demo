@@ -25,3 +25,9 @@ on conflict (id_kalendarza) do update set
   nazwa = excluded.nazwa,
   typ = excluded.typ,
   aktywny = excluded.aktywny;
+
+-- Work profile starts incomplete: missing rate, amount kind and commute are distinct from zero.
+insert into t_profile_pracy(id_uzytkownika)
+select 'U001' where not exists (
+  select 1 from t_profile_pracy where id_uzytkownika='U001' and aktywny=true
+);

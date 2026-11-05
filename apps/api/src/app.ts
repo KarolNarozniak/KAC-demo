@@ -1,3 +1,5 @@
+import { registerScheduling } from './scheduling/routes.js';
+import type { SchedulingRepository } from './scheduling/repository.js';
 import { registerWorkProfile } from './profile/routes.js';
 import type { WorkProfileRepository } from './profile/repository.js';
 import { config } from './config.js';
@@ -36,6 +38,7 @@ export type CalendarRepository = {
 
 export type ApiOptions = {
   workProfile?: WorkProfileRepository | null;
+  scheduling?: SchedulingRepository | null;
   /**
    * Mechanizm odczytu grafiku (S23KC2S1P2-44). Serwer (server.ts) podaje LocalScheduleReader (PDF + OCR).
    * Bez tej opcji działa czytnik demonstracyjny – używają go testy, żeby nie uruchamiać OCR.
@@ -115,7 +118,7 @@ const readScheduleSchema = {
 const cancelSchema = { params: { type: 'object', required: ['id'], properties: { id: sessionIdSchema } } } as const;
 
 export function buildApi(repository: CalendarRepository | null, allowedOrigins: string[] = [], options: ApiOptions = {}) {
-  const app: FastifyInstance = Fastify({ logger: true });
+  const app: FastifyInstance = Fastify({ logger: true, ajv: { customOptions: { removeAdditional: false, coerceTypes: false } } });
   const scheduleReader: ScheduleReader = options.scheduleReader ?? new DemoScheduleReader();
   // Wydarzenia z kalendarza do wykrywania duplikatów zmian pracy. Bez bazy porównanie jest pomijane.
   const existingEventsFor = async (rows: ImportRow[]): Promise<ExistingEvent[]> => {
@@ -133,6 +136,7 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   });
 
+  registerScheduling(app, options.scheduling ?? null, config.demoUserId, config.demoCalendarId);
   registerWorkProfile(app, options.workProfile ?? null, config.demoUserId);
 
   app.get('/api/health/live', async () => ({ api: 'ok' }));
