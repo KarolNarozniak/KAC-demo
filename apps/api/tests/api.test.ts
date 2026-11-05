@@ -90,3 +90,22 @@ test('delete distinguishes missing events from unavailable storage', async () =>
     finally { await app.close(); }
   }
 });
+
+test('OpenAPI specification and Swagger UI are served (S23KC2S1P2-184)', async () => {
+  const app = buildApi(null);
+  try {
+    const spec = await app.inject({ method: 'GET', url: '/api/openapi.json' });
+    assert.equal(spec.statusCode, 200);
+    const document = spec.json();
+    assert.match(document.openapi, /^3\./);
+    for (const path of ['/api/health/live', '/api/calendar', '/api/events', '/api/events/{id}', '/api/import/sessions/{id}/confirm', '/api/import/google/connections']) {
+      assert.ok(document.paths[path], `missing path ${path}`);
+    }
+    assert.ok(!document.paths['/api/openapi.json'], 'spec endpoint should be hidden');
+    assert.deepEqual(document.paths['/api/events'].post.tags, ['Events']);
+    assert.ok(document.paths['/api/events/{id}'].put.responses['409']);
+    const ui = await app.inject({ method: 'GET', url: '/api/docs/' });
+    assert.equal(ui.statusCode, 200);
+    assert.match(ui.headers['content-type'] as string, /text\/html/);
+  } finally { await app.close(); }
+});

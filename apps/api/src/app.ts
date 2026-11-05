@@ -4,6 +4,7 @@ import { readClassPdf, PdfReadError } from './import/classes/reader.js';
 import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import type { CalendarOverview, EventInput } from './database.js';
+import { databaseErrors, errorResponse, okResponse, registerApiDocs, tags } from './docs.js';
 import { importCollisions } from './import/collisions-preview.js';
 import { registerGoogleImport, type GoogleImportOptions } from './import/google/routes.js';
 import { decodeIcsFile, IcsError, looksLikeIcs, parseIcs } from './import/ics/parse.js';
@@ -67,6 +68,9 @@ const rowsProperty = { type: 'array', maxItems: 1000, items: importRowSchema } a
 const sessionIdSchema = { type: 'string', minLength: 1, maxLength: 64 } as const;
 
 const importPreviewSchema = {
+  tags: [tags.import],
+  summary: 'Podgląd importu – sprawdza wiersze bez zapisu w kalendarzu',
+  response: { 200: okResponse('Wiersze ze statusem kontroli'), ...databaseErrors },
   body: {
     type: 'object',
     required: ['rows'],
@@ -76,6 +80,9 @@ const importPreviewSchema = {
 } as const;
 
 const createSessionSchema = {
+  tags: [tags.import],
+  summary: 'Utworzenie sesji importu (wygasa po 15 minutach bez akcji)',
+  response: { 201: okResponse('Sesja utworzona: importSessionId, expiresAt, rows'), ...databaseErrors },
   body: {
     type: 'object',
     required: ['source', 'format', 'rows'],
@@ -89,6 +96,16 @@ const createSessionSchema = {
 } as const;
 
 const confirmSchema = {
+  tags: [tags.import],
+  summary: 'Zatwierdzenie importu – zapis zaakceptowanych wierszy (wszystkie albo żaden)',
+  response: {
+    201: okResponse('Zapisano: saved, rejected, summary, events'),
+    404: errorResponse('Sesja importu nie istnieje'),
+    409: errorResponse('Sesja importu jest już zamknięta'),
+    410: errorResponse('Sesja importu wygasła'),
+    422: errorResponse('Błędne wiersze, niepotwierdzona zmiana nocna lub brak decyzji o duplikatach'),
+    ...databaseErrors,
+  },
   params: { type: 'object', required: ['id'], properties: { id: sessionIdSchema } },
   body: { type: 'object', required: ['rows'], additionalProperties: false, properties: { rows: rowsProperty } },
 } as const;
@@ -108,16 +125,22 @@ const readScheduleSchema = {
   },
 } as const;
 
-const cancelSchema = { params: { type: 'object', required: ['id'], properties: { id: sessionIdSchema } } } as const;
+const cancelSchema = {
+  tags: [tags.import],
+  summary: 'Anulowanie importu – kalendarz bez zmian',
+  response: { 200: okResponse('status: cancelled'), 409: errorResponse('Sesja importu nie jest aktywna'), ...databaseErrors },
+  params: { type: 'object', required: ['id'], properties: { id: sessionIdSchema } },
+} as const;
+
+const fileReadResponses = {
+  201: okResponse('Odczytane wiersze, podgląd i identyfikator sesji importu'),
+  422: errorResponse('Plik nieobsługiwany, nieczytelny lub bez rozpoznanych danych'),
+  429: errorResponse('Czytnik plików jest zajęty – spróbuj ponownie'),
+  ...databaseErrors,
+} as const;
 
 export function buildApi(repository: CalendarRepository | null, allowedOrigins: string[] = [], options: ApiOptions = {}) {
   const app: FastifyInstance = Fastify({ logger: true });
-  const scheduleReader: ScheduleReader = options.scheduleReader ?? new DemoScheduleReader();
-  // Wydarzenia z kalendarza do wykrywania duplikatów zmian pracy. Bez bazy porównanie jest pomijane.
-  const existingEventsFor = async (rows: ImportRow[]): Promise<ExistingEvent[]> => {
-    if (!repository?.listEventsForImport) return [];
-    return repository.listEventsForImport();
-  };
   const allowAnyOrigin = allowedOrigins.includes('*');
   const origins = new Set(allowedOrigins);
 
@@ -129,9 +152,32 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   });
 
-  app.get('/api/health/live', async () => ({ api: 'ok' }));
+  registerApiDocs(app);
+  // Trasy rejestrujemy jako plugin po dokumentacji – tylko wtedy @fastify/swagger widzi je wszystkie.
+  app.register(async (routes) => registerRoutes(routes, repository, options));
 
-  app.get('/api/health/ready', async (request, reply) => {
+  return app;
+}
+
+function registerRoutes(app: FastifyInstance, repository: CalendarRepository | null, options: ApiOptions) {
+  const scheduleReader: ScheduleReader = options.scheduleReader ?? new DemoScheduleReader();
+  // Wydarzenia z kalendarza do wykrywania duplikatów zmian pracy. Bez bazy porównanie jest pomijane.
+  const existingEventsFor = async (rows: ImportRow[]): Promise<ExistingEvent[]> => {
+    if (!repository?.listEventsForImport) return [];
+    return repository.listEventsForImport();
+  };
+
+  app.get('/api/health/live', {
+    schema: { tags: [tags.health], summary: 'API działa (bez sprawdzania bazy)', response: { 200: okResponse('api: ok') } },
+  }, async () => ({ api: 'ok' }));
+
+  app.get('/api/health/ready', {
+    schema: {
+      tags: [tags.health],
+      summary: 'API jest gotowe – sprawdza połączenie z PostgreSQL',
+      response: { 200: okResponse('api: ok, database: connected'), 503: okResponse('database: not-configured albo unavailable') },
+    },
+  }, async (request, reply) => {
     if (!repository) return reply.code(503).send({ api: 'ok', database: 'not-configured' });
     try {
       await repository.checkConnection();
@@ -142,7 +188,13 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
     }
   });
 
-  app.get('/api/calendar', async (_request, reply) => {
+  app.get('/api/calendar', {
+    schema: {
+      tags: [tags.calendar],
+      summary: 'Kalendarz użytkownika z wydarzeniami',
+      response: { 200: okResponse('source, user, calendar, counts, events'), 404: errorResponse('Kalendarz nie istnieje'), ...databaseErrors },
+    },
+  }, async (_request, reply) => {
     if (!repository) return reply.code(503).send({ error: 'database_not_configured' });
     try {
       const overview = await repository.getOverview();
@@ -167,7 +219,17 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
   } as const;
   for (const method of ['POST', 'PUT'] as const) {
     app.route<{ Body: EventInput; Params: { id?: string } }>({ method, url: method === 'POST' ? '/api/events' : '/api/events/:id',
-      schema: { body: eventBody, ...(method === 'PUT' ? { params: { type: 'object', required: ['id'], properties: { id: { type: 'string', minLength: 1, maxLength: 200 } } } } : {}) },
+      schema: {
+        tags: [tags.events],
+        summary: method === 'POST' ? 'Utworzenie wydarzenia' : 'Edycja wydarzenia (cała seria)',
+        response: {
+          [method === 'POST' ? 201 : 200]: okResponse('Zapisane wydarzenie z id'),
+          400: errorResponse('Niepoprawne dane wydarzenia'),
+          ...(method === 'PUT' ? { 404: errorResponse('Wydarzenie nie istnieje') } : {}),
+          409: errorResponse('Kolizja z innymi wydarzeniami: conflicts i collisionToken do zapisu mimo kolizji'),
+          503: errorResponse('Baza danych niedostępna albo wydarzenie nie zostało zapisane'),
+        },
+        body: eventBody, ...(method === 'PUT' ? { params: { type: 'object', required: ['id'], properties: { id: { type: 'string', minLength: 1, maxLength: 200 } } } } : {}) },
       handler: async (request, reply) => {
         const input = request.body;
         const validDate = (value: string) => {
@@ -192,7 +254,11 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
   }
 
   app.delete<{ Params: { id: string } }>('/api/events/:id', {
-    schema: { params: { type: 'object', required: ['id'], properties: { id: { type: 'string', minLength: 1, maxLength: 200 } } } },
+    schema: {
+      tags: [tags.events],
+      summary: 'Usunięcie wydarzenia (dla serii – wszystkich wystąpień)',
+      response: { 200: okResponse('deletedIds – identyfikatory usuniętych wydarzeń'), 404: errorResponse('Wydarzenie nie istnieje'), ...databaseErrors },
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'string', minLength: 1, maxLength: 200 } } } },
   }, async (request, reply) => {
     if (!repository?.deleteEvent) return reply.code(503).send({ error: 'database_not_configured' });
     try {
@@ -298,7 +364,8 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
 
   // --- Import grafiku pracy ze zdjęcia lub pliku (S23KC2S1P2-44) ---
   app.post<{ Body: { fileName: string; dataBase64: string } }>('/api/import/classes/read',
-    { schema: readScheduleSchema, bodyLimit: READ_BODY_LIMIT }, async (request, reply) => {
+    { schema: { ...readScheduleSchema, tags: [tags.import], summary: 'Odczyt planu zajęć z PDF, zdjęcia lub pliku ICS (base64)', response: fileReadResponses },
+      bodyLimit: READ_BODY_LIMIT }, async (request, reply) => {
       if (!repository?.createImportSession || !repository.listEventsForImport) return reply.code(503).send({ error: 'database_not_configured' });
 
       // Plik ICS (S23KC2S1P2-8) rozpoznajemy po treści – ten sam przycisk importu planu przyjmuje PDF, zdjęcie i ICS.
@@ -374,7 +441,8 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
   // Sprawdza plik, odczytuje zmiany i zakłada sesję importu do kontroli. Kalendarz pozostaje bez zmian.
   app.post<{ Body: { fileName: string; dataBase64: string } }>(
     '/api/import/work-schedule/read',
-    { schema: readScheduleSchema, bodyLimit: READ_BODY_LIMIT + 1024 },
+    { schema: { ...readScheduleSchema, tags: [tags.workSchedule], summary: 'Odczyt grafiku pracy z PDF lub zdjęcia (base64)', response: fileReadResponses },
+      bodyLimit: READ_BODY_LIMIT + 1024 },
     async (request, reply) => {
       const file = checkScheduleFile(request.body.dataBase64);
       if (!file.ok) return reply.code(422).send({ error: file.reason });
@@ -417,6 +485,4 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
       }
     },
   );
-
-  return app;
 }

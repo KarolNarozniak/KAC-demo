@@ -13,6 +13,8 @@ Use Node.js 24 LTS (24.3+; `.nvmrc` selects 24) and PostgreSQL 16. Node 25 is no
 5. `npm run api:dev`
 6. In a second terminal: `npm run web:dev`.
 
+API documentation (Swagger UI) is served by the running API at `http://localhost:4000/api/docs`; the raw OpenAPI 3 specification is at `/api/openapi.json`. It is generated from the Fastify route schemas, so new routes appear automatically – add `tags`, `summary` and `response` to their `schema` (helpers in `apps/api/src/docs.ts`).
+
 Open the Expo URL, normally `http://localhost:8081`. To use a phone, set `EXPO_PUBLIC_API_URL` to your computer's reachable API address and add the web origin to `API_CORS_ORIGINS`.
 
 ## Expo / React upgrade
