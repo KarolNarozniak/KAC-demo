@@ -14,6 +14,10 @@ import { mapShiftsToRows, READ_STATUS_LABELS } from './import/work-schedule/mapp
 import { ScheduleReadError } from './import/work-schedule/local-reader.js';
 import { DemoScheduleReader, type ScheduleReader } from './import/work-schedule/reader.js';
 import type { AcceptedRow, ConfirmResult, CreateSessionInput, ImportFormat, ImportSource } from './import/session.js';
+import { generateSchedule, validateSchedule } from './scheduling/generator.js';
+import { validWeekStart, localInstant } from './scheduling/time.js';
+import { ScheduleVersionConflictError, type ScheduleRepository } from './scheduling/repository.js';
+import type { CandidateShift, ManualShiftInput, PlannerOverrides, ScheduleGenerationResult } from './scheduling/types.js';
 
 export type CalendarRepository = {
   deleteEvent?: (eventId: string) => Promise<string[] | null>;
@@ -39,6 +43,7 @@ export type ApiOptions = {
   scheduleReader?: ScheduleReader;
   /** Import z Google Calendar (S23KC2S1P2-27): klient OAuth; bez niego działa konto demonstracyjne. */
   google?: GoogleImportOptions;
+  scheduleRepository?: ScheduleRepository;
 };
 
 // Ograniczenia danych wejściowych importu: chronią API przed zbyt dużymi lub dziwnymi żądaniami.
@@ -110,6 +115,29 @@ const readScheduleSchema = {
 
 const cancelSchema = { params: { type: 'object', required: ['id'], properties: { id: sessionIdSchema } } } as const;
 
+const schedulerOverridesSchema = {
+  type: 'object', additionalProperties: false,
+  properties: {
+    mode: { type: 'string', enum: ['elastyczny', 'zmianowy'] },
+    minimumHours: { type: 'number', minimum: 0, maximum: 80 },
+    targetHours: { type: 'number', minimum: 0, maximum: 80 },
+    maximumHours: { type: 'number', minimum: 0, maximum: 80 },
+    commuteBufferMinutes: { type: 'integer', minimum: 0, maximum: 720 },
+    minimumRestMinutes: { type: 'integer', minimum: 0, maximum: 1440 },
+    minimumShiftMinutes: { type: 'integer', minimum: 120, maximum: 720 },
+    maximumSlotMinutes: { type: 'integer', minimum: 120, maximum: 720 },
+  },
+} as const;
+const generateScheduleSchema = { body: { type: 'object', required: ['weekStart'], additionalProperties: false,
+  properties: { weekStart: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' }, overrides: schedulerOverridesSchema } } } as const;
+const updateScheduleSchema = { params: { type: 'object', required: ['weekStart'], additionalProperties: false,
+  properties: { weekStart: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' } } },
+  body: { type: 'object', required: ['shifts', 'expectedVersion'], additionalProperties: false, properties: {
+    expectedVersion: { type: 'integer', minimum: 1 },
+    shifts: { type: 'array', maxItems: 14, items: { type: 'object', required: ['id', 'startLocal', 'endLocal'], additionalProperties: false,
+      properties: { id: { type: 'string', minLength: 1, maxLength: 100 }, startLocal: { type: 'string', maxLength: 16 }, endLocal: { type: 'string', maxLength: 16 } } } },
+  } } } as const;
+
 export function buildApi(repository: CalendarRepository | null, allowedOrigins: string[] = [], options: ApiOptions = {}) {
   const app: FastifyInstance = Fastify({ logger: true });
   const scheduleReader: ScheduleReader = options.scheduleReader ?? new DemoScheduleReader();
@@ -130,6 +158,76 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
   });
 
   app.get('/api/health/live', async () => ({ api: 'ok' }));
+
+  const scheduleRepository = options.scheduleRepository;
+  app.post<{ Body: { weekStart: string; overrides?: PlannerOverrides } }>('/api/schedules/generate', { schema: generateScheduleSchema }, async (request, reply) => {
+    if (!scheduleRepository) return reply.code(503).send({ error: 'scheduling_not_configured' });
+    if (!validWeekStart(request.body.weekStart)) return reply.code(400).send({ error: 'invalid_week_start' });
+    try {
+      const context = await scheduleRepository.getPlanningContext();
+      if (!context) return reply.code(404).send({ error: 'work_profile_not_found' });
+      const generated = generateSchedule(context, request.body.weekStart, request.body.overrides ?? {});
+      return reply.code(201).send(await scheduleRepository.saveSchedule(context, generated));
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('Ustawienia')) return reply.code(400).send({ error: 'invalid_scheduler_settings', message: error.message });
+      request.log.error({ err: error }, 'Schedule generation failed');
+      return reply.code(503).send({ error: 'schedule_generation_failed' });
+    }
+  });
+
+  app.get<{ Params: { weekStart: string } }>('/api/schedules/:weekStart', async (request, reply) => {
+    if (!scheduleRepository) return reply.code(503).send({ error: 'scheduling_not_configured' });
+    if (!validWeekStart(request.params.weekStart)) return reply.code(400).send({ error: 'invalid_week_start' });
+    try {
+      const schedule = await scheduleRepository.getLatestSchedule(request.params.weekStart);
+      return schedule ? schedule : reply.code(404).send({ error: 'schedule_not_found' });
+    } catch (error) {
+      request.log.error({ err: error }, 'Schedule lookup failed');
+      return reply.code(503).send({ error: 'schedule_lookup_failed' });
+    }
+  });
+
+  app.put<{ Params: { weekStart: string }; Body: { shifts: ManualShiftInput[]; expectedVersion: number } }>('/api/schedules/:weekStart', { schema: updateScheduleSchema }, async (request, reply) => {
+    if (!scheduleRepository) return reply.code(503).send({ error: 'scheduling_not_configured' });
+    const { weekStart } = request.params;
+    if (!validWeekStart(weekStart)) return reply.code(400).send({ error: 'invalid_week_start' });
+    try {
+      const [context, latest] = await Promise.all([scheduleRepository.getPlanningContext(), scheduleRepository.getLatestSchedule(weekStart)]);
+      if (!context) return reply.code(404).send({ error: 'work_profile_not_found' });
+      if (!latest) return reply.code(404).send({ error: 'schedule_not_found' });
+      const validation = validateSchedule(context, weekStart, request.body.shifts, { mode: latest.mode,
+        minimumHours: latest.minimumMinutes / 60, targetHours: latest.targetMinutes / 60, maximumHours: latest.maximumMinutes / 60 });
+      if (validation.errors.length) return reply.code(422).send({ error: 'invalid_schedule', errors: validation.errors, warnings: validation.warnings });
+      const shifts: CandidateShift[] = request.body.shifts.flatMap((input) => {
+        const startMatch = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})$/.exec(input.startLocal);
+        const endMatch = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})$/.exec(input.endLocal);
+        if (!startMatch || !endMatch) return [];
+        const start = localInstant(startMatch[1]!, startMatch[2]!, context.profile.timeZone);
+        const end = localInstant(endMatch[1]!, endMatch[2]!, context.profile.timeZone);
+        if (!start || !end) return [];
+        const durationMinutes = Math.round((end.getTime() - start.getTime()) / 60_000);
+        const optionalViolation = validation.warnings.find((warning) => warning.code === 'optional_lecture_conflict' && warning.candidateIds.includes(input.id));
+        const optionalLectureIds = optionalViolation?.eventIds ?? [];
+        return [{ candidateId: input.id, title: 'Praca', start: start.toISOString(), end: end.toISOString(), startLocal: input.startLocal,
+          endLocal: input.endLocal, durationMinutes, workDate: input.startLocal.slice(0, 10), mode: latest.mode, optionalLectureIds,
+          softPenalty: typeof optionalViolation?.details.penalty === 'number' ? optionalViolation.details.penalty : 0 }];
+      });
+      const solutionStatus = validation.totalMinutes >= validation.targetMinutes ? 'target_met' : 'not_found';
+      const edited: ScheduleGenerationResult = { ...latest, version: undefined, shifts, solutionStatus,
+        existingWorkMinutes: validation.existingWorkMinutes, proposedMinutes: validation.proposedMinutes, totalMinutes: validation.totalMinutes,
+        shortfallMinutes: validation.shortfallMinutes, minimumShortfallMinutes: validation.minimumShortfallMinutes,
+        optionalLecturesSkipped: [...new Set(shifts.flatMap((shift) => shift.optionalLectureIds))].sort(),
+        workdaysUsed: new Set(shifts.map((shift) => shift.workDate)).size,
+        violations: validation.warnings, generatedAt: new Date().toISOString() };
+      delete edited.scheduleId;
+      delete edited.version;
+      return await scheduleRepository.saveSchedule(context, edited, request.body.expectedVersion);
+    } catch (error) {
+      if (error instanceof ScheduleVersionConflictError) return reply.code(409).send({ error: 'schedule_version_conflict', currentVersion: error.actualVersion });
+      request.log.error({ err: error }, 'Schedule update failed');
+      return reply.code(503).send({ error: 'schedule_update_failed' });
+    }
+  });
 
   app.get('/api/health/ready', async (request, reply) => {
     if (!repository) return reply.code(503).send({ api: 'ok', database: 'not-configured' });
