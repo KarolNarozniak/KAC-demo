@@ -26,36 +26,36 @@ test('schedule API generates and persists a validated weekly proposal', async ()
     saveSchedule: async (_context, schedule) => { saved = { ...schedule, scheduleId: 'G1', version: (saved?.version ?? 0) + 1 }; return saved; },
   } });
   try {
-    const settings = await app.inject({ method: 'GET', url: '/api/scheduling/settings' });
+    const settings = await app.inject({ method: 'GET', url: '/api/v1/scheduling/settings' });
     assert.equal(settings.statusCode, 200);
-    const savedSettings = await app.inject({ method: 'PUT', url: '/api/scheduling/settings', payload: {
+    const savedSettings = await app.inject({ method: 'PUT', url: '/api/v1/scheduling/settings', payload: {
       ...settings.json(), mode: 'elastyczny', minimumHours: 4, targetHours: 8, maximumHours: 12, commuteBufferMinutes: 0, minimumRestMinutes: 0,
       minimumShiftMinutes: 120, maximumSlotMinutes: 360, maxHoursPerDay: 8, profileVersion: 'v1', availability: context.availability,
       preferredWorkWindows: [], blockedPeriods: [], shiftTemplates: [],
     } });
     assert.equal(savedSettings.statusCode, 200);
-    const invalid = await app.inject({ method: 'POST', url: '/api/schedules/generate', payload: { weekStart: '2026-11-03', profileVersion: 'v1' } });
+    const invalid = await app.inject({ method: 'POST', url: '/api/v1/schedules/generate', payload: { weekStart: '2026-11-03', profileVersion: 'v1' } });
     assert.equal(invalid.statusCode, 400);
-    const noClasses = await app.inject({ method: 'POST', url: '/api/schedules/generate', payload: { weekStart: '2026-11-02', profileVersion: 'v1' } });
+    const noClasses = await app.inject({ method: 'POST', url: '/api/v1/schedules/generate', payload: { weekStart: '2026-11-02', profileVersion: 'v1' } });
     assert.equal(noClasses.statusCode, 409);
     assert.equal(noClasses.json().requiresConfirmation, true);
-    const response = await app.inject({ method: 'POST', url: '/api/schedules/generate', payload: { weekStart: '2026-11-02', profileVersion: 'v1', confirmNoClasses: true } });
+    const response = await app.inject({ method: 'POST', url: '/api/v1/schedules/generate', payload: { weekStart: '2026-11-02', profileVersion: 'v1', confirmNoClasses: true } });
     assert.equal(response.statusCode, 201);
     assert.equal(response.json().solutionStatus, 'target_met');
     assert.ok(response.json().scheduleId);
-    assert.equal((await app.inject({ method: 'GET', url: '/api/schedules/2026-11-02' })).statusCode, 200);
+    assert.equal((await app.inject({ method: 'GET', url: '/api/v1/schedules/2026-11-02' })).statusCode, 200);
     const current = response.json() as ScheduleGenerationResult;
-    const edited = await app.inject({ method: 'PUT', url: '/api/schedules/2026-11-02', payload: {
+    const edited = await app.inject({ method: 'PUT', url: '/api/v1/schedules/2026-11-02', payload: {
       expectedVersion: current.version,
       shifts: current.shifts.map((shift) => ({ id: shift.candidateId, startLocal: shift.startLocal, endLocal: shift.endLocal })),
     } });
     assert.equal(edited.statusCode, 200);
     assert.equal(edited.json().version, 2);
-    const invalidEdit = await app.inject({ method: 'PUT', url: '/api/schedules/2026-11-02', payload: {
+    const invalidEdit = await app.inject({ method: 'PUT', url: '/api/v1/schedules/2026-11-02', payload: {
       expectedVersion: 2, shifts: [{ id: 'bad', startLocal: '2026-11-02T06:00', endLocal: '2026-11-02T10:00' }],
     } });
     assert.equal(invalidEdit.statusCode, 422);
-    const approved = await app.inject({ method: 'POST', url: '/api/schedules/2026-11-02/approve', payload: { expectedVersion: 2 } });
+    const approved = await app.inject({ method: 'POST', url: '/api/v1/schedules/2026-11-02/approve', payload: { expectedVersion: 2 } });
     assert.equal(approved.statusCode, 200);
     assert.equal(approved.json().isApproved, true);
   } finally { await app.close(); }

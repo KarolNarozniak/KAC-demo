@@ -8,16 +8,16 @@ test('calendar persists and deletes events and weekly series in PostgreSQL', { s
   assert.ok(pool);
   const app = buildApi(new PostgresCalendarRepository(pool), config.corsOrigins);
   try {
-    const readiness = await app.inject({ method: 'GET', url: '/api/health/ready' });
+    const readiness = await app.inject({ method: 'GET', url: '/api/v1/health/ready' });
     assert.equal(readiness.statusCode, 200);
     assert.equal(readiness.json().database, 'connected');
 
-    const response = await app.inject({ method: 'GET', url: '/api/calendar' });
+    const response = await app.inject({ method: 'GET', url: '/api/v1/calendar/overview' });
     assert.equal(response.statusCode, 200);
     const payload = response.json();
     assert.equal(payload.source, 'postgresql');
     assert.equal(payload.calendar.id, config.demoCalendarId);
-    const created = await app.inject({ method: 'POST', url: '/api/events', payload: {
+    const created = await app.inject({ method: 'POST', url: '/api/v1/calendar/events', payload: {
       title: 'Persistence integration test', start: '2026-10-24T09:00', end: '2026-10-24T10:00',
       category: 'Work', location: 'Test office', mandatory: false, repeatWeekly: true
     } });
@@ -26,7 +26,7 @@ test('calendar persists and deletes events and weekly series in PostgreSQL', { s
     try {
       const freshApp = buildApi(new PostgresCalendarRepository(pool));
       try {
-        const reread = await freshApp.inject({ method: 'GET', url: '/api/calendar' });
+        const reread = await freshApp.inject({ method: 'GET', url: '/api/v1/calendar/overview' });
         const saved = reread.json().events.find((event: { id: string }) => event.id === id);
         assert.equal(saved.repeatWeekly, true);
          assert.equal(saved.start, '2026-10-24T09:00');
@@ -38,21 +38,21 @@ test('calendar persists and deletes events and weekly series in PostgreSQL', { s
         assert.equal(await repository.deleteEvent(id, config.demoUserId, 'not-the-calendar'), null);
         const stillPresent = await pool.query('select id_wydarzenia from t_wydarzenia where id_wydarzenia = $1', [id]);
         assert.equal(stillPresent.rowCount, 1);
-        const deleted = await freshApp.inject({ method: 'DELETE', url: `/api/events/${id}` });
+        const deleted = await freshApp.inject({ method: 'DELETE', url: `/api/v1/calendar/events/${id}` });
         assert.equal(deleted.statusCode, 200);
         assert.deepEqual(deleted.json().deletedIds, [id]);
-        const afterDelete = await freshApp.inject({ method: 'GET', url: '/api/calendar' });
+        const afterDelete = await freshApp.inject({ method: 'GET', url: '/api/v1/calendar/overview' });
         assert.equal(afterDelete.json().events.some((event: { id: string }) => event.id === id), false);
         assert.equal((await pool.query('select id_serii from t_serie where id_serii = $1', [series.rows[0].id_serii])).rowCount, 0);
-        assert.equal((await freshApp.inject({ method: 'DELETE', url: `/api/events/${id}` })).statusCode, 404);
-        const single = await freshApp.inject({ method: 'POST', url: '/api/events', payload: {
+        assert.equal((await freshApp.inject({ method: 'DELETE', url: `/api/v1/calendar/events/${id}` })).statusCode, 404);
+        const single = await freshApp.inject({ method: 'POST', url: '/api/v1/calendar/events', payload: {
           title: 'Single-event deletion test', start: '2026-10-24T11:00', end: '2026-10-24T12:00',
           category: 'Personal', location: '', mandatory: false, repeatWeekly: false,
         } });
         assert.equal(single.statusCode, 201);
         const singleId = single.json().id;
         try {
-          assert.equal((await freshApp.inject({ method: 'DELETE', url: `/api/events/${singleId}` })).statusCode, 200);
+          assert.equal((await freshApp.inject({ method: 'DELETE', url: `/api/v1/calendar/events/${singleId}` })).statusCode, 200);
           assert.equal((await pool.query('select id_wydarzenia from t_wydarzenia where id_wydarzenia = $1', [singleId])).rowCount, 0);
         } finally { await pool.query('delete from t_wydarzenia where id_wydarzenia = $1', [singleId]); }
       } finally { await freshApp.close(); }

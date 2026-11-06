@@ -39,11 +39,11 @@ test('image upload uses detected type, creates only a review session, and retain
       return {id:'ocr-preview',expiresAt:new Date()};
     }});
   try {
-    const response=await app.inject({method:'POST',url:'/api/import/classes/read',payload:{fileName:'misleading.pdf',dataBase64:bytes('zima-2026-2027').toString('base64')}});
+    const response=await app.inject({method:'POST',url:'/api/v1/import/classes/read',payload:{fileName:'misleading.pdf',dataBase64:bytes('zima-2026-2027').toString('base64')}});
     assert.equal(response.statusCode,201);
     assert.equal(response.json().importSessionId,'ocr-preview');
     assert.ok(response.json().rows.every((row:{reviewRequired:boolean})=>row.reviewRequired));
-    const broken=await app.inject({method:'POST',url:'/api/import/classes/read',payload:{fileName:'broken.png',dataBase64:Buffer.from([137,80,78,71,13,10,26,10,0]).toString('base64')}});
+    const broken=await app.inject({method:'POST',url:'/api/v1/import/classes/read',payload:{fileName:'broken.png',dataBase64:Buffer.from([137,80,78,71,13,10,26,10,0]).toString('base64')}});
     assert.equal(broken.statusCode,422);
     assert.equal(sessions,1);
   } finally {await app.close();}

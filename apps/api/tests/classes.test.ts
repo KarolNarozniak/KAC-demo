@@ -44,9 +44,9 @@ test('class upload rejects unsupported images and corrupt PDFs before creating a
   const app = buildApi({ checkConnection: async () => {}, getOverview: async () => null,
     listEventsForImport: async () => [], createImportSession: async () => { writes++; return { id: 's1', expiresAt: new Date() }; } });
   try {
-    const photo = await app.inject({ method: 'POST', url: '/api/import/classes/read', payload: { fileName: 'fake.pdf', dataBase64: pngBytes().toString('base64') } });
+    const photo = await app.inject({ method: 'POST', url: '/api/v1/import/classes/read', payload: { fileName: 'fake.pdf', dataBase64: pngBytes().toString('base64') } });
     assert.equal(photo.statusCode, 422); assert.equal(photo.json().error, 'unsupported-image-layout');
-    const corrupt = await app.inject({ method: 'POST', url: '/api/import/classes/read', payload: { fileName: 'bad.pdf', dataBase64: pdfBytes().toString('base64') } });
+    const corrupt = await app.inject({ method: 'POST', url: '/api/v1/import/classes/read', payload: { fileName: 'bad.pdf', dataBase64: pdfBytes().toString('base64') } });
     assert.equal(corrupt.statusCode, 422);
     assert.equal(writes, 0);
   } finally { await app.close(); }
@@ -151,7 +151,7 @@ for (const name of ['wat-plan-zima-2025-2026', 'wat-plan-zima-2026-2027']) {
         return { id: 'semester-preview', expiresAt: new Date() };
       } });
     try {
-      const response = await app.inject({ method: 'POST', url: '/api/import/classes/read', payload: {
+      const response = await app.inject({ method: 'POST', url: '/api/v1/import/classes/read', payload: {
         fileName: `${name}.pdf`, dataBase64: readFileSync(path).toString('base64'),
       } });
       assert.equal(response.statusCode, 201);

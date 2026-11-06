@@ -1,0 +1,30 @@
+{
+  "link.title.Platforma": {
+    "message": "Platform",
+    "description": "The title of the footer links column with title=Platforma in the footer"
+  },
+  "link.title.Rozwój": {
+    "message": "Development",
+    "description": "The title of the footer links column with title=Rozwój in the footer"
+  },
+  "link.item.label.API v1": {
+    "message": "API v1",
+    "description": "The label of footer link with label=API v1 linking to http://localhost:4000/api/v1/docs"
+  },
+  "link.item.label.OpenAPI JSON": {
+    "message": "OpenAPI JSON",
+    "description": "The label of footer link with label=OpenAPI JSON linking to http://localhost:4000/api/v1/openapi.json"
+  },
+  "link.item.label.Standard zmian API": {
+    "message": "API change standard",
+    "description": "The label of footer link with label=Standard zmian API linking to /docs/api-standard"
+  },
+  "link.item.label.Lokalny quickstart": {
+    "message": "Local quickstart",
+    "description": "The label of footer link with label=Lokalny quickstart linking to /docs/quickstart"
+  },
+  "copyright": {
+    "message": "Copyright © 2026 KAC Platform.",
+    "description": "The footer copyright"
+  }
+}

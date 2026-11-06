@@ -1,0 +1,29 @@
+{
+  "name": "@kac/docs",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "generate-api": "docusaurus gen-api-docs all && node scripts/clean-generated-openapi-imports.mjs",
+    "dev": "docusaurus start --host 0.0.0.0",
+    "dev:en": "docusaurus start --host 0.0.0.0 --port 3001 --locale en --no-open",
+    "build": "docusaurus build",
+    "serve": "docusaurus serve --host 0.0.0.0 --port 3000",
+    "write-translations": "docusaurus write-translations --locale en",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@docusaurus/core": "^3.10.2",
+    "@docusaurus/preset-classic": "^3.10.2",
+    "@docusaurus/theme-mermaid": "^3.10.2",
+    "@docusaurus/tsconfig": "^3.10.2",
+    "@mdx-js/react": "^3.1.1",
+    "@mermaid-js/layout-elk": "^0.1.9",
+    "docusaurus-plugin-openapi-docs": "^5.2.0",
+    "docusaurus-theme-openapi-docs": "^5.2.0",
+    "prism-react-renderer": "^2.4.1",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "@docusaurus/types": "^3.10.2",
+    "typescript": "^5.7.2"
+  }
+}

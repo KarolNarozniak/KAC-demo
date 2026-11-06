@@ -22,21 +22,21 @@ async function request(path: string, options?: RequestInit) {
   return response.json();
 }
 export async function loadCalendar(): Promise<CalendarEvent[]> {
-  const data = await request('/api/calendar');
+  const data = await request('/api/v1/calendar/overview');
   const categories: Record<string, CalendarEvent['category']> = { 'Zajęcia': 'Class', 'Praca': 'Work', 'Prywatne': 'Personal' };
   return data.events.map((event: CalendarEvent) => ({ ...event, category: categories[event.category] ?? 'Personal' }));
 }
 export async function createEvent(event: CalendarEvent, collisionToken?: string): Promise<CalendarEvent> {
   const { title, start, end, category, mandatory, repeatWeekly } = event;
-  return request('/api/events', { method: 'POST', body: JSON.stringify({ title, start, end, category, mandatory, repeatWeekly, location: event.location ?? '', collisionToken }) });
+  return request('/api/v1/calendar/events', { method: 'POST', body: JSON.stringify({ title, start, end, category, mandatory, repeatWeekly, location: event.location ?? '', collisionToken }) });
 }
 
 export async function deleteEvent(id: string): Promise<string[]> {
-  const result = await request(`/api/events/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  const result = await request(`/api/v1/calendar/events/${encodeURIComponent(id)}`, { method: 'DELETE' });
   return result.deletedIds;
 }
 
 export async function updateEvent(id: string, event: CalendarEvent, collisionToken?: string): Promise<CalendarEvent> {
   const { title, start, end, category, mandatory, repeatWeekly } = event;
-  return request(`/api/events/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ title, start, end, category, mandatory, repeatWeekly, location: event.location ?? '', collisionToken }) });
+  return request(`/api/v1/calendar/events/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ title, start, end, category, mandatory, repeatWeekly, location: event.location ?? '', collisionToken }) });
 }

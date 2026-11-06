@@ -15,7 +15,7 @@ first version. The broader plan below remains a roadmap, not a statement of ship
   Weekly date reconstruction requires a valid Monday anchor and at least 70% matching
   header dates. Unreadable headers reject the image; unreadable subject codes remain
   editable rows. Grid detection never uses fixture names, hashes or paired PDF data.
-- Existing `/api/import/classes/read` accepts images and creates the usual preview
+- Existing `/api/v1/import/classes/read` accepts images and creates the usual preview
   session. One OCR request runs at a time, with a 60-second timeout and cleanup;
   overload returns 429. There is no background queue or persistent OCR job state.
 - Web/Android/iOS file pickers accept images. Every OCR row starts unselected;
