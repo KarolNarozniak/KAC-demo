@@ -15,6 +15,8 @@ import ApiLinks from '@site/src/components/ApiLinks';
 
 Swagger UI i Docusaurus korzystają z tego samego kontraktu OpenAPI 3.1. Kontrakt nie jest utrzymywany ręcznie: `@fastify/swagger` odczytuje schematy tras Fastify, które jednocześnie walidują żądania.
 
+Opis wszystkich operacji generujemy z OpenAPI w [referencji endpointów](./api/openapi-reference). Ta strona pokazuje modele żądań i odpowiedzi, pogrupowane według tagów API.
+
 ## Domeny API v1
 
 | Domena | Prefiks zasobów | Przykładowe operacje |
@@ -36,6 +38,6 @@ Walidacja wejścia Fastify zwraca `400`. Konflikt wydarzeń lub nieaktualna wers
 - Runtime routes i schematy: `apps/api/src/api/v1/`.
 - Eksport OpenAPI 3.1: `apps/api/openapi/openapi.json`.
 - Generator: `apps/api/scripts/export-openapi.ts`.
-- Każda zmiana endpointu, schematu, statusu lub przykładu wymaga eksportu OpenAPI, aktualizacji wygenerowanej referencji oraz aktualizacji tej dokumentacji. CI porównuje wygenerowany kontrakt z plikiem wersjonowanym.
+- Każda zmiana endpointu, schematu, statusu lub przykładu wymaga eksportu OpenAPI, regeneracji polskiej i angielskiej referencji oraz aktualizacji tej dokumentacji. CI porównuje wygenerowany kontrakt z plikiem wersjonowanym.
 
 Procedura zmiany jest opisana w [standardzie API](./api-standard.md).

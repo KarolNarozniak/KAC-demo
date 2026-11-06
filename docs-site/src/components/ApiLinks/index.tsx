@@ -9,6 +9,6 @@ export default function ApiLinks() {
   return <ul>
     <li><a href={`${apiOrigin}/api/v1/docs`}><Translate id="api.links.swagger">Open Swagger UI</Translate></a></li>
     <li><a href={`${apiOrigin}/api/v1/openapi.json`}><Translate id="api.links.spec">Download the OpenAPI JSON specification</Translate></a></li>
-    <li><Link to="/docs/api/reference/kac-platform-api"><Translate id="api.links.reference">Browse the generated endpoint reference</Translate></Link></li>
+    <li><Link to="/docs/api/openapi-reference"><Translate id="api.links.reference">Browse the generated endpoint reference</Translate></Link></li>
   </ul>;
 }

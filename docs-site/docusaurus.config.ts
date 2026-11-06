@@ -22,35 +22,12 @@ const config: Config = {
   markdown: { mermaid: true, hooks: { onBrokenMarkdownLinks: 'throw' } },
   presets: [
     ['classic', {
-      docs: { sidebarPath: './sidebars.ts', docItemComponent: '@theme/ApiItem' },
+      docs: { sidebarPath: './sidebars.ts' },
       blog: false,
       theme: { customCss: './src/css/custom.css' },
     }],
   ],
-  plugins: [
-    './plugins/webpack-openapi-compat',
-    ['docusaurus-plugin-openapi-docs', {
-      id: 'openapi',
-      docsPluginId: 'classic',
-      config: {
-        platformPl: {
-          specPath: '../apps/api/openapi/openapi.json',
-          outputDir: 'docs/api/reference',
-          downloadUrl: apiOpenApiUrl,
-          showSchemas: true,
-          sidebarOptions: { groupPathsBy: 'tag', categoryLinkSource: 'tag' },
-        },
-        platformEn: {
-          specPath: '../apps/api/openapi/openapi.json',
-          outputDir: 'i18n/en/docusaurus-plugin-content-docs/current/api/reference',
-          downloadUrl: apiOpenApiUrl,
-          showSchemas: true,
-          sidebarOptions: { groupPathsBy: 'tag', categoryLinkSource: 'tag' },
-        },
-      },
-    }],
-  ],
-  themes: ['docusaurus-theme-openapi-docs', '@docusaurus/theme-mermaid'],
+  themes: ['@docusaurus/theme-mermaid'],
   themeConfig: {
     image: 'img/social-card.svg',
     navbar: {
