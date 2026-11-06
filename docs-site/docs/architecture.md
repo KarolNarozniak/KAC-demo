@@ -13,10 +13,12 @@ description: Granice aplikacji, domen API, dane i przepływ walidacji.
 flowchart LR
   Browser[Web / Expo React Native] -->|JSON /api/v1| Api[Fastify API]
   Api --> Calendar[Moduł kalendarza]
+  Api --> Profile[Moduł profilu pracy]
   Api --> Scheduling[Moduł planowania]
   Api --> Imports[Moduły importu]
   Api --> Google[Jednorazowy odczyt Google]
   Calendar --> Pg[(PostgreSQL)]
+  Profile --> Pg
   Scheduling --> Pg
   Imports --> Pg
   Api --> OpenAPI[Kontrakt OpenAPI]
@@ -29,7 +31,9 @@ flowchart LR
 Wszystkie zasoby HTTP należą do jednej domeny API i wspólnej wersji `/api/v1`. Trasy są jednak rozdzielone według odpowiedzialności:
 
 - `src/api/v1/calendar/routes.ts` obsługuje przegląd kalendarza oraz wydarzenia.
-- `src/api/v1/scheduling/routes.ts` obsługuje ustawienia profilu, generowanie, edycję, walidację, akceptację i historię grafików.
+- `src/api/v1/profile/routes.ts` obsługuje profil pracy: limity godzin, cel godzin (tydzień albo miesiąc), dojazd, dostępność, preferencje, blokady i szablony zmian. Zapis jest atomowy i wymaga aktualnej wersji profilu (optimistic locking).
+- `src/api/v1/scheduling/routes.ts` obsługuje generowanie, edycję, walidację, akceptację i historię grafików.
+- `src/api/scope.ts` ustala użytkownika żądania po stronie serwera. Do czasu logowania jest to użytkownik demonstracyjny z konfiguracji.
 - `src/api/v1/imports/routes.ts` obsługuje podgląd importu, sesje oraz odczyt plików i planów zajęć.
 - `src/api/v1/imports/google-routes.ts` implementuje jednorazowy import Google jako adapter źródła danych.
 - `src/api/v1/health/routes.ts` zawiera sondy liveness i readiness.
@@ -54,4 +58,5 @@ Moduł tras otrzymuje zależności przez opcje Fastify. Nie otwiera własnego po
 - Importy są najpierw propozycją/sesją. Kalendarz zmienia się dopiero po walidacji i potwierdzeniu.
 - Akceptacja grafiku ponownie sprawdza ograniczenia w backendzie i zapisuje zmiany wraz z wydarzeniami w transakcji.
 - Czas wydarzeń jest interpretowany w strefie czasowej profilu użytkownika.
+- Użytkownik ma najwyżej jeden aktywny profil pracy (unikalny indeks w bazie). Cel miesięczny jest przeliczany na tydzień (miesiąc = 52/12 tygodnia) i ta wartość trafia do generatora. Zmiana profilu wpływa tylko na kolejne generowane grafiki.
 - Konflikty kalendarza oraz wersje grafiku są rozstrzygane w backendzie, nie tylko w UI.

@@ -5,6 +5,7 @@ import swaggerUi from '@fastify/swagger-ui';
 import { calendarRoutes } from './api/v1/calendar/routes.js';
 import { healthRoutes } from './api/v1/health/routes.js';
 import { importRoutes } from './api/v1/imports/routes.js';
+import { profileRoutes } from './api/v1/profile/routes.js';
 import { schedulingRoutes } from './api/v1/scheduling/routes.js';
 import type { ApiOptions, CalendarRepository } from './api/contracts.js';
 import { registerGoogleImport } from './api/v1/imports/google-routes.js';
@@ -33,7 +34,7 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
       info: {
         title: 'KAC Platform API',
         version: '1.0.0',
-        summary: 'Calendar, imports and weekly schedule planning API.',
+        summary: 'Calendar, imports, work profile and weekly schedule planning API.',
         description: [
           'Versioned JSON API for the KAC calendar application.',
           '',
@@ -49,7 +50,8 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
       tags: [
         { name: 'System', description: 'Liveness and dependency readiness.' },
         { name: 'Calendar', description: 'Calendar overview and event lifecycle.' },
-        { name: 'Scheduling', description: 'Weekly planning, constraints, versions and approval.' },
+        { name: 'Work profile', description: 'Work limits, hour target, commute, availability and shift templates used by planning.' },
+        { name: 'Scheduling', description: 'Weekly planning, versions, validation and approval.' },
         { name: 'Imports', description: 'Reviewable imports from schedules, ICS and class files.' },
         { name: 'Google import', description: 'One-time, read-only Google Calendar import.' },
       ],
@@ -69,6 +71,7 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
   app.register(async (v1) => {
     await healthRoutes(v1, { repository });
     await calendarRoutes(v1, { repository });
+    await profileRoutes(v1, { repository: options.workProfileRepository, scope: options.userScope });
     await schedulingRoutes(v1, { repository: options.scheduleRepository });
     await importRoutes(v1, { repository, scheduleRepository: options.scheduleRepository, scheduleReader, google: options.google });
     registerGoogleImport(v1, repository, options.google);

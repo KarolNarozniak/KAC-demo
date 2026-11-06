@@ -23,7 +23,8 @@ All operations are generated from OpenAPI in the [endpoint reference](./api/open
 | --- | --- | --- |
 | System | `/api/v1/health` | Liveness and readiness |
 | Calendar | `/api/v1/calendar` | Overview and event CRUD |
-| Scheduling | `/api/v1/scheduling`, `/api/v1/schedules` | Profile constraints, listing, versions, validation and approval |
+| Work profile | `/api/v1/work-profile` | Hour limits, weekly or monthly hour target, commute, availability, shift templates, profile version |
+| Scheduling | `/api/v1/schedules` | Generation, listing, versions, validation and approval |
 | Imports | `/api/v1/import` | Timetables, previews, sessions and confirmation |
 | Google | `/api/v1/import/google` | One-time read and event preview |
 
@@ -31,7 +32,7 @@ All paths are served from the same API host. OpenAPI lists full paths including 
 
 ## Error conventions
 
-Invalid input returns `400`. Calendar conflicts or stale versions use `409`; schedule constraint violations use `422`; unknown resources use `404`; missing database or unavailable dependency uses `503`. Import does not write calendar events before confirmation.
+Invalid input returns `400`. Invalid work profile values return `422` with an error code for each field (`fields`). Calendar conflicts or stale versions use `409`; schedule constraint violations use `422`; unknown resources use `404`; missing database or unavailable dependency uses `503`. Import does not write calendar events before confirmation.
 
 ## Contract in the repository
 

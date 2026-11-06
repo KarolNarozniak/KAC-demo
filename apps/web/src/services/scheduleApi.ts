@@ -1,21 +1,6 @@
-export type WorkMode = 'elastyczny' | 'zmianowy';
-export type ShiftTemplate = { id: string; name: string; startTime: string; endTime: string; endsNextDay: boolean; daysOfWeek: number[]; active: boolean };
-export type ScheduleSettings = {
-  profileVersion: string;
-  mode: WorkMode;
-  minimumHours: number;
-  targetHours: number;
-  maximumHours: number;
-  commuteBufferMinutes: number;
-  minimumRestMinutes: number;
-  minimumShiftMinutes: number;
-  maximumSlotMinutes: number;
-  maxHoursPerDay: number;
-  availability: { id: string; dayOfWeek: number; startTime: string; endTime: string }[];
-  preferredWorkWindows: { id: string; dayOfWeek: number; startTime: string; endTime: string; weight: number }[];
-  blockedPeriods: { id: string; type: string; start: string; end: string; reason?: string }[];
-  shiftTemplates: ShiftTemplate[];
-};
+import type { WorkMode, WorkProfile } from './workProfileApi';
+export type { ShiftTemplate, WorkMode } from './workProfileApi';
+
 export type ScheduleShift = {
   candidateId: string;
   title: string;
@@ -76,21 +61,13 @@ export async function loadSchedule(weekStart: string): Promise<WeeklySchedule | 
   return response.json();
 }
 
-export async function loadScheduleSettings(): Promise<ScheduleSettings> {
-  const response = await request('/api/v1/scheduling/settings');
-  if (!response.ok) throw new Error('Nie udało się wczytać ustawień planu.');
-  return response.json();
-}
-
-export async function saveScheduleSettings(settings: ScheduleSettings): Promise<ScheduleSettings> {
-  const response = await request('/api/v1/scheduling/settings', { method: 'PUT', body: JSON.stringify(settings) });
-  if (response.status === 409) throw new Error('Profil został zmieniony. Odśwież ustawienia przed zapisem.');
-  if (!response.ok) throw new Error('Nie udało się zapisać ustawień planu. Sprawdź zakresy i szablony zmian.');
-  return response.json();
-}
-
-export async function generateSchedule(weekStart: string, settings: ScheduleSettings, workaholic: boolean, confirmNoClasses = false): Promise<WeeklySchedule> {
-  const { profileVersion, shiftTemplates, availability: _availability, preferredWorkWindows: _preferences, blockedPeriods: _blocks, ...overrides } = settings;
+/**
+ * Generuje propozycję tygodnia z zapisanego profilu pracy.
+ * Generator planuje tydzień, dlatego przekazujemy cel tygodniowy (przy celu miesięcznym – jego odpowiednik tygodniowy).
+ */
+export async function generateSchedule(weekStart: string, profile: WorkProfile, workaholic: boolean, confirmNoClasses = false): Promise<WeeklySchedule> {
+  const { profileVersion, mode, minimumHours, maximumHours, weeklyTargetHours, commuteBufferMinutes, minimumRestMinutes, minimumShiftMinutes, maximumSlotMinutes, maxHoursPerDay, shiftTemplates } = profile;
+  const overrides = { mode, minimumHours, targetHours: weeklyTargetHours, maximumHours, commuteBufferMinutes, minimumRestMinutes, minimumShiftMinutes, maximumSlotMinutes, maxHoursPerDay };
   const response = await request('/api/v1/schedules/generate', { method: 'POST', body: JSON.stringify({ weekStart, profileVersion, confirmNoClasses, overrides: { ...overrides, shiftTemplates, workaholic } }) });
   if (response.status === 409) {
     const result = await response.json();

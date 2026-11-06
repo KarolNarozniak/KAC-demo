@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { generateSchedule, validateSchedule } from '../../../scheduling/generator.js';
 import { expandEventsForWeek, localInstant, validWeekStart } from '../../../scheduling/time.js';
-import { ProfileVersionConflictError, ScheduleAlreadyApprovedError, ScheduleVersionConflictError, type ScheduleRepository } from '../../../scheduling/repository.js';
-import type { CandidateShift, ManualShiftInput, PlannerOverrides, PlanningContext, ScheduleGenerationResult, ScheduleProfileSettings } from '../../../scheduling/types.js';
+import { ScheduleAlreadyApprovedError, ScheduleVersionConflictError, type ScheduleRepository } from '../../../scheduling/repository.js';
+import type { CandidateShift, ManualShiftInput, PlannerOverrides, PlanningContext, ScheduleGenerationResult } from '../../../scheduling/types.js';
 
 const schedulerOverridesSchema = {
   type: 'object', additionalProperties: false,
@@ -36,25 +36,6 @@ const versionSchema = { params: { type: 'object', required: ['weekStart'], prope
 const listSchema = { querystring: { type: 'object', required: ['from', 'to'], additionalProperties: false, properties: {
   from: { type: 'string', format: 'date' }, to: { type: 'string', format: 'date' }, limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 }, offset: { type: 'integer', minimum: 0, default: 0 },
 } } } as const;
-const settingsSchema = { body: { type: 'object', required: ['mode', 'minimumHours', 'targetHours', 'maximumHours', 'commuteBufferMinutes', 'minimumRestMinutes', 'minimumShiftMinutes', 'maximumSlotMinutes', 'maxHoursPerDay', 'profileVersion', 'availability', 'preferredWorkWindows', 'blockedPeriods', 'shiftTemplates'], additionalProperties: false,
-  properties: { ...schedulerOverridesSchema.properties, profileVersion: { type: 'string', minLength: 1 },
-    availability: { type: 'array', maxItems: 70, items: { type: 'object', required: ['id', 'dayOfWeek', 'startTime', 'endTime'], additionalProperties: false,
-      properties: { id: idSchema, dayOfWeek: { type: 'integer', minimum: 1, maximum: 7 }, startTime: { type: 'string', pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' }, endTime: { type: 'string', pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' } } } },
-    preferredWorkWindows: { type: 'array', maxItems: 70, items: { type: 'object', required: ['id', 'dayOfWeek', 'startTime', 'endTime', 'weight'], additionalProperties: false,
-      properties: { id: idSchema, dayOfWeek: { type: 'integer', minimum: 1, maximum: 7 }, startTime: { type: 'string', pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' }, endTime: { type: 'string', pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' }, weight: { type: 'number', minimum: 0, maximum: 100 } } } },
-    blockedPeriods: { type: 'array', maxItems: 100, items: { type: 'object', required: ['id', 'type', 'start', 'end'], additionalProperties: false,
-      properties: { id: idSchema, type: { type: 'string', minLength: 1, maxLength: 80 }, start: { type: 'string', format: 'date-time' }, end: { type: 'string', format: 'date-time' }, reason: { type: 'string', maxLength: 200 } } } },
-  } } } as const;
-
-const settingsFromContext = (context: PlanningContext): ScheduleProfileSettings => ({
-  mode: context.profile.mode, minimumHours: context.profile.minimumHours, targetHours: context.profile.targetHours,
-  maximumHours: context.profile.maximumHours, commuteBufferMinutes: context.profile.commuteBufferMinutes,
-  minimumRestMinutes: context.profile.minimumRestMinutes, minimumShiftMinutes: context.profile.minimumShiftMinutes,
-  maximumSlotMinutes: context.profile.maximumSlotMinutes, maxHoursPerDay: context.profile.maxHoursPerDay,
-  profileVersion: context.profile.profileVersion, availability: context.availability,
-  preferredWorkWindows: context.preferredWorkWindows, blockedPeriods: context.blockedPeriods, shiftTemplates: context.shiftTemplates,
-});
-
 export async function schedulingRoutes(app: FastifyInstance, options: { repository?: ScheduleRepository }) {
   const scheduleRepository = options.repository;
   const planningContextFor = async (weekStart: string): Promise<PlanningContext | null> => {
@@ -66,39 +47,7 @@ export async function schedulingRoutes(app: FastifyInstance, options: { reposito
     return { ...context, events: context.events.filter((event) => !ids.has(event.id)) };
   };
 
-  app.get('/scheduling/settings', { schema: { tags: ['Scheduling'], summary: 'Read scheduler settings', description: 'Returns weekly targets, working availability, preferred windows, blocked periods, shift templates and the profile concurrency version.', operationId: 'getScheduleSettings', response: { 200: objectResponse, 404: objectResponse, 503: objectResponse } } }, async (_request, reply) => {
-    if (!scheduleRepository) return reply.code(503).send({ error: 'scheduling_not_configured' });
-    try {
-      const context = await scheduleRepository.getPlanningContext();
-      return context ? settingsFromContext(context) : reply.code(404).send({ error: 'work_profile_not_found' });
-    } catch (error) {
-      app.log.error({ err: error }, 'Schedule settings lookup failed');
-      return reply.code(503).send({ error: 'schedule_settings_lookup_failed' });
-    }
-  });
-
-  app.put<{ Body: ScheduleProfileSettings }>('/scheduling/settings', { schema: { ...settingsSchema, tags: ['Scheduling'], summary: 'Update scheduler settings', description: 'Atomically updates working constraints, recurring availability, preferred windows, blocked periods and shift templates. Requires the current profileVersion.', operationId: 'updateScheduleSettings', response: { 200: objectResponse, 400: objectResponse, 404: objectResponse, 409: objectResponse } } }, async (request, reply) => {
-    if (!scheduleRepository) return reply.code(503).send({ error: 'scheduling_not_configured' });
-    const settings = request.body;
-    if (settings.minimumHours > settings.targetHours || settings.targetHours > settings.maximumHours || settings.maximumSlotMinutes < settings.minimumShiftMinutes ||
-      !settings.availability.every((window) => window.endTime > window.startTime) ||
-      !settings.preferredWorkWindows.every((window) => window.endTime > window.startTime) ||
-      !settings.blockedPeriods.every((period) => new Date(period.end).getTime() > new Date(period.start).getTime())) {
-      return reply.code(400).send({ error: 'invalid_scheduler_settings' });
-    }
-    try {
-      const context = await scheduleRepository.getPlanningContext();
-      if (!context) return reply.code(404).send({ error: 'work_profile_not_found' });
-      if (settings.profileVersion !== context.profile.profileVersion) return reply.code(409).send({ error: 'profile_version_conflict', profileVersion: context.profile.profileVersion });
-      await scheduleRepository.saveSettings(context, settings);
-      const updated = await scheduleRepository.getPlanningContext();
-      return updated ? settingsFromContext(updated) : reply.code(404).send({ error: 'work_profile_not_found' });
-    } catch (error) {
-      if (error instanceof ProfileVersionConflictError) return reply.code(409).send({ error: 'profile_version_conflict' });
-      request.log.error({ err: error }, 'Schedule settings update failed');
-      return reply.code(400).send({ error: 'schedule_settings_update_failed' });
-    }
-  });
+  // Ustawienia profilu (limity, cel, dostępność, szablony) obsługuje moduł profilu pracy: GET/PUT /api/v1/work-profile.
 
   app.post<{ Body: { weekStart: string; profileVersion: string; confirmNoClasses?: boolean; overrides?: PlannerOverrides } }>('/schedules/generate', { schema: {
     ...generateSchema, tags: ['Scheduling'], summary: 'Generate a weekly schedule', description: 'Creates a deterministic draft. If no classes occur in the week, confirmation is required. Published planner shifts are excluded from the planning baseline so a replacement can reduce the previous hours.',

@@ -4,35 +4,38 @@ import { buildApi } from '../src/app.js';
 import { config } from '../src/config.js';
 import { pool, PostgresCalendarRepository } from '../src/database.js';
 import { PostgresScheduleRepository } from '../src/scheduling/repository.js';
+import { PostgresWorkProfileRepository } from '../src/profile/repository.js';
 import { validateSchedule } from '../src/scheduling/generator.js';
 
 test('PostgreSQL schedule persistence, retrieval, edits and version conflicts', { skip: !config.databaseUrl }, async () => {
   assert.ok(pool);
   const calendarId = `schedule-test-calendar-${Date.now()}`;
   const profileId = `schedule-test-profile-${Date.now()}`;
+  // Własny użytkownik testu: każdy użytkownik ma najwyżej jeden aktywny profil pracy (S23KC2S1P2-186).
+  const userId = `schedule-test-user-${Date.now()}`;
   const repository = new PostgresScheduleRepository(pool);
-  await pool.query(`insert into t_kalendarze (id_kalendarza, id_uzytkownika, nazwa, typ) values ($1, $2, 'Schedule test', 'Osobisty')`, [calendarId, config.demoUserId]);
+  await pool.query(`insert into t_uzytkownicy (id_uzytkownika, imie, nazwisko, email, strefa_czasowa) values ($1, 'Test', 'Grafik', $2, 'Europe/Warsaw')`, [userId, `${userId}@example.test`]);
+  await pool.query(`insert into t_kalendarze (id_kalendarza, id_uzytkownika, nazwa, typ) values ($1, $2, 'Schedule test', 'Osobisty')`, [calendarId, userId]);
   await pool.query(`insert into t_profile_pracy
     (id_profilu, id_uzytkownika, stawka_pln, min_godzin_tydzien, cel_godzin_tydzien, max_godzin_tydzien,
      czas_dojazdu_min, min_odpoczynku_min, aktywny, tryb_pracy, min_slot_min, max_slot_min)
-    values ($1, $2, 30, 2, 4, 8, 0, 0, true, 'elastyczny', 120, 360)`, [profileId, config.demoUserId]);
+    values ($1, $2, 30, 2, 4, 8, 0, 0, true, 'elastyczny', 120, 360)`, [profileId, userId]);
   await pool.query(`insert into t_dostepnosc (id_profilu, dzien_tygodnia, od_godzina, do_godzina, rodzaj)
     values ($1, 1, '08:00', '18:00', 'Dostępny'), ($1, 3, '08:00', '18:00', 'Dostępny')`, [profileId]);
   const app = buildApi(null, [], { scheduleRepository: {
-    getPlanningContext: () => repository.getPlanningContext(config.demoUserId, calendarId, profileId),
+    getPlanningContext: () => repository.getPlanningContext(userId, calendarId, profileId),
     getLatestSchedule: (weekStart) => repository.getLatestSchedule(weekStart, calendarId),
     getScheduleById: repository.getScheduleById.bind(repository),
     listSchedules: (filters) => repository.listSchedules(filters, calendarId),
     getApprovedShiftEventIds: (weekStart) => repository.getApprovedShiftEventIds(weekStart, calendarId),
     saveSchedule: repository.saveSchedule.bind(repository),
-    saveSettings: repository.saveSettings.bind(repository),
     approveSchedule: (weekStart, expectedVersion) => repository.approveSchedule(weekStart, expectedVersion, calendarId),
     rejectSchedule: (weekStart, expectedVersion) => repository.rejectSchedule(weekStart, expectedVersion, calendarId),
-  } });
+  }, workProfileRepository: new PostgresWorkProfileRepository(pool), userScope: () => ({ userId, calendarId }) });
   try {
-    const currentSettings = await app.inject({ method: 'GET', url: '/api/v1/scheduling/settings' });
+    const currentSettings = await app.inject({ method: 'GET', url: '/api/v1/work-profile' });
     assert.equal(currentSettings.statusCode, 200);
-    const settings = await app.inject({ method: 'PUT', url: '/api/v1/scheduling/settings', payload: {
+    const settings = await app.inject({ method: 'PUT', url: '/api/v1/work-profile', payload: {
       ...currentSettings.json(),
       mode: 'elastyczny', minimumHours: 2, targetHours: 4, maximumHours: 8, commuteBufferMinutes: 0, minimumRestMinutes: 0,
       minimumShiftMinutes: 120, maximumSlotMinutes: 360, maxHoursPerDay: 8,
@@ -54,7 +57,7 @@ test('PostgreSQL schedule persistence, retrieval, edits and version conflicts', 
     assert.equal(persisted.rows[0].id_profilu, profileId);
     assert.equal(persisted.rows[0].tydzien_od, '2026-11-02');
     assert.equal(persisted.rows[0].id_kalendarza, calendarId);
-    const loadedContext = await repository.getPlanningContext(config.demoUserId, calendarId, profileId);
+    const loadedContext = await repository.getPlanningContext(userId, calendarId, profileId);
     assert.equal(loadedContext?.profile.calendarId, calendarId);
     const versionCheck = await pool.query('select coalesce(max(version), 0)::integer as version from t_grafiki where id_kalendarza = $1 and tydzien_od = $2', [calendarId, '2026-11-02']);
     assert.equal(versionCheck.rows[0].version, 1);
@@ -80,7 +83,7 @@ test('PostgreSQL schedule persistence, retrieval, edits and version conflicts', 
     assert.equal(stale.statusCode, 409);
     const deletedAvailability = await pool.query('delete from t_dostepnosc where id_profilu = $1 and rodzaj = $2 returning id_dostepnosci', [profileId, 'Dostępny']);
     assert.ok(deletedAvailability.rowCount > 0);
-    const contextWithoutAvailability = await repository.getPlanningContext(config.demoUserId, calendarId, profileId);
+    const contextWithoutAvailability = await repository.getPlanningContext(userId, calendarId, profileId);
     assert.equal(contextWithoutAvailability?.availability.length, 0);
     const currentSchedule = await repository.getLatestSchedule('2026-11-02', calendarId);
     assert.ok(currentSchedule?.shifts.length);
@@ -100,7 +103,7 @@ test('PostgreSQL schedule persistence, retrieval, edits and version conflicts', 
     assert.equal(approved.json().workflowStatus, 'accepted');
     const calendarEvents = await pool.query(`select id_wydarzenia from t_wydarzenia where id_kalendarza = $1 and zrodlo = 'Plan pracy'`, [calendarId]);
     assert.equal(calendarEvents.rowCount, approved.json().shifts.length);
-    const calendarView = await new PostgresCalendarRepository(pool).getOverview(config.demoUserId, calendarId);
+    const calendarView = await new PostgresCalendarRepository(pool).getOverview(userId, calendarId);
     assert.equal(calendarView?.events.filter((event) => event.title === 'Zmiana pracy').length, approved.json().shifts.length);
     const reapproved = await app.inject({ method: 'POST', url: '/api/v1/schedules/2026-11-02/approve', payload: { expectedVersion: 2 } });
     assert.equal(reapproved.statusCode, 200);
@@ -114,8 +117,8 @@ test('PostgreSQL schedule persistence, retrieval, edits and version conflicts', 
     assert.equal(approvedAgain.statusCode, 200);
     assert.equal((await pool.query(`select id_wydarzenia from t_wydarzenia where id_kalendarza = $1 and zrodlo = 'Plan pracy'`, [calendarId])).rowCount, approvedAgain.json().shifts.length);
 
-    const currentProfile = await app.inject({ method: 'GET', url: '/api/v1/scheduling/settings' });
-    const lowerTargetSettings = await app.inject({ method: 'PUT', url: '/api/v1/scheduling/settings', payload: {
+    const currentProfile = await app.inject({ method: 'GET', url: '/api/v1/work-profile' });
+    const lowerTargetSettings = await app.inject({ method: 'PUT', url: '/api/v1/work-profile', payload: {
       ...currentProfile.json(), minimumHours: 1, targetHours: 2, maximumHours: 8,
     } });
     assert.equal(lowerTargetSettings.statusCode, 200, lowerTargetSettings.body);
@@ -153,6 +156,7 @@ test('PostgreSQL schedule persistence, retrieval, edits and version conflicts', 
     await app.close();
     await pool.query('delete from t_profile_pracy where id_profilu = $1', [profileId]);
     await pool.query('delete from t_kalendarze where id_kalendarza = $1', [calendarId]);
+    await pool.query('delete from t_uzytkownicy where id_uzytkownika = $1', [userId]);
     await pool.end();
   }
 });

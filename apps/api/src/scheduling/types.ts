@@ -19,6 +19,10 @@ export interface PlanningProfile {
   maximumSlotMinutes: number;
   maxHoursPerDay: number;
   profileVersion: string;
+  /** Okres celu godzin (S23KC2S1P2-39); targetHours powyżej jest zawsze celem tygodniowym. */
+  targetPeriod?: 'week' | 'month';
+  /** Cel wpisany przez użytkownika w jego okresie (przy celu miesięcznym – wartość miesięczna). */
+  periodTargetHours?: number;
 }
 
 export interface AvailabilityWindow {
@@ -89,22 +93,6 @@ export interface PlannerOverrides {
   candidateStepMinutes?: number;
   shiftTemplates?: ShiftTemplate[];
   workaholic?: boolean;
-}
-
-export interface ScheduleProfileSettings extends PlannerOverrides {
-  minimumHours: number;
-  targetHours: number;
-  maximumHours: number;
-  commuteBufferMinutes: number;
-  minimumRestMinutes: number;
-  minimumShiftMinutes: number;
-  maximumSlotMinutes: number;
-  maxHoursPerDay: number;
-  profileVersion: string;
-  availability: AvailabilityWindow[];
-  preferredWorkWindows: PreferredWorkWindow[];
-  blockedPeriods: BlockedPeriod[];
-  shiftTemplates: ShiftTemplate[];
 }
 
 export interface CandidateShift {
