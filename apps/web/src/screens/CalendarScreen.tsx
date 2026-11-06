@@ -7,13 +7,14 @@ import { Button, Field, useTheme } from '../components/ui';
 import DateField from '../components/DateField';
 import TimeField from '../components/TimeField';
 import WeekGrid, { type WeekLayout } from '../components/WeekGrid';
+import type { WeeklySchedule } from '../services/scheduleApi';
 import ClassScheduleImport from '../components/ClassScheduleImport';
 import WorkScheduleImport from '../components/WorkScheduleImport';
 import GoogleCalendarImport from '../components/GoogleCalendarImport';
 const categories: Category[] = ['Class', 'Work', 'Personal'];
 const labels: Record<Category, string> = { Class: 'Zajęcia', Work: 'Praca', Personal: 'Prywatne' };
-type Props = { week: Date; setWeek: (value: Date) => void; todayOnly?: boolean; weekLayout: WeekLayout; now: Date; active: boolean };
-export default function CalendarScreen({ week, setWeek, todayOnly = false, weekLayout, now, active }: Props) {
+type Props = { week: Date; setWeek: (value: Date) => void; todayOnly?: boolean; weekLayout: WeekLayout; now: Date; active: boolean; draftSchedule?: WeeklySchedule | null };
+export default function CalendarScreen({ week, setWeek, todayOnly = false, weekLayout, now, active, draftSchedule }: Props) {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -38,6 +39,13 @@ export default function CalendarScreen({ week, setWeek, todayOnly = false, weekL
   const [error, setError] = useState(''); const [conflicts, setConflicts] = useState<EventCollision[]>([]); const [pending, setPending] = useState<CalendarEvent | null>(null);
   const monday = startOfWeek(todayOnly ? now : week); const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addCalendarDays(monday, i)), [monday.getTime()]);
   const list = useMemo(() => occurrencesForRange(events, { start: monday, end: addCalendarDays(monday, 7) }), [events, monday.getTime()]);
+  const previewEvents = useMemo(() => {
+    if (!draftSchedule || draftSchedule.isApproved || draftSchedule.weekStart !== localDateKey(monday)) return [];
+    return draftSchedule.shifts.map((shift) => ({ id: `preview-${shift.candidateId}`, title: 'Propozycja pracy', location: 'Nieopublikowana propozycja',
+      start: shift.start, end: shift.end, category: 'Work' as const, mandatory: false, repeatWeekly: false,
+      occurrenceStart: new Date(shift.start), occurrenceEnd: new Date(shift.end), preview: true }));
+  }, [draftSchedule, monday.getTime()]);
+  const gridEvents = useMemo(() => [...list, ...previewEvents], [list, previewEvents]);
   const [collisionToken, setCollisionToken] = useState<string | undefined>();
   const [notice, setNotice] = useState('');
   const close = () => { setDialog(null); setDraft(null); setSelected(null); setPending(null); setEditId(null); setError(''); setCollisionToken(undefined); };
@@ -101,6 +109,7 @@ export default function CalendarScreen({ week, setWeek, todayOnly = false, weekL
       <Button title="Dzisiaj" onPress={() => setWeek(new Date())} />
       <Button title="›" accessibilityLabel="Następny tydzień" onPress={() => setWeek(addCalendarDays(monday, 7))} />
     </View>}
+    {!!previewEvents.length && !todayOnly && <Text accessibilityLiveRegion="polite" style={[styles.muted, { paddingVertical: 5 }]}>Podgląd propozycji pracy: linie przerywane oznaczają zmiany niezatwierdzone.</Text>}
     {todayOnly ? <View style={{ flex: 1, minHeight: 0 }}>
       <View style={[styles.row, { justifyContent: 'space-between', paddingVertical: 8 }]}><Text style={styles.heading}>Dzień dobry!</Text><Button title="+" accessibilityLabel="Dodaj wydarzenie" primary onPress={() => newEvent(now)} /></View>
       <View accessibilityLabel="Podsumowanie dnia od asystenta" style={{ backgroundColor: palette.blueSoft, borderRadius: 8, padding: 12, marginBottom: 14, minHeight: 88 }}>
@@ -108,7 +117,7 @@ export default function CalendarScreen({ week, setWeek, todayOnly = false, weekL
         <Text style={styles.muted}>Tutaj pojawi się podsumowanie wydarzeń od asystenta.</Text>
       </View>
       <WeekGrid active={active} days={[addCalendarDays(now, 0)]} events={upcoming} layout="days-top" now={now} startAtNow hideDayHeader onAdd={newEvent} onSelect={details} />
-    </View> : <WeekGrid active={active} days={weekDays} events={list} layout={weekLayout} now={now} onAdd={newEvent} onSelect={details} />}
+    </View> : <WeekGrid active={active} days={weekDays} events={gridEvents} layout={weekLayout} now={now} onAdd={newEvent} onSelect={details} />}
     <Modal visible={dialog !== null} transparent animationType="fade" onRequestClose={() => { if (!saving) close(); }}><View style={{ flex: 1, backgroundColor: palette.scrim, alignItems: 'center', justifyContent: 'center', padding: 16 }}><ScrollView style={{ backgroundColor: palette.surface, borderRadius: 18, width: '100%', maxWidth: 480, maxHeight: '92%' }} contentContainerStyle={{ padding: 21 }}>
       {dialog === 'form' && draft && <><Text style={styles.heading}>{editId ? 'Edytuj wydarzenie' : 'Dodaj wydarzenie'}</Text><View style={{ marginTop: 16 }}>
         <Field label="TYTUŁ WYDARZENIA" maxLength={200} editable={!saving} value={draft.title} onChangeText={(v) => changeDraft('title', v)} placeholder="Spotkanie projektowe" /><Field label="MIEJSCE" maxLength={500} editable={!saving} value={draft.location ?? ''} onChangeText={(v) => changeDraft('location', v)} placeholder="np. Gmach Północny 204" />

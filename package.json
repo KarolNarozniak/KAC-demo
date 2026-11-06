@@ -8,7 +8,8 @@
   "workspaces": [
     "apps/web",
     "apps/api",
-    "database"
+    "database",
+    "docs-site"
   ],
   "scripts": {
     "start": "npm run web:dev",
@@ -18,19 +19,33 @@
     "api:start": "npm run start --workspace @kac/api",
     "build:web": "npm run build:web --workspace @kac/web",
     "build:api": "npm run build --workspace @kac/api",
-    "build": "npm run db:check && npm run build:api && npm run build:web",
+    "build": "npm run db:check && npm run build:api && npm run build:web && npm run api:openapi:check && npm run docs:generate-api && npm run build --workspace @kac/docs",
     "typecheck:web": "npm run typecheck --workspace @kac/web",
     "typecheck:api": "npm run typecheck --workspace @kac/api",
-    "typecheck": "npm run typecheck:web && npm run typecheck:api",
+    "typecheck:docs": "npm run typecheck --workspace @kac/docs",
+    "typecheck": "npm run typecheck:web && npm run typecheck:api && npm run typecheck:docs",
     "test:web": "npm run test --workspace @kac/web",
     "test:api": "npm run test --workspace @kac/api",
     "test:api:db": "npm run test:db --workspace @kac/api",
-    "test": "npm run test:web && npm run test:api",
-    "db:up": "docker compose up -d postgres",
+    "test": "npm run test:web && npm run test:api && npm run api:openapi:check",
+    "db:up": "docker compose up -d --wait postgres",
     "db:down": "docker compose down",
     "db:migrate": "npm run migrate --workspace @kac/database",
     "db:seed": "npm run seed --workspace @kac/database",
+    "db:seed:if-empty": "npm run seed:if-empty --workspace @kac/database",
     "db:check": "npm run check --workspace @kac/database",
-    "db:setup-local": "npm run db:up && npm run db:migrate && npm run db:seed"
+    "db:setup-local": "npm run db:up && npm run db:migrate && npm run db:seed",
+    "api:openapi:export": "npm run openapi:export --workspace @kac/api",
+    "api:openapi:check": "npm run openapi:check --workspace @kac/api",
+    "docs:generate-api": "npm run api:openapi:export && npm run generate-api --workspace @kac/docs",
+    "docs:dev": "npm run docs:generate-api && npm run dev --workspace @kac/docs",
+    "docs:dev:en": "npm run docs:generate-api && npm run dev:en --workspace @kac/docs",
+    "docs:build": "npm run api:openapi:check && npm run generate-api --workspace @kac/docs && npm run build --workspace @kac/docs",
+    "docs:check": "npm run api:openapi:check && npm run docs:build",
+    "dev:services": "concurrently --kill-others -n API,WEB,DOCS -c blue,green,magenta \"npm run api:dev\" \"npm run web:dev\" \"npm run serve --workspace @kac/docs\"",
+    "dev:all": "node scripts/dev-all.mjs"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
   }
 }

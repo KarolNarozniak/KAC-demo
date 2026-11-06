@@ -100,7 +100,7 @@ test('API: plik ICS daje podgląd z duplikatami, kolizjami i liczbą pominiętyc
   const { repository, sessions } = fakeRepository();
   const app = buildApi(repository);
   try {
-    const response = await app.inject({ method: 'POST', url: '/api/import/classes/read', payload: { fileName: 'plan.ics', dataBase64: b64(semesterPlan()) } });
+    const response = await app.inject({ method: 'POST', url: '/api/v1/import/classes/read', payload: { fileName: 'plan.ics', dataBase64: b64(semesterPlan()) } });
     assert.equal(response.statusCode, 201);
     const body = response.json();
     assert.equal(body.source, 'ics');
@@ -119,10 +119,10 @@ test('API: ICS bez wydarzeń i ICS z samymi wydarzeniami całodniowymi nie tworz
   const { repository, sessions } = fakeRepository();
   const app = buildApi(repository);
   try {
-    const empty = await app.inject({ method: 'POST', url: '/api/import/classes/read', payload: { fileName: 'pusty.ics', dataBase64: b64(ics()) } });
+    const empty = await app.inject({ method: 'POST', url: '/api/v1/import/classes/read', payload: { fileName: 'pusty.ics', dataBase64: b64(ics()) } });
     assert.equal(empty.statusCode, 422);
     assert.equal(empty.json().error, 'empty-calendar');
-    const allDay = await app.inject({ method: 'POST', url: '/api/import/classes/read', payload: { fileName: 'swieta.ics',
+    const allDay = await app.inject({ method: 'POST', url: '/api/v1/import/classes/read', payload: { fileName: 'swieta.ics',
       dataBase64: b64(ics(vevent({ UID: 'h', SUMMARY: 'Święto', 'DTSTART;VALUE=DATE:': '20261111' }))) } });
     assert.equal(allDay.statusCode, 422);
     assert.equal(allDay.json().error, 'no-importable-events');

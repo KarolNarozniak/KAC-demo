@@ -29,7 +29,7 @@ function fakeRepository(confirm: () => Promise<ConfirmResult> = async () => okRe
 }
 
 const read = (app: ReturnType<typeof buildApi>, fileName: string, bytes: Buffer) =>
-  app.inject({ method: 'POST', url: '/api/import/work-schedule/read', payload: { fileName, dataBase64: toBase64(bytes) } });
+  app.inject({ method: 'POST', url: '/api/v1/import/work-schedule/read', payload: { fileName, dataBase64: toBase64(bytes) } });
 
 test('wczytanie grafiku: sesja, wynik odczytu, własne zmiany i duplikat z kalendarza (201)', async () => {
   const { repository, calls } = fakeRepository();
@@ -88,7 +88,7 @@ test('bez bazy danych import grafiku jest niedostępny (503)', async () => {
 
 const night = { id: 'z3', title: 'Praca', date: '2026-11-04', startTime: '22:00', endTime: '06:00', category: 'Work' as const };
 const confirm = (app: ReturnType<typeof buildApi>, rows: unknown[]) =>
-  app.inject({ method: 'POST', url: '/api/import/sessions/IMP-44/confirm', payload: { rows } });
+  app.inject({ method: 'POST', url: '/api/v1/import/sessions/IMP-44/confirm', payload: { rows } });
 
 test('niepotwierdzona zmiana nocna blokuje zapis (422)', async () => {
   const app = buildApi(fakeRepository().repository);
@@ -134,9 +134,9 @@ test('anulowanie importu (5a)', async () => {
   const { repository, calls } = fakeRepository();
   const app = buildApi(repository);
   try {
-    const ok = await app.inject({ method: 'POST', url: '/api/import/sessions/IMP-44/cancel' });
+    const ok = await app.inject({ method: 'POST', url: '/api/v1/import/sessions/IMP-44/cancel' });
     assert.equal(ok.statusCode, 200);
-    const again = await app.inject({ method: 'POST', url: '/api/import/sessions/INNY/cancel' });
+    const again = await app.inject({ method: 'POST', url: '/api/v1/import/sessions/INNY/cancel' });
     assert.equal(again.statusCode, 409);
     assert.deepEqual(calls.cancelled, ['IMP-44', 'INNY']);
   } finally {

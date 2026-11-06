@@ -50,18 +50,18 @@ test('tryb demonstracyjny: odmowa (3a), kalendarze, brak wydarzeń (6a), podglą
   const { repository, sessions } = fakeRepository();
   const app = buildApi(repository);
   try {
-    const start = (await app.inject({ method: 'POST', url: '/api/import/google/connections' })).json();
+    const start = (await app.inject({ method: 'POST', url: '/api/v1/import/google/connections' })).json();
     assert.equal(start.mode, 'demo');
-    const denied = await app.inject({ method: 'POST', url: `/api/import/google/connections/${start.connectionId}/consent`, payload: { allow: false } });
+    const denied = await app.inject({ method: 'POST', url: `/api/v1/import/google/connections/${start.connectionId}/consent`, payload: { allow: false } });
     assert.equal(denied.json().status, 'denied');
-    assert.equal((await app.inject({ method: 'GET', url: `/api/import/google/connections/${start.connectionId}/calendars` })).statusCode, 403);
+    assert.equal((await app.inject({ method: 'GET', url: `/api/v1/import/google/connections/${start.connectionId}/calendars` })).statusCode, 403);
 
-    const second = (await app.inject({ method: 'POST', url: '/api/import/google/connections' })).json();
-    await app.inject({ method: 'POST', url: `/api/import/google/connections/${second.connectionId}/consent`, payload: { allow: true } });
-    const calendars = (await app.inject({ method: 'GET', url: `/api/import/google/connections/${second.connectionId}/calendars` })).json();
+    const second = (await app.inject({ method: 'POST', url: '/api/v1/import/google/connections' })).json();
+    await app.inject({ method: 'POST', url: `/api/v1/import/google/connections/${second.connectionId}/consent`, payload: { allow: true } });
+    const calendars = (await app.inject({ method: 'GET', url: `/api/v1/import/google/connections/${second.connectionId}/calendars` })).json();
     assert.ok(calendars.calendars.length >= 2);
 
-    const read = (calendarId: string, from: string, to: string) => app.inject({ method: 'POST', url: `/api/import/google/connections/${second.connectionId}/read`, payload: { calendarId, from, to } });
+    const read = (calendarId: string, from: string, to: string) => app.inject({ method: 'POST', url: `/api/v1/import/google/connections/${second.connectionId}/read`, payload: { calendarId, from, to } });
     const empty = await read('urodziny', '2026-11-02', '2026-11-30');
     assert.equal(empty.statusCode, 422);
     assert.equal(empty.json().error, 'no-events');
@@ -96,14 +96,14 @@ test('prawdziwy OAuth (udawany Google): PKCE, tylko odczyt, odmowa, wymiana kodu
     return json({}, 404);
   };
   const { repository } = fakeRepository();
-  const app = buildApi(repository, [], { google: { oauth: { clientId: 'cid', clientSecret: 'secret', redirectUri: 'http://localhost:4000/api/import/google/callback' }, fetch: fakeFetch } });
+    const app = buildApi(repository, [], { google: { oauth: { clientId: 'cid', clientSecret: 'secret', redirectUri: 'http://localhost:4000/api/v1/import/google/callback' }, fetch: fakeFetch } });
   try {
-    const refused = (await app.inject({ method: 'POST', url: '/api/import/google/connections' })).json();
-    const refusedPage = await app.inject({ method: 'GET', url: `/api/import/google/callback?state=${refused.connectionId}&error=access_denied` });
+    const refused = (await app.inject({ method: 'POST', url: '/api/v1/import/google/connections' })).json();
+    const refusedPage = await app.inject({ method: 'GET', url: `/api/v1/import/google/callback?state=${refused.connectionId}&error=access_denied` });
     assert.match(refusedPage.body, /Brak zgody/);
-    assert.equal((await app.inject({ method: 'GET', url: `/api/import/google/connections/${refused.connectionId}` })).json().status, 'denied');
+    assert.equal((await app.inject({ method: 'GET', url: `/api/v1/import/google/connections/${refused.connectionId}` })).json().status, 'denied');
 
-    const start = (await app.inject({ method: 'POST', url: '/api/import/google/connections' })).json();
+    const start = (await app.inject({ method: 'POST', url: '/api/v1/import/google/connections' })).json();
     assert.equal(start.mode, 'google');
     const auth = new URL(start.authUrl);
     assert.equal(auth.searchParams.get('code_challenge_method'), 'S256');
@@ -111,21 +111,21 @@ test('prawdziwy OAuth (udawany Google): PKCE, tylko odczyt, odmowa, wymiana kodu
     assert.doesNotMatch(auth.searchParams.get('scope') ?? '', /auth\/calendar(\s|$)/); // bez prawa zapisu
     assert.equal(auth.searchParams.get('state'), start.connectionId);
 
-    assert.equal((await app.inject({ method: 'GET', url: '/api/import/google/callback?state=nieznany&code=abc' })).statusCode, 400);
-    const callback = await app.inject({ method: 'GET', url: `/api/import/google/callback?state=${start.connectionId}&code=abc` });
+    assert.equal((await app.inject({ method: 'GET', url: '/api/v1/import/google/callback?state=nieznany&code=abc' })).statusCode, 400);
+    const callback = await app.inject({ method: 'GET', url: `/api/v1/import/google/callback?state=${start.connectionId}&code=abc` });
     assert.match(callback.body, /Połączono z Google/);
     const tokenRequest = new URLSearchParams(calls.find((call) => call.url.includes('oauth2.googleapis.com'))?.init?.body ?? '');
     assert.ok((tokenRequest.get('code_verifier') ?? '').length >= 43);
-    const status = (await app.inject({ method: 'GET', url: `/api/import/google/connections/${start.connectionId}` })).json();
+    const status = (await app.inject({ method: 'GET', url: `/api/v1/import/google/connections/${start.connectionId}` })).json();
     assert.deepEqual(status, { status: 'connected', email: 'jan@gmail.com', mode: 'google' });
     // Token nie wychodzi poza serwer.
     assert.doesNotMatch(JSON.stringify(status), /ya29/);
 
-    const calendars = (await app.inject({ method: 'GET', url: `/api/import/google/connections/${start.connectionId}/calendars` })).json();
+    const calendars = (await app.inject({ method: 'GET', url: `/api/v1/import/google/connections/${start.connectionId}/calendars` })).json();
     assert.deepEqual(calendars.calendars.map((calendar: { id: string }) => calendar.id), ['jan@gmail.com', 'uczelnia']);
     assert.ok(calls.some((call) => call.init?.headers?.Authorization === 'Bearer ya29.token'));
 
-    const read = await app.inject({ method: 'POST', url: `/api/import/google/connections/${start.connectionId}/read`, payload: { calendarId: 'uczelnia', from: '2026-11-01', to: '2026-11-30', category: 'Class' } });
+    const read = await app.inject({ method: 'POST', url: `/api/v1/import/google/connections/${start.connectionId}/read`, payload: { calendarId: 'uczelnia', from: '2026-11-01', to: '2026-11-30', category: 'Class' } });
     assert.equal(read.statusCode, 201);
     const body = read.json();
     assert.deepEqual(body.rows.map((row: { title: string; date: string; startTime: string; category: string }) => [row.title, row.date, row.startTime, row.category]), [['Konsultacje', '2026-11-05', '10:00', 'Class']]);
@@ -136,10 +136,10 @@ test('prawdziwy OAuth (udawany Google): PKCE, tylko odczyt, odmowa, wymiana kodu
     assert.equal(eventsUrl.searchParams.get('timeMin'), '2026-10-31T23:00:00.000Z');
 
     // Odrzucony token Google → czytelny błąd zamiast awarii.
-    const third = (await app.inject({ method: 'POST', url: '/api/import/google/connections' })).json();
-    await app.inject({ method: 'GET', url: `/api/import/google/callback?state=${third.connectionId}&code=abc` });
+    const third = (await app.inject({ method: 'POST', url: '/api/v1/import/google/connections' })).json();
+    await app.inject({ method: 'GET', url: `/api/v1/import/google/callback?state=${third.connectionId}&code=abc` });
     calendarStatus = 401;
-    const unauthorized = await app.inject({ method: 'GET', url: `/api/import/google/connections/${third.connectionId}/calendars` });
+    const unauthorized = await app.inject({ method: 'GET', url: `/api/v1/import/google/connections/${third.connectionId}/calendars` });
     assert.equal(unauthorized.statusCode, 401);
     assert.equal(unauthorized.json().error, 'google-unauthorized');
   } finally { await app.close(); }

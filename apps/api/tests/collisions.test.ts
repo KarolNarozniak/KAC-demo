@@ -44,7 +44,7 @@ test('create and update expose conflict details and never silently override', as
   try {
     for (const method of ['POST', 'PUT'] as const) {
       const { id, ...input } = event();
-      const response = await app.inject({ method, url: method === 'POST' ? '/api/events' : '/api/events/one', payload: { ...input, mandatory: false, location: '' } });
+      const response = await app.inject({ method, url: method === 'POST' ? '/api/v1/calendar/events' : '/api/v1/calendar/events/one', payload: { ...input, mandatory: false, location: '' } });
       assert.equal(response.statusCode, 409); assert.equal(response.json().conflicts.length, 1); assert.equal(response.json().collisionToken, conflict.collisionToken);
     }
   } finally { await app.close(); }
