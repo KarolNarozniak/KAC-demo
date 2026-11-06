@@ -15,6 +15,8 @@ import ApiLinks from '@site/src/components/ApiLinks';
 
 Swagger UI and Docusaurus use the same OpenAPI 3.1 contract. The contract is not maintained by hand: `@fastify/swagger` reads Fastify route schemas, which also validate requests at runtime.
 
+All operations are generated from OpenAPI in the [endpoint reference](./api/openapi-reference). The page includes request and response schemas grouped by API tags.
+
 ## API v1 domains
 
 | Domain | Resource prefix | Example operations |
@@ -36,6 +38,6 @@ Invalid input returns `400`. Calendar conflicts or stale versions use `409`; sch
 - Runtime routes and schemas: `apps/api/src/api/v1/`.
 - OpenAPI 3.1 export: `apps/api/openapi/openapi.json`.
 - Exporter: `apps/api/scripts/export-openapi.ts`.
-- Every route, schema, status or example change must include an OpenAPI export, regenerated API reference and updates to this documentation. CI compares the generated contract with the versioned file.
+- Every route, schema, status or example change must include an OpenAPI export, regeneration of the Polish and English API references and updates to this documentation. CI compares the generated contract with the versioned file.
 
 Follow the [API change standard](./api-standard.md).

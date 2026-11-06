@@ -5,8 +5,8 @@
 **/coverage/
 docs-site/build/
 docs-site/.docusaurus/
-docs-site/docs/api/reference/
-docs-site/i18n/en/docusaurus-plugin-content-docs/current/api/reference/
+docs-site/docs/api/openapi-reference.md
+docs-site/i18n/en/docusaurus-plugin-content-docs/current/api/openapi-reference.md
 apps/api/deploy/
 apps/web/deploy/
 **/.env
