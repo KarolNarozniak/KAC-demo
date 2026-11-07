@@ -6,6 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { WeekLayout } from './src/components/WeekGrid';
 import CalendarScreen from './src/screens/CalendarScreen';
 import ScreenTransition from './src/components/ScreenTransition';
+import PreferencesEditor from './src/components/PreferencesEditor';
 import { loadWeeklyHourLimits, saveMaxWeeklyHours } from './src/services/profileApi';
 import { Button, Field, ThemeProvider, ThemeToggle, useTheme, type ThemeMode } from './src/components/ui';
 const tabs = ['Dziś', 'Tydzień', 'Ustawienia', 'Asystent'] as const;
@@ -82,6 +83,7 @@ function CalendarApp() {
           {!!limitError && <Text accessibilityRole="alert" style={styles.error}>{limitError}</Text>}
           {!!limitNotice && <Text accessibilityLiveRegion="polite" style={styles.muted}>{limitNotice}</Text>}
           <Button title={limitSaving ? 'Zapisywanie…' : 'Zapisz limit'} primary disabled={limitSaving} onPress={() => void saveLimit()} />
+          <PreferencesEditor />
         </View>
       </View> : <View style={[styles.content, { padding: 16 }]}><Text style={styles.heading}>Asystent</Text><Text style={styles.subtitle}>Wkrótce</Text></View>);
     }} />

@@ -4,6 +4,7 @@ import { config } from './config.js';
 import { CATEGORY_IDS, type ExistingEvent } from './import/rules.js';
 import { validateWeeklyHourLimits, type WeeklyHourLimits } from './profile/validation.js';
 import { planImport, type PlanAction } from './import/plan.js';
+import { listPreferences, replacePreferences, type PreferenceInterval, type PreferencesSnapshot } from './profile/repository.js';
 import {
   IMPORT_SESSION_TTL_MINUTES,
   SOURCE_LABELS,
@@ -460,5 +461,14 @@ export class PostgresCalendarRepository {
       return { minGodzinTydzien, celGodzinTydzien, maxGodzinTydzien };
     } catch (error) { await client.query('ROLLBACK'); throw error; }
     finally { client.release(); }
+    
+  }
+  
+  async listWorkPreferences(userId = config.demoUserId): Promise<PreferencesSnapshot> {
+    return listPreferences(this.connectionPool, userId);
+  }
+
+  async replaceWorkPreferences(version: string, intervals: PreferenceInterval[], userId = config.demoUserId): Promise<PreferencesSnapshot> {
+    return replacePreferences(this.connectionPool, userId, version, intervals);
   }
 }

@@ -14,6 +14,7 @@ import { mapShiftsToRows, READ_STATUS_LABELS } from './import/work-schedule/mapp
 import { ScheduleReadError } from './import/work-schedule/local-reader.js';
 import { DemoScheduleReader, type ScheduleReader } from './import/work-schedule/reader.js';
 import { ProfileValidationError, type WeeklyHourLimits } from './profile/validation.js';
+import { PreferencesConflictError, PreferencesValidationError, type PreferenceInterval, type PreferencesSnapshot } from './profile/repository.js';
 import type { AcceptedRow, ConfirmResult, CreateSessionInput, ImportFormat, ImportSource } from './import/session.js';
 
 export type CalendarRepository = {
@@ -25,6 +26,8 @@ export type CalendarRepository = {
     // Limit godzin pracy w tygodniu (user story: ustawienie limitu godzin).
   getWeeklyHourLimits?: () => Promise<WeeklyHourLimits>;
   setMaxWeeklyWorkHours?: (maxHours: number | null) => Promise<WeeklyHourLimits>;
+  listWorkPreferences?: () => Promise<PreferencesSnapshot>;
+  replaceWorkPreferences?: (version: string, intervals: PreferenceInterval[]) => Promise<PreferencesSnapshot>;
   // Import (S23KC2S1P2-32): sesja, przedłużanie, zatwierdzenie i anulowanie.
   createImportSession?: (input: CreateSessionInput) => Promise<{ id: string; expiresAt: Date }>;
   touchImportSession?: (sessionId: string) => Promise<void>;
@@ -214,6 +217,44 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
     if (!repository?.getWeeklyHourLimits) return reply.code(503).send({ error: 'database_not_configured' });
     try { return await repository.getWeeklyHourLimits(); }
     catch (error) { app.log.error(error); return reply.code(503).send({ error: 'database_unavailable' }); }
+  });
+
+    // --- Preferowane godziny pracy (user story: określenie preferowanych godzin) ---
+  app.get('/api/work-profile/preferences', async (_request, reply) => {
+    if (!repository?.listWorkPreferences) return reply.code(503).send({ error: 'database_not_configured' });
+    try { return await repository.listWorkPreferences(); }
+    catch (error) { app.log.error(error); return reply.code(503).send({ error: 'database_unavailable' }); }
+  });
+
+  const preferencesBody = {
+    type: 'object', additionalProperties: false, required: ['version', 'intervals'],
+    properties: {
+      version: { type: 'string' },
+      intervals: {
+        type: 'array', maxItems: 50,
+        items: {
+          type: 'object', additionalProperties: false, required: ['dayOfWeek', 'startTime', 'endTime', 'weight'],
+          properties: {
+            dayOfWeek: { type: 'integer', minimum: 1, maximum: 7 },
+            startTime: { type: 'string', maxLength: 5 },
+            endTime: { type: 'string', maxLength: 5 },
+            weight: { type: 'number', minimum: 0 },
+          },
+        },
+      },
+    },
+  } as const;
+
+  app.put<{ Body: { version: string; intervals: PreferenceInterval[] } }>('/api/work-profile/preferences', { schema: { body: preferencesBody } }, async (request, reply) => {
+    if (!repository?.replaceWorkPreferences) return reply.code(503).send({ error: 'database_not_configured' });
+    try {
+      return await repository.replaceWorkPreferences(request.body.version, request.body.intervals);
+    } catch (error) {
+      if (error instanceof PreferencesConflictError) return reply.code(409).send({ error: error.message });
+      if (error instanceof PreferencesValidationError) return reply.code(400).send({ error: error.message, rowIndex: error.rowIndex });
+      request.log.error({ err: error }, 'Work preferences not saved');
+      return reply.code(503).send({ error: 'preferences_not_saved' });
+    }
   });
 
   const weeklyWorkLimitBody = {
