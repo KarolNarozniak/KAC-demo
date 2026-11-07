@@ -1,38 +1,120 @@
-import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateCommuteGaps, validateAvailability, generateShifts, type TimedItem } from '../src/scheduling/constraints.js';
-import { availabilityWindows } from '../src/scheduling/context.js';
-const item = (id: string, start: string, end: string, category: TimedItem['category'] = 'Work'): TimedItem => ({ id, start: '2026-11-02T' + start + ':00Z', end: '2026-11-02T' + end + ':00Z', category });
-test('zero, exact gap, missing minute, max rest and empty location', () => {
-    const work = item('w', '10:00', '11:00'), cls = item('c', '11:30', '12:00', 'Class');
-    assert.deepEqual(validateCommuteGaps([cls, work], 30, 120), []);
-    assert.equal(validateCommuteGaps([work, { ...cls, start: '2026-11-02T11:29:00Z' }], 30, 0)[0]?.actualMinutes, 29);
-    assert.deepEqual(validateCommuteGaps([work, item('p', '11:00', '12:00', 'Personal')], 0, 0), []);
-    assert.deepEqual(validateCommuteGaps([work, item('w2', '12:00', '13:00')], 30, 60), []);
-    assert.equal(validateCommuteGaps([work, item('w2', '11:59', '13:00')], 30, 60)[0]?.requiredMinutes, 60);
+import test from 'node:test';
+import { generateSchedule, validateSchedule } from '../src/scheduling/generator.js';
+import type { PlanningContext } from '../src/scheduling/types.js';
+
+const context = (overrides: Partial<PlanningContext> = {}): PlanningContext => ({
+  profile: {
+    id: 'P1', userId: 'U1', calendarId: 'K1', timeZone: 'Europe/Warsaw', minimumHours: 8,
+    targetHours: 12, maximumHours: 20, hourlyRatePln: 30, commuteBufferMinutes: 15,
+    minimumRestMinutes: 30, mode: 'elastyczny', minimumShiftMinutes: 120, maximumSlotMinutes: 360, maxHoursPerDay: 8, profileVersion: 'v1',
+  },
+  availability: [1, 2, 3, 4, 5, 6, 7].map((dayOfWeek) => ({ id: `a${dayOfWeek}`, dayOfWeek, startTime: '08:00', endTime: '22:00' })),
+  preferredWorkWindows: [], blockedPeriods: [], events: [], shiftTemplates: [],
+  ...overrides,
 });
-test('buffer must fit availability and generator subtracts occupied intervals once', () => {
-    const windows = [{ start: '2026-11-02T08:00:00Z', end: '2026-11-02T16:00:00Z' }];
-    assert.equal(validateAvailability([item('w', '08:00', '10:00')], windows, 30).length, 1);
-    assert.equal(validateAvailability([item('w', '08:30', '15:30')], windows, 30).length, 0);
-    const events = [item('c', '10:00', '11:00', 'Class')];
-    const shifts = generateShifts(windows, events, 180, 30, 0);
-    assert.equal(shifts[0]?.start, '2026-11-02T08:30:00.000Z');
-    assert.equal(shifts[0]?.end, '2026-11-02T09:30:00.000Z');
-    assert.equal(shifts[1]?.start, '2026-11-02T11:30:00.000Z');
-    assert.deepEqual(validateCommuteGaps([...events, ...shifts], 30, 0), []);
+
+test('weekly generation reaches target without exceeding maximum', () => {
+  const result = generateSchedule(context(), '2026-11-02');
+  assert.equal(result.solutionStatus, 'target_met');
+  assert.ok(result.totalMinutes >= result.targetMinutes);
+  assert.ok(result.totalMinutes <= result.maximumMinutes);
+  assert.equal(result.shortfallMinutes, 0);
+  assert.ok(result.shifts.every((shift) => shift.durationMinutes >= 120));
 });
-test('night shifts and neighbor outside planned week use real instants', () => {
-    const work = { id: 'w', start: '2026-11-02T00:00:00Z', end: '2026-11-02T02:00:00Z', category: 'Work' as const };
-    const previous = { id: 'c', start: '2026-11-01T22:00:00Z', end: '2026-11-01T23:45:00Z', category: 'Class' as const };
-    assert.equal(validateCommuteGaps([work, previous], 30, 0)[0]?.actualMinutes, 15);
-    const windows = availabilityWindows('2026-10-19', [{ dayOfWeek: 7, startTime: '00:00', endTime: '04:00' }], 'Europe/Warsaw');
-    assert.equal((Date.parse(windows[0]!.end) - Date.parse(windows[0]!.start)) / 60000, 300);
+
+test('workaholic option fills the maximum feasible weekly capacity', () => {
+  const result = generateSchedule(context({ availability: [
+    { id: 'mon', dayOfWeek: 1, startTime: '08:00', endTime: '18:00' },
+    { id: 'tue', dayOfWeek: 2, startTime: '08:00', endTime: '18:00' },
+  ] }), '2026-11-02', { workaholic: true });
+  assert.equal(result.targetMinutes, result.maximumCapacityMinutes);
+  assert.equal(result.totalMinutes, result.maximumCapacityMinutes);
+  assert.equal(result.parameters.workaholic, true);
 });
-test('touching intervals join across midnight and week edges only supply buffer', () => {
-    const windows = availabilityWindows('2026-11-02', [{ dayOfWeek: 1, startTime: '00:00', endTime: '02:00' }, { dayOfWeek: 1, startTime: '22:00', endTime: '24:00' }, { dayOfWeek: 2, startTime: '00:00', endTime: '02:00' }, { dayOfWeek: 7, startTime: '22:00', endTime: '24:00' }], 'Europe/Warsaw');
-    const shifts = generateShifts(windows, [], 300, 30, 0, { start: '2026-11-01T23:00:00Z', end: '2026-11-08T23:00:00Z' });
-    assert.equal(shifts[0]?.start, '2026-11-01T23:00:00.000Z');
-    assert.ok(shifts.some(s => Date.parse(s.end) - Date.parse(s.start) === 180 * 60000));
-    assert.deepEqual(validateAvailability(shifts, windows, 30), []);
+
+test('daily maximum caps generated work and rejects manual overbooking', () => {
+  const input = context({
+    profile: { ...context().profile, minimumHours: 4, targetHours: 8, maximumHours: 12, maxHoursPerDay: 4 },
+    availability: [
+      { id: 'mon', dayOfWeek: 1, startTime: '08:00', endTime: '18:00' },
+      { id: 'tue', dayOfWeek: 2, startTime: '08:00', endTime: '18:00' },
+    ],
+  });
+  const result = generateSchedule(input, '2026-11-02');
+  assert.equal(result.totalMinutes, 480);
+  assert.ok(result.shifts.every((shift) => shift.durationMinutes <= 240));
+  const validation = validateSchedule(input, '2026-11-02', [
+    { id: 'first', startLocal: '2026-11-02T08:00', endLocal: '2026-11-02T11:00' },
+    { id: 'second', startLocal: '2026-11-02T12:00', endLocal: '2026-11-02T15:00' },
+  ]);
+  assert.ok(validation.errors.some((error) => error.code === 'daily_maximum_hours'));
+});
+
+test('existing work counts toward the weekly target', () => {
+  const result = generateSchedule(context({ events: [{
+    id: 'work-1', title: 'Existing shift', start: '2026-11-03T09:00', end: '2026-11-03T13:00',
+    category: 'Work', mandatory: false, repeatWeekly: false,
+  }] }), '2026-11-02');
+  assert.equal(result.existingWorkMinutes, 240);
+  assert.equal(result.totalMinutes, result.existingWorkMinutes + result.proposedMinutes);
+  assert.equal(result.solutionStatus, 'target_met');
+});
+
+test('optional lectures are soft conflicts and reported when target needs them', () => {
+  const events = [
+    { id: 'mandatory', title: 'Required class', start: '2026-11-02T08:00', end: '2026-11-02T12:00', category: 'Class' as const, mandatory: true, repeatWeekly: false },
+    { id: 'optional', title: 'Optional class', start: '2026-11-03T08:00', end: '2026-11-03T12:00', category: 'Class' as const, mandatory: false, repeatWeekly: false },
+  ];
+  const result = generateSchedule(context({
+    profile: { ...context().profile, minimumHours: 4, targetHours: 7, maximumHours: 8 },
+    availability: [
+      { id: 'mon', dayOfWeek: 1, startTime: '12:00', endTime: '16:00' },
+      { id: 'tue', dayOfWeek: 2, startTime: '08:00', endTime: '12:00' },
+    ],
+    events,
+  }), '2026-11-02');
+  assert.ok(result.optionalLecturesSkipped.includes('optional'));
+  assert.ok(result.violations.some((violation) => violation.code === 'optional_lectures_skipped'));
+});
+
+test('shift mode chooses templates and manual edits retain hard constraints', () => {
+  const input = context({
+    profile: { ...context().profile, mode: 'zmianowy', minimumHours: 8, targetHours: 8, maximumHours: 8 },
+    availability: context().availability.map(window => ({...window,startTime:'07:45'})),
+    shiftTemplates: [{ id: 'am', name: 'Morning', startTime: '08:00', endTime: '16:00', endsNextDay: false, daysOfWeek: [1, 2, 3, 4, 5], active: true }],
+  });
+  const result = generateSchedule(input, '2026-11-02');
+  assert.equal(result.shifts.length, 1);
+  assert.equal(result.shifts[0]?.templateId, 'am');
+  const validation = validateSchedule(input, '2026-11-02', [{ id: 'manual', startLocal: '2026-11-02T07:00', endLocal: '2026-11-02T15:00' }]);
+  assert.ok(validation.errors.some((error) => error.code === 'outside_availability'));
+});
+
+test('greedy failure is not reported as a proof of infeasibility', () => {
+  const result = generateSchedule(context({
+    profile: { ...context().profile, minimumHours: 8, targetHours: 16, maximumHours: 20 },
+    availability: [{ id: 'short', dayOfWeek: 1, startTime: '08:00', endTime: '13:00' }],
+  }), '2026-11-02');
+  assert.equal(result.solutionStatus, 'not_found');
+  assert.ok(result.shortfallMinutes > 0);
+});
+
+test('merged planner fits commute inside availability and uses max(rest, commute)', () => {
+  const input = context({
+    profile: {...context().profile, minimumHours:4,targetHours:4,maximumHours:4,commuteBufferMinutes:30,minimumRestMinutes:60,maximumSlotMinutes:120},
+    availability:[{id:'mon',dayOfWeek:1,startTime:'08:00',endTime:'14:00'}],
+  });
+  const result=generateSchedule(input,'2026-11-02');
+  assert.equal(result.proposedMinutes,240);
+  assert.equal(result.shifts.length,2);
+  assert.equal(result.shifts[0]?.startLocal,'2026-11-02T08:30');
+  assert.equal(result.shifts[1]?.startLocal,'2026-11-02T11:30');
+  const invalid=validateSchedule(input,'2026-11-02',[
+    {id:'a',startLocal:'2026-11-02T08:30',endLocal:'2026-11-02T10:30'},
+    {id:'b',startLocal:'2026-11-02T11:29',endLocal:'2026-11-02T13:29'},
+  ]);
+  const gap=invalid.errors.find(error=>error.code==='commute_gap_too_short');
+  assert.equal(gap?.details.actualMinutes,59);
+  assert.equal(gap?.details.requiredMinutes,60);
 });

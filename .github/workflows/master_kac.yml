@@ -29,7 +29,7 @@ jobs:
     env:
       DATABASE_URL: postgresql://kac:kac_ci_password@localhost:5432/kac_test
       API_PORT: 4000
-      API_CORS_ORIGINS: http://localhost:8081,http://localhost:8080
+      API_CORS_ORIGINS: http://localhost:8081,http://localhost:8080,http://localhost:3000
       EXPO_PUBLIC_API_URL: ${{ vars.KAC_API_URL }}
 
     steps:
@@ -43,6 +43,9 @@ jobs:
 
       - name: Install workspace dependencies
         run: npm ci
+
+      - name: Enforce versioned OpenAPI contract
+        run: npm run api:openapi:check
 
       - name: Check model and apply database migrations
         run: |
@@ -59,7 +62,7 @@ jobs:
       - name: Verify API reads the seeded PostgreSQL calendar
         run: npm run test:api:db
 
-      - name: Build frontend and backend
+      - name: Build frontend, backend and bilingual documentation
         run: npm run build
 
       - name: Prepare minimal web deployment package

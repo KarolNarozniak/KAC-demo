@@ -15,7 +15,7 @@ test('import: sesja, odrzucenie wiersza, zapis w kalendarzu i wygasanie sesji', 
       { id: 'p1', title, date: '2026-11-03', startTime: '10:00', endTime: '12:00', category: 'Class', location: 'Sala 118', confidence: 0.8 },
       { id: 'p2', title: `${title} (odrzucony)`, date: '2026-11-04', startTime: '10:00', endTime: '12:00', category: 'Class' },
     ];
-    const created = await app.inject({ method: 'POST', url: '/api/import/sessions', payload: { source: 'classes', format: 'PDF', rows } });
+    const created = await app.inject({ method: 'POST', url: '/api/v1/import/sessions', payload: { source: 'classes', format: 'PDF', rows } });
     assert.equal(created.statusCode, 201);
     const sessionId: string = created.json().importSessionId;
     sessions.push(sessionId);
@@ -27,7 +27,7 @@ test('import: sesja, odrzucenie wiersza, zapis w kalendarzu i wygasanie sesji', 
     // Użytkownik zatwierdza tylko pierwszy wiersz, drugi odrzuca.
     const firstRow = rows[0];
     assert.ok(firstRow);
-    const confirmed = await app.inject({ method: 'POST', url: `/api/import/sessions/${sessionId}/confirm`, payload: { rows: [firstRow] } });
+    const confirmed = await app.inject({ method: 'POST', url: `/api/v1/import/sessions/${sessionId}/confirm`, payload: { rows: [firstRow] } });
     assert.equal(confirmed.statusCode, 201);
     assert.equal(confirmed.json().saved, 1);
     assert.equal(confirmed.json().rejected, 1);
@@ -44,15 +44,15 @@ test('import: sesja, odrzucenie wiersza, zapis w kalendarzu i wygasanie sesji', 
     assert.equal(Number(positions.rows[0].pewnosc), 0.8);
 
     // Drugie zatwierdzenie tej samej sesji jest blokowane.
-    const again = await app.inject({ method: 'POST', url: `/api/import/sessions/${sessionId}/confirm`, payload: { rows: [firstRow] } });
+    const again = await app.inject({ method: 'POST', url: `/api/v1/import/sessions/${sessionId}/confirm`, payload: { rows: [firstRow] } });
     assert.equal(again.statusCode, 409);
 
     // Sesja bez akcji przez ponad 15 minut wygasa.
-    const old = await app.inject({ method: 'POST', url: '/api/import/sessions', payload: { source: 'classes', format: 'PDF', rows: [firstRow] } });
+    const old = await app.inject({ method: 'POST', url: '/api/v1/import/sessions', payload: { source: 'classes', format: 'PDF', rows: [firstRow] } });
     const oldId: string = old.json().importSessionId;
     sessions.push(oldId);
     await pool.query(`update t_importy set data_importu = now() - interval '16 minutes' where id_importu = $1`, [oldId]);
-    const expired = await app.inject({ method: 'POST', url: `/api/import/sessions/${oldId}/confirm`, payload: { rows: [firstRow] } });
+    const expired = await app.inject({ method: 'POST', url: `/api/v1/import/sessions/${oldId}/confirm`, payload: { rows: [firstRow] } });
     assert.equal(expired.statusCode, 410);
   } finally {
     // Sprzątanie: usuwamy wszystko, co test dodał do bazy.

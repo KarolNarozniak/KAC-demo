@@ -1,10 +1,12 @@
+import {PostgresScheduleRepository} from '../src/scheduling/repository.js';
+import {generateSchedule} from '../src/scheduling/generator.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { Pool } from 'pg';
 import { config } from '../src/config.js';
 import { WorkProfileRepository } from '../src/profile/repository.js';
-import { SchedulingRepository } from '../src/scheduling/repository.js';
+import { SchedulingRepository } from '../src/scheduling/work-profile-repository.js';
 import { buildApi } from '../src/app.js';
 test('isolated PostgreSQL: ownership, rollback, concurrent version, snapshots and acceptance constraints', { skip: !config.databaseUrl }, async () => {
     const schema = 'test_planning_' + Date.now();
@@ -13,7 +15,7 @@ test('isolated PostgreSQL: ownership, rollback, concurrent version, snapshots an
     let app: ReturnType<typeof buildApi> | undefined;
     try {
         await admin.query(`create schema ${schema}`);
-        for (const migration of ['001_initial_model.sql', '002_event_location.sql', '003_work_profile.sql', '004_schedule_commute_snapshot.sql'])
+        for (const migration of (await readdir(new URL('../../../database/migrations/', import.meta.url))).filter(name => name.endsWith('.sql')).sort())
             await pool.query(await readFile(new URL('../../../database/migrations/' + migration, import.meta.url), 'utf8'));
         await pool.query(`insert into t_uzytkownicy(id_uzytkownika,imie,nazwisko,email) values ($1,'Test','Owner','owner@test'),('other','Other','Owner','other@test')`, [config.demoUserId]);
         await pool.query(`insert into t_kalendarze(id_kalendarza,id_uzytkownika,nazwa,typ) values ($1,$2,'Test','Osobisty')`, [config.demoCalendarId, config.demoUserId]);
@@ -24,7 +26,7 @@ test('isolated PostgreSQL: ownership, rollback, concurrent version, snapshots an
         const request = (method: string, url: string, payload?: any) => app!.inject({ method: method as any, url, payload });
         const p = await profiles.getProfile(config.demoUserId);
         assert.equal(p.commuteMinutes, null);
-        assert.equal((await request('POST', '/api/schedules/generate', { week: '2026-11-02' })).statusCode, 422);
+        assert.equal((await request('POST', '/api/v1/work-profile/schedules/generate', { week: '2026-11-02' })).statusCode, 422);
         await profiles.saveProfile(config.demoUserId, { ...p, hourlyRatePln: 30, rateKind: 'gross', commuteMinutes: 30, targetHours: 20, maxHours: 30 });
         const a = await profiles.replaceAvailability(config.demoUserId, [{ dayOfWeek: 7, startTime: '22:00', endTime: '02:00' }, { dayOfWeek: 2, startTime: '08:00', endTime: '24:00' }, { dayOfWeek: 3, startTime: '08:00', endTime: '16:00' }], 2);
         assert.equal(a.intervals[0]?.endTime, '02:00');
@@ -39,7 +41,7 @@ test('isolated PostgreSQL: ownership, rollback, concurrent version, snapshots an
         await pool.query('drop trigger test_failure on t_dostepnosc');
         const concurrent = await Promise.allSettled([profiles.replaceAvailability(config.demoUserId, a.intervals, a.version), profiles.replaceAvailability(config.demoUserId, a.intervals, a.version)]);
         assert.equal(concurrent.filter(r => r.status === 'fulfilled').length, 1);
-        const generated = await request('POST', '/api/schedules/generate', { week: '2026-11-02' });
+        const generated = await request('POST', '/api/v1/work-profile/schedules/generate', { week: '2026-11-02' });
         assert.equal(generated.statusCode, 200, generated.body);
         const schedule = generated.json();
         assert.equal(schedule.plannedHours, 20);
@@ -48,16 +50,16 @@ test('isolated PostgreSQL: ownership, rollback, concurrent version, snapshots an
         assert.equal((await planning.get(schedule.id, config.demoUserId)).shifts[0]?.hourlyRatePln, 30);
         await assert.rejects(planning.get(schedule.id, 'other'), /schedule_not_found/);
         const shift = schedule.shifts[0];
-        const invalid = await request('PUT', `/api/schedules/${schedule.id}/shifts/${shift.id}`, { start: '2026-11-02T00:00:00Z', end: '2026-11-02T01:00:00Z' });
+        const invalid = await request('PUT', `/api/v1/work-profile/schedules/${schedule.id}/shifts/${shift.id}`, { start: '2026-11-02T00:00:00Z', end: '2026-11-02T01:00:00Z' });
         assert.equal(invalid.statusCode, 422);
-        const accepted = await request('POST', `/api/schedules/${schedule.id}/accept`, {});
+        const accepted = await request('POST', `/api/v1/work-profile/schedules/${schedule.id}/accept`, {});
         assert.equal(accepted.statusCode, 200, accepted.body);
         assert.equal((await pool.query('select count(*)::int as n from t_wydarzenia')).rows[0].n, schedule.shifts.length);
         const before = await planning.get(schedule.id, config.demoUserId);
         const current = await profiles.getProfile(config.demoUserId);
         await profiles.saveProfile(config.demoUserId, { ...current, hourlyRatePln: 99, rateKind: 'net' });
         assert.deepEqual(await planning.get(schedule.id, config.demoUserId), before);
-        assert.equal((await request('POST', `/api/schedules/${schedule.id}/accept`, {})).statusCode, 409);
+        assert.equal((await request('POST', `/api/v1/work-profile/schedules/${schedule.id}/accept`, {})).statusCode, 409);
         const next = await planning.generate(config.demoUserId, config.demoCalendarId, '2026-11-09');
         const count = (await pool.query('select count(*)::int as n from t_wydarzenia')).rows[0].n;
         await planning.change(config.demoUserId, config.demoCalendarId, next.id, 'reject');
@@ -98,12 +100,40 @@ test('isolated PostgreSQL: ownership, rollback, concurrent version, snapshots an
         await pool.query(`insert into t_wydarzenia(id_kalendarza,id_kategorii,tytul,rozpoczecie,zakonczenie,miejsce) values($1,'class','Sunday class','2026-11-29T21:00:00Z','2026-11-29T22:45:00Z','')`, [config.demoCalendarId]);
         const boundary = await planning.generate(config.demoUserId, config.demoCalendarId, '2026-11-30');
         assert.equal(boundary.shifts[0]?.start, '2026-11-29T23:15:00.000Z');
-        const tooEarly = await request('PUT', `/api/schedules/${boundary.id}/shifts/${boundary.shifts[0]!.id}`, {
+        const tooEarly = await request('PUT', `/api/v1/work-profile/schedules/${boundary.id}/shifts/${boundary.shifts[0]!.id}`, {
             start: '2026-11-29T23:14:00Z', end: '2026-11-29T23:44:00Z'
         });
         assert.equal(tooEarly.statusCode, 422);
         assert.equal(tooEarly.json().details.violations[0].actualMinutes, 29);
         await planning.change(config.demoUserId, config.demoCalendarId, boundary.id, 'accept');
+        const advanced = new PostgresScheduleRepository(pool);
+        const legacyBefore = await planning.get(schedule.id,config.demoUserId);
+        assert.equal(await advanced.getLatestSchedule('2026-11-02',config.demoCalendarId),null);
+        const advancedContext = (await advanced.getPlanningContext(config.demoUserId,config.demoCalendarId))!;
+        advancedContext.events=[];
+        advancedContext.profile.targetHours=2;
+        advancedContext.profile.minimumHours=0;
+        advancedContext.profile.commuteBufferMinutes=0;
+        advancedContext.availability=[{id:'new-window',dayOfWeek:1,startTime:'08:00',endTime:'18:00'}];
+        const advancedDraft=await advanced.saveSchedule(advancedContext,generateSchedule(advancedContext,'2026-11-02'));
+        assert.equal(advancedDraft.shifts[0]?.hourlyRatePln,0);
+        assert.equal(advancedDraft.estimatedPayPln,0);
+        assert.equal(await advanced.getScheduleById(schedule.id),null);
+        await assert.rejects(planning.get(advancedDraft.scheduleId!,config.demoUserId),/schedule_not_found/);
+        const beforeAdvanced=await advanced.getScheduleById(advancedDraft.scheduleId!);
+        const changed=await profiles.getProfile(config.demoUserId);
+        await profiles.saveProfile(config.demoUserId,{...changed,hourlyRatePln:99,rateKind:'net'});
+        assert.deepEqual(await advanced.getScheduleById(advancedDraft.scheduleId!),beforeAdvanced);
+        const advancedShift=advancedDraft.shifts[0]!;
+        await pool.query(`insert into t_wydarzenia(id_kalendarza,id_kategorii,tytul,rozpoczecie,zakonczenie) values($1,'class','Concurrent class',$2,$3)`,[config.demoCalendarId,advancedShift.start,advancedShift.end]);
+        await assert.rejects(advanced.approveSchedule('2026-11-02',advancedDraft.version!,config.demoCalendarId),/invalid_schedule/);
+        await advanced.rejectSchedule('2026-11-02',advancedDraft.version!,config.demoCalendarId);
+        assert.deepEqual(await planning.get(schedule.id,config.demoUserId),legacyBefore);
+        // Applying master's workflow normalization must preserve old accepted/rejected states.
+        for(const migration of ['007_work_profile_workflow.sql','008_schedule_workflow_status.sql','009_work_profile_workflow_restore.sql'])
+            await pool.query(await readFile(new URL('../../../database/migrations/'+migration,import.meta.url),'utf8'));
+        assert.deepEqual(await planning.get(schedule.id,config.demoUserId),legacyBefore);
+        assert.equal((await planning.get(next.id,config.demoUserId)).status,'Rejected');
     }
     finally {
         await app?.close();

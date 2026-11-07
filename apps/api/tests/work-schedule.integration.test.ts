@@ -32,7 +32,7 @@ test('import grafiku: zastąpienie duplikatu, zmiana nocna, odrzucenie cudzych z
     );
     const existingId: string = existing.rows[0].id_wydarzenia;
 
-    const response = await app.inject({ method: 'POST', url: '/api/import/work-schedule/read', payload: { fileName: 'grafik.pdf', dataBase64: toBase64(pdfBytes()) } });
+    const response = await app.inject({ method: 'POST', url: '/api/v1/import/work-schedule/read', payload: { fileName: 'grafik.pdf', dataBase64: toBase64(pdfBytes()) } });
     assert.equal(response.statusCode, 201);
     const body = response.json();
     sessions.push(body.importSessionId);
@@ -45,7 +45,7 @@ test('import grafiku: zastąpienie duplikatu, zmiana nocna, odrzucenie cudzych z
     const [first, second] = body.rows;
     const confirmed = await app.inject({
       method: 'POST',
-      url: `/api/import/sessions/${body.importSessionId}/confirm`,
+      url: `/api/v1/import/sessions/${body.importSessionId}/confirm`,
       payload: {
         rows: [
           { id: first.id, title: first.title, date: first.date, startTime: first.startTime, endTime: first.endTime, category: 'Work', duplicateDecision: 'replace' },
@@ -67,10 +67,10 @@ test('import grafiku: zastąpienie duplikatu, zmiana nocna, odrzucenie cudzych z
     assert.deepEqual(positions.rows.map((row) => row.status_kontroli), ['Zastąpiła', 'Zatwierdzona', 'Odrzucona']);
 
     // Drugi import tego samego grafiku i anulowanie: kalendarz bez zmian, import ma status „Anulowany”.
-    const second2 = await app.inject({ method: 'POST', url: '/api/import/work-schedule/read', payload: { fileName: 'grafik.pdf', dataBase64: toBase64(pdfBytes()) } });
+    const second2 = await app.inject({ method: 'POST', url: '/api/v1/import/work-schedule/read', payload: { fileName: 'grafik.pdf', dataBase64: toBase64(pdfBytes()) } });
     const secondId: string = second2.json().importSessionId;
     sessions.push(secondId);
-    const cancelled = await app.inject({ method: 'POST', url: `/api/import/sessions/${secondId}/cancel` });
+    const cancelled = await app.inject({ method: 'POST', url: `/api/v1/import/sessions/${secondId}/cancel` });
     assert.equal(cancelled.statusCode, 200);
     const status = await pool.query(`select status from t_importy where id_importu = $1`, [secondId]);
     assert.equal(status.rows[0].status, 'Anulowany');

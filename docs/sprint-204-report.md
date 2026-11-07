@@ -1,5 +1,7 @@
 # Raport realizacji sprintu 204 — Michał Kozłowski
 
+Uwaga: raport opisuje pierwotne wdrożenie. Zmiany ścieżek API i integrację z nowszym master opisuje [raport scalenia z 2026-11-07](./merge-master-2026-11-07.md).
+
 Data: 2026-11-06. Projekt: S23KC2S1P2. Zakres: 18 zgłoszeń (3 story, 14 podzadań, 1 opracowanie dokumentacji). **Jira pozostaje bez zmian.**
 
 ## Baza i podział pracy

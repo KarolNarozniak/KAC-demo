@@ -22,7 +22,8 @@ export async function workRequest(path: string, body?: unknown, method = 'PUT') 
     const base = process.env.EXPO_PUBLIC_API_URL?.trim().replace(/\/$/, '') || (['localhost', '127.0.0.1'].includes(globalThis.location?.hostname) ? 'http://localhost:4000' : '');
     if (!base)
         throw new Error('Brak konfiguracji adresu API.');
-    const r = await fetch(`${base}/api/${path}`, { method: body === undefined ? 'GET' : method, headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(15000) });
+    if (path.startsWith('schedules')) path = 'work-profile/' + path;
+    const r = await fetch(`${base}/api/v1/${path}`, { method: body === undefined ? 'GET' : method, headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(15000) });
     const data = await r.json();
     if (!r.ok) {
         if (data.error === 'schedule_constraints')

@@ -9,12 +9,16 @@
     "start": "node dist/server.js",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "tsx --test tests/api.test.ts tests/import-rules.test.ts tests/import-session.test.ts tests/work-schedule.test.ts tests/work-schedule-api.test.ts tests/work-schedule-reader.test.ts tests/ics.test.ts tests/google.test.ts tests/classes.test.ts tests/collisions.test.ts tests/ocr.test.ts tests/work-profile.test.ts tests/scheduling.test.ts",
-    "test:db": "tsx --test --test-concurrency=1 tests/postgres.integration.test.ts tests/import.integration.test.ts tests/work-schedule.integration.test.ts tests/features.integration.test.ts tests/imports-ics-google.integration.test.ts tests/planning.integration.test.ts",
+    "openapi:export": "tsx scripts/export-openapi.ts",
+    "openapi:check": "tsx scripts/export-openapi.ts --check",
+    "test": "tsx --test tests/api.test.ts tests/import-rules.test.ts tests/import-session.test.ts tests/work-schedule.test.ts tests/work-schedule-api.test.ts tests/work-schedule-reader.test.ts tests/ics.test.ts tests/google.test.ts tests/classes.test.ts tests/collisions.test.ts tests/ocr.test.ts tests/scheduling.test.ts tests/scheduling-api.test.ts tests/work-profile.test.ts tests/work-profile-scheduling.test.ts",
+    "test:db": "tsx --test --test-concurrency=1 tests/postgres.integration.test.ts tests/import.integration.test.ts tests/work-schedule.integration.test.ts tests/features.integration.test.ts tests/imports-ics-google.integration.test.ts tests/scheduling.integration.test.ts tests/planning.integration.test.ts",
     "package:deploy": "node scripts/package-deploy.mjs"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.2",
+    "@fastify/swagger": "^9.9.3",
+    "@fastify/swagger-ui": "^6.1.3",
     "@tesseract.js-data/eng": "^1.0.0",
     "@tesseract.js-data/pol": "^1.0.0",
     "dotenv": "^16.4.7",
@@ -22,7 +26,8 @@
     "pdfjs-dist": "^6.4.299",
     "pg": "^8.13.1",
     "sharp": "^0.35.5",
-    "tesseract.js": "^7.0.0"
+    "tesseract.js": "^7.0.0",
+    "ajv": "^8.17.1"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

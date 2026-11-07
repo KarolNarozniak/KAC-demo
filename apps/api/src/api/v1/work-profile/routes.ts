@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
-import { ProfileError, type Interval } from './availability.js';
-import type { WorkProfile, WorkProfileRepository } from './repository.js';
-import { rateGrosz } from '../scheduling/pay.js';
+import { ProfileError, type Interval } from '../../../profile/availability.js';
+import type { WorkProfile, WorkProfileRepository } from '../../../profile/repository.js';
+import { rateGrosz } from '../../../scheduling/pay.js';
 const nullableNumber = { anyOf: [{ type: 'number', minimum: 0, maximum: 999.99 }, { type: 'null' }] };
 export const profileSchema = { type: 'object', additionalProperties: false, required: ['version', 'hourlyRatePln', 'rateKind', 'commuteMinutes', 'minRestMinutes', 'minHours', 'targetHours', 'maxHours'], properties: {
         version: { type: 'integer', minimum: 1 }, hourlyRatePln: { anyOf: [{ type: 'number' }, { type: 'null' }] }, rateKind: { enum: ['gross', 'net', null] },
@@ -22,10 +22,10 @@ export function registerWorkProfile(app: FastifyInstance, repository: WorkProfil
             return reply.code(503).send({ error: 'database_unavailable' });
         }
     };
-    app.get('/api/work-profile', async (_, reply) => run(reply, () => repository!.getProfile(userId)));
+    app.get('/work-profile', async (_, reply) => run(reply, () => repository!.getProfile(userId)));
     app.put<{
         Body: WorkProfile;
-    }>('/api/work-profile', { schema: { body: profileSchema } }, async (req, reply) => run(reply, async () => {
+    }>('/work-profile', { schema: { body: profileSchema } }, async (req, reply) => run(reply, async () => {
         const p = req.body;
         if (p.hourlyRatePln !== null)
             rateGrosz(p.hourlyRatePln);
@@ -36,11 +36,11 @@ export function registerWorkProfile(app: FastifyInstance, repository: WorkProfil
             throw new ProfileError('invalid_hour_limits');
         return repository!.saveProfile(userId, p);
     }));
-    app.get('/api/work-profile/availability', async (_, reply) => run(reply, () => repository!.listAvailability(userId)));
+    app.get('/work-profile/availability', async (_, reply) => run(reply, () => repository!.listAvailability(userId)));
     app.put<{
         Body: {
             version: number;
             intervals: Interval[];
         };
-    }>('/api/work-profile/availability', { schema: { body: availabilitySchema } }, async (req, reply) => run(reply, () => repository!.replaceAvailability(userId, req.body.intervals, req.body.version)));
+    }>('/work-profile/availability', { schema: { body: availabilitySchema } }, async (req, reply) => run(reply, () => repository!.replaceAvailability(userId, req.body.intervals, req.body.version)));
 }

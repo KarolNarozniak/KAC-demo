@@ -41,15 +41,15 @@ test('routes validate availability, conflict and profile precision', async () =>
         } intervals = normalizeAvailability(rows); return { version: ++version, intervals }; }, saveProfile: async (_u: string, p: any) => p };
     const app = buildApi(null, [], { workProfile: repo as any });
     try {
-        assert.equal((await app.inject({ method: 'GET', url: '/api/work-profile/availability' })).statusCode, 200);
-        const put = (payload: any) => app.inject({ method: 'PUT', url: '/api/work-profile/availability', payload });
+        assert.equal((await app.inject({ method: 'GET', url: '/api/v1/work-profile/availability' })).statusCode, 200);
+        const put = (payload: any) => app.inject({ method: 'PUT', url: '/api/v1/work-profile/availability', payload });
         assert.equal((await put({ version: 1, intervals: [] })).statusCode, 200);
         assert.equal((await put({ version: 1, intervals: [] })).statusCode, 409);
         assert.equal((await put({ version: 2, intervals: [], extra: true })).statusCode, 400);
         assert.equal((await put({ version: '2', intervals: [] })).statusCode, 400);
         assert.equal((await put({ version: 2, intervals: [{ dayOfWeek: 0, startTime: '08:00', endTime: '09:00' }] })).statusCode, 400);
         assert.equal((await put({ version: 2, intervals: [{ dayOfWeek: 1, startTime: '08:00', endTime: '10:00' }, { dayOfWeek: 1, startTime: '09:00', endTime: '11:00' }] })).statusCode, 422);
-        assert.equal((await app.inject({ method: 'PUT', url: '/api/work-profile', payload: { version: 1, hourlyRatePln: 1.001, rateKind: 'gross', commuteMinutes: 0, minRestMinutes: 0, minHours: null, targetHours: null, maxHours: null } })).statusCode, 422);
+        assert.equal((await app.inject({ method: 'PUT', url: '/api/v1/work-profile', payload: { version: 1, hourlyRatePln: 1.001, rateKind: 'gross', commuteMinutes: 0, minRestMinutes: 0, minHours: null, targetHours: null, maxHours: null } })).statusCode, 422);
     }
     finally {
         await app.close();
