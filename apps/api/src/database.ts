@@ -140,6 +140,42 @@ export class PostgresCalendarRepository {
     } finally { client.release(); }
   }
   
+  // --- Metody dla Blokowanie dni wolnych i sesji ---
+
+  async listBlocks(): Promise<Block[]> {
+    const result = await this.connectionPool.query(
+      'SELECT id, user_id as "userId", title, start_time as "startTime", end_time as "endTime", type FROM blocks ORDER BY start_time ASC'
+    );
+    return result.rows.map(row => ({
+      ...row,
+      startTime: row.startTime.toISOString().slice(0, 16),
+      endTime: row.endTime.toISOString().slice(0, 16),
+    }));
+  }
+
+async createBlock(input: BlockInput, userId = config.demoUserId): Promise<Block> {
+    const startTimeIso = new Date(input.startTime).toISOString();
+    const endTimeIso = new Date(input.endTime).toISOString();
+
+    const result = await this.connectionPool.query(
+      `INSERT INTO blocks (user_id, title, start_time, end_time, type) 
+       VALUES ($1, $2, $3, $4, $5) 
+       RETURNING id, user_id as "userId", title, start_time as "startTime", end_time as "endTime", type`,
+      [userId, input.title, startTimeIso, endTimeIso, input.type]
+    );
+    const row = result.rows[0];
+    return {
+      ...row,
+      startTime: row.startTime.toISOString().slice(0, 16),
+      endTime: row.endTime.toISOString().slice(0, 16),
+    };
+  }
+
+  async deleteBlock(id: string): Promise<boolean> {
+    const result = await this.connectionPool.query('DELETE FROM blocks WHERE id = $1 RETURNING id', [id]);
+    return (result.rowCount ?? 0) > 0;
+  }
+  
   async getEventOrSeries(eventId: string, userId = config.demoUserId, calendarId = config.demoCalendarId) {
     const client = await this.connectionPool.connect();
     try {
