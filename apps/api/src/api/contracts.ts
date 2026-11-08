@@ -4,6 +4,8 @@ import type { AcceptedRow, ConfirmResult, CreateSessionInput } from '../import/s
 import type { GoogleImportOptions } from './v1/imports/google-routes.js';
 import type { ScheduleRepository } from '../scheduling/repository.js';
 import type { ScheduleReader } from '../import/work-schedule/reader.js';
+import type { WorkProfileRepository } from '../profile/repository.js';
+import type { ScopeResolver } from './scope.js';
 
 export type CalendarRepository = {
   deleteEvent?: (eventId: string) => Promise<string[] | null>;
@@ -23,6 +25,10 @@ export type ApiOptions = {
   scheduleReader?: ScheduleReader;
   google?: GoogleImportOptions;
   scheduleRepository?: ScheduleRepository;
+  /** Profil pracy i cel godzin (S23KC2S1P2-15, S23KC2S1P2-39). */
+  workProfileRepository?: WorkProfileRepository;
+  /** Ustala użytkownika żądania po stronie serwera (S23KC2S1P2-185). Domyślnie użytkownik demonstracyjny. */
+  userScope?: ScopeResolver;
 };
 
 export type ApiDependencies = {

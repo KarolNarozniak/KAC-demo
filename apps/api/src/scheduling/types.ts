@@ -19,6 +19,10 @@ export interface PlanningProfile {
   maximumSlotMinutes: number;
   maxHoursPerDay: number;
   profileVersion: string;
+  /** Okres celu godzin (S23KC2S1P2-39); targetHours powyżej jest zawsze celem tygodniowym. */
+  targetPeriod?: 'week' | 'month';
+  /** Cel wpisany przez użytkownika w jego okresie (przy celu miesięcznym – wartość miesięczna). */
+  periodTargetHours?: number;
 }
 
 export interface AvailabilityWindow {
@@ -91,22 +95,6 @@ export interface PlannerOverrides {
   workaholic?: boolean;
 }
 
-export interface ScheduleProfileSettings extends PlannerOverrides {
-  minimumHours: number;
-  targetHours: number;
-  maximumHours: number;
-  commuteBufferMinutes: number;
-  minimumRestMinutes: number;
-  minimumShiftMinutes: number;
-  maximumSlotMinutes: number;
-  maxHoursPerDay: number;
-  profileVersion: string;
-  availability: AvailabilityWindow[];
-  preferredWorkWindows: PreferredWorkWindow[];
-  blockedPeriods: BlockedPeriod[];
-  shiftTemplates: ShiftTemplate[];
-}
-
 export interface CandidateShift {
   candidateId: string;
   title: string;
@@ -130,6 +118,32 @@ export interface ScheduleViolation {
   candidateIds: string[];
   eventIds: string[];
   details: Record<string, unknown>;
+}
+
+/** Wystąpienie wydarzenia w planowanym tygodniu (S23KC2S1P2-193); serie są rozwinięte na konkretne daty. */
+export interface BlockingOccurrence {
+  eventId: string;
+  title: string;
+  category: ScheduleCategory;
+  mandatory: boolean;
+  repeatWeekly: boolean;
+  start: string;
+  end: string;
+  startLocal: string;
+  endLocal: string;
+  /** hard – w tym czasie nie wolno planować pracy; soft – zajęcia nieobowiązkowe, pomijane tylko w ostateczności. */
+  effect: 'hard' | 'soft';
+  /** Czas, który musi zostać przed i po wydarzeniu (dojazd, a przy pracy także odpoczynek). */
+  bufferMinutes: number;
+}
+
+/** Przedział, w którym można zaplanować pracę: dostępność minus zajęcia, wydarzenia i blokady (S23KC2S1P2-194). */
+export interface FreeWindow {
+  start: string;
+  end: string;
+  startLocal: string;
+  endLocal: string;
+  minutes: number;
 }
 
 export interface ScheduleGenerationResult {
@@ -159,6 +173,11 @@ export interface ScheduleGenerationResult {
   generatedAt: string;
   generatorVersion: 'greedy-v1';
   parameters: PlannerOverrides;
+  /** Wydarzenia tygodnia uwzględnione przy planowaniu, w tym zajęcia (S23KC2S1P2-40). */
+  blockingEvents?: BlockingOccurrence[];
+  /** Wolne przedziały w dostępności po odjęciu zajęć i wydarzeń. */
+  freeWindows?: FreeWindow[];
+  freeMinutes?: number;
 }
 
 export interface PenaltyConfig {

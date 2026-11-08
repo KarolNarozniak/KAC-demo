@@ -23,7 +23,8 @@ Opis wszystkich operacji generujemy z OpenAPI w [referencji endpointów](./api/o
 | --- | --- | --- |
 | System | `/api/v1/health` | Liveness i readiness |
 | Kalendarz | `/api/v1/calendar` | Odczyt overview, CRUD wydarzeń |
-| Planowanie | `/api/v1/scheduling`, `/api/v1/schedules` | Ograniczenia profilu, lista, wersje, walidacja i akceptacja |
+| Profil pracy | `/api/v1/work-profile` | Limity godzin, cel tygodniowy lub miesięczny, dojazd, dostępność, szablony zmian, wersja profilu |
+| Planowanie | `/api/v1/schedules` | Generowanie, lista, wersje, walidacja i akceptacja |
 | Importy | `/api/v1/import` | Pliki klas/grafików, podgląd, sesje, potwierdzanie |
 | Google | `/api/v1/import/google` | Jednorazowy odczyt i podgląd wydarzeń |
 
@@ -31,7 +32,7 @@ Wszystkie ścieżki są pod jedną domeną serwera API. OpenAPI pokazuje pełne 
 
 ## Kody błędów
 
-Walidacja wejścia Fastify zwraca `400`. Konflikt wydarzeń lub nieaktualna wersja wykorzystuje `409`; naruszenia ograniczeń planu `422`; nieznane zasoby `404`; brak bazy lub niedostępna zależność `503`. Import nie zapisuje wydarzeń przed potwierdzeniem sesji.
+Walidacja wejścia Fastify zwraca `400`. Błędne wartości profilu pracy zwracają `422` z kodem błędu przy każdym polu (`fields`). Konflikt wydarzeń lub nieaktualna wersja wykorzystuje `409`; naruszenia ograniczeń planu `422` (kolizja zmiany z zajęciami obowiązkowymi ma kod `class_collision` i wskazuje zajęcia); nieznane zasoby `404`; brak bazy lub niedostępna zależność `503`. Import nie zapisuje wydarzeń przed potwierdzeniem sesji.
 
 ## Kontrakt w repozytorium
 

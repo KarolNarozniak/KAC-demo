@@ -26,6 +26,9 @@ on conflict (id_kalendarza) do update set
   typ = excluded.typ,
   aktywny = excluded.aktywny;
 
+-- Użytkownik ma najwyżej jeden aktywny profil (S23KC2S1P2-186); profilem demonstracyjnym jest P001.
+update t_profile_pracy set aktywny = false where id_uzytkownika = 'U001' and id_profilu <> 'P001' and aktywny;
+
 insert into t_profile_pracy (
   id_profilu, id_uzytkownika, stawka_pln, min_godzin_tydzien, cel_godzin_tydzien,
   max_godzin_tydzien, czas_dojazdu_min, min_odpoczynku_min, aktywny,

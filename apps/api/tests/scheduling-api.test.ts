@@ -20,20 +20,11 @@ test('schedule API generates and persists a validated weekly proposal', async ()
       solutionStatus: saved.solutionStatus, version: saved.version ?? 1, isApproved: saved.isApproved, isRejected: false,
       targetMinutes: saved.targetMinutes, totalMinutes: saved.totalMinutes, shortfallMinutes: saved.shortfallMinutes }] : [], total: saved ? 1 : 0, limit, offset }),
     getApprovedShiftEventIds: async () => [],
-    saveSettings: async () => {},
     approveSchedule: async () => saved ? (saved = { ...saved, isApproved: true, approvedAt: new Date().toISOString() }) : null,
     rejectSchedule: async () => { saved = null; return null; },
     saveSchedule: async (_context, schedule) => { saved = { ...schedule, scheduleId: 'G1', version: (saved?.version ?? 0) + 1 }; return saved; },
   } });
   try {
-    const settings = await app.inject({ method: 'GET', url: '/api/v1/scheduling/settings' });
-    assert.equal(settings.statusCode, 200);
-    const savedSettings = await app.inject({ method: 'PUT', url: '/api/v1/scheduling/settings', payload: {
-      ...settings.json(), mode: 'elastyczny', minimumHours: 4, targetHours: 8, maximumHours: 12, commuteBufferMinutes: 0, minimumRestMinutes: 0,
-      minimumShiftMinutes: 120, maximumSlotMinutes: 360, maxHoursPerDay: 8, profileVersion: 'v1', availability: context.availability,
-      preferredWorkWindows: [], blockedPeriods: [], shiftTemplates: [],
-    } });
-    assert.equal(savedSettings.statusCode, 200);
     const invalid = await app.inject({ method: 'POST', url: '/api/v1/schedules/generate', payload: { weekStart: '2026-11-03', profileVersion: 'v1' } });
     assert.equal(invalid.statusCode, 400);
     const noClasses = await app.inject({ method: 'POST', url: '/api/v1/schedules/generate', payload: { weekStart: '2026-11-02', profileVersion: 'v1' } });

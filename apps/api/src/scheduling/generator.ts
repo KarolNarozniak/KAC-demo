@@ -1,11 +1,10 @@
 import { DEFAULT_SCHEDULER_PENALTIES } from './config.js';
-import { addLocalDays, expandEventsForWeek, localDateKey, localDateTimeString, localInstant, minutesOfDay, overlap, overlapMinutes, timeOfDay, validWeekStart, weekBounds } from './time.js';
+import { constraints, availabilityRanges, blockedPeriodIntervals, freeWindows, listBlockingOccurrences, paddedInterval, type Interval } from './constraints.js';
+import { addLocalDays, localDateKey, localDateTimeString, localInstant, minutesOfDay, overlap, overlapMinutes, validWeekStart, weekBounds } from './time.js';
 import type {
-  AvailabilityWindow, BlockedPeriod, CandidateShift, ManualShiftInput, PlanningContext, PlannerOverrides,
+  CandidateShift, ManualShiftInput, PlanningContext, PlannerOverrides,
   PreferredWorkWindow, ScheduleGenerationResult, ScheduleViolation, SolutionStatus, ValidationResult, WorkMode,
 } from './types.js';
-
-type Interval = { id: string; title: string; start: Date; end: Date };
 type EffectiveProfile = {
   mode: WorkMode;
   minimumMinutes: number;
@@ -64,40 +63,6 @@ function addUsage(target: Map<string, number>, incoming: Map<string, number>) {
   for (const [date, minutes] of incoming) target.set(date, (target.get(date) ?? 0) + minutes);
 }
 
-function asIntervals(periods: BlockedPeriod[]): Interval[] {
-  return periods.flatMap((period) => {
-    const start = new Date(period.start), end = new Date(period.end);
-    return Number.isFinite(start.getTime()) && Number.isFinite(end.getTime()) && end > start
-      ? [{ id: period.id, title: period.reason ?? period.type, start, end }]
-      : [];
-  });
-}
-
-function padInterval(interval: Interval, minutes: number): Interval {
-  const pad = minutes * 60_000;
-  return { ...interval, start: new Date(interval.start.getTime() - pad), end: new Date(interval.end.getTime() + pad) };
-}
-
-function availabilityRanges(windows: AvailabilityWindow[], weekStart: string, timeZone: string): Interval[] {
-  const result: Interval[] = [];
-  // Extra Monday covers an overnight shift beginning on Sunday.
-  for (let dayOffset = 0; dayOffset <= 7; dayOffset++) {
-    const date = new Date(Date.UTC(Number(weekStart.slice(0, 4)), Number(weekStart.slice(5, 7)) - 1, Number(weekStart.slice(8, 10)) + dayOffset));
-    const dateKey = date.toISOString().slice(0, 10);
-    const weekday = date.getUTCDay() || 7;
-    for (const window of windows.filter((item) => item.dayOfWeek === weekday)) {
-      const start = localInstant(dateKey, window.startTime, timeZone);
-      let end = localInstant(dateKey, window.endTime, timeZone);
-      if (start && end && end <= start) {
-        const next = new Date(date.getTime() + 86_400_000).toISOString().slice(0, 10);
-        end = localInstant(next, window.endTime, timeZone);
-      }
-      if (start && end && end > start) result.push({ id: window.id, title: 'Dostępność', start, end });
-    }
-  }
-  return result;
-}
-
 function intervalCovered(start: Date, end: Date, ranges: Interval[]): boolean {
   let cursor = start.getTime();
   const sorted = ranges.filter((range) => range.end > start && range.start < end).sort((a, b) => a.start.getTime() - b.start.getTime());
@@ -146,23 +111,23 @@ function dayPreferredPenalty(candidate: CandidateShift, preferences: PreferredWo
 }
 
 function buildCandidates(context: PlanningContext, weekStart: string, profile: EffectiveProfile, includeCandidates = true) {
-  const expandedEvents = expandEventsForWeek(context, weekStart);
+  // S23KC2S1P2-193: wystąpienia wydarzeń tygodnia (serie rozwinięte) z informacją, czy blokują pracę i z jakim buforem.
+  const occurrences = listBlockingOccurrences(context, weekStart, profile);
   const availability = availabilityRanges(context.availability, weekStart, context.profile.timeZone);
-  const hardBlocks = asIntervals(context.blockedPeriods);
+  const hardBlocks = blockedPeriodIntervals(context.blockedPeriods);
   const optionalLectures: Interval[] = [];
   const existingWork: Interval[] = [];
+  const classBlockIds = new Set<string>();
 
-  for (const event of expandedEvents) {
-    const interval = { id: event.id, title: event.title, start: event.occurrenceStart, end: event.occurrenceEnd };
-    if (event.category === 'Class' && !event.mandatory) {
+  for (const occurrence of occurrences) {
+    if (occurrence.effect === 'soft') {
       // Optional lectures are not a hard blocker; overlapping them costs points in the second pass.
-      optionalLectures.push(padInterval(interval, profile.commuteBufferMinutes));
-    } else if (event.category === 'Work') {
-      existingWork.push(interval);
-      hardBlocks.push(padInterval(interval, profile.commuteBufferMinutes + profile.minimumRestMinutes));
-    } else {
-      hardBlocks.push(padInterval(interval, profile.commuteBufferMinutes));
+      optionalLectures.push(paddedInterval(occurrence));
+      continue;
     }
+    if (occurrence.category === 'Work') existingWork.push({ id: occurrence.eventId, title: occurrence.title, start: new Date(occurrence.start), end: new Date(occurrence.end) });
+    if (occurrence.category === 'Class') classBlockIds.add(occurrence.eventId);
+    hardBlocks.push(paddedInterval(occurrence));
   }
 
   const candidates: CandidateShift[] = [];
@@ -260,7 +225,7 @@ function buildCandidates(context: PlanningContext, weekStart: string, profile: E
     const end = interval.end > weekEndInstant ? weekEndInstant : interval.end;
     if (end > start) addUsage(existingWorkDailyMinutes, dailyMinutes(start, end, timeZone));
   }
-  return { candidates, hardBlocks, optionalLectures, existingWork, existingWorkMinutes, existingDays, existingWorkDailyMinutes, weekStartInstant, weekEndInstant };
+  return { candidates, occurrences, classBlockIds, hardBlocks, optionalLectures, existingWork, existingWorkMinutes, existingDays, existingWorkDailyMinutes, weekStartInstant, weekEndInstant };
 }
 
 function canAdd(candidate: CandidateShift, selected: CandidateShift[], hardBlocks: Interval[], profile: EffectiveProfile) {
@@ -340,6 +305,8 @@ export function generateSchedule(context: PlanningContext, weekStart: string, ov
       ? 'target_met'
       : upperBoundMinutes < profile.targetMinutes ? 'proven_infeasible' : 'not_found';
   const optionalLecturesSkipped = [...new Set(selected.flatMap((shift) => shift.optionalLectureIds))].sort();
+  // S23KC2S1P2-194, krok 5: wolny czas w dostępności po odjęciu zajęć i wydarzeń.
+  const free = freeWindows(context, weekStart, generated.occurrences, profile.minimumShiftMinutes);
   const violations: ScheduleViolation[] = [];
   const sharedValidation = validateSchedule(context, weekStart, selected.map((shift) => ({ id: shift.candidateId,
     startLocal: shift.startLocal, endLocal: shift.endLocal, templateId: shift.templateId })), {
@@ -368,6 +335,13 @@ export function generateSchedule(context: PlanningContext, weekStart: string, ov
       : 'Heurystyka nie znalazła pełnego grafiku; cel może być osiągalny po zmianie ustawień.',
     candidateIds: [], eventIds: [],
     details: { targetMinutes: profile.targetMinutes, totalMinutes, upperBoundMinutes },
+  });
+  // S23KC2S1P2-40, 5a: nawet cały wolny czas nie wystarczy na cel – grafik spełniający wszystkie wymagania nie istnieje.
+  if (!overrides.workaholic && existingWorkMinutes + free.freeMinutes < profile.targetMinutes) violations.push({
+    code: 'insufficient_free_time', severity: 'warning',
+    message: `Po odjęciu zajęć i dojazdów w dostępności zostaje ${Math.floor(free.freeMinutes / 60)} h ${free.freeMinutes % 60} min wolnego czasu – za mało, żeby osiągnąć cel. Zmień dostępność albo cel w profilu pracy.`,
+    candidateIds: [], eventIds: generated.occurrences.filter((occurrence) => occurrence.category === 'Class' && occurrence.effect === 'hard').map((occurrence) => occurrence.eventId),
+    details: { freeMinutes: free.freeMinutes, existingWorkMinutes, targetMinutes: profile.targetMinutes, missingMinutes: profile.targetMinutes - existingWorkMinutes - free.freeMinutes },
   });
   if (existingWorkMinutes > profile.maximumMinutes) violations.push({
     code: 'existing_work_exceeds_maximum', severity: 'error',
@@ -416,6 +390,9 @@ export function generateSchedule(context: PlanningContext, weekStart: string, ov
     generatedAt: new Date().toISOString(),
     generatorVersion: 'greedy-v1',
     parameters: inputSnapshot,
+    blockingEvents: generated.occurrences,
+    freeWindows: free.windows,
+    freeMinutes: free.freeMinutes,
   };
 }
 
@@ -468,7 +445,9 @@ export function validateSchedule(context: PlanningContext, weekStart: string, sh
     if (!intervalCovered(start, end, availabilityRanges(context.availability, weekStart, context.profile.timeZone))) {
       errors.push({ code: 'outside_availability', severity: 'error', message: 'Zmiana wykracza poza dostępność studenta.', candidateIds: [input.id], eventIds: [], details: {} });
     }
-    const hardConflict = generated.hardBlocks.find((block) => overlap(start, end, block.start, block.end));
+    // S23KC2S1P2-194: kolizja z zajęciami obowiązkowymi ma własny błąd ze wskazaniem zajęć; pozostałe blokady – hard_conflict.
+    errors.push(...constraints.classCollision({ id: input.id, start, end }, generated.occurrences, context.profile.timeZone));
+    const hardConflict = generated.hardBlocks.find((block) => !generated.classBlockIds.has(block.id) && overlap(start, end, block.start, block.end));
     if (hardConflict) errors.push({ code: 'hard_conflict', severity: 'error', message: `Zmiana koliduje z blokadą: ${hardConflict.title}.`, candidateIds: [input.id], eventIds: [hardConflict.id], details: {} });
     const optionalIds = generated.optionalLectures.filter((event) => overlap(start, end, event.start, event.end)).map((event) => event.id).sort();
     if (optionalIds.length) warnings.push({
