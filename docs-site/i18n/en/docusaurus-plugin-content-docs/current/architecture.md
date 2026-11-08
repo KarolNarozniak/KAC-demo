@@ -57,6 +57,7 @@ Route modules receive dependencies through Fastify plugin options. They do not o
 
 - Imports are staged as proposals/sessions. The calendar changes only after validation and confirmation.
 - Schedule approval rechecks constraints on the server and commits shifts with calendar events in a transaction.
+- Classes in planning (`src/scheduling/constraints.ts`): `listBlockingOccurrences` expands weekly series into the planned week, `freeWindows` subtracts mandatory classes and other events (with the commute buffer) from availability, and `constraints.classCollision` reports a `class_collision` error that identifies the class. Optional classes are skipped only as a last resort, with a warning. Schedule responses include `blockingEvents` and `freeWindows` computed from the current calendar.
 - Event times are interpreted in the user's profile timezone.
 - A user has at most one active work profile (unique database index). A monthly target is converted to a weekly one (month = 52/12 weeks) and that value is used by the generator. Profile changes affect only future generated schedules.
 - Calendar conflicts and schedule versions are resolved by the backend, not only by the UI.

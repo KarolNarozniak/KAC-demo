@@ -4,6 +4,7 @@ import { addCalendarDays, localDateKey, startOfWeek } from '../domain/calendar';
 import { Button, useTheme } from '../components/ui';
 import TargetProgress from '../components/TargetProgress';
 import { formatNumber } from '../domain/workProfile';
+import { classTimeLabel, conflictMessage, shiftClassConflicts, weekClasses, windowsLabel } from '../domain/scheduleClasses';
 import { useWorkProfile } from '../hooks/useWorkProfile';
 import WorkProfileScreen from './WorkProfileScreen';
 import { approveSchedule, generateSchedule, loadSchedule, NoClassesConfirmationRequired, rejectSchedule, saveSchedule, type ScheduleShift, type ShiftTemplate, type WeeklySchedule, type WorkMode } from '../services/scheduleApi';
@@ -24,6 +25,8 @@ export default function ScheduleScreen({ week, setWeek, now, active, onApproved,
   // Profil pracy (limity, cel, dojazd, dostępność, szablony) – S23KC2S1P2-15 i S23KC2S1P2-39.
   const profile = useWorkProfile(active);
   const templates = profile.saved?.shiftTemplates ?? [];
+  const classes = weekClasses(schedule?.blockingEvents, schedule?.weekStart);
+  const classCollision = !!schedule?.shifts.some((shift) => shiftClassConflicts(shift, schedule.blockingEvents).some((conflict) => conflict.blocking));
   const [workaholic, setWorkaholic] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -174,6 +177,19 @@ export default function ScheduleScreen({ week, setWeek, now, active, onApproved,
         {schedule.violations.map((violation, index) => <Text key={`${violation.code}-${index}`} style={[styles.muted, { marginTop: 8, color: violation.severity === 'error' ? palette.red : palette.amber }]}>{violation.message}</Text>)}
       </View>
 
+      {/* S23KC2S1P2-40: zajęcia uwzględnione przy planowaniu tego tygodnia (serie rozwinięte na konkretne daty). */}
+      <View style={styles.card}>
+        <Text style={styles.heading}>Zajęcia w tym tygodniu</Text>
+        <Text style={[styles.muted, { marginTop: 4, marginBottom: 8 }]}>Praca nie jest planowana w czasie zajęć obowiązkowych ani dojazdu przed i po nich. Zajęcia nieobowiązkowe są pomijane tylko wtedy, gdy inaczej nie da się zbliżyć do celu.</Text>
+        {!classes.length && <Text style={styles.muted}>Brak zajęć w kalendarzu na ten tydzień.</Text>}
+        {classes.map((event) => <View key={`${event.eventId}-${event.start}`} style={[styles.row, { flexWrap: 'wrap', paddingVertical: 6, borderTopWidth: 1, borderColor: palette.line }]}>
+          <Text style={[styles.body, { minWidth: 150 }]}>{classTimeLabel(event)}</Text>
+          <Text style={[styles.body, { flex: 1, fontWeight: '700' }]}>{event.title}{event.repeatWeekly ? ' · co tydzień' : ''}</Text>
+          <Text style={[styles.muted, { color: event.mandatory ? palette.red : palette.muted }]}>{event.mandatory ? 'obowiązkowe' : 'nieobowiązkowe'}</Text>
+        </View>)}
+        {typeof schedule.freeMinutes === 'number' && <Text style={[styles.muted, { marginTop: 10 }]}>Wolny czas na pracę w dostępności po odjęciu zajęć i dojazdów: {minutesLabel(schedule.freeMinutes)} ({windowsLabel(schedule.freeWindows?.length ?? 0)}).</Text>}
+      </View>
+
       <View style={styles.card}>
         <View style={[styles.row, { justifyContent: 'space-between', flexWrap: 'wrap', marginBottom: 12 }]}><View><Text style={styles.heading}>Proponowane zmiany</Text><Text style={styles.muted}>{shiftCount} zmian · możesz poprawić godziny przed zapisaniem</Text></View><Button title="Dodaj zmianę" disabled={saving || loading} onPress={addShift} /></View>
         {!schedule.shifts.length && <Text style={styles.muted}>Brak zmian. Dodaj zmianę albo zmień ograniczenia.</Text>}
@@ -184,12 +200,21 @@ export default function ScheduleScreen({ week, setWeek, now, active, onApproved,
             <Text style={[styles.muted, { paddingBottom: 10 }]}>{minutesLabel(shift.durationMinutes)}</Text>
             <Button title="Usuń" danger onPress={() => removeShift(shift.candidateId)} />
           </View>
+          {(() => {
+            // S23KC2S1P2-195: wskazanie zajęć kolidujących ze zmianą – od razu przy ręcznej edycji, przed zapisem.
+            const message = conflictMessage(shiftClassConflicts(shift, schedule.blockingEvents));
+            return <>
+              {!!message.blocking && <Text accessibilityRole="alert" style={[styles.error, { marginTop: 6 }]}>{message.blocking}</Text>}
+              {!!message.optional && <Text style={[styles.muted, { marginTop: 6, color: palette.amber }]}>{message.optional}</Text>}
+            </>;
+          })()}
           {schedule.mode === 'zmianowy' && <View style={[styles.row, { flexWrap: 'wrap', marginTop: 8 }]} accessibilityLabel={`Szablon zmiany ${index + 1}`}>
             {templates.filter((template) => template.active).map((template) => <Pressable key={template.id} accessibilityRole="radio" accessibilityState={{ checked: shift.templateId === template.id }} onPress={() => applyTemplate(shift.candidateId, template)} style={[styles.button, shift.templateId === template.id && { backgroundColor: palette.blueSoft, borderColor: palette.blue }]}><Text style={styles.buttonText}>{template.name}</Text></Pressable>)}
           </View>}
         </View>)}
         {dirty && <Button title={saving ? 'Sprawdzanie i zapisywanie…' : 'Sprawdź i zapisz zmiany'} disabled={saving || loading || !schedule.version} onPress={() => void save()} />}
-        {!schedule.isApproved && <Button title={saving ? 'Zatwierdzanie…' : 'Zatwierdź grafik i dodaj do kalendarza'} primary disabled={saving || loading || dirty || profile.dirty || !schedule.version} onPress={() => void approve()} />}
+        {!schedule.isApproved && classCollision && <Text accessibilityRole="alert" style={styles.error}>Zmień albo usuń zmiany kolidujące z zajęciami obowiązkowymi – takiego grafiku nie można zatwierdzić.</Text>}
+        {!schedule.isApproved && <Button title={saving ? 'Zatwierdzanie…' : 'Zatwierdź grafik i dodaj do kalendarza'} primary disabled={saving || loading || dirty || profile.dirty || classCollision || !schedule.version} onPress={() => void approve()} />}
         {!schedule.isApproved && <Button title="Odrzuć propozycję" danger disabled={saving || loading || !schedule.version} onPress={() => setConfirmReject(true)} />}
         {confirmReject && !schedule.isApproved && <View accessibilityRole="alert" style={[styles.card, { borderColor: palette.red }]}>
           <Text style={styles.body}>{dirty ? 'Odrzucić propozycję i utracić niezapisane poprawki?' : 'Odrzucić tę propozycję? Zatwierdzone wcześniej wydarzenia pozostaną w kalendarzu.'}</Text>

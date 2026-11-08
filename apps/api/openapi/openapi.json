@@ -1770,7 +1770,7 @@
         "tags": [
           "Scheduling"
         ],
-        "description": "Creates a deterministic draft. If no classes occur in the week, confirmation is required. Published planner shifts are excluded from the planning baseline so a replacement can reduce the previous hours.",
+        "description": "Creates a deterministic draft. Weekly class series are expanded into the selected week; work is planned only in availability minus mandatory classes and commute buffers. If no classes occur in the week, confirmation is required. If free time cannot cover the target, the result contains insufficient_free_time. Published planner shifts are excluded from the planning baseline so a replacement can reduce the previous hours.",
         "requestBody": {
           "required": true,
           "content": {
@@ -1912,12 +1912,273 @@
         },
         "responses": {
           "201": {
-            "description": "Default Response",
+            "description": "Propozycja albo zatwierdzony grafik tygodnia. blockingEvents i freeWindows są wyliczane z bieżącego kalendarza i profilu.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": true
+                  "title": "WeeklySchedule",
+                  "description": "Propozycja albo zatwierdzony grafik tygodnia. blockingEvents i freeWindows są wyliczane z bieżącego kalendarza i profilu.",
+                  "additionalProperties": true,
+                  "properties": {
+                    "blockingEvents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "title": "BlockingEvent",
+                        "description": "Wystąpienie wydarzenia uwzględnione przy planowaniu tygodnia. Zajęcia cotygodniowe są rozwinięte na konkretne daty (z datą końca serii i lokalną godziną po zmianie czasu).",
+                        "required": [
+                          "eventId",
+                          "title",
+                          "category",
+                          "mandatory",
+                          "repeatWeekly",
+                          "start",
+                          "end",
+                          "startLocal",
+                          "endLocal",
+                          "effect",
+                          "bufferMinutes"
+                        ],
+                        "properties": {
+                          "eventId": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "category": {
+                            "type": "string",
+                            "enum": [
+                              "Class",
+                              "Work",
+                              "Personal"
+                            ]
+                          },
+                          "mandatory": {
+                            "type": "boolean",
+                            "description": "Zajęcia obowiązkowe."
+                          },
+                          "repeatWeekly": {
+                            "type": "boolean",
+                            "description": "Wystąpienie pochodzi z serii cotygodniowej."
+                          },
+                          "start": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "end": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "startLocal": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                            "description": "Lokalna data i godzina w strefie profilu (YYYY-MM-DDTHH:MM)."
+                          },
+                          "endLocal": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                            "description": "Lokalna data i godzina w strefie profilu (YYYY-MM-DDTHH:MM)."
+                          },
+                          "effect": {
+                            "type": "string",
+                            "enum": [
+                              "hard",
+                              "soft"
+                            ],
+                            "description": "hard – w tym czasie (z buforem) nie wolno planować pracy; soft – zajęcia nieobowiązkowe, pomijane tylko w ostateczności z ostrzeżeniem."
+                          },
+                          "bufferMinutes": {
+                            "type": "integer",
+                            "description": "Czas wolny wymagany przed i po wydarzeniu: dojazd, a przy pracy także odpoczynek."
+                          }
+                        }
+                      },
+                      "description": "Zajęcia i inne wydarzenia tygodnia uwzględnione przy planowaniu."
+                    },
+                    "freeWindows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "title": "FreeWindow",
+                        "description": "Przedział, w którym można zaplanować pracę: dostępność minus zajęcia obowiązkowe, inne wydarzenia (z buforem) i blokady. Pomija przedziały krótsze niż minimalna zmiana.",
+                        "required": [
+                          "start",
+                          "end",
+                          "startLocal",
+                          "endLocal",
+                          "minutes"
+                        ],
+                        "properties": {
+                          "start": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "end": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "startLocal": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                            "description": "Lokalna data i godzina w strefie profilu (YYYY-MM-DDTHH:MM)."
+                          },
+                          "endLocal": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                            "description": "Lokalna data i godzina w strefie profilu (YYYY-MM-DDTHH:MM)."
+                          },
+                          "minutes": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "freeMinutes": {
+                      "type": "integer",
+                      "description": "Suma wolnych przedziałów w minutach."
+                    },
+                    "violations": {
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "title": "ClassCollisionViolation",
+                            "description": "Zmiana pracy koliduje z zajęciami obowiązkowymi. Kolizja oznacza przecięcie przedziałów [początek zmiany, koniec zmiany) i [początek zajęć − bufor, koniec zajęć + bufor); samo zetknięcie granic nie jest kolizją.",
+                            "required": [
+                              "code",
+                              "severity",
+                              "message",
+                              "candidateIds",
+                              "eventIds",
+                              "details"
+                            ],
+                            "properties": {
+                              "code": {
+                                "type": "string",
+                                "enum": [
+                                  "class_collision"
+                                ]
+                              },
+                              "severity": {
+                                "type": "string",
+                                "enum": [
+                                  "error"
+                                ]
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "candidateIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "description": "Identyfikator kolidującej zmiany."
+                              },
+                              "eventIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "description": "Identyfikator zajęć."
+                              },
+                              "details": {
+                                "type": "object",
+                                "required": [
+                                  "eventId",
+                                  "title",
+                                  "mandatory",
+                                  "classStartLocal",
+                                  "classEndLocal",
+                                  "overlapStartLocal",
+                                  "overlapEndLocal",
+                                  "bufferMinutes"
+                                ],
+                                "properties": {
+                                  "eventId": {
+                                    "type": "string"
+                                  },
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "mandatory": {
+                                    "type": "boolean"
+                                  },
+                                  "classStartLocal": {
+                                    "type": "string",
+                                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                                    "description": "Lokalna data i godzina w strefie profilu (YYYY-MM-DDTHH:MM)."
+                                  },
+                                  "classEndLocal": {
+                                    "type": "string",
+                                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                                    "description": "Lokalna data i godzina w strefie profilu (YYYY-MM-DDTHH:MM)."
+                                  },
+                                  "overlapStartLocal": {
+                                    "type": "string",
+                                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                                    "description": "Początek części wspólnej zmiany i zajęć z buforem."
+                                  },
+                                  "overlapEndLocal": {
+                                    "type": "string",
+                                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                                    "description": "Koniec części wspólnej zmiany i zajęć z buforem."
+                                  },
+                                  "bufferMinutes": {
+                                    "type": "integer"
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "type": "object",
+                            "title": "ScheduleViolation",
+                            "description": "Naruszenie albo ostrzeżenie grafiku, np. insufficient_free_time (wolny czas po odjęciu zajęć nie wystarcza na cel), optional_lecture_conflict, target_shortfall, maximum_hours.",
+                            "required": [
+                              "code",
+                              "severity",
+                              "message"
+                            ],
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "severity": {
+                                "type": "string",
+                                "enum": [
+                                  "warning",
+                                  "error"
+                                ]
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "candidateIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "eventIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "details": {
+                                "type": "object",
+                                "additionalProperties": true
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -1976,7 +2237,7 @@
         "tags": [
           "Scheduling"
         ],
-        "description": "Revalidates the draft against current profile/calendar constraints, then atomically publishes the shifts as calendar events. Previous planner-generated events are replaced only after validation.",
+        "description": "Revalidates the draft against current profile/calendar constraints, then atomically publishes the shifts as calendar events. Previous planner-generated events are replaced only after validation. A shift overlapping a mandatory class (including commute buffer) returns 422 with class_collision.",
         "requestBody": {
           "required": true,
           "content": {
@@ -2011,7 +2272,579 @@
         ],
         "responses": {
           "200": {
-            "description": "Default Response"
+            "description": "Propozycja albo zatwierdzony grafik tygodnia. blockingEvents i freeWindows są wyliczane z bieżącego kalendarza i profilu.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "WeeklySchedule",
+                  "description": "Propozycja albo zatwierdzony grafik tygodnia. blockingEvents i freeWindows są wyliczane z bieżącego kalendarza i profilu.",
+                  "additionalProperties": true,
+                  "properties": {
+                    "blockingEvents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "title": "BlockingEvent",
+                        "description": "Wystąpienie wydarzenia uwzględnione przy planowaniu tygodnia. Zajęcia cotygodniowe są rozwinięte na konkretne daty (z datą końca serii i lokalną godziną po zmianie czasu).",
+                        "required": [
+                          "eventId",
+                          "title",
+                          "category",
+                          "mandatory",
+                          "repeatWeekly",
+                          "start",
+                          "end",
+                          "startLocal",
+                          "endLocal",
+                          "effect",
+                          "bufferMinutes"
+                        ],
+                        "properties": {
+                          "eventId": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "category": {
+                            "type": "string",
+                            "enum": [
+                              "Class",
+                              "Work",
+                              "Personal"
+                            ]
+                          },
+                          "mandatory": {
+                            "type": "boolean",
+                            "description": "Zajęcia obowiązkowe."
+                          },
+                          "repeatWeekly": {
+                            "type": "boolean",
+                            "description": "Wystąpienie pochodzi z serii cotygodniowej."
+                          },
+                          "start": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "end": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "startLocal": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                            "description": "Lokalna data i godzina w strefie profilu (YYYY-MM-DDTHH:MM)."
+                          },
+                          "endLocal": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                            "description": "Lokalna data i godzina w strefie profilu (YYYY-MM-DDTHH:MM)."
+                          },
+                          "effect": {
+                            "type": "string",
+                            "enum": [
+                              "hard",
+                              "soft"
+                            ],
+                            "description": "hard – w tym czasie (z buforem) nie wolno planować pracy; soft – zajęcia nieobowiązkowe, pomijane tylko w ostateczności z ostrzeżeniem."
+                          },
+                          "bufferMinutes": {
+                            "type": "integer",
+                            "description": "Czas wolny wymagany przed i po wydarzeniu: dojazd, a przy pracy także odpoczynek."
+                          }
+                        }
+                      },
+                      "description": "Zajęcia i inne wydarzenia tygodnia uwzględnione przy planowaniu."
+                    },
+                    "freeWindows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "title": "FreeWindow",
+                        "description": "Przedział, w którym można zaplanować pracę: dostępność minus zajęcia obowiązkowe, inne wydarzenia (z buforem) i blokady. Pomija przedziały krótsze niż minimalna zmiana.",
+                        "required": [
+                          "start",
+                          "end",
+                          "startLocal",
+                          "endLocal",
+                          "minutes"
+                        ],
+                        "properties": {
+                          "start": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "end": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "startLocal": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                            "description": "Lokalna data i godzina w strefie profilu (YYYY-MM-DDTHH:MM)."
+                          },
+                          "endLocal": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                            "description": "Lokalna data i godzina w strefie profilu (YYYY-MM-DDTHH:MM)."
+                          },
+                          "minutes": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "freeMinutes": {
+                      "type": "integer",
+                      "description": "Suma wolnych przedziałów w minutach."
+                    },
+                    "violations": {
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "title": "ClassCollisionViolation",
+                            "description": "Zmiana pracy koliduje z zajęciami obowiązkowymi. Kolizja oznacza przecięcie przedziałów [początek zmiany, koniec zmiany) i [początek zajęć − bufor, koniec zajęć + bufor); samo zetknięcie granic nie jest kolizją.",
+                            "required": [
+                              "code",
+                              "severity",
+                              "message",
+                              "candidateIds",
+                              "eventIds",
+                              "details"
+                            ],
+                            "properties": {
+                              "code": {
+                                "type": "string",
+                                "enum": [
+                                  "class_collision"
+                                ]
+                              },
+                              "severity": {
+                                "type": "string",
+                                "enum": [
+                                  "error"
+                                ]
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "candidateIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "description": "Identyfikator kolidującej zmiany."
+                              },
+                              "eventIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "description": "Identyfikator zajęć."
+                              },
+                              "details": {
+                                "type": "object",
+                                "required": [
+                                  "eventId",
+                                  "title",
+                                  "mandatory",
+                                  "classStartLocal",
+                                  "classEndLocal",
+                                  "overlapStartLocal",
+                                  "overlapEndLocal",
+                                  "bufferMinutes"
+                                ],
+                                "properties": {
+                                  "eventId": {
+                                    "type": "string"
+                                  },
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "mandatory": {
+                                    "type": "boolean"
+                                  },
+                                  "classStartLocal": {
+                                    "type": "string",
+                                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                                    "description": "Lokalna data i godzina w strefie profilu (YYYY-MM-DDTHH:MM)."
+                                  },
+                                  "classEndLocal": {
+                                    "type": "string",
+                                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                                    "description": "Lokalna data i godzina w strefie profilu (YYYY-MM-DDTHH:MM)."
+                                  },
+                                  "overlapStartLocal": {
+                                    "type": "string",
+                                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                                    "description": "Początek części wspólnej zmiany i zajęć z buforem."
+                                  },
+                                  "overlapEndLocal": {
+                                    "type": "string",
+                                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                                    "description": "Koniec części wspólnej zmiany i zajęć z buforem."
+                                  },
+                                  "bufferMinutes": {
+                                    "type": "integer"
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "type": "object",
+                            "title": "ScheduleViolation",
+                            "description": "Naruszenie albo ostrzeżenie grafiku, np. insufficient_free_time (wolny czas po odjęciu zajęć nie wystarcza na cel), optional_lecture_conflict, target_shortfall, maximum_hours.",
+                            "required": [
+                              "code",
+                              "severity",
+                              "message"
+                            ],
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "severity": {
+                                "type": "string",
+                                "enum": [
+                                  "warning",
+                                  "error"
+                                ]
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "candidateIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "eventIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "details": {
+                                "type": "object",
+                                "additionalProperties": true
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Grafik narusza ograniczenia. Kolizja z zajęciami obowiązkowymi ma kod class_collision i wskazuje zajęcia.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "InvalidSchedule",
+                  "description": "Grafik narusza ograniczenia. Kolizja z zajęciami obowiązkowymi ma kod class_collision i wskazuje zajęcia.",
+                  "required": [
+                    "error",
+                    "errors",
+                    "warnings"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "invalid_schedule"
+                      ]
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "title": "ClassCollisionViolation",
+                            "description": "Zmiana pracy koliduje z zajęciami obowiązkowymi. Kolizja oznacza przecięcie przedziałów [początek zmiany, koniec zmiany) i [początek zajęć − bufor, koniec zajęć + bufor); samo zetknięcie granic nie jest kolizją.",
+                            "required": [
+                              "code",
+                              "severity",
+                              "message",
+                              "candidateIds",
+                              "eventIds",
+                              "details"
+                            ],
+                            "properties": {
+                              "code": {
+                                "type": "string",
+                                "enum": [
+                                  "class_collision"
+                                ]
+                              },
+                              "severity": {
+                                "type": "string",
+                                "enum": [
+                                  "error"
+                                ]
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "candidateIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "description": "Identyfikator kolidującej zmiany."
+                              },
+                              "eventIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "description": "Identyfikator zajęć."
+                              },
+                              "details": {
+                                "type": "object",
+                                "required": [
+                                  "eventId",
+                                  "title",
+                                  "mandatory",
+                                  "classStartLocal",
+                                  "classEndLocal",
+                                  "overlapStartLocal",
+                                  "overlapEndLocal",
+                                  "bufferMinutes"
+                                ],
+                                "properties": {
+                                  "eventId": {
+                                    "type": "string"
+                                  },
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "mandatory": {
+                                    "type": "boolean"
+                                  },
+                                  "classStartLocal": {
+                                    "type": "string",
+                                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                                    "description": "Lokalna data i godzina w strefie profilu (YYYY-MM-DDTHH:MM)."
+                                  },
+                                  "classEndLocal": {
+                                    "type": "string",
+                                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                                    "description": "Lokalna data i godzina w strefie profilu (YYYY-MM-DDTHH:MM)."
+                                  },
+                                  "overlapStartLocal": {
+                                    "type": "string",
+                                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                                    "description": "Początek części wspólnej zmiany i zajęć z buforem."
+                                  },
+                                  "overlapEndLocal": {
+                                    "type": "string",
+                                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                                    "description": "Koniec części wspólnej zmiany i zajęć z buforem."
+                                  },
+                                  "bufferMinutes": {
+                                    "type": "integer"
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "type": "object",
+                            "title": "ScheduleViolation",
+                            "description": "Naruszenie albo ostrzeżenie grafiku, np. insufficient_free_time (wolny czas po odjęciu zajęć nie wystarcza na cel), optional_lecture_conflict, target_shortfall, maximum_hours.",
+                            "required": [
+                              "code",
+                              "severity",
+                              "message"
+                            ],
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "severity": {
+                                "type": "string",
+                                "enum": [
+                                  "warning",
+                                  "error"
+                                ]
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "candidateIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "eventIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "details": {
+                                "type": "object",
+                                "additionalProperties": true
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "title": "ClassCollisionViolation",
+                            "description": "Zmiana pracy koliduje z zajęciami obowiązkowymi. Kolizja oznacza przecięcie przedziałów [początek zmiany, koniec zmiany) i [początek zajęć − bufor, koniec zajęć + bufor); samo zetknięcie granic nie jest kolizją.",
+                            "required": [
+                              "code",
+                              "severity",
+                              "message",
+                              "candidateIds",
+                              "eventIds",
+                              "details"
+                            ],
+                            "properties": {
+                              "code": {
+                                "type": "string",
+                                "enum": [
+                                  "class_collision"
+                                ]
+                              },
+                              "severity": {
+                                "type": "string",
+                                "enum": [
+                                  "error"
+                                ]
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "candidateIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "description": "Identyfikator kolidującej zmiany."
+                              },
+                              "eventIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "description": "Identyfikator zajęć."
+                              },
+                              "details": {
+                                "type": "object",
+                                "required": [
+                                  "eventId",
+                                  "title",
+                                  "mandatory",
+                                  "classStartLocal",
+                                  "classEndLocal",
+                                  "overlapStartLocal",
+                                  "overlapEndLocal",
+                                  "bufferMinutes"
+                                ],
+                                "properties": {
+                                  "eventId": {
+                                    "type": "string"
+                                  },
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "mandatory": {
+                                    "type": "boolean"
+                                  },
+                                  "classStartLocal": {
+                                    "type": "string",
+                                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                                    "description": "Lokalna data i godzina w strefie profilu (YYYY-MM-DDTHH:MM)."
+                                  },
+                                  "classEndLocal": {
+                                    "type": "string",
+                                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                                    "description": "Lokalna data i godzina w strefie profilu (YYYY-MM-DDTHH:MM)."
+                                  },
+                                  "overlapStartLocal": {
+                                    "type": "string",
+                                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                                    "description": "Początek części wspólnej zmiany i zajęć z buforem."
+                                  },
+                                  "overlapEndLocal": {
+                                    "type": "string",
+                                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                                    "description": "Koniec części wspólnej zmiany i zajęć z buforem."
+                                  },
+                                  "bufferMinutes": {
+                                    "type": "integer"
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "type": "object",
+                            "title": "ScheduleViolation",
+                            "description": "Naruszenie albo ostrzeżenie grafiku, np. insufficient_free_time (wolny czas po odjęciu zajęć nie wystarcza na cel), optional_lecture_conflict, target_shortfall, maximum_hours.",
+                            "required": [
+                              "code",
+                              "severity",
+                              "message"
+                            ],
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "severity": {
+                                "type": "string",
+                                "enum": [
+                                  "warning",
+                                  "error"
+                                ]
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "candidateIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "eventIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "details": {
+                                "type": "object",
+                                "additionalProperties": true
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -2170,12 +3003,273 @@
         ],
         "responses": {
           "200": {
-            "description": "Default Response",
+            "description": "Propozycja albo zatwierdzony grafik tygodnia. blockingEvents i freeWindows są wyliczane z bieżącego kalendarza i profilu.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": true
+                  "title": "WeeklySchedule",
+                  "description": "Propozycja albo zatwierdzony grafik tygodnia. blockingEvents i freeWindows są wyliczane z bieżącego kalendarza i profilu.",
+                  "additionalProperties": true,
+                  "properties": {
+                    "blockingEvents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "title": "BlockingEvent",
+                        "description": "Wystąpienie wydarzenia uwzględnione przy planowaniu tygodnia. Zajęcia cotygodniowe są rozwinięte na konkretne daty (z datą końca serii i lokalną godziną po zmianie czasu).",
+                        "required": [
+                          "eventId",
+                          "title",
+                          "category",
+                          "mandatory",
+                          "repeatWeekly",
+                          "start",
+                          "end",
+                          "startLocal",
+                          "endLocal",
+                          "effect",
+                          "bufferMinutes"
+                        ],
+                        "properties": {
+                          "eventId": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "category": {
+                            "type": "string",
+                            "enum": [
+                              "Class",
+                              "Work",
+                              "Personal"
+                            ]
+                          },
+                          "mandatory": {
+                            "type": "boolean",
+                            "description": "Zajęcia obowiązkowe."
+                          },
+                          "repeatWeekly": {
+                            "type": "boolean",
+                            "description": "Wystąpienie pochodzi z serii cotygodniowej."
+                          },
+                          "start": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "end": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "startLocal": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                            "description": "Lokalna data i godzina w strefie profilu (YYYY-MM-DDTHH:MM)."
+                          },
+                          "endLocal": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                            "description": "Lokalna data i godzina w strefie profilu (YYYY-MM-DDTHH:MM)."
+                          },
+                          "effect": {
+                            "type": "string",
+                            "enum": [
+                              "hard",
+                              "soft"
+                            ],
+                            "description": "hard – w tym czasie (z buforem) nie wolno planować pracy; soft – zajęcia nieobowiązkowe, pomijane tylko w ostateczności z ostrzeżeniem."
+                          },
+                          "bufferMinutes": {
+                            "type": "integer",
+                            "description": "Czas wolny wymagany przed i po wydarzeniu: dojazd, a przy pracy także odpoczynek."
+                          }
+                        }
+                      },
+                      "description": "Zajęcia i inne wydarzenia tygodnia uwzględnione przy planowaniu."
+                    },
+                    "freeWindows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "title": "FreeWindow",
+                        "description": "Przedział, w którym można zaplanować pracę: dostępność minus zajęcia obowiązkowe, inne wydarzenia (z buforem) i blokady. Pomija przedziały krótsze niż minimalna zmiana.",
+                        "required": [
+                          "start",
+                          "end",
+                          "startLocal",
+                          "endLocal",
+                          "minutes"
+                        ],
+                        "properties": {
+                          "start": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "end": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "startLocal": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                            "description": "Lokalna data i godzina w strefie profilu (YYYY-MM-DDTHH:MM)."
+                          },
+                          "endLocal": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                            "description": "Lokalna data i godzina w strefie profilu (YYYY-MM-DDTHH:MM)."
+                          },
+                          "minutes": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "freeMinutes": {
+                      "type": "integer",
+                      "description": "Suma wolnych przedziałów w minutach."
+                    },
+                    "violations": {
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "title": "ClassCollisionViolation",
+                            "description": "Zmiana pracy koliduje z zajęciami obowiązkowymi. Kolizja oznacza przecięcie przedziałów [początek zmiany, koniec zmiany) i [początek zajęć − bufor, koniec zajęć + bufor); samo zetknięcie granic nie jest kolizją.",
+                            "required": [
+                              "code",
+                              "severity",
+                              "message",
+                              "candidateIds",
+                              "eventIds",
+                              "details"
+                            ],
+                            "properties": {
+                              "code": {
+                                "type": "string",
+                                "enum": [
+                                  "class_collision"
+                                ]
+                              },
+                              "severity": {
+                                "type": "string",
+                                "enum": [
+                                  "error"
+                                ]
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "candidateIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "description": "Identyfikator kolidującej zmiany."
+                              },
+                              "eventIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "description": "Identyfikator zajęć."
+                              },
+                              "details": {
+                                "type": "object",
+                                "required": [
+                                  "eventId",
+                                  "title",
+                                  "mandatory",
+                                  "classStartLocal",
+                                  "classEndLocal",
+                                  "overlapStartLocal",
+                                  "overlapEndLocal",
+                                  "bufferMinutes"
+                                ],
+                                "properties": {
+                                  "eventId": {
+                                    "type": "string"
+                                  },
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "mandatory": {
+                                    "type": "boolean"
+                                  },
+                                  "classStartLocal": {
+                                    "type": "string",
+                                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                                    "description": "Lokalna data i godzina w strefie profilu (YYYY-MM-DDTHH:MM)."
+                                  },
+                                  "classEndLocal": {
+                                    "type": "string",
+                                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                                    "description": "Lokalna data i godzina w strefie profilu (YYYY-MM-DDTHH:MM)."
+                                  },
+                                  "overlapStartLocal": {
+                                    "type": "string",
+                                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                                    "description": "Początek części wspólnej zmiany i zajęć z buforem."
+                                  },
+                                  "overlapEndLocal": {
+                                    "type": "string",
+                                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                                    "description": "Koniec części wspólnej zmiany i zajęć z buforem."
+                                  },
+                                  "bufferMinutes": {
+                                    "type": "integer"
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "type": "object",
+                            "title": "ScheduleViolation",
+                            "description": "Naruszenie albo ostrzeżenie grafiku, np. insufficient_free_time (wolny czas po odjęciu zajęć nie wystarcza na cel), optional_lecture_conflict, target_shortfall, maximum_hours.",
+                            "required": [
+                              "code",
+                              "severity",
+                              "message"
+                            ],
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "severity": {
+                                "type": "string",
+                                "enum": [
+                                  "warning",
+                                  "error"
+                                ]
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "candidateIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "eventIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "details": {
+                                "type": "object",
+                                "additionalProperties": true
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -2227,12 +3321,273 @@
         ],
         "responses": {
           "200": {
-            "description": "Default Response",
+            "description": "Propozycja albo zatwierdzony grafik tygodnia. blockingEvents i freeWindows są wyliczane z bieżącego kalendarza i profilu.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": true
+                  "title": "WeeklySchedule",
+                  "description": "Propozycja albo zatwierdzony grafik tygodnia. blockingEvents i freeWindows są wyliczane z bieżącego kalendarza i profilu.",
+                  "additionalProperties": true,
+                  "properties": {
+                    "blockingEvents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "title": "BlockingEvent",
+                        "description": "Wystąpienie wydarzenia uwzględnione przy planowaniu tygodnia. Zajęcia cotygodniowe są rozwinięte na konkretne daty (z datą końca serii i lokalną godziną po zmianie czasu).",
+                        "required": [
+                          "eventId",
+                          "title",
+                          "category",
+                          "mandatory",
+                          "repeatWeekly",
+                          "start",
+                          "end",
+                          "startLocal",
+                          "endLocal",
+                          "effect",
+                          "bufferMinutes"
+                        ],
+                        "properties": {
+                          "eventId": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "category": {
+                            "type": "string",
+                            "enum": [
+                              "Class",
+                              "Work",
+                              "Personal"
+                            ]
+                          },
+                          "mandatory": {
+                            "type": "boolean",
+                            "description": "Zajęcia obowiązkowe."
+                          },
+                          "repeatWeekly": {
+                            "type": "boolean",
+                            "description": "Wystąpienie pochodzi z serii cotygodniowej."
+                          },
+                          "start": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "end": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "startLocal": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                            "description": "Lokalna data i godzina w strefie profilu (YYYY-MM-DDTHH:MM)."
+                          },
+                          "endLocal": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                            "description": "Lokalna data i godzina w strefie profilu (YYYY-MM-DDTHH:MM)."
+                          },
+                          "effect": {
+                            "type": "string",
+                            "enum": [
+                              "hard",
+                              "soft"
+                            ],
+                            "description": "hard – w tym czasie (z buforem) nie wolno planować pracy; soft – zajęcia nieobowiązkowe, pomijane tylko w ostateczności z ostrzeżeniem."
+                          },
+                          "bufferMinutes": {
+                            "type": "integer",
+                            "description": "Czas wolny wymagany przed i po wydarzeniu: dojazd, a przy pracy także odpoczynek."
+                          }
+                        }
+                      },
+                      "description": "Zajęcia i inne wydarzenia tygodnia uwzględnione przy planowaniu."
+                    },
+                    "freeWindows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "title": "FreeWindow",
+                        "description": "Przedział, w którym można zaplanować pracę: dostępność minus zajęcia obowiązkowe, inne wydarzenia (z buforem) i blokady. Pomija przedziały krótsze niż minimalna zmiana.",
+                        "required": [
+                          "start",
+                          "end",
+                          "startLocal",
+                          "endLocal",
+                          "minutes"
+                        ],
+                        "properties": {
+                          "start": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "end": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "startLocal": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                            "description": "Lokalna data i godzina w strefie profilu (YYYY-MM-DDTHH:MM)."
+                          },
+                          "endLocal": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                            "description": "Lokalna data i godzina w strefie profilu (YYYY-MM-DDTHH:MM)."
+                          },
+                          "minutes": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "freeMinutes": {
+                      "type": "integer",
+                      "description": "Suma wolnych przedziałów w minutach."
+                    },
+                    "violations": {
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "title": "ClassCollisionViolation",
+                            "description": "Zmiana pracy koliduje z zajęciami obowiązkowymi. Kolizja oznacza przecięcie przedziałów [początek zmiany, koniec zmiany) i [początek zajęć − bufor, koniec zajęć + bufor); samo zetknięcie granic nie jest kolizją.",
+                            "required": [
+                              "code",
+                              "severity",
+                              "message",
+                              "candidateIds",
+                              "eventIds",
+                              "details"
+                            ],
+                            "properties": {
+                              "code": {
+                                "type": "string",
+                                "enum": [
+                                  "class_collision"
+                                ]
+                              },
+                              "severity": {
+                                "type": "string",
+                                "enum": [
+                                  "error"
+                                ]
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "candidateIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "description": "Identyfikator kolidującej zmiany."
+                              },
+                              "eventIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "description": "Identyfikator zajęć."
+                              },
+                              "details": {
+                                "type": "object",
+                                "required": [
+                                  "eventId",
+                                  "title",
+                                  "mandatory",
+                                  "classStartLocal",
+                                  "classEndLocal",
+                                  "overlapStartLocal",
+                                  "overlapEndLocal",
+                                  "bufferMinutes"
+                                ],
+                                "properties": {
+                                  "eventId": {
+                                    "type": "string"
+                                  },
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "mandatory": {
+                                    "type": "boolean"
+                                  },
+                                  "classStartLocal": {
+                                    "type": "string",
+                                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                                    "description": "Lokalna data i godzina w strefie profilu (YYYY-MM-DDTHH:MM)."
+                                  },
+                                  "classEndLocal": {
+                                    "type": "string",
+                                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                                    "description": "Lokalna data i godzina w strefie profilu (YYYY-MM-DDTHH:MM)."
+                                  },
+                                  "overlapStartLocal": {
+                                    "type": "string",
+                                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                                    "description": "Początek części wspólnej zmiany i zajęć z buforem."
+                                  },
+                                  "overlapEndLocal": {
+                                    "type": "string",
+                                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                                    "description": "Koniec części wspólnej zmiany i zajęć z buforem."
+                                  },
+                                  "bufferMinutes": {
+                                    "type": "integer"
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "type": "object",
+                            "title": "ScheduleViolation",
+                            "description": "Naruszenie albo ostrzeżenie grafiku, np. insufficient_free_time (wolny czas po odjęciu zajęć nie wystarcza na cel), optional_lecture_conflict, target_shortfall, maximum_hours.",
+                            "required": [
+                              "code",
+                              "severity",
+                              "message"
+                            ],
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "severity": {
+                                "type": "string",
+                                "enum": [
+                                  "warning",
+                                  "error"
+                                ]
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "candidateIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "eventIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "details": {
+                                "type": "object",
+                                "additionalProperties": true
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -2278,7 +3633,7 @@
         "tags": [
           "Scheduling"
         ],
-        "description": "Validates edits against availability, calendar events, shift templates, weekly and daily limits. Uses expectedVersion to detect concurrent changes.",
+        "description": "Validates edits against availability, calendar events, shift templates, weekly and daily limits. A shift overlapping a mandatory class (including commute buffer) is rejected with class_collision. Uses expectedVersion to detect concurrent changes.",
         "requestBody": {
           "required": true,
           "content": {
@@ -2347,12 +3702,273 @@
         ],
         "responses": {
           "200": {
-            "description": "Default Response",
+            "description": "Propozycja albo zatwierdzony grafik tygodnia. blockingEvents i freeWindows są wyliczane z bieżącego kalendarza i profilu.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": true
+                  "title": "WeeklySchedule",
+                  "description": "Propozycja albo zatwierdzony grafik tygodnia. blockingEvents i freeWindows są wyliczane z bieżącego kalendarza i profilu.",
+                  "additionalProperties": true,
+                  "properties": {
+                    "blockingEvents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "title": "BlockingEvent",
+                        "description": "Wystąpienie wydarzenia uwzględnione przy planowaniu tygodnia. Zajęcia cotygodniowe są rozwinięte na konkretne daty (z datą końca serii i lokalną godziną po zmianie czasu).",
+                        "required": [
+                          "eventId",
+                          "title",
+                          "category",
+                          "mandatory",
+                          "repeatWeekly",
+                          "start",
+                          "end",
+                          "startLocal",
+                          "endLocal",
+                          "effect",
+                          "bufferMinutes"
+                        ],
+                        "properties": {
+                          "eventId": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "category": {
+                            "type": "string",
+                            "enum": [
+                              "Class",
+                              "Work",
+                              "Personal"
+                            ]
+                          },
+                          "mandatory": {
+                            "type": "boolean",
+                            "description": "Zajęcia obowiązkowe."
+                          },
+                          "repeatWeekly": {
+                            "type": "boolean",
+                            "description": "Wystąpienie pochodzi z serii cotygodniowej."
+                          },
+                          "start": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "end": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "startLocal": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                            "description": "Lokalna data i godzina w strefie profilu (YYYY-MM-DDTHH:MM)."
+                          },
+                          "endLocal": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                            "description": "Lokalna data i godzina w strefie profilu (YYYY-MM-DDTHH:MM)."
+                          },
+                          "effect": {
+                            "type": "string",
+                            "enum": [
+                              "hard",
+                              "soft"
+                            ],
+                            "description": "hard – w tym czasie (z buforem) nie wolno planować pracy; soft – zajęcia nieobowiązkowe, pomijane tylko w ostateczności z ostrzeżeniem."
+                          },
+                          "bufferMinutes": {
+                            "type": "integer",
+                            "description": "Czas wolny wymagany przed i po wydarzeniu: dojazd, a przy pracy także odpoczynek."
+                          }
+                        }
+                      },
+                      "description": "Zajęcia i inne wydarzenia tygodnia uwzględnione przy planowaniu."
+                    },
+                    "freeWindows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "title": "FreeWindow",
+                        "description": "Przedział, w którym można zaplanować pracę: dostępność minus zajęcia obowiązkowe, inne wydarzenia (z buforem) i blokady. Pomija przedziały krótsze niż minimalna zmiana.",
+                        "required": [
+                          "start",
+                          "end",
+                          "startLocal",
+                          "endLocal",
+                          "minutes"
+                        ],
+                        "properties": {
+                          "start": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "end": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "startLocal": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                            "description": "Lokalna data i godzina w strefie profilu (YYYY-MM-DDTHH:MM)."
+                          },
+                          "endLocal": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                            "description": "Lokalna data i godzina w strefie profilu (YYYY-MM-DDTHH:MM)."
+                          },
+                          "minutes": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "freeMinutes": {
+                      "type": "integer",
+                      "description": "Suma wolnych przedziałów w minutach."
+                    },
+                    "violations": {
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "title": "ClassCollisionViolation",
+                            "description": "Zmiana pracy koliduje z zajęciami obowiązkowymi. Kolizja oznacza przecięcie przedziałów [początek zmiany, koniec zmiany) i [początek zajęć − bufor, koniec zajęć + bufor); samo zetknięcie granic nie jest kolizją.",
+                            "required": [
+                              "code",
+                              "severity",
+                              "message",
+                              "candidateIds",
+                              "eventIds",
+                              "details"
+                            ],
+                            "properties": {
+                              "code": {
+                                "type": "string",
+                                "enum": [
+                                  "class_collision"
+                                ]
+                              },
+                              "severity": {
+                                "type": "string",
+                                "enum": [
+                                  "error"
+                                ]
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "candidateIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "description": "Identyfikator kolidującej zmiany."
+                              },
+                              "eventIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "description": "Identyfikator zajęć."
+                              },
+                              "details": {
+                                "type": "object",
+                                "required": [
+                                  "eventId",
+                                  "title",
+                                  "mandatory",
+                                  "classStartLocal",
+                                  "classEndLocal",
+                                  "overlapStartLocal",
+                                  "overlapEndLocal",
+                                  "bufferMinutes"
+                                ],
+                                "properties": {
+                                  "eventId": {
+                                    "type": "string"
+                                  },
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "mandatory": {
+                                    "type": "boolean"
+                                  },
+                                  "classStartLocal": {
+                                    "type": "string",
+                                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                                    "description": "Lokalna data i godzina w strefie profilu (YYYY-MM-DDTHH:MM)."
+                                  },
+                                  "classEndLocal": {
+                                    "type": "string",
+                                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                                    "description": "Lokalna data i godzina w strefie profilu (YYYY-MM-DDTHH:MM)."
+                                  },
+                                  "overlapStartLocal": {
+                                    "type": "string",
+                                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                                    "description": "Początek części wspólnej zmiany i zajęć z buforem."
+                                  },
+                                  "overlapEndLocal": {
+                                    "type": "string",
+                                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                                    "description": "Koniec części wspólnej zmiany i zajęć z buforem."
+                                  },
+                                  "bufferMinutes": {
+                                    "type": "integer"
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "type": "object",
+                            "title": "ScheduleViolation",
+                            "description": "Naruszenie albo ostrzeżenie grafiku, np. insufficient_free_time (wolny czas po odjęciu zajęć nie wystarcza na cel), optional_lecture_conflict, target_shortfall, maximum_hours.",
+                            "required": [
+                              "code",
+                              "severity",
+                              "message"
+                            ],
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "severity": {
+                                "type": "string",
+                                "enum": [
+                                  "warning",
+                                  "error"
+                                ]
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "candidateIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "eventIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "details": {
+                                "type": "object",
+                                "additionalProperties": true
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -2391,12 +4007,304 @@
             }
           },
           "422": {
-            "description": "Default Response",
+            "description": "Grafik narusza ograniczenia. Kolizja z zajęciami obowiązkowymi ma kod class_collision i wskazuje zajęcia.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": true
+                  "title": "InvalidSchedule",
+                  "description": "Grafik narusza ograniczenia. Kolizja z zajęciami obowiązkowymi ma kod class_collision i wskazuje zajęcia.",
+                  "required": [
+                    "error",
+                    "errors",
+                    "warnings"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "invalid_schedule"
+                      ]
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "title": "ClassCollisionViolation",
+                            "description": "Zmiana pracy koliduje z zajęciami obowiązkowymi. Kolizja oznacza przecięcie przedziałów [początek zmiany, koniec zmiany) i [początek zajęć − bufor, koniec zajęć + bufor); samo zetknięcie granic nie jest kolizją.",
+                            "required": [
+                              "code",
+                              "severity",
+                              "message",
+                              "candidateIds",
+                              "eventIds",
+                              "details"
+                            ],
+                            "properties": {
+                              "code": {
+                                "type": "string",
+                                "enum": [
+                                  "class_collision"
+                                ]
+                              },
+                              "severity": {
+                                "type": "string",
+                                "enum": [
+                                  "error"
+                                ]
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "candidateIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "description": "Identyfikator kolidującej zmiany."
+                              },
+                              "eventIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "description": "Identyfikator zajęć."
+                              },
+                              "details": {
+                                "type": "object",
+                                "required": [
+                                  "eventId",
+                                  "title",
+                                  "mandatory",
+                                  "classStartLocal",
+                                  "classEndLocal",
+                                  "overlapStartLocal",
+                                  "overlapEndLocal",
+                                  "bufferMinutes"
+                                ],
+                                "properties": {
+                                  "eventId": {
+                                    "type": "string"
+                                  },
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "mandatory": {
+                                    "type": "boolean"
+                                  },
+                                  "classStartLocal": {
+                                    "type": "string",
+                                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                                    "description": "Lokalna data i godzina w strefie profilu (YYYY-MM-DDTHH:MM)."
+                                  },
+                                  "classEndLocal": {
+                                    "type": "string",
+                                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                                    "description": "Lokalna data i godzina w strefie profilu (YYYY-MM-DDTHH:MM)."
+                                  },
+                                  "overlapStartLocal": {
+                                    "type": "string",
+                                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                                    "description": "Początek części wspólnej zmiany i zajęć z buforem."
+                                  },
+                                  "overlapEndLocal": {
+                                    "type": "string",
+                                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                                    "description": "Koniec części wspólnej zmiany i zajęć z buforem."
+                                  },
+                                  "bufferMinutes": {
+                                    "type": "integer"
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "type": "object",
+                            "title": "ScheduleViolation",
+                            "description": "Naruszenie albo ostrzeżenie grafiku, np. insufficient_free_time (wolny czas po odjęciu zajęć nie wystarcza na cel), optional_lecture_conflict, target_shortfall, maximum_hours.",
+                            "required": [
+                              "code",
+                              "severity",
+                              "message"
+                            ],
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "severity": {
+                                "type": "string",
+                                "enum": [
+                                  "warning",
+                                  "error"
+                                ]
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "candidateIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "eventIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "details": {
+                                "type": "object",
+                                "additionalProperties": true
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "title": "ClassCollisionViolation",
+                            "description": "Zmiana pracy koliduje z zajęciami obowiązkowymi. Kolizja oznacza przecięcie przedziałów [początek zmiany, koniec zmiany) i [początek zajęć − bufor, koniec zajęć + bufor); samo zetknięcie granic nie jest kolizją.",
+                            "required": [
+                              "code",
+                              "severity",
+                              "message",
+                              "candidateIds",
+                              "eventIds",
+                              "details"
+                            ],
+                            "properties": {
+                              "code": {
+                                "type": "string",
+                                "enum": [
+                                  "class_collision"
+                                ]
+                              },
+                              "severity": {
+                                "type": "string",
+                                "enum": [
+                                  "error"
+                                ]
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "candidateIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "description": "Identyfikator kolidującej zmiany."
+                              },
+                              "eventIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "description": "Identyfikator zajęć."
+                              },
+                              "details": {
+                                "type": "object",
+                                "required": [
+                                  "eventId",
+                                  "title",
+                                  "mandatory",
+                                  "classStartLocal",
+                                  "classEndLocal",
+                                  "overlapStartLocal",
+                                  "overlapEndLocal",
+                                  "bufferMinutes"
+                                ],
+                                "properties": {
+                                  "eventId": {
+                                    "type": "string"
+                                  },
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "mandatory": {
+                                    "type": "boolean"
+                                  },
+                                  "classStartLocal": {
+                                    "type": "string",
+                                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                                    "description": "Lokalna data i godzina w strefie profilu (YYYY-MM-DDTHH:MM)."
+                                  },
+                                  "classEndLocal": {
+                                    "type": "string",
+                                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                                    "description": "Lokalna data i godzina w strefie profilu (YYYY-MM-DDTHH:MM)."
+                                  },
+                                  "overlapStartLocal": {
+                                    "type": "string",
+                                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                                    "description": "Początek części wspólnej zmiany i zajęć z buforem."
+                                  },
+                                  "overlapEndLocal": {
+                                    "type": "string",
+                                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$",
+                                    "description": "Koniec części wspólnej zmiany i zajęć z buforem."
+                                  },
+                                  "bufferMinutes": {
+                                    "type": "integer"
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "type": "object",
+                            "title": "ScheduleViolation",
+                            "description": "Naruszenie albo ostrzeżenie grafiku, np. insufficient_free_time (wolny czas po odjęciu zajęć nie wystarcza na cel), optional_lecture_conflict, target_shortfall, maximum_hours.",
+                            "required": [
+                              "code",
+                              "severity",
+                              "message"
+                            ],
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "severity": {
+                                "type": "string",
+                                "enum": [
+                                  "warning",
+                                  "error"
+                                ]
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "candidateIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "eventIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "details": {
+                                "type": "object",
+                                "additionalProperties": true
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
                 }
               }
             }

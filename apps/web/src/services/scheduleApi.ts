@@ -15,7 +15,17 @@ export type ScheduleShift = {
   optionalLectureIds: string[];
   softPenalty: number;
 };
-export type ScheduleViolation = { code: string; severity: 'warning' | 'error'; message: string };
+export type ScheduleViolation = { code: string; severity: 'warning' | 'error'; message: string; candidateIds?: string[]; eventIds?: string[]; details?: Record<string, unknown> };
+/** Wystąpienie wydarzenia w planowanym tygodniu (S23KC2S1P2-40); serie są rozwinięte na konkretne daty. */
+export type BlockingEvent = {
+  eventId: string; title: string; category: 'Class' | 'Work' | 'Personal'; mandatory: boolean; repeatWeekly: boolean;
+  start: string; end: string; startLocal: string; endLocal: string;
+  /** hard – w tym czasie (z buforem) nie wolno planować pracy; soft – zajęcia nieobowiązkowe. */
+  effect: 'hard' | 'soft';
+  bufferMinutes: number;
+};
+/** Wolny przedział w dostępności po odjęciu zajęć i wydarzeń. */
+export type FreeWindow = { start: string; end: string; startLocal: string; endLocal: string; minutes: number };
 export type WeeklySchedule = {
   scheduleId?: string;
   version?: number;
@@ -38,6 +48,9 @@ export type WeeklySchedule = {
   parameters: { workaholic?: boolean; profileVersion?: string; maxHoursPerDay?: number };
   shifts: ScheduleShift[];
   violations: ScheduleViolation[];
+  blockingEvents?: BlockingEvent[];
+  freeWindows?: FreeWindow[];
+  freeMinutes?: number;
 };
 
 const baseUrl = () => {
@@ -82,6 +95,11 @@ export async function generateSchedule(weekStart: string, profile: WorkProfile, 
 export async function approveSchedule(weekStart: string, expectedVersion: number): Promise<WeeklySchedule> {
   const response = await request(`/api/v1/schedules/${weekStart}/approve`, { method: 'POST', body: JSON.stringify({ expectedVersion }) });
   if (response.status === 409) throw new Error('Grafik zmienił się w międzyczasie. Odśwież go przed zatwierdzeniem.');
+  if (response.status === 422) {
+    // Np. w kalendarzu pojawiły się zajęcia obowiązkowe kolidujące ze zmianą (class_collision).
+    const data = await response.json();
+    throw new Error(data.errors?.map((item: ScheduleViolation) => item.message).join(' ') || 'Grafik narusza ograniczenia i nie może zostać zatwierdzony.');
+  }
   if (!response.ok) throw new Error('Nie udało się dodać zatwierdzonych zmian do kalendarza.');
   return response.json();
 }

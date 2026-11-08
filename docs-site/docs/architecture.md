@@ -57,6 +57,7 @@ Moduł tras otrzymuje zależności przez opcje Fastify. Nie otwiera własnego po
 
 - Importy są najpierw propozycją/sesją. Kalendarz zmienia się dopiero po walidacji i potwierdzeniu.
 - Akceptacja grafiku ponownie sprawdza ograniczenia w backendzie i zapisuje zmiany wraz z wydarzeniami w transakcji.
+- Zajęcia przy planowaniu (`src/scheduling/constraints.ts`): `listBlockingOccurrences` rozwija serie cotygodniowe na planowany tydzień, `freeWindows` odejmuje zajęcia obowiązkowe i inne wydarzenia (z buforem dojazdu) od dostępności, a `constraints.classCollision` zgłasza błąd `class_collision` ze wskazaniem zajęć. Zajęcia nieobowiązkowe są pomijane tylko w ostateczności, z ostrzeżeniem. Odpowiedzi grafiku zawierają `blockingEvents` i `freeWindows` wyliczone z bieżącego kalendarza.
 - Czas wydarzeń jest interpretowany w strefie czasowej profilu użytkownika.
 - Użytkownik ma najwyżej jeden aktywny profil pracy (unikalny indeks w bazie). Cel miesięczny jest przeliczany na tydzień (miesiąc = 52/12 tygodnia) i ta wartość trafia do generatora. Zmiana profilu wpływa tylko na kolejne generowane grafiki.
 - Konflikty kalendarza oraz wersje grafiku są rozstrzygane w backendzie, nie tylko w UI.

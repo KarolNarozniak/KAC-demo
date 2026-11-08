@@ -32,7 +32,7 @@ All paths are served from the same API host. OpenAPI lists full paths including 
 
 ## Error conventions
 
-Invalid input returns `400`. Invalid work profile values return `422` with an error code for each field (`fields`). Calendar conflicts or stale versions use `409`; schedule constraint violations use `422`; unknown resources use `404`; missing database or unavailable dependency uses `503`. Import does not write calendar events before confirmation.
+Invalid input returns `400`. Invalid work profile values return `422` with an error code for each field (`fields`). Calendar conflicts or stale versions use `409`; schedule constraint violations use `422` (a shift overlapping a mandatory class returns `class_collision` identifying the class); unknown resources use `404`; missing database or unavailable dependency uses `503`. Import does not write calendar events before confirmation.
 
 ## Contract in the repository
 
