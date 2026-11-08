@@ -24,12 +24,12 @@ const baseUrl = () => {
   throw new Error('Brak konfiguracji adresu API.');
 };
 
-async function request(path: string, options?: RequestInit) {
+async function request(path: string, options?: RequestInit, handlers?: { onConflict?: () => Error; onError?: (code: string, data: any) => Error }) {
   const response = await fetch(`${baseUrl()}${path}`, { ...options, headers: { Accept: 'application/json', ...(options?.body ? { 'Content-Type': 'application/json' } : {}) } });
-  if (response.status === 409) throw new WorkPreferencesConflictError();
+  if (response.status === 409) throw handlers?.onConflict?.() ?? new WorkPreferencesConflictError();
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
-    throw new WorkPreferencesError(data.error, data.rowIndex);
+    throw handlers?.onError?.(data.error, data) ?? new WorkPreferencesError(data.error, data.rowIndex);
   }
   return response.json();
 }
@@ -37,3 +37,17 @@ async function request(path: string, options?: RequestInit) {
 export const loadWorkPreferences = (): Promise<PreferencesSnapshot> => request('/api/work-profile/preferences');
 export const saveWorkPreferences = (version: string, intervals: PreferenceInterval[]): Promise<PreferencesSnapshot> =>
   request('/api/work-profile/preferences', { method: 'PUT', body: JSON.stringify({ version, intervals }) });
+
+export type WorkProfile = { version: string; minRestMinutes: number };
+
+export class WorkProfileError extends Error {
+  constructor(code: string) { super(code === 'invalid_min_rest_minutes' ? 'Wpisz poprawną, nieujemną liczbę minut.' : 'Nie udało się zapisać ustawień odpoczynku.'); }
+}
+export class WorkProfileConflictError extends Error {
+  constructor() { super('Ustawienia odpoczynku zostały zmienione w międzyczasie — wczytano najnowszą wersję.'); }
+}
+
+export const loadWorkProfile = (): Promise<WorkProfile> => request('/api/work-profile');
+export const saveWorkProfile = (version: string, minRestMinutes: number): Promise<WorkProfile> =>
+  request('/api/work-profile', { method: 'PUT', body: JSON.stringify({ version, minRestMinutes }) },
+    { onConflict: () => new WorkProfileConflictError(), onError: (code) => new WorkProfileError(code) });

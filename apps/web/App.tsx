@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Text, View, Pressable, Image } from 'react-native';
+import { Text, View, Pressable, Image, ScrollView } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -7,6 +7,7 @@ import type { WeekLayout } from './src/components/WeekGrid';
 import CalendarScreen from './src/screens/CalendarScreen';
 import ScreenTransition from './src/components/ScreenTransition';
 import PreferencesEditor from './src/components/PreferencesEditor';
+import RestSettings from './src/components/RestSettings';
 import { loadWeeklyHourLimits, saveMaxWeeklyHours } from './src/services/profileApi';
 import { Button, Field, ThemeProvider, ThemeToggle, useTheme, type ThemeMode } from './src/components/ui';
 const tabs = ['Dziś', 'Tydzień', 'Ustawienia', 'Asystent'] as const;
@@ -70,7 +71,7 @@ function CalendarApp() {
     </View>
     <ScreenTransition screenIndex={tabs.indexOf(tab)} renderScreen={(index, active) => {
       const route = tabs[index];
-      return (route === 'Dziś' || route === 'Tydzień' ? <CalendarScreen active={active} now={now} weekLayout={weekLayout} todayOnly={route === 'Dziś'} week={week} setWeek={setWeek} /> : route === 'Ustawienia' ? <View style={[styles.content, { padding: 16 }]}>
+            return (route === 'Dziś' || route === 'Tydzień' ? <CalendarScreen active={active} now={now} weekLayout={weekLayout} todayOnly={route === 'Dziś'} week={week} setWeek={setWeek} /> : route === 'Ustawienia' ? <ScrollView style={styles.content} contentContainerStyle={{ padding: 16, paddingBottom: 32 }} keyboardShouldPersistTaps="handled">
         <View style={[styles.row, { justifyContent: 'space-between', marginBottom: 20 }]}><Text style={styles.heading}>Motyw</Text><ThemeToggle /></View>
         <Text style={[styles.heading, { marginBottom: 12 }]}>Układ tygodnia</Text>
         <View accessibilityRole="radiogroup" style={{ gap: 8 }}>
@@ -84,9 +85,10 @@ function CalendarApp() {
           {!!limitNotice && <Text accessibilityLiveRegion="polite" style={styles.muted}>{limitNotice}</Text>}
           <Button title={limitSaving ? 'Zapisywanie…' : 'Zapisz limit'} primary disabled={limitSaving} onPress={() => void saveLimit()} />
           <PreferencesEditor />
+          <RestSettings />
         </View>
-      </View> : <View style={[styles.content, { padding: 16 }]}><Text style={styles.heading}>Asystent</Text><Text style={styles.subtitle}>Wkrótce</Text></View>);
-    }} />
+            </ScrollView> : <View style={[styles.content, { padding: 16 }]}><Text style={styles.heading}>Asystent</Text><Text style={styles.subtitle}>Wkrótce</Text></View>);
+          }} />
     <View accessibilityRole="tablist" style={{ flexDirection: 'row', backgroundColor: palette.surface, borderTopWidth: 1, borderColor: palette.line, paddingTop: 4, paddingBottom: 4 }}>
       {tabs.map((item, i) => <Pressable key={item} accessibilityRole="tab" accessibilityState={{ selected: tab === item }} onPress={() => setTab(item)} style={{ flex: 1, minWidth: 0, minHeight: 48, justifyContent: 'center', alignItems: 'center', gap: 4 }}><View style={{ width: 28, height: 24, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: 20, lineHeight: 24, includeFontPadding: false, textAlign: 'center', color: tab === item ? palette.blue : palette.muted }}>{['◷', '▦', '⚙︎', '✧'][i]}</Text></View><Text style={{ width: '100%', height: 16, lineHeight: 16, includeFontPadding: false, textAlign: 'center', fontSize: 12, fontWeight: '700', color: tab === item ? palette.blue : palette.muted }}>{item}</Text></Pressable>)}
     </View>

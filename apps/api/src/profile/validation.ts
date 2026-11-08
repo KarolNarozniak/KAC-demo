@@ -8,7 +8,17 @@ export type WeeklyHourLimits = {
 };
 
 export class ProfileValidationError extends Error {
-  constructor(message: string, public field?: keyof WeeklyHourLimits) { super(message); }
+  constructor(message: string, public field?: string) { super(message); }
+}
+
+export class ProfileVersionConflictError extends Error {
+  constructor() { super('profile_version_conflict'); }
+}
+
+export function validateMinRestMinutes(value: unknown): asserts value is number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
+    throw new ProfileValidationError('invalid_min_rest_minutes', 'minRestMinutes');
+  }
 }
 
 export function validateWeeklyHourLimits(input: WeeklyHourLimits): void {

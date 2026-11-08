@@ -15,6 +15,9 @@ import { ScheduleReadError } from './import/work-schedule/local-reader.js';
 import { DemoScheduleReader, type ScheduleReader } from './import/work-schedule/reader.js';
 import { ProfileValidationError, type WeeklyHourLimits } from './profile/validation.js';
 import { PreferencesConflictError, PreferencesValidationError, type PreferenceInterval, type PreferencesSnapshot } from './profile/repository.js';
+import { ProfileVersionConflictError } from './profile/validation.js';
+import { checkMinimumRest, type ProposedShift } from './scheduling/rest.js';
+import { mondayWeekBounds } from './scheduling/constraints.js';
 import type { AcceptedRow, ConfirmResult, CreateSessionInput, ImportFormat, ImportSource } from './import/session.js';
 
 export type CalendarRepository = {
@@ -28,6 +31,10 @@ export type CalendarRepository = {
   setMaxWeeklyWorkHours?: (maxHours: number | null) => Promise<WeeklyHourLimits>;
   listWorkPreferences?: () => Promise<PreferencesSnapshot>;
   replaceWorkPreferences?: (version: string, intervals: PreferenceInterval[]) => Promise<PreferencesSnapshot>;
+  getMinRestMinutes?: () => Promise<{ version: string; minRestMinutes: number }>;
+  setMinRestMinutes?: (version: string, minRestMinutes: number) => Promise<{ version: string; minRestMinutes: number }>;
+  getAccountTimeZone?: () => Promise<string>;
+  getWorkShiftsNear?: (weekStart: Date, weekEnd: Date) => Promise<TimedEvent[]>;
   // Import (S23KC2S1P2-32): sesja, przedłużanie, zatwierdzenie i anulowanie.
   createImportSession?: (input: CreateSessionInput) => Promise<{ id: string; expiresAt: Date }>;
   touchImportSession?: (sessionId: string) => Promise<void>;
@@ -224,6 +231,55 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
     if (!repository?.listWorkPreferences) return reply.code(503).send({ error: 'database_not_configured' });
     try { return await repository.listWorkPreferences(); }
     catch (error) { app.log.error(error); return reply.code(503).send({ error: 'database_unavailable' }); }
+  });
+
+    // --- Czas na odpoczynek (user story: planer uwzględnia czas na odpoczynek) ---
+  app.get('/api/work-profile', async (_request, reply) => {
+    if (!repository?.getMinRestMinutes) return reply.code(503).send({ error: 'database_not_configured' });
+    try { return await repository.getMinRestMinutes(); }
+    catch (error) { app.log.error(error); return reply.code(503).send({ error: 'database_unavailable' }); }
+  });
+
+  const workProfileBody = {
+    type: 'object', additionalProperties: false, required: ['version', 'minRestMinutes'],
+    properties: { version: { type: 'string' }, minRestMinutes: { type: 'integer', minimum: 0 } },
+  } as const;
+
+  app.put<{ Body: { version: string; minRestMinutes: number } }>('/api/work-profile', { schema: { body: workProfileBody } }, async (request, reply) => {
+    if (!repository?.setMinRestMinutes) return reply.code(503).send({ error: 'database_not_configured' });
+    try { return await repository.setMinRestMinutes(request.body.version, request.body.minRestMinutes); }
+    catch (error) {
+      if (error instanceof ProfileVersionConflictError) return reply.code(409).send({ error: error.message });
+      if (error instanceof ProfileValidationError) return reply.code(400).send({ error: error.message, field: error.field });
+      request.log.error({ err: error }, 'Rest minutes not saved');
+      return reply.code(503).send({ error: 'profile_not_saved' });
+    }
+  });
+
+  // Walidacja dla UI (task: "nie wyliczać reguły samodzielnie w UI") — klient wysyła kandydatów, dostaje werdykt.
+  const restCheckBody = {
+    type: 'object', additionalProperties: false, required: ['proposals'],
+    properties: {
+      proposals: {
+        type: 'array', maxItems: 20,
+        items: {
+          type: 'object', additionalProperties: false, required: ['id', 'start', 'end'],
+          properties: { id: { type: 'string' }, start: { type: 'string' }, end: { type: 'string' }, linkedEventId: { type: 'string' } },
+        },
+      },
+    },
+  } as const;
+
+  app.post<{ Body: { proposals: ProposedShift[] } }>('/api/scheduling/rest-check', { schema: { body: restCheckBody } }, async (request, reply) => {
+    if (!repository?.getMinRestMinutes || !repository?.getWorkShiftsNear || !repository?.getAccountTimeZone) return reply.code(503).send({ error: 'database_not_configured' });
+    try {
+      const zone = await repository.getAccountTimeZone();
+      const { minRestMinutes } = await repository.getMinRestMinutes();
+      const { weekStart, weekEnd } = mondayWeekBounds(new Date(), zone);
+      const existingWork = await repository.getWorkShiftsNear(weekStart, weekEnd);
+      const violations = checkMinimumRest(request.body.proposals, existingWork, minRestMinutes, zone, weekStart, weekEnd);
+      return { weekStart: weekStart.toISOString(), weekEnd: weekEnd.toISOString(), minRestMinutes, violations };
+    } catch (error) { app.log.error(error); return reply.code(503).send({ error: 'database_unavailable' }); }
   });
 
   const preferencesBody = {
