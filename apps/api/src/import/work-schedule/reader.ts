@@ -3,9 +3,9 @@
 // To jest „gniazdo” na mechanizm odczytu. Reszta importu (walidacja, podgląd, duplikaty, zapis) korzysta
 // wyłącznie z interfejsu ScheduleReader, więc sposób odczytu można później podmienić w jednym miejscu.
 //
-// Sposób odczytu zdjęć i PDF (OCR na serwerze, usługa AI itp.) nie jest jeszcze ustalony w zespole.
-// Do tego czasu działa czytnik demonstracyjny: plik jest sprawdzany naprawdę, ale zwracane zmiany
-// pochodzą z przykładowego grafiku. Ekran importu informuje o tym użytkownika.
+// Prawdziwy odczyt to LocalScheduleReader (local-reader.ts): warstwa tekstowa PDF albo lokalny OCR zdjęcia
+// (Tesseract.js, tak jak w imporcie planu zajęć – historyjka 38). DemoScheduleReader zostaje do testów
+// i pokazów bez OCR (WORK_SCHEDULE_READER=demo). Ekran importu informuje, gdy działa czytnik demonstracyjny.
 
 import type { ScheduleFileType } from './file-check.js';
 
@@ -23,10 +23,13 @@ export type RawShift = {
 
 export type ScheduleFile = { name: string; type: ScheduleFileType; bytes: Buffer };
 
+/** Dane pomocnicze odczytu: kto importuje i względem jakiej daty uzupełniać rok w datach typu „02.11”. */
+export type ReadContext = { userName: string; now?: Date };
+
 export interface ScheduleReader {
   /** Czy odczyt jest prawdziwy (false = czytnik demonstracyjny). */
   readonly real: boolean;
-  read(file: ScheduleFile): Promise<RawShift[]>;
+  read(file: ScheduleFile, context: ReadContext): Promise<RawShift[]>;
 }
 
 /** Przykładowy grafik kawiarni dla kilku pracowników. */
@@ -53,10 +56,8 @@ const DEMO_CONFIDENCE: Record<ScheduleFileType, number> = { PDF: 0.9, PNG: 0.8, 
 export class DemoScheduleReader implements ScheduleReader {
   readonly real = false;
 
-  constructor(private readonly employeeName: () => Promise<string>) {}
-
-  async read(file: ScheduleFile): Promise<RawShift[]> {
+  async read(file: ScheduleFile, context: ReadContext): Promise<RawShift[]> {
     if (/pusty/i.test(file.name)) return [];
-    return sampleSchedule(await this.employeeName(), DEMO_CONFIDENCE[file.type]);
+    return sampleSchedule(context.userName, DEMO_CONFIDENCE[file.type]);
   }
 }

@@ -4,12 +4,15 @@ import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/d
 import { Button, useTheme } from './ui';
 import type { TimeFieldProps } from './TimeField.types';
 
-export default function TimeField({ label, value, onChange }: TimeFieldProps) {
+export default function TimeField({ label, value, onChange, invalid = false }: TimeFieldProps) {
   const [open, setOpen] = useState(false);
   const { styles, palette, mode } = useTheme();
   const [hours, minutes] = value.split(':').map(Number);
+  // Pusta godzina (np. nieodczytana z importu): pokazujemy podpowiedź, a zegar otwiera się na pełnej godzinie.
+  const valid = /^\d{2}:\d{2}$/.test(value) && Number.isFinite(hours) && Number.isFinite(minutes);
   const date = new Date();
-  date.setHours(hours, minutes, 0, 0);
+  if (valid) date.setHours(hours, minutes, 0, 0);
+  else date.setMinutes(0, 0, 0);
   const commit = (selected: Date) => onChange(`${String(selected.getHours()).padStart(2, '0')}:${String(selected.getMinutes()).padStart(2, '0')}`);
   useEffect(() => {
     if (Platform.OS === 'android') return () => { void DateTimePickerAndroid.dismiss('time'); };
@@ -27,9 +30,9 @@ export default function TimeField({ label, value, onChange }: TimeFieldProps) {
     }
   };
   return <View style={{ flex: 1, minWidth: 0, marginBottom: 12 }}>
-    <Text style={styles.label}>{label}</Text>
-    <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${value}`} accessibilityState={{ expanded: open }} onPress={showPicker} disabled={open} style={[styles.input, { minHeight: 44, justifyContent: 'center' }]}>
-      <Text style={styles.body}>{value}</Text>
+    <Text style={[styles.label, invalid && { color: palette.red }]}>{label}</Text>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${value}`} accessibilityState={{ expanded: open }} onPress={showPicker} disabled={open} style={[styles.input, { minHeight: 44, justifyContent: 'center' }, invalid && { borderColor: palette.red, borderWidth: 2 }]}>
+      <Text style={valid ? styles.body : styles.muted}>{valid ? value : 'Wybierz godzinę'}</Text>
     </Pressable>
     {Platform.OS === 'ios' && <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
       <View style={{ flex: 1, backgroundColor: palette.scrim, justifyContent: 'center', alignItems: 'center', padding: 16 }}>

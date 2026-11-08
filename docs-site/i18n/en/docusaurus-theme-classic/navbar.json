@@ -1,0 +1,18 @@
+{
+  "title": {
+    "message": "KAC Platform",
+    "description": "The title in the navbar"
+  },
+  "logo.alt": {
+    "message": "KAC Platform",
+    "description": "The alt text of navbar logo"
+  },
+  "item.label.Dokumentacja": {
+    "message": "Documentation",
+    "description": "Navbar item with label Dokumentacja"
+  },
+  "item.label.Swagger UI": {
+    "message": "Swagger UI",
+    "description": "Navbar item with label Swagger UI"
+  }
+}

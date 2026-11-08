@@ -1,19 +1,28 @@
-# Aura Kalendar
+# KAC Platform
 
-First application slice: a responsive week calendar, today's view, and PostgreSQL-backed event creation. Bottom navigation contains **Dziś**, **Tydzień**, **Ustawienia**, **Asystent**. The cog tab contains calendar layout settings; assistant integration is reserved for a later increment.
+Kalendarz wydarzeń i tygodniowe planowanie pracy: Expo/React Native Web, modułowe Fastify API v1, PostgreSQL oraz dwujęzyczna dokumentacja Docusaurus.
+
+Pełna dokumentacja produktu, architektury, OpenAPI i procesu zmian znajduje się w [Docusaurus](http://localhost:3000) (PL/EN). Interaktywny kontrakt backendu jest dostępny w [Swagger UI](http://localhost:4000/api/v1/docs), a OpenAPI JSON pod `http://localhost:4000/api/v1/openapi.json`.
 
 ## Run locally
 
-Use Node.js 24 LTS (24.3+; `.nvmrc` selects 24) and PostgreSQL 16. Node 25 is not supported by the Expo 58 toolchain. Docker Compose is provided for PostgreSQL.
+Wymagane: Node.js 24 LTS (24.3+; `.nvmrc` selects 24), Docker i Docker Compose v2. Node 25 nie jest wspierany przez Expo 58. Pełne instrukcje są w [lokalnym quickstarcie](docs-site/docs/quickstart.md).
 
-1. Copy `.env.example` to `.env`, `apps/api/.env.example` to `apps/api/.env`, and `apps/web/.env.example` to `apps/web/.env`. Configure `DATABASE_URL` and `EXPO_PUBLIC_API_URL`.
-2. `npm ci`
-3. `npm run db:up` (or start your own PostgreSQL instance).
-4. `npm run db:migrate` then `npm run db:seed`. Fresh databases start with an empty calendar; seeding does not remove existing events.
-5. `npm run api:dev`
-6. In a second terminal: `npm run web:dev`.
+Pierwsze uruchomienie automatycznie przygotowuje zależności, `.env`, bazę, migracje, dane demonstracyjne i kontrakt OpenAPI.
 
-Open the Expo URL, normally `http://localhost:8081`. To use a phone, set `EXPO_PUBLIC_API_URL` to your computer's reachable API address and add the web origin to `API_CORS_ORIGINS`.
+Windows PowerShell:
+
+```powershell
+.\scripts\quickstart.ps1
+```
+
+Linux/macOS:
+
+```bash
+sh ./scripts/quickstart.sh
+```
+
+W razie potrzeby konfigurację można wykonać wcześniej przez `scripts/setup.ps1` lub `scripts/setup.sh`. Jedno polecenie uruchamia web (`http://localhost:8081`), API (`http://localhost:4000/api/v1`) i dokumentację (`http://localhost:3000`). `Ctrl+C` zatrzymuje serwisy, baza PostgreSQL zostaje uruchomiona.
 
 ## Expo / React upgrade
 
@@ -35,10 +44,62 @@ The dependency audit on 2026-10-22 decreased from **55 findings (1 critical, 37 
 - Creation saves to PostgreSQL before updating the calendar. Connection failures keep the form open with the entered data. No in-memory demo fallback.
 - **Powtarzaj co tydzień** stores a series and its first event in one transaction. Occurrences are derived for the visible week, without a fixed end date. Calendar dates and times use the configured account timezone (initially Europe/Warsaw), retaining weekly wall-clock time across daylight-saving changes.
 - Calendar ownership, categories, series and the original relational schema are retained for subsequent features. `DB_DEMO_USER_ID` and `DB_DEMO_CALENDAR_ID` select the initial seeded calendar. There is no authentication yet; these server-selected IDs must be replaced by authenticated account scope when accounts are implemented.
-- Event editing, account flows, imports, planning and notifications are outside this increment. Their simulated UI and fixtures have been removed.
+- Event creation and whole-series editing use server-side collision checks. Warnings show titles, categories, full dates/times and overlap intervals. Choose **Popraw termin**, **Zapisz mimo kolizji**, or **Anuluj**. Touching interval endpoints do not collide. An override applies only to the displayed draft and current conflicts. Updates retain event IDs and save atomically. Recurring events retain the account's local wall time; nonexistent spring-DST times are rejected. One-off events may span up to 366 days; weekly events up to 7 days.
+- **Tydzień → Importuj plan** reads text PDFs exported in the WAT mini e-D semester layout locally on the API server. PDF selection works on web, Android and iOS. The reader maps date columns, time blocks, the subject legend and printed page continuations. It uses the academic semester, not the document update date. Dated classes become individual events, without infinite weekly repetition.
+- The paginated import preview supports corrections, selection and duplicate decisions: **Pomiń**, **Zastąp**, **Zachowaj oba**. Uncertain rows start unselected. A duplicate has the same normalized title and start instant; end time is deliberately excluded so a corrected duration can replace an existing event. Matches include derived weekly occurrences. Replacing a weekly match changes the whole series while preserving its anchor; the UI labels this, and a series may be replaced only once per batch. Ambiguous matches require an explicit target. Confirmation rechecks duplicates under the same calendar lock used by manual writes and commits the whole batch atomically.
+- Class import also accepts **PNG/JPG screenshots of the WAT Miniatura grid**. Tesseract.js runs offline on the API host with a packaged English model for subject abbreviations, Roman months and numerical times. Sharp decodes images and applies EXIF orientation; grid segmentation preserves date/time associations. All OCR rows start unselected and require review. Subject codes can be misread; missing rooms and class forms remain blank. Skewed/perspective photos and scanned PDFs remain deferred. Image limits: 5 MB, 20 megapixels, 6000 × 8000 dimensions, one OCR worker, 60-second timeout. No Python or system Tesseract installation is needed.
+- Text PDF limits: 5 MB, 10 pages, 30,000 text items, 1,000 imported rows, two readers at once and a 15-second worker timeout. The worker has a bounded heap; uploads are neither retained on disk nor sent to third-party services. Android uses the FileSystem picker to retain access to the selected provider document in Expo Go; original files are never deleted. On iOS, temporary document cache copies are cleaned up after reading.
+- **Tydzień → Importuj** (work schedule, S23KC2S1P2-44) reads the real file: text PDFs through the same PDF worker, and JPG/PNG photos through local Tesseract.js OCR with a packaged **Polish** model (names with Polish characters). Sharp applies EXIF orientation, contrast normalisation and scaling, and table grid lines are erased before OCR (Tesseract otherwise skips bordered cells). Photos are additionally read through an adaptive-threshold variant (uneven light, shadows, photos of screens, slightly skewed grids); the variant giving more complete shifts wins; Tesseract auto-rotates slightly skewed photos. **Zrób zdjęcie** opens the camera directly (expo-image-picker on Android/iOS, including Expo Go; `capture` file input in mobile browsers). The parser accepts lists (date, name, hours in any column order), date groups, employee groups and weekly tables (header with dates, one row per employee). Days off (`wolne`, `urlop`, `L4`, `X`, `-`) are skipped; missing years come from the document or the nearest date. Missing fields give a partial read; rows below 70% confidence are labelled **SPRAWDŹ ODCZYT**. Scanned PDFs without text are rejected with a request for a photo. Image OCR shares the one-worker limit with class OCR (`reader-busy` → HTTP 429). `WORK_SCHEDULE_READER=demo` switches back to the sample schedule for demonstrations.
+- **Tydzień → Importuj plan** also accepts **ICS files** (S23KC2S1P2-8; USOS, Google Calendar, Outlook and Apple exports), detected by content. The parser handles folded lines, escaping, `TZID`/UTC/floating times (including Windows zone names), `DURATION`, `RRULE` (DAILY/WEEKLY/MONTHLY with INTERVAL, COUNT, UNTIL, BYDAY), `EXDATE`, moved or cancelled occurrences (`RECURRENCE-ID`) and cancelled events. Series are expanded to individual class events (open-ended series: one year, max. 1000 rows per import). All-day events, events without an end and unsupported rules are skipped and counted. Times are converted to the account timezone; a different file timezone is reported. ICS rows use the shared preview, duplicate decisions and atomic confirmation; collisions with existing events are flagged (7a).
+- Import previews highlight the fields that need correction (S23KC2S1P2-20) and report the import result as completed, failed or cancelled.
+- **Tydzień → Google** imports events once from Google Calendar (S23KC2S1P2-27): connect and consent (refusal ends the import), pick a calendar, date range and category, preview with duplicates/collisions, then import; the number of imported events is shown. With `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `GOOGLE_REDIRECT_URI` (default `http://localhost:4000/api/v1/import/google/callback`, registered in Google Cloud Console) the API uses OAuth 2.0 with PKCE and the read-only `calendar.readonly` scope. The access token stays in API memory, is never sent to the app and is discarded after the events are read or after 15 minutes. Without these variables a sample Google account is used (same flow, saved to PostgreSQL). Imported events have source `Google`; later changes in Google are not synchronised.
+- Authentication remains a later task: the server-selected demo account and calendar remain in use. Planning and notifications are outside this increment.
 
 ## Checks and deployment
 
-`npm run typecheck`, `npm test`, `npm run build`. With PostgreSQL migrated and seeded, run `npm run test:api:db` to verify create/read/delete persistence, ownership checks and series cleanup through a fresh API instance. The integration test removes its own records.
+`npm run typecheck`, `npm test`, `npm run api:openapi:check`, `npm run docs:build`, `npm run build`. API changes must update the route JSON Schemas, exported OpenAPI file and both language versions of the Docusaurus documentation in the same change. See [API change standard](docs-site/docs/api-standard.md). With PostgreSQL migrated and seeded, run `npm run test:api:db` to verify persistence through a fresh API instance.
 
-The API and Expo web deployment scripts and existing GitHub Actions remain. Configure API `DATABASE_URL`, `PGSSLMODE=require` and `API_CORS_ORIGINS`; the web build embeds `EXPO_PUBLIC_API_URL`. Apply database migrations before deploying the updated API.
+The API, Expo web and docs builds are included in CI. Configure API `DATABASE_URL`, `PGSSLMODE=require` and `API_CORS_ORIGINS`; the web build embeds `EXPO_PUBLIC_API_URL`. Apply database migrations before deploying the updated API.
+
+## Feature validation (S23KC2S1P2-43, -14, -38)
+
+Run the checks above and `npm run test:api:db` against a migrated, seeded **test database**. Database suites run sequentially because legacy tests share the demo calendar; new feature scenarios create and remove a separate calendar. They cover concurrent create requests, collision overrides, atomic edits, ownership, recurring duplicate replacement, cancellation and repeated semester imports. The three paired PDF/JSON timetable fixtures live in `apps/api/tests/fixtures/timetables`, named by printed semester and academic year. They contain 166, 212 and 37 entries. Actual-PDF worker and upload tests are mandatory; missing source fixtures fail the tests rather than being skipped.
+
+Native JavaScript bundles can be checked with `npx expo export --platform ios --platform android` from `apps/web`. Native device picker behavior still requires a device/emulator smoke test; a successful bundle export does not establish that a physical-device test passed.
+
+The initial OCR implementation and deferred stages are documented in [the local OCR implementation plan](docs/ocr-implementation-plan.md). Three original screenshot fixtures are in `apps/api/tests/fixtures/ocr`. Tests check all 37, 166 and 212 date/time assignments against the paired PDFs; this does not imply perfect subject-code recognition.
+
+## Build and try the OCR demo locally
+
+Run from the repository root with Node 24 and Docker running. Copy the example
+configuration only when the corresponding local file does not already exist:
+
+```sh
+npm ci
+[ -f .env ] || cp .env.example .env
+[ -f apps/api/.env ] || cp apps/api/.env.example apps/api/.env
+[ -f apps/web/.env ] || cp apps/web/.env.example apps/web/.env
+npm run db:up
+npm run db:migrate
+npm run db:seed
+npm run build
+npm run api:start
+```
+
+In a second terminal at the repository root:
+
+```sh
+npm run web:dev
+```
+
+Open `http://localhost:8081`, choose **Tydzień → Importuj plan → Wybierz PDF lub obraz**,
+and select a PNG from `apps/api/tests/fixtures/ocr`. Check/correct the subject codes,
+select the rows to import and confirm. Nothing enters the calendar before confirmation.
+For the compiled web build instead of Expo development mode, use `npm run web:start`
+(default port 8080). Restart/rebuild the frontend after changing `EXPO_PUBLIC_API_URL`.
+
+For Android/iOS preview, put `EXPO_PUBLIC_API_URL=http://YOUR_COMPUTER_LAN_IP:4000`
+in `apps/web/.env`, then run `npm run start:dev --workspace @kac/web -- --lan`.
+The phone must reach that API address; `localhost` on a phone points to the phone.
+The native file picker accepts PNG/JPG/PDF. The work-schedule import can also take a photo
+with the camera. On-device OCR is not implemented. Use an SDK-compatible Expo client or development build.

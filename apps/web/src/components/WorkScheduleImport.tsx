@@ -6,13 +6,14 @@
 // Okno otwiera przycisk „Importuj” w zakładce Tydzień.
 
 import React, { useEffect, useState } from 'react';
-import { Modal, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { Button, Field, useTheme } from './ui';
 import DateField from './DateField';
 import TimeField from './TimeField';
 import {
   cancelImport,
   confirmImport,
+  invalidFields,
   previewImport,
   readWorkSchedule,
   type DuplicateDecision,
@@ -22,11 +23,13 @@ import {
   type ImportSummary,
   type ScheduleRow,
 } from '../services/importApi';
+import { pickPdf } from '../services/pickPdf';
+import { takePhoto } from '../services/takePhoto';
 
 type Props = { visible: boolean; onClose: () => void; onImported: () => void };
 
-const MAX_FILE_BYTES = 5 * 1024 * 1024;
-const ACCEPTED_TYPES = 'image/jpeg,image/png,application/pdf,.jpg,.jpeg,.png,.pdf';
+/** Poniżej tej pewności odczytu wiersz jest dodatkowo oznaczony do sprawdzenia (historyjka 32). */
+const LOW_CONFIDENCE = 0.7;
 
 const fileErrorText: Record<string, string> = {
   'unsupported-format': 'Nieobsługiwany format pliku. Wybierz zdjęcie JPG/PNG albo plik PDF.',
@@ -34,6 +37,12 @@ const fileErrorText: Record<string, string> = {
   'empty-file': 'Wybrany plik jest pusty. Wybierz inny plik.',
   'file-too-large': 'Plik jest za duży (maks. 5 MB). Wybierz mniejszy plik albo zrób zdjęcie w niższej rozdzielczości.',
   nothing_recognized: 'Nie odczytano żadnej zmiany. Wybierz czytelniejsze zdjęcie lub inny plik.',
+  'unreadable-image': 'Nie udało się odczytać zdjęcia. Zrób wyraźniejsze zdjęcie (prosto, bez cienia) albo wybierz plik PNG/JPG.',
+  'unreadable-pdf': 'Nie udało się odczytać pliku PDF. Plik może być uszkodzony – wybierz inny plik.',
+  'encrypted-pdf': 'PDF zabezpieczony hasłem nie jest obsługiwany. Wybierz plik bez hasła albo zrób zdjęcie grafiku.',
+  'scanned-pdf': 'Ten PDF to skan bez tekstu. Zrób zdjęcie lub zrzut ekranu grafiku i wybierz plik JPG/PNG.',
+  'read-timeout': 'Odczyt trwał zbyt długo. Spróbuj z mniejszym lub wyraźniejszym zdjęciem.',
+  'reader-busy': 'Serwer odczytuje teraz inny plik. Spróbuj ponownie za chwilę.',
 };
 
 const issueText: Record<ImportIssue, string> = {
@@ -56,31 +65,6 @@ type PickedFile = { name: string; size: number; base64: string };
 type Session = { id: string; readStatusLabel: string; readerIsDemo: boolean; userName: string };
 type Phase = 'idle' | 'reading' | 'preview' | 'saving' | 'saveFailed';
 
-/** Otwiera systemowy wybór pliku. Na telefonie pozwala też od razu zrobić zdjęcie aparatem. */
-function pickFileFromDevice(): Promise<PickedFile | null> {
-  return new Promise((resolve, reject) => {
-    if (Platform.OS !== 'web' || typeof document === 'undefined') {
-      reject(new Error('Import grafiku jest na razie dostępny w przeglądarce (także na telefonie).'));
-      return;
-    }
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = ACCEPTED_TYPES;
-    input.onchange = () => {
-      const file = input.files?.[0];
-      if (!file) return resolve(null);
-      const reader = new FileReader();
-      reader.onload = () => {
-        const dataUrl = String(reader.result ?? '');
-        resolve({ name: file.name, size: file.size, base64: dataUrl.slice(dataUrl.indexOf(',') + 1) });
-      };
-      reader.onerror = () => reject(new Error('Nie udało się wczytać pliku z urządzenia.'));
-      reader.readAsDataURL(file);
-    };
-    input.click();
-  });
-}
-
 export default function WorkScheduleImport({ visible, onClose, onImported }: Props) {
   const { palette, styles } = useTheme();
   const [file, setFile] = useState<PickedFile | null>(null);
@@ -90,13 +74,14 @@ export default function WorkScheduleImport({ visible, onClose, onImported }: Pro
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [overnightOk, setOvernightOk] = useState<Record<string, boolean>>({});
   const [decisions, setDecisions] = useState<Record<string, DuplicateDecision>>({});
+  const [replacementIds, setReplacementIds] = useState<Record<string, string>>({});
   const [preview, setPreview] = useState<Record<string, ImportPreviewRow>>({});
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [summary, setSummary] = useState<ImportSummary | null>(null);
 
   const reset = () => {
-    setPhase('idle'); setSession(null); setRows([]); setSelected({}); setOvernightOk({}); setDecisions({}); setPreview({});
+    setPhase('idle'); setSession(null); setRows([]); setSelected({}); setOvernightOk({}); setDecisions({}); setReplacementIds({}); setPreview({});
   };
 
   const toInput = (row: ScheduleRow): ImportRowInput => ({
@@ -116,12 +101,13 @@ export default function WorkScheduleImport({ visible, onClose, onImported }: Pro
     return () => { clearTimeout(timer); controller.abort(); };
   }, [rows, session]);
 
-  const chooseFile = async () => {
+  // Plik z galerii/dysku albo zdjęcie prosto z aparatu. Oba sposoby sprawdzają rozmiar (maks. 5 MB) i zgłaszają błąd z gotowym komunikatem.
+  const chooseFile = async (source: 'file' | 'camera' = 'file') => {
     setError(''); setNotice(''); setSummary(null);
     try {
-      const picked = await pickFileFromDevice();
+      // Wybór pliku jest wspólny z importem planu zajęć: przeglądarka (także na telefonie) oraz aplikacja na Androidzie/iOS.
+      const picked: PickedFile | null = source === 'camera' ? await takePhoto() : await pickPdf();
       if (!picked) return;
-      if (picked.size > MAX_FILE_BYTES) { setFile(null); setError(fileErrorText['file-too-large'] ?? ''); return; }
       setFile(picked);
     } catch (pickError) {
       setError(pickError instanceof Error ? pickError.message : 'Nie udało się wybrać pliku.');
@@ -175,7 +161,7 @@ export default function WorkScheduleImport({ visible, onClose, onImported }: Pro
     try {
       const result = await confirmImport(
         session.id,
-        chosen.map((row) => ({ ...toInput(row), overnightConfirmed: overnightOk[row.id] || undefined, duplicateDecision: decisions[row.id] })),
+        chosen.map((row) => ({ ...toInput(row), overnightConfirmed: overnightOk[row.id] || undefined, duplicateDecision: decisions[row.id], replacementId: replacementIds[row.id] })),
       );
       if (result.kind === 'saved') {
         setSummary(result.summary ?? { added: result.saved, replaced: 0, skipped: 0, rejected: result.rejected });
@@ -226,8 +212,12 @@ export default function WorkScheduleImport({ visible, onClose, onImported }: Pro
     const duplicateEvents = item?.duplicateOfEvents ?? [];
     const duplicateRows = item?.duplicateOfRows ?? [];
     const hasDuplicate = duplicateEvents.length > 0 || duplicateRows.length > 0;
-    const allowed: DuplicateDecision[] = duplicateEvents.length > 0 ? ['skip', 'replace', 'keepBoth'] : ['skip', 'keepBoth'];
+    const allowed: DuplicateDecision[] = ['skip', 'replace', 'keepBoth'];
+    const targets = [...duplicateEvents.map(event => ({ id: event.id, label: `${event.title}, ${formatInstant(event.start)}${event.repeatWeekly ? ' — cała seria cotygodniowa' : ''}` })),
+      ...duplicateRows.map(id => ({ id: `row:${id}`, label: label(id) }))];
     const decision = decisions[row.id];
+    // Pola wymagające poprawy są podświetlone (tak jak w imporcie planu – historyjka S23KC2S1P2-20).
+    const bad = invalidFields(row, item?.status === 'error' ? item.issues : []);
     return (
       <View key={row.id} style={{ marginTop: 14, borderTopWidth: 1, borderColor: palette.line, paddingTop: 13, opacity: isSelected ? 1 : 0.6 }}>
         <View style={[styles.row, { flexWrap: 'wrap' }]}>
@@ -235,6 +225,7 @@ export default function WorkScheduleImport({ visible, onClose, onImported }: Pro
           <Text style={{ fontWeight: '800', color: palette.ink }}>{label(row.id)} · {row.employee ?? 'bez nazwiska'}{row.isOwn ? ' (Ty)' : ''}</Text>
           {!row.isOwn && pill('INNY PRACOWNIK', palette.muted)}
           {row.confidence !== undefined && <Text style={styles.muted}>Pewność odczytu: {Math.round(row.confidence * 100)}%</Text>}
+          {row.confidence !== undefined && row.confidence < LOW_CONFIDENCE && pill('SPRAWDŹ ODCZYT', palette.amber)}
         </View>
 
         {item?.status === 'error' && (
@@ -264,17 +255,19 @@ export default function WorkScheduleImport({ visible, onClose, onImported }: Pro
             <View style={[styles.row, { flexWrap: 'wrap', marginTop: 6 }]}>
               {allowed.map((option) => choice(decisionText[option].label, decision === option, () => setDecisions((current) => ({ ...current, [row.id]: option })), option))}
             </View>
+            {decision === 'replace' && targets.length > 1 && targets.map(target => choice(`Zastąp: ${target.label}`, replacementIds[row.id] === target.id, () => setReplacementIds(current => ({ ...current, [row.id]: target.id })), target.id))}
+            {duplicateEvents.some(event => event.repeatWeekly) && <Text style={styles.muted}>Zastąpienie zmienia całą serię cotygodniową. Jedną serię można zastąpić tylko raz w imporcie.</Text>}
             {decision && <Text style={[styles.muted, { marginTop: 4 }]}>{decisionText[decision].label}: {decisionText[decision].effect}.</Text>}
           </View>
         )}
 
         <View style={{ marginTop: 8 }}>
-          <DateField label="DATA" value={row.date} onChange={(value) => update(row.id, 'date', value)} />
+          <DateField label="DATA" value={row.date} invalid={bad.date} onChange={(value) => update(row.id, 'date', value)} />
           <View style={styles.row}>
-            <TimeField label="POCZĄTEK" value={row.startTime} onChange={(value) => update(row.id, 'startTime', value)} />
-            <TimeField label="KONIEC" value={row.endTime} onChange={(value) => update(row.id, 'endTime', value)} />
+            <TimeField label="POCZĄTEK" value={row.startTime} invalid={bad.start} onChange={(value) => update(row.id, 'startTime', value)} />
+            <TimeField label="KONIEC" value={row.endTime} invalid={bad.end} onChange={(value) => update(row.id, 'endTime', value)} />
           </View>
-          <Field label="TYTUŁ" value={row.title} onChangeText={(value) => update(row.id, 'title', value)} />
+          <Field label="TYTUŁ" value={row.title} invalid={bad.title} onChangeText={(value) => update(row.id, 'title', value)} />
           <Field label="MIEJSCE" value={row.location ?? ''} onChangeText={(value) => update(row.id, 'location', value)} />
         </View>
       </View>
@@ -290,10 +283,12 @@ export default function WorkScheduleImport({ visible, onClose, onImported }: Pro
             <Button title="Zamknij" accessibilityLabel="Zamknij import" disabled={phase === 'saving'} onPress={() => void close()} />
           </View>
           <Text style={styles.subtitle}>Zdjęcie JPG/PNG albo plik PDF, maks. 5 MB. Na telefonie możesz od razu zrobić zdjęcie grafiku.</Text>
+          <Text style={[styles.muted, { marginTop: 6 }]}>Najlepiej odczytywany jest grafik w formie listy lub tabeli: data, imię i nazwisko, godziny (np. 16:00-20:00). Zdjęcie rób prosto i bez cieni. Każdą odczytaną zmianę sprawdzisz przed zapisem.</Text>
 
           {phase === 'idle' && (
             <View style={[styles.row, { flexWrap: 'wrap', marginTop: 14 }]}>
-              <Button title={file ? 'Zmień plik' : 'Wybierz zdjęcie lub plik'} onPress={() => void chooseFile()} />
+              <Button title="Zrób zdjęcie" onPress={() => void chooseFile('camera')} />
+              <Button title={file ? 'Zmień plik' : 'Wybierz zdjęcie lub plik'} onPress={() => void chooseFile('file')} />
               {file && <Text style={styles.body}>{file.name} · {(file.size / 1024).toFixed(0)} KB</Text>}
               {file && <Button title="Wczytaj grafik" primary onPress={() => void startImport()} />}
             </View>
@@ -319,7 +314,7 @@ export default function WorkScheduleImport({ visible, onClose, onImported }: Pro
               {session.readerIsDemo && (
                 <View style={[styles.row, { flexWrap: 'wrap', marginTop: 8 }]}>
                   {pill('ODCZYT DEMONSTRACYJNY', palette.muted)}
-                  <Text style={styles.muted}>Plik został sprawdzony, ale treść grafiku nie jest jeszcze odczytywana (sposób odczytu zdjęć i PDF czeka na decyzję zespołu). Poniżej przykładowy grafik.</Text>
+                  <Text style={styles.muted}>Serwer działa w trybie demonstracyjnym (WORK_SCHEDULE_READER=demo): plik został sprawdzony, ale poniżej jest przykładowy grafik zamiast treści pliku.</Text>
                 </View>
               )}
 

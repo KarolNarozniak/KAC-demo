@@ -10,7 +10,11 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "noUncheckedIndexedAccess": true,
-    "sourceMap": true
+    "sourceMap": true,
+    "allowJs": true
   },
-  "include": ["src/**/*.ts"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.mjs"
+  ]
 }
