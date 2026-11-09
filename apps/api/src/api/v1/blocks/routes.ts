@@ -30,6 +30,13 @@ export async function blockRoutes(app: FastifyInstance) {
               type: { type: 'string', enum: ['vacation', 'exam_session', 'day_off'] }
             }
           }
+        },
+        501: {
+          description: 'Not implemented',
+          type: 'object',
+          properties: {
+            error: { type: 'string' }
+          }
         }
       }
     }
@@ -68,6 +75,13 @@ export async function blockRoutes(app: FastifyInstance) {
             endTime: { type: 'string' },
             type: { type: 'string', enum: ['vacation', 'exam_session', 'day_off'] }
           }
+        },
+        501: {
+          description: 'Not implemented',
+          type: 'object',
+          properties: {
+            error: { type: 'string' }
+          }
         }
       }
     }
@@ -102,6 +116,13 @@ export async function blockRoutes(app: FastifyInstance) {
         },
         404: {
           description: 'Block not found',
+          type: 'object',
+          properties: {
+            error: { type: 'string' }
+          }
+        },
+        501: {
+          description: 'Not implemented',
           type: 'object',
           properties: {
             error: { type: 'string' }
