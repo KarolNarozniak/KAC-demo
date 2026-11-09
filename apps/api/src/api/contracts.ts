@@ -19,6 +19,10 @@ export type CalendarRepository = {
   cancelImportSession?: (sessionId: string) => Promise<boolean>;
   listEventsForImport?: () => Promise<ExistingEvent[]>;
   getImportUserName?: () => Promise<string>;
+  
+  listBlocks?: () => Promise<Block[]>;
+  createBlock?: (input: BlockInput) => Promise<Block>;
+  deleteBlock?: (id: string) => Promise<boolean>;
 };
 
 export type ApiOptions = {
@@ -36,4 +40,22 @@ export type ApiDependencies = {
   scheduleRepository?: ScheduleRepository;
   scheduleReader: ScheduleReader;
   google?: GoogleImportOptions;
+};
+
+export type BlockType = 'vacation' | 'exam_session' | 'day_off';
+
+export type Block = {
+  id: string;
+  userId: string;
+  title: string;
+  startTime: string;
+  endTime: string;
+  type: BlockType;
+};
+
+export type BlockInput = {
+  title: string;
+  startTime: string;
+  endTime: string;
+  type: BlockType;
 };

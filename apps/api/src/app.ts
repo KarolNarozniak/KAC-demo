@@ -10,6 +10,7 @@ import { schedulingRoutes } from './api/v1/scheduling/routes.js';
 import type { ApiOptions, CalendarRepository } from './api/contracts.js';
 import { registerGoogleImport } from './api/v1/imports/google-routes.js';
 import { DemoScheduleReader } from './import/work-schedule/reader.js';
+import { blockRoutes } from './api/v1/blocks/routes.js';
 
 export type { ApiOptions, CalendarRepository } from './api/contracts.js';
 
@@ -17,6 +18,7 @@ const API_PREFIX = '/api/v1';
 
 export function buildApi(repository: CalendarRepository | null, allowedOrigins: string[] = [], options: ApiOptions = {}) {
   const app: FastifyInstance = Fastify({ logger: true });
+  app.decorate('repository', repository as any);
   const allowAnyOrigin = allowedOrigins.includes('*');
   const origins = new Set(allowedOrigins);
 
@@ -54,6 +56,7 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
         { name: 'Scheduling', description: 'Weekly planning, versions, validation and approval.' },
         { name: 'Imports', description: 'Reviewable imports from schedules, ICS and class files.' },
         { name: 'Google import', description: 'One-time, read-only Google Calendar import.' },
+        { name: 'Blocks', description: 'Vacation, exam sessions and days off blocks.' },
       ],
       externalDocs: { description: 'KAC bilingual developer documentation', url: process.env.DOCUSAURUS_URL ?? 'http://localhost:3000' },
     },
@@ -74,6 +77,7 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
     await profileRoutes(v1, { repository: options.workProfileRepository, scope: options.userScope });
     await schedulingRoutes(v1, { repository: options.scheduleRepository });
     await importRoutes(v1, { repository, scheduleRepository: options.scheduleRepository, scheduleReader, google: options.google });
+    await blockRoutes(v1);
     registerGoogleImport(v1, repository, options.google);
   }, { prefix: API_PREFIX });
 

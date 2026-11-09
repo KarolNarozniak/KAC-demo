@@ -13,9 +13,26 @@ export class ScheduleVersionConflictError extends Error {
 export type ScheduleRepository = Pick<PostgresScheduleRepository, 'getPlanningContext' | 'saveSchedule' | 'getLatestSchedule' | 'getScheduleById' | 'listSchedules' | 'getApprovedShiftEventIds' | 'approveSchedule' | 'rejectSchedule'>;
 
 export class PostgresScheduleRepository {
-  constructor(private readonly connectionPool: Pool) {}
+  constructor(private readonly connectionPool: Pool) {
+    this.ensureBlocksTable().catch(() => {});
+  }
+
+  async ensureBlocksTable() {
+    await this.connectionPool.query(`
+      CREATE TABLE IF NOT EXISTS blocks (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id VARCHAR(255) NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        start_time TIMESTAMP WITH TIME ZONE NOT NULL,
+        end_time TIMESTAMP WITH TIME ZONE NOT NULL,
+        type VARCHAR(50) NOT NULL CHECK (type IN ('vacation', 'exam_session', 'day_off')),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+  }
 
   async getPlanningContext(userId = config.demoUserId, calendarId = config.demoCalendarId, requestedProfileId?: string): Promise<PlanningContext | null> {
+    await this.ensureBlocksTable();
     const profileResult = await this.connectionPool.query(`
       select p.id_profilu, p.id_uzytkownika, c.id_kalendarza, u.strefa_czasowa,
         p.min_godzin_tydzien, p.cel_godzin_tydzien, p.max_godzin_tydzien, p.stawka_pln,
@@ -29,13 +46,16 @@ export class PostgresScheduleRepository {
     const profile = profileResult.rows[0];
     if (!profile) return null;
     const profileId: string = profile.id_profilu;
-    const [availability, preferences, blocks, events, templates] = await Promise.all([
+    
+    const [availability, preferences, blocks, calendarBlocksResult, events, templates] = await Promise.all([
       this.connectionPool.query(`select id_dostepnosci, dzien_tygodnia, od_godzina, do_godzina
-        from t_dostepnosc where id_profilu = $1 and rodzaj = 'Dostępny' order by dzien_tygodnia, od_godzina`, [profileId]),
+        from t_dostepnosc where id_profilu = $1 order by dzien_tygodnia, od_godzina`, [profileId]),
       this.connectionPool.query(`select id_preferencji, dzien_tygodnia, od_godzina, do_godzina, waga
         from t_prefer_godziny where id_profilu = $1 order by dzien_tygodnia, od_godzina`, [profileId]),
       this.connectionPool.query(`select id_blokady, typ, rozpoczecie, zakonczenie, powod
         from t_blokady where id_profilu = $1 order by rozpoczecie`, [profileId]),
+      this.connectionPool.query(`select id, user_id, title, start_time, end_time, type
+        from blocks where user_id = $1 order by start_time`, [userId]),
       this.connectionPool.query(`select e.id_wydarzenia, e.tytul, e.obowiazkowe, e.powtarzaj_co_tydzien, e.zrodlo,
           to_char(e.rozpoczecie at time zone $2, 'YYYY-MM-DD"T"HH24:MI') as start_local,
           to_char(e.zakonczenie at time zone $2, 'YYYY-MM-DD"T"HH24:MI') as end_local,
@@ -46,9 +66,11 @@ export class PostgresScheduleRepository {
       this.connectionPool.query(`select id_szablonu, nazwa, godzina_od, godzina_do, koniec_nastepnego_dnia, dni_tygodnia, aktywna
         from t_szablony_zmian where id_profilu = $1 order by nazwa`, [profileId]),
     ]);
+
     const number = (value: string | number | null, fallback: number) => value === null ? fallback : Number(value);
     const time = (value: string) => value.slice(0, 5);
     const categoryMap: Record<string, 'Class' | 'Work' | 'Personal'> = { Zajęcia: 'Class', Praca: 'Work', Prywatne: 'Personal' };
+
     return {
       profile: {
         id: profileId,
@@ -71,7 +93,12 @@ export class PostgresScheduleRepository {
       },
       availability: availability.rows.map((row) => ({ id: row.id_dostepnosci, dayOfWeek: Number(row.dzien_tygodnia), startTime: time(row.od_godzina), endTime: time(row.do_godzina) })),
       preferredWorkWindows: preferences.rows.map((row) => ({ id: row.id_preferencji, dayOfWeek: Number(row.dzien_tygodnia), startTime: time(row.od_godzina), endTime: time(row.do_godzina), weight: Number(row.waga) })),
-      blockedPeriods: blocks.rows.map((row) => ({ id: row.id_blokady, type: row.typ, start: new Date(row.rozpoczecie).toISOString(), end: new Date(row.zakonczenie).toISOString(), reason: row.powod ?? undefined })),
+      
+      blockedPeriods: [
+        ...blocks.rows.map((row) => ({ id: String(row.id_blokady), type: row.typ, start: new Date(row.rozpoczecie).toISOString(), end: new Date(row.zakonczenie).toISOString(), reason: row.powod ?? undefined })),
+        ...calendarBlocksResult.rows.map((row) => ({ id: String(row.id), type: row.type, start: new Date(row.start_time).toISOString(), end: new Date(row.end_time).toISOString(), reason: row.title })),
+      ],
+
       events: events.rows.map((row) => ({ id: row.id_wydarzenia, title: row.tytul, start: row.start_local, end: row.end_local,
         category: categoryMap[row.category] ?? 'Personal', mandatory: row.obowiazkowe, repeatWeekly: row.powtarzaj_co_tydzien, source: row.zrodlo, seriesEndDate: row.series_end_date })),
       shiftTemplates: templates.rows.map((row) => ({ id: row.id_szablonu, name: row.nazwa, startTime: time(row.godzina_od), endTime: time(row.godzina_do),
