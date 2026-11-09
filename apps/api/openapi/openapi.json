@@ -5024,7 +5024,6 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "description": "List of blocks and exam sessions",
                   "type": "array",
                   "items": {
                     "type": "object",
@@ -5063,7 +5062,6 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "description": "Not implemented",
                   "type": "object",
                   "properties": {
                     "error": {
@@ -5124,7 +5122,6 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "description": "Created block or exam session",
                   "type": "object",
                   "properties": {
                     "id": {
@@ -5160,7 +5157,6 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "description": "Not implemented",
                   "type": "object",
                   "properties": {
                     "error": {
@@ -5198,7 +5194,6 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "description": "Deletion success confirmation",
                   "type": "object",
                   "properties": {
                     "success": {
@@ -5214,7 +5209,6 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "description": "Block not found",
                   "type": "object",
                   "properties": {
                     "error": {
@@ -5230,7 +5224,6 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "description": "Not implemented",
                   "type": "object",
                   "properties": {
                     "error": {

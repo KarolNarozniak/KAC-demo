@@ -18,24 +18,36 @@ export async function blockRoutes(app: FastifyInstance) {
       response: {
         200: {
           description: 'List of blocks and exam sessions',
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              id: { type: 'string' },
-              userId: { type: 'string' },
-              title: { type: 'string' },
-              startTime: { type: 'string' },
-              endTime: { type: 'string' },
-              type: { type: 'string', enum: ['vacation', 'exam_session', 'day_off'] }
+          content: {
+            'application/json': {
+              schema: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    userId: { type: 'string' },
+                    title: { type: 'string' },
+                    startTime: { type: 'string' },
+                    endTime: { type: 'string' },
+                    type: { type: 'string', enum: ['vacation', 'exam_session', 'day_off'] }
+                  }
+                }
+              }
             }
           }
         },
         501: {
           description: 'Not implemented',
-          type: 'object',
-          properties: {
-            error: { type: 'string' }
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  error: { type: 'string' }
+                }
+              }
+            }
           }
         }
       }
@@ -66,21 +78,33 @@ export async function blockRoutes(app: FastifyInstance) {
       response: {
         201: {
           description: 'Created block or exam session',
-          type: 'object',
-          properties: {
-            id: { type: 'string' },
-            userId: { type: 'string' },
-            title: { type: 'string' },
-            startTime: { type: 'string' },
-            endTime: { type: 'string' },
-            type: { type: 'string', enum: ['vacation', 'exam_session', 'day_off'] }
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  userId: { type: 'string' },
+                  title: { type: 'string' },
+                  startTime: { type: 'string' },
+                  endTime: { type: 'string' },
+                  type: { type: 'string', enum: ['vacation', 'exam_session', 'day_off'] }
+                }
+              }
+            }
           }
         },
         501: {
           description: 'Not implemented',
-          type: 'object',
-          properties: {
-            error: { type: 'string' }
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  error: { type: 'string' }
+                }
+              }
+            }
           }
         }
       }
@@ -109,23 +133,41 @@ export async function blockRoutes(app: FastifyInstance) {
       response: {
         200: {
           description: 'Deletion success confirmation',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' }
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  success: { type: 'boolean' }
+                }
+              }
+            }
           }
         },
         404: {
           description: 'Block not found',
-          type: 'object',
-          properties: {
-            error: { type: 'string' }
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  error: { type: 'string' }
+                }
+              }
+            }
           }
         },
         501: {
           description: 'Not implemented',
-          type: 'object',
-          properties: {
-            error: { type: 'string' }
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  error: { type: 'string' }
+                }
+              }
+            }
           }
         }
       }
