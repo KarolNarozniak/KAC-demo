@@ -13,9 +13,26 @@ export class ScheduleVersionConflictError extends Error {
 export type ScheduleRepository = Pick<PostgresScheduleRepository, 'getPlanningContext' | 'saveSchedule' | 'getLatestSchedule' | 'getScheduleById' | 'listSchedules' | 'getApprovedShiftEventIds' | 'approveSchedule' | 'rejectSchedule'>;
 
 export class PostgresScheduleRepository {
-  constructor(private readonly connectionPool: Pool) {}
+  constructor(private readonly connectionPool: Pool) {
+    this.ensureBlocksTable().catch(() => {});
+  }
+
+  async ensureBlocksTable() {
+    await this.connectionPool.query(`
+      CREATE TABLE IF NOT EXISTS blocks (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id VARCHAR(255) NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        start_time TIMESTAMP WITH TIME ZONE NOT NULL,
+        end_time TIMESTAMP WITH TIME ZONE NOT NULL,
+        type VARCHAR(50) NOT NULL CHECK (type IN ('vacation', 'exam_session', 'day_off')),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+  }
 
   async getPlanningContext(userId = config.demoUserId, calendarId = config.demoCalendarId, requestedProfileId?: string): Promise<PlanningContext | null> {
+    await this.ensureBlocksTable();
     const profileResult = await this.connectionPool.query(`
       select p.id_profilu, p.id_uzytkownika, c.id_kalendarza, u.strefa_czasowa,
         p.min_godzin_tydzien, p.cel_godzin_tydzien, p.max_godzin_tydzien, p.stawka_pln,
@@ -30,7 +47,6 @@ export class PostgresScheduleRepository {
     if (!profile) return null;
     const profileId: string = profile.id_profilu;
     
-    // Pobieramy dane równolegle, dodając zapytanie do nowej tabeli blocks
     const [availability, preferences, blocks, calendarBlocksResult, events, templates] = await Promise.all([
       this.connectionPool.query(`select id_dostepnosci, dzien_tygodnia, od_godzina, do_godzina
         from t_dostepnosc where id_profilu = $1 order by dzien_tygodnia, od_godzina`, [profileId]),
@@ -78,7 +94,6 @@ export class PostgresScheduleRepository {
       availability: availability.rows.map((row) => ({ id: row.id_dostepnosci, dayOfWeek: Number(row.dzien_tygodnia), startTime: time(row.od_godzina), endTime: time(row.do_godzina) })),
       preferredWorkWindows: preferences.rows.map((row) => ({ id: row.id_preferencji, dayOfWeek: Number(row.dzien_tygodnia), startTime: time(row.od_godzina), endTime: time(row.do_godzina), weight: Number(row.waga) })),
       
-      // Łączymy stare blokady profilu oraz nowe blokady z tabeli blocks (dni wolne, sesja egzaminacyjna)
       blockedPeriods: [
         ...blocks.rows.map((row) => ({ id: String(row.id_blokady), type: row.typ, start: new Date(row.rozpoczecie).toISOString(), end: new Date(row.zakonczenie).toISOString(), reason: row.powod ?? undefined })),
         ...calendarBlocksResult.rows.map((row) => ({ id: String(row.id), type: row.type, start: new Date(row.start_time).toISOString(), end: new Date(row.end_time).toISOString(), reason: row.title })),
@@ -271,3 +286,12 @@ export class PostgresScheduleRepository {
     };
   }
 }
+```[cite: 7]
+
+### Co zrobić teraz?
+1. Zapisz plik `apps/api/src/scheduling/repository.ts`.
+2. Zrób commita i wyślij zmiany na GitHuba:
+   ```bash
+   git add apps/api/src/scheduling/repository.ts
+   git commit -m "fix: ensure blocks table is auto-created in PostgresScheduleRepository too"
+   git push origin Krzysztof_Blokowanie_dni
