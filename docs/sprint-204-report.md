@@ -1,3 +1,5 @@
+Aktualny stan po kolejnym scaleniu: [raport 2026-11-09](./merge-master-2026-11-09.md).
+
 # Raport realizacji sprintu 204 — Michał Kozłowski
 
 Uwaga: raport opisuje pierwotne wdrożenie. Zmiany ścieżek API i integrację z nowszym master opisuje [raport scalenia z 2026-11-07](./merge-master-2026-11-07.md).

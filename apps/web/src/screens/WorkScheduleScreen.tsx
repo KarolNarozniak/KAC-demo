@@ -5,7 +5,7 @@ import { localFields, editedInstant } from '../domain/scheduleTime';
 import React, { useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView } from 'react-native';
 import { useTheme } from '../components/ui';
-import { workRequest, formatPln } from '../services/workProfileApi';
+import { workRequest, formatPln } from '../services/compensationApi';
 type Shift = {
     id: string;
     start: string;

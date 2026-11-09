@@ -1,29 +1,32 @@
 import { validateSchedule } from './generator.js';
 import { calculatePay } from './pay.js';
-import { normalizeAvailability, ProfileError } from '../profile/availability.js';
+import { ProfileError } from '../profile/availability.js';
 import type { Pool } from 'pg';
 import { config } from '../config.js';
 import { localDateTimeString } from './time.js';
-import type { PlanningContext, ScheduleGenerationResult, ScheduleProfileSettings } from './types.js';
+import type { PlanningContext, ScheduleGenerationResult } from './types.js';
 
 export class ScheduleNotFoundError extends Error {}
 export class ScheduleAlreadyApprovedError extends Error {}
 export class ProfileVersionConflictError extends Error {}
 export class ScheduleVersionConflictError extends Error {
-  constructor(public expectedVersion: number, public actualVersion: number) { super('schedule_version_conflict'); }
+  constructor(public expectedVersion:number,public actualVersion:number){super('schedule_version_conflict');}
 }
-
-export type ScheduleRepository = Pick<PostgresScheduleRepository, 'getPlanningContext' | 'saveSchedule' | 'getLatestSchedule' | 'getScheduleById' | 'listSchedules' | 'getApprovedShiftEventIds' | 'saveSettings' | 'approveSchedule' | 'rejectSchedule'>;
-
+export type ScheduleRepository = Pick<PostgresScheduleRepository, 'getPlanningContext'|'saveSchedule'|'getLatestSchedule'|'getScheduleById'|'listSchedules'|'getApprovedShiftEventIds'|'approveSchedule'|'rejectSchedule'>;
 export class PostgresScheduleRepository {
   constructor(private readonly connectionPool: Pool) {}
 
   async getPlanningContext(userId = config.demoUserId, calendarId = config.demoCalendarId, requestedProfileId?: string, connection: Pick<Pool, 'query'> = this.connectionPool): Promise<PlanningContext | null> {
-    const profileResult = await connection.query(`
+    let queue:Promise<unknown>=Promise.resolve();
+    const read=(sql:string,parameters:unknown[])=>{
+      const result=connection===this.connectionPool ? connection.query(sql,parameters) : queue.then(()=>connection.query(sql,parameters));
+      queue=result;return result;
+    };
+    const profileResult = await read(`
       select p.id_profilu, p.id_uzytkownika, c.id_kalendarza, u.strefa_czasowa,
         p.min_godzin_tydzien, p.cel_godzin_tydzien, p.max_godzin_tydzien, p.stawka_pln,
         p.czas_dojazdu_min, p.min_odpoczynku_min, p.tryb_pracy, p.min_slot_min, p.max_slot_min,
-        p.max_godzin_dzien, p.rodzaj_stawki, p.updated_at::text as profile_version
+        p.rodzaj_stawki, p.max_godzin_dzien, p.okres_celu, p.cel_godzin_miesiac, p.updated_at::text as profile_version
       from t_profile_pracy p
       join t_uzytkownicy u on u.id_uzytkownika = p.id_uzytkownika
       join t_kalendarze c on c.id_uzytkownika = p.id_uzytkownika and c.id_kalendarza = $2 and c.aktywny
@@ -32,26 +35,31 @@ export class PostgresScheduleRepository {
     const profile = profileResult.rows[0];
     if (!profile) return null;
     const profileId: string = profile.id_profilu;
-    const [availability, preferences, blocks, events, templates] = await Promise.all([
-      connection.query(`select id_dostepnosci, dzien_tygodnia, od_godzina, do_godzina
-        from t_dostepnosc where id_profilu = $1 and rodzaj = 'Dostępny' order by dzien_tygodnia, od_godzina`, [profileId]),
-      connection.query(`select id_preferencji, dzien_tygodnia, od_godzina, do_godzina, waga
+
+    const [availability, preferences, blocks, calendarBlocksResult, events, templates] = await Promise.all([
+      read(`select id_dostepnosci, dzien_tygodnia, od_godzina, do_godzina
+        from t_dostepnosc where id_profilu = $1 order by dzien_tygodnia, od_godzina`, [profileId]),
+      read(`select id_preferencji, dzien_tygodnia, od_godzina, do_godzina, waga
         from t_prefer_godziny where id_profilu = $1 order by dzien_tygodnia, od_godzina`, [profileId]),
-      connection.query(`select id_blokady, typ, rozpoczecie, zakonczenie, powod
+      read(`select id_blokady, typ, rozpoczecie, zakonczenie, powod
         from t_blokady where id_profilu = $1 order by rozpoczecie`, [profileId]),
-      connection.query(`select e.id_wydarzenia, e.tytul, e.obowiazkowe, e.powtarzaj_co_tydzien, e.zrodlo,
+      read(`select id, user_id, title, start_time, end_time, type
+        from blocks where user_id = $1 order by start_time`, [userId]),
+      read(`select e.id_wydarzenia, e.tytul, e.obowiazkowe, e.powtarzaj_co_tydzien, e.zrodlo,
           to_char(e.rozpoczecie at time zone $2, 'YYYY-MM-DD"T"HH24:MI') as start_local,
           to_char(e.zakonczenie at time zone $2, 'YYYY-MM-DD"T"HH24:MI') as end_local,
           k.nazwa as category, s.data_konca::text as series_end_date
         from t_wydarzenia e join t_kategorie k on k.id_kategorii = e.id_kategorii
         left join t_serie s on s.id_serii = e.id_serii
         where e.id_kalendarza = $1 and e.status = 'Aktywne' order by e.rozpoczecie`, [profile.id_kalendarza, profile.strefa_czasowa]),
-      connection.query(`select id_szablonu, nazwa, godzina_od, godzina_do, koniec_nastepnego_dnia, dni_tygodnia, aktywna
+      read(`select id_szablonu, nazwa, godzina_od, godzina_do, koniec_nastepnego_dnia, dni_tygodnia, aktywna
         from t_szablony_zmian where id_profilu = $1 order by nazwa`, [profileId]),
     ]);
+
     const number = (value: string | number | null, fallback: number) => value === null ? fallback : Number(value);
     const time = (value: string) => value.slice(0, 5);
     const categoryMap: Record<string, 'Class' | 'Work' | 'Personal'> = { Zajęcia: 'Class', Praca: 'Work', Prywatne: 'Personal' };
+
     return {
       profile: {
         id: profileId,
@@ -72,73 +80,22 @@ export class PostgresScheduleRepository {
         maximumSlotMinutes: Number(profile.max_slot_min),
         maxHoursPerDay: Number(profile.max_godzin_dzien),
         profileVersion: profile.profile_version,
+        targetPeriod: profile.okres_celu === 'Miesiac' ? 'month' : 'week',
+        periodTargetHours: profile.okres_celu === 'Miesiac' ? number(profile.cel_godzin_miesiac, 0) : number(profile.cel_godzin_tydzien, 0),
       },
       availability: availability.rows.map((row) => ({ id: row.id_dostepnosci, dayOfWeek: Number(row.dzien_tygodnia), startTime: time(row.od_godzina), endTime: time(row.do_godzina) })),
       preferredWorkWindows: preferences.rows.map((row) => ({ id: row.id_preferencji, dayOfWeek: Number(row.dzien_tygodnia), startTime: time(row.od_godzina), endTime: time(row.do_godzina), weight: Number(row.waga) })),
-      blockedPeriods: blocks.rows.map((row) => ({ id: row.id_blokady, type: row.typ, start: new Date(row.rozpoczecie).toISOString(), end: new Date(row.zakonczenie).toISOString(), reason: row.powod ?? undefined })),
+
+      blockedPeriods: [
+        ...blocks.rows.map((row) => ({ source:'profile' as const,id: String(row.id_blokady), type: row.typ, start: new Date(row.rozpoczecie).toISOString(), end: new Date(row.zakonczenie).toISOString(), reason: row.powod ?? undefined })),
+        ...calendarBlocksResult.rows.map((row) => ({ source:'calendar' as const,id: String(row.id), type: row.type, start: new Date(row.start_time).toISOString(), end: new Date(row.end_time).toISOString(), reason: row.title })),
+      ],
+
       events: events.rows.map((row) => ({ id: row.id_wydarzenia, title: row.tytul, start: row.start_local, end: row.end_local,
         category: categoryMap[row.category] ?? 'Personal', mandatory: row.obowiazkowe, repeatWeekly: row.powtarzaj_co_tydzien, source: row.zrodlo, seriesEndDate: row.series_end_date })),
       shiftTemplates: templates.rows.map((row) => ({ id: row.id_szablonu, name: row.nazwa, startTime: time(row.godzina_od), endTime: time(row.godzina_do),
         endsNextDay: row.koniec_nastepnego_dnia, daysOfWeek: row.dni_tygodnia.map(Number), active: row.aktywna })),
     };
-  }
-
-  async saveSettings(context: PlanningContext, settings: ScheduleProfileSettings): Promise<void> {
-    const client = await this.connectionPool.connect();
-    try {
-      await client.query('begin');
-      const profileUpdate = await client.query(`update t_profile_pracy set
-        min_godzin_tydzien = $2, cel_godzin_tydzien = $3, max_godzin_tydzien = $4,
-        czas_dojazdu_min = $5, min_odpoczynku_min = $6, tryb_pracy = $7,
-        min_slot_min = $8, max_slot_min = $9, max_godzin_dzien = $10, version=version+1, updated_at = now()
-        where id_profilu = $1 and updated_at = $11::timestamptz returning id_profilu`, [context.profile.id, settings.minimumHours, settings.targetHours, settings.maximumHours,
-        settings.commuteBufferMinutes, settings.minimumRestMinutes, settings.mode, settings.minimumShiftMinutes, settings.maximumSlotMinutes, settings.maxHoursPerDay, settings.profileVersion]);
-      if (!profileUpdate.rowCount) throw new ProfileVersionConflictError('profile_version_conflict');
-      const normalized=normalizeAvailability(settings.availability);
-      await client.query(`delete from t_dostepnosc where id_profilu=$1 and rodzaj='Dostępny'`,[context.profile.id]);
-      for(const window of normalized) await client.query(`insert into t_dostepnosc(id_profilu,dzien_tygodnia,od_godzina,do_godzina,rodzaj) values($1,$2,$3::time,$4::time,'Dostępny')`,[context.profile.id,window.dayOfWeek,window.startTime,window.endTime]);
-      if (settings.preferredWorkWindows) {
-        const ids = settings.preferredWorkWindows.map((window) => window.id);
-        await client.query(`delete from t_prefer_godziny where id_profilu = $1 and not (id_preferencji = any($2::text[]))`, [context.profile.id, ids]);
-        for (const window of settings.preferredWorkWindows) {
-          await client.query(`insert into t_prefer_godziny (id_preferencji, id_profilu, dzien_tygodnia, od_godzina, do_godzina, waga)
-            values ($1, $2, $3, $4::time, $5::time, $6)
-            on conflict (id_preferencji) do update set dzien_tygodnia = excluded.dzien_tygodnia,
-              od_godzina = excluded.od_godzina, do_godzina = excluded.do_godzina, waga = excluded.waga
-            where t_prefer_godziny.id_profilu = excluded.id_profilu`, [window.id, context.profile.id, window.dayOfWeek,
-          window.startTime, window.endTime, window.weight]);
-        }
-      }
-      if (settings.blockedPeriods) {
-        const ids = settings.blockedPeriods.map((period) => period.id);
-        await client.query(`delete from t_blokady where id_profilu = $1 and not (id_blokady = any($2::text[]))`, [context.profile.id, ids]);
-        for (const period of settings.blockedPeriods) {
-          await client.query(`insert into t_blokady (id_blokady, id_profilu, typ, rozpoczecie, zakonczenie, powod)
-            values ($1, $2, $3, $4::timestamptz, $5::timestamptz, $6)
-            on conflict (id_blokady) do update set typ = excluded.typ, rozpoczecie = excluded.rozpoczecie,
-              zakonczenie = excluded.zakonczenie, powod = excluded.powod where t_blokady.id_profilu = excluded.id_profilu`,
-          [period.id, context.profile.id, period.type, period.start, period.end, period.reason ?? null]);
-        }
-      }
-      {
-        const ids = settings.shiftTemplates.map((template) => template.id);
-        await client.query(`delete from t_szablony_zmian where id_profilu = $1 and not (id_szablonu = any($2::text[]))`, [context.profile.id, ids]);
-        for (const template of settings.shiftTemplates) {
-          await client.query(`insert into t_szablony_zmian
-            (id_szablonu, id_profilu, nazwa, godzina_od, godzina_do, koniec_nastepnego_dnia, dni_tygodnia, aktywna)
-            values ($1, $2, $3, $4::time, $5::time, $6, $7::smallint[], $8)
-            on conflict (id_szablonu) do update set nazwa = excluded.nazwa, godzina_od = excluded.godzina_od,
-              godzina_do = excluded.godzina_do, koniec_nastepnego_dnia = excluded.koniec_nastepnego_dnia,
-              dni_tygodnia = excluded.dni_tygodnia, aktywna = excluded.aktywna
-            where t_szablony_zmian.id_profilu = excluded.id_profilu`, [template.id, context.profile.id, template.name,
-            template.startTime, template.endTime, template.endsNextDay, template.daysOfWeek, template.active]);
-        }
-      }
-      await client.query('commit');
-    } catch (error) {
-      await client.query('rollback');
-      throw error;
-    } finally { client.release(); }
   }
 
   async saveSchedule(context: PlanningContext, schedule: ScheduleGenerationResult, expectedVersion?: number): Promise<ScheduleGenerationResult> {

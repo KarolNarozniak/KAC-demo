@@ -1,3 +1,6 @@
+import { PostgresWorkProfileRepository } from '../src/profile/repository.js';
+import { PostgresCalendarRepository } from '../src/database.js';
+import { validateWorkProfile } from '../src/profile/rules.js';
 import {PostgresScheduleRepository} from '../src/scheduling/repository.js';
 import {generateSchedule} from '../src/scheduling/generator.js';
 import test from 'node:test';
@@ -5,7 +8,7 @@ import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
 import { Pool } from 'pg';
 import { config } from '../src/config.js';
-import { WorkProfileRepository } from '../src/profile/repository.js';
+import { WorkProfileRepository } from '../src/profile/compensation-repository.js';
 import { SchedulingRepository } from '../src/scheduling/work-profile-repository.js';
 import { buildApi } from '../src/app.js';
 test('isolated PostgreSQL: ownership, rollback, concurrent version, snapshots and acceptance constraints', { skip: !config.databaseUrl }, async () => {
@@ -22,7 +25,7 @@ test('isolated PostgreSQL: ownership, rollback, concurrent version, snapshots an
         await pool.query(`insert into t_kategorie(id_kategorii,nazwa,kolor_hex) values ('work','Praca','#000000'),('class','Zajęcia','#000000'),('personal','Prywatne','#000000')`);
         await pool.query(`insert into t_profile_pracy(id_profilu,id_uzytkownika) values ('profile',$1),('other_profile','other')`, [config.demoUserId]);
         const profiles = new WorkProfileRepository(pool), planning = new SchedulingRepository(pool);
-        app = buildApi(null, [], { workProfile: profiles, scheduling: planning });
+        app = buildApi(null, [], { workProfile: profiles, scheduling: planning, workProfileRepository:new PostgresWorkProfileRepository(pool) });
         const request = (method: string, url: string, payload?: any) => app!.inject({ method: method as any, url, payload });
         const p = await profiles.getProfile(config.demoUserId);
         assert.equal(p.commuteMinutes, null);
@@ -134,6 +137,34 @@ test('isolated PostgreSQL: ownership, rollback, concurrent version, snapshots an
             await pool.query(await readFile(new URL('../../../database/migrations/'+migration,import.meta.url),'utf8'));
         assert.deepEqual(await planning.get(schedule.id,config.demoUserId),legacyBefore);
         assert.equal((await planning.get(next.id,config.demoUserId)).status,'Rejected');
+        const standard=new PostgresWorkProfileRepository(pool);
+        const scope={userId:config.demoUserId,calendarId:config.demoCalendarId};
+        const form=(await standard.getProfile(scope))!;
+        const beforeVersion=(await profiles.getProfile(scope.userId)).version;
+        const checked=validateWorkProfile({...form,targetPeriod:'month',targetHours:100,availability:[{id:'midnight',dayOfWeek:1,startTime:'00:00',endTime:'24:00'}]});
+        assert.ok(checked.ok);
+        const monthly=await request('PUT','/api/v1/work-profile',checked.value);
+        assert.equal(monthly.statusCode,200,monthly.body);
+        assert.equal(monthly.json().targetPeriod,'month');
+        assert.equal((await profiles.getProfile(scope.userId)).version,beforeVersion+1);
+        await assert.rejects(profiles.replaceAvailability(scope.userId,[],beforeVersion),/version_conflict/);
+        const compensation=await profiles.getProfile(scope.userId);
+        await profiles.saveProfile(scope.userId,{...compensation,hourlyRatePln:41,rateKind:'net'});
+        const preserved=(await standard.getProfile(scope))!;
+        assert.equal(preserved.targetPeriod,'month');assert.equal(preserved.targetHours,100);
+        const calendar=new PostgresCalendarRepository(pool);
+        const blockInput={title:'Synthetic exam session',startTime:'2026-12-13T23:00:00Z',endTime:'2026-12-14T23:00:00Z',type:'exam_session' as const};
+        const ownBlock=await calendar.createBlock(blockInput,scope.userId);
+        const otherBlock=await calendar.createBlock(blockInput,'other');
+        assert.deepEqual((await calendar.listBlocks(scope.userId)).map(block=>block.id),[ownBlock.id]);
+        assert.equal(await calendar.deleteBlock(otherBlock.id,scope.userId),false);
+        assert.ok(!(await standard.getProfile(scope))!.blockedPeriods.some(block=>block.id===ownBlock.id));
+        const withBlocks=(await advanced.getPlanningContext(scope.userId,scope.calendarId))!;
+        assert.ok(withBlocks.blockedPeriods.some(block=>block.id===ownBlock.id));
+        assert.equal(generateSchedule(withBlocks,'2026-12-14').proposedMinutes,0);
+        assert.equal((await planning.generate(scope.userId,scope.calendarId,'2026-12-14')).shifts.length,0);
+        assert.equal(await calendar.deleteBlock(ownBlock.id,scope.userId),true);
+        assert.ok((await planning.generate(scope.userId,scope.calendarId,'2026-12-14')).shifts.length>0);
     }
     finally {
         await app?.close();

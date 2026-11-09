@@ -1,65 +1,120 @@
+import { normalizeAvailability } from './availability.js';
 import type { Pool, PoolClient } from 'pg';
-import { ProfileError, normalizeAvailability, type Interval } from './availability.js';
-export type WorkProfile = {
-    version: number;
-    hourlyRatePln: number | null;
-    rateKind: 'gross' | 'net' | null;
-    commuteMinutes: number | null;
-    minRestMinutes: number;
-    minHours: number | null;
-    targetHours: number | null;
-    maxHours: number | null;
-};
-export const mapProfile = (r: any): WorkProfile => ({ version: r.version, hourlyRatePln: r.stawka_pln === null ? null : Number(r.stawka_pln), rateKind: r.rodzaj_stawki, commuteMinutes: r.czas_dojazdu_min, minRestMinutes: r.min_odpoczynku_min, minHours: r.min_godzin_tydzien === null ? null : Number(r.min_godzin_tydzien), targetHours: r.cel_godzin_tydzien === null ? null : Number(r.cel_godzin_tydzien), maxHours: r.max_godzin_tydzien === null ? null : Number(r.max_godzin_tydzien) });
-export class WorkProfileRepository {
-    constructor(public pool: Pool) { }
-    async transaction<T>(fn: (c: PoolClient) => Promise<T>): Promise<T> {
-        const c = await this.pool.connect();
-        try {
-            await c.query('BEGIN');
-            const value = await fn(c);
-            await c.query('COMMIT');
-            return value;
-        }
-        catch (e) {
-            await c.query('ROLLBACK');
-            throw e;
-        }
-        finally {
-            c.release();
-        }
+import type { UserScope } from '../api/scope.js';
+import { PostgresScheduleRepository } from '../scheduling/repository.js';
+import { profileFromContext } from './rules.js';
+import type { ValidWorkProfile, WorkProfile } from './types.js';
+
+export type SaveProfileResult =
+  | { kind: 'saved'; profile: WorkProfile }
+  /** Ktoś zapisał profil w międzyczasie (inne okno, inne urządzenie) – zwracamy aktualną wersję. */
+  | { kind: 'conflict'; current: WorkProfile }
+  | { kind: 'not-found' };
+
+export interface WorkProfileRepository {
+  /** Aktywny profil pracy użytkownika z zakresu albo null, gdy go nie ma. */
+  getProfile(scope: UserScope): Promise<WorkProfile | null>;
+  /** Zapisuje cały profil, tylko jeśli expectedVersion jest aktualną wersją profilu. */
+  saveProfile(scope: UserScope, expectedVersion: string, value: ValidWorkProfile): Promise<SaveProfileResult>;
+}
+
+/**
+ * Profil pracy w PostgreSQL (S23KC2S1P2-179).
+ * Odczyt korzysta z tego samego zapytania co generator grafiku, więc ekran profilu i planowanie widzą identyczne dane.
+ */
+export class PostgresWorkProfileRepository implements WorkProfileRepository {
+  private readonly planning: PostgresScheduleRepository;
+
+  constructor(private readonly pool: Pool) {
+    this.planning = new PostgresScheduleRepository(pool);
+  }
+
+  async getProfile(scope: UserScope): Promise<WorkProfile | null> {
+    const context = await this.planning.getPlanningContext(scope.userId, scope.calendarId);
+    return context ? profileFromContext(context) : null;
+  }
+
+  /**
+   * Atomowy zapis profilu: jedna transakcja, wiersz profilu zablokowany (FOR UPDATE) od sprawdzenia wersji
+   * do zapisu dostępności, preferencji, blokad i szablonów. Przy błędzie nic się nie zmienia.
+   * Dwa równoczesne zapisy z tą samą wersją: pierwszy przechodzi, drugi dostaje konflikt.
+   */
+  async saveProfile(scope: UserScope, expectedVersion: string, value: ValidWorkProfile): Promise<SaveProfileResult> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('begin');
+      const current = await client.query<{ id_profilu: string; version: string }>(
+        `select id_profilu, updated_at::text as version from t_profile_pracy
+         where id_uzytkownika = $1 and aktywny for update`, [scope.userId]);
+      const row = current.rows[0];
+      if (!row) {
+        await client.query('rollback');
+        return { kind: 'not-found' };
+      }
+      if (row.version !== expectedVersion) {
+        await client.query('rollback');
+        const latest = await this.getProfile(scope);
+        return latest ? { kind: 'conflict', current: latest } : { kind: 'not-found' };
+      }
+      await this.writeProfile(client, row.id_profilu, value);
+      await client.query('commit');
+    } catch (error) {
+      await client.query('rollback').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
     }
-    async lock(c: PoolClient, userId: string, version?: number) {
-        const r = await c.query('select * from t_profile_pracy where id_uzytkownika=$1 and aktywny=true order by id_profilu for update', [userId]);
-        if (r.rows.length !== 1)
-            throw new ProfileError('profile_not_found', 404);
-        const row = r.rows[0];
-        if (version !== undefined && row.version !== version)
-            throw new ProfileError('version_conflict', 409);
-        return row;
+    const saved = await this.getProfile(scope);
+    return saved ? { kind: 'saved', profile: saved } : { kind: 'not-found' };
+  }
+
+  private async writeProfile(client: PoolClient, profileId: string, value: ValidWorkProfile) {
+    const monthly = value.targetPeriod === 'month';
+    await client.query(`update t_profile_pracy set
+      min_godzin_tydzien = $2, cel_godzin_tydzien = $3, max_godzin_tydzien = $4,
+      okres_celu = $5, cel_godzin_miesiac = $6,
+      czas_dojazdu_min = $7, min_odpoczynku_min = $8, tryb_pracy = $9,
+      min_slot_min = $10, max_slot_min = $11, max_godzin_dzien = $12, version=version+1, updated_at = clock_timestamp()
+      where id_profilu = $1`, [profileId, value.minimumHours, value.weeklyTargetHours, value.maximumHours,
+      monthly ? 'Miesiac' : 'Tydzien', monthly ? value.targetHours : null,
+      value.commuteBufferMinutes, value.minimumRestMinutes, value.mode,
+      value.minimumShiftMinutes, value.maximumSlotMinutes, value.maxHoursPerDay]);
+
+    // Listy zapisujemy jako „stan docelowy”: usuwamy pozycje, których nie ma w formularzu, resztę dodajemy albo zmieniamy.
+    const availability=normalizeAvailability(value.availability);
+    await client.query(`delete from t_dostepnosc where id_profilu=$1 and rodzaj='Dostępny'`,[profileId]);
+    for(const window of availability) await client.query(`insert into t_dostepnosc(id_profilu,dzien_tygodnia,od_godzina,do_godzina,rodzaj) values($1,$2,$3::time,$4::time,'Dostępny')`,[profileId,window.dayOfWeek,window.startTime,window.endTime]);
+    await client.query(`delete from t_prefer_godziny where id_profilu = $1 and not (id_preferencji = any($2::text[]))`,
+      [profileId, value.preferredWorkWindows.map((window) => window.id)]);
+    for (const window of value.preferredWorkWindows) {
+      await client.query(`insert into t_prefer_godziny (id_preferencji, id_profilu, dzien_tygodnia, od_godzina, do_godzina, waga)
+        values ($1, $2, $3, $4::time, $5::time, $6)
+        on conflict (id_preferencji) do update set dzien_tygodnia = excluded.dzien_tygodnia,
+          od_godzina = excluded.od_godzina, do_godzina = excluded.do_godzina, waga = excluded.waga
+        where t_prefer_godziny.id_profilu = excluded.id_profilu`, [window.id, profileId, window.dayOfWeek, window.startTime, window.endTime, window.weight]);
     }
-    async getProfile(userId: string) { return this.transaction(async (c) => mapProfile(await this.lock(c, userId))); }
-    async saveProfile(userId: string, p: WorkProfile) {
-        return this.transaction(async (c) => {
-            const row = await this.lock(c, userId, p.version);
-            const r = await c.query(`update t_profile_pracy set stawka_pln=$2, rodzaj_stawki=$3, czas_dojazdu_min=$4,min_odpoczynku_min=$5,min_godzin_tydzien=$6,cel_godzin_tydzien=$7,max_godzin_tydzien=$8,version=version+1,updated_at=now() where id_profilu=$1 returning *`, [row.id_profilu, p.hourlyRatePln, p.rateKind, p.commuteMinutes, p.minRestMinutes, p.minHours, p.targetHours, p.maxHours]);
-            return mapProfile(r.rows[0]);
-        });
+
+    await client.query(`delete from t_blokady where id_profilu = $1 and not (id_blokady = any($2::text[]))`,
+      [profileId, value.blockedPeriods.map((period) => period.id)]);
+    for (const period of value.blockedPeriods) {
+      await client.query(`insert into t_blokady (id_blokady, id_profilu, typ, rozpoczecie, zakonczenie, powod)
+        values ($1, $2, $3, $4::timestamptz, $5::timestamptz, $6)
+        on conflict (id_blokady) do update set typ = excluded.typ, rozpoczecie = excluded.rozpoczecie,
+          zakonczenie = excluded.zakonczenie, powod = excluded.powod where t_blokady.id_profilu = excluded.id_profilu`,
+      [period.id, profileId, period.type, period.start, period.end, period.reason ?? null]);
     }
-    async readIntervals(c: PoolClient, id: string): Promise<Interval[]> {
-        const r = await c.query(`select dzien_tygodnia as "dayOfWeek",left(od_godzina::text,5) as "startTime",left(do_godzina::text,5) as "endTime" from t_dostepnosc where id_profilu=$1 order by dzien_tygodnia,od_godzina`, [id]);
-        return r.rows;
+
+    await client.query(`delete from t_szablony_zmian where id_profilu = $1 and not (id_szablonu = any($2::text[]))`,
+      [profileId, value.shiftTemplates.map((template) => template.id)]);
+    for (const template of value.shiftTemplates) {
+      await client.query(`insert into t_szablony_zmian
+        (id_szablonu, id_profilu, nazwa, godzina_od, godzina_do, koniec_nastepnego_dnia, dni_tygodnia, aktywna)
+        values ($1, $2, $3, $4::time, $5::time, $6, $7::smallint[], $8)
+        on conflict (id_szablonu) do update set nazwa = excluded.nazwa, godzina_od = excluded.godzina_od,
+          godzina_do = excluded.godzina_do, koniec_nastepnego_dnia = excluded.koniec_nastepnego_dnia,
+          dni_tygodnia = excluded.dni_tygodnia, aktywna = excluded.aktywna
+        where t_szablony_zmian.id_profilu = excluded.id_profilu`, [template.id, profileId, template.name,
+        template.startTime, template.endTime, template.endsNextDay, template.daysOfWeek, template.active]);
     }
-    async listAvailability(userId: string) { return this.transaction(async (c) => { const p = await this.lock(c, userId); return { version: p.version, intervals: await this.readIntervals(c, p.id_profilu) }; }); }
-    async replaceAvailability(userId: string, intervals: Interval[], version: number) {
-        const normalized = normalizeAvailability(intervals);
-        return this.transaction(async (c) => {
-            const p = await this.lock(c, userId, version);
-            await c.query('delete from t_dostepnosc where id_profilu=$1', [p.id_profilu]);
-            for (const i of normalized)
-                await c.query(`insert into t_dostepnosc(id_profilu,dzien_tygodnia,od_godzina,do_godzina,rodzaj) values($1,$2,$3::time,$4::time,'Dostępny')`, [p.id_profilu, i.dayOfWeek, i.startTime, i.endTime]);
-            await c.query('update t_profile_pracy set version=version+1,updated_at=now() where id_profilu=$1', [p.id_profilu]);
-            return { version: p.version + 1, intervals: normalized };
-        });
-    }
+  }
 }

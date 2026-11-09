@@ -1,27 +1,33 @@
-import {formatPln} from '../services/workProfileApi';
+import {formatPln} from '../services/compensationApi';
 import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { addCalendarDays, localDateKey, startOfWeek } from '../domain/calendar';
-import { Button, Field, useTheme } from '../components/ui';
-import { approveSchedule, generateSchedule, loadSchedule, loadScheduleSettings, NoClassesConfirmationRequired, rejectSchedule, saveSchedule, saveScheduleSettings, type ScheduleSettings, type ScheduleShift, type ShiftTemplate, type WeeklySchedule, type WorkMode } from '../services/scheduleApi';
+import { Button, useTheme } from '../components/ui';
+import TargetProgress from '../components/TargetProgress';
+import { formatNumber } from '../domain/workProfile';
+import { classTimeLabel, conflictMessage, shiftClassConflicts, weekClasses, windowsLabel } from '../domain/scheduleClasses';
+import { useWorkProfile } from '../hooks/useWorkProfile';
+import WorkProfileScreen from './WorkProfileScreen';
+import { approveSchedule, generateSchedule, loadSchedule, NoClassesConfirmationRequired, rejectSchedule, saveSchedule, type ScheduleShift, type ShiftTemplate, type WeeklySchedule, type WorkMode } from '../services/scheduleApi';
 
-type Props = { week: Date; setWeek: (value: Date) => void; now: Date; active: boolean; onApproved: () => void; onPreview: (schedule: WeeklySchedule | null) => void };
+type Props = { week: Date; setWeek: (value: Date) => void; now: Date; active: boolean; onApproved: () => void; onPreview: (schedule: WeeklySchedule | null) => void;
+  /** Informuje aplikację o niezapisanych zmianach profilu (pytanie przy wyjściu z zakładki – S23KC2S1P2-15, 3a). */
+  onUnsavedChange?: (unsaved: boolean) => void;
+  /** Zmiana wartości odrzuca niezapisane zmiany profilu (użytkownik wybrał „Odrzuć zmiany”). */
+  discardSignal?: number };
 const modeLabel: Record<WorkMode, string> = { elastyczny: 'Elastyczny', zmianowy: 'Zmianowy' };
 const statusLabel = { target_met: 'Cel osiągnięty', proven_infeasible: 'Cel niemożliwy przy tych ograniczeniach', not_found: 'Nie znaleziono pełnego grafiku' };
 const minutesLabel = (minutes: number) => `${Math.floor(minutes / 60)} h${minutes % 60 ? ` ${minutes % 60} min` : ''}`;
-const weekdays = ['Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'Sb', 'Nd'];
-const initialSettings: ScheduleSettings = { profileVersion: '', mode: 'elastyczny', minimumHours: 10, targetHours: 20, maximumHours: 40,
-  commuteBufferMinutes: 15, minimumRestMinutes: 30, minimumShiftMinutes: 120, maximumSlotMinutes: 360, maxHoursPerDay: 8,
-  availability: [], preferredWorkWindows: [], blockedPeriods: [], shiftTemplates: [] };
-
-export default function ScheduleScreen({ week, setWeek, now, active, onApproved, onPreview }: Props) {
+export default function ScheduleScreen({ week, setWeek, now, active, onApproved, onPreview, onUnsavedChange, discardSignal = 0 }: Props) {
   const { palette, styles } = useTheme();
   const monday = startOfWeek(week);
   const weekStart = localDateKey(monday);
   const [schedule, setSchedule] = useState<WeeklySchedule | null>(null);
-  const [settings, setSettings] = useState<ScheduleSettings>(initialSettings);
-  const [settingsDirty, setSettingsDirty] = useState(false);
-  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  // Profil pracy (limity, cel, dojazd, dostępność, szablony) – S23KC2S1P2-15 i S23KC2S1P2-39.
+  const profile = useWorkProfile(active);
+  const templates = profile.saved?.shiftTemplates ?? [];
+  const classes = weekClasses(schedule?.blockingEvents, schedule?.weekStart);
+  const classCollision = !!schedule?.shifts.some((shift) => shiftClassConflicts(shift, schedule.blockingEvents).some((conflict) => conflict.blocking));
   const [workaholic, setWorkaholic] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -44,38 +50,12 @@ export default function ScheduleScreen({ week, setWeek, now, active, onApproved,
     return () => { current = false; };
   }, [active, weekStart, onPreview]);
 
-  useEffect(() => {
-    if (!active || settingsLoaded) return;
-    let current = true;
-    void loadScheduleSettings().then((value) => {
-      if (current) { setSettings(value); setSettingsDirty(false); setSettingsLoaded(true); }
-    }).catch((reason) => { if (current) setError(reason instanceof Error ? reason.message : 'Nie udało się wczytać ustawień planu.'); });
-    return () => { current = false; };
-  }, [active, settingsLoaded]);
+  useEffect(() => { onUnsavedChange?.(profile.dirty); }, [profile.dirty, onUnsavedChange]);
+  useEffect(() => { if (discardSignal) profile.cancel(); }, [discardSignal]);
 
   useEffect(() => {
     onPreview(schedule && !schedule.isApproved ? schedule : null);
   }, [schedule, onPreview]);
-
-  const changeSetting = <K extends keyof ScheduleSettings>(key: K, value: ScheduleSettings[K]) => {
-    setSettings((current) => ({ ...current, [key]: value })); setSettingsDirty(true);
-  };
-  const changeTemplate = (id: string, update: Partial<ShiftTemplate>) => {
-    setSettings((current) => ({ ...current, shiftTemplates: current.shiftTemplates.map((template) => template.id === id ? { ...template, ...update } : template) }));
-    setSettingsDirty(true);
-  };
-  const changeAvailability = (id: string, update: Partial<ScheduleSettings['availability'][number]>) => {
-    setSettings((current) => ({ ...current, availability: current.availability.map((window) => window.id === id ? { ...window, ...update } : window) }));
-    setSettingsDirty(true);
-  };
-  const numericField = (key: 'minimumHours' | 'targetHours' | 'maximumHours' | 'commuteBufferMinutes' | 'minimumRestMinutes' | 'minimumShiftMinutes' | 'maximumSlotMinutes' | 'maxHoursPerDay', label: string) =>
-    <Field label={label} value={String(settings[key])} onChangeText={(value) => changeSetting(key, Number(value.replace(',', '.')) || 0)} keyboardType="decimal-pad" editable={!loading && !saving} />;
-  const saveSettings = async () => {
-    setSaving(true); setError('');
-    try { setSettings(await saveScheduleSettings(settings)); setSettingsDirty(false); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : 'Nie udało się zapisać ustawień.'); }
-    finally { setSaving(false); }
-  };
 
   const selectedWeek = `${monday.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' })} – ${addCalendarDays(monday, 6).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short', year: 'numeric' })}`;
   const changeShift = (id: string, field: 'startLocal' | 'endLocal', value: string) => {
@@ -95,7 +75,7 @@ export default function ScheduleScreen({ week, setWeek, now, active, onApproved,
   };
   const addShift = () => {
     if (!schedule) return;
-    const template = schedule.mode === 'zmianowy' ? settings.shiftTemplates.find((item) => item.active) : undefined;
+    const template = schedule.mode === 'zmianowy' ? templates.find((item) => item.active) : undefined;
     if (schedule.mode === 'zmianowy' && !template) { setError('Dodaj i zapisz co najmniej jeden aktywny szablon zmiany.'); return; }
     const dayOffset = template ? Array.from({ length: 7 }, (_, index) => index).find((index) => template.daysOfWeek.includes(((monday.getDay() + 6 + index) % 7) + 1)) ?? 0 : 0;
     const shiftDate = addCalendarDays(monday, dayOffset), date = localDateKey(shiftDate);
@@ -122,16 +102,15 @@ export default function ScheduleScreen({ week, setWeek, now, active, onApproved,
     setSchedule({ ...schedule, shifts: schedule.shifts.filter((shift) => shift.candidateId !== id) }); setDirty(true);
   };
   const generate = async (confirmedNoClasses = false) => {
-    if (!settingsLoaded) return;
-    if (settings.minimumHours < 0 || settings.minimumHours > settings.targetHours || settings.targetHours > settings.maximumHours || settings.maximumHours > 80 || settings.maximumSlotMinutes < settings.minimumShiftMinutes) {
-      setError('Sprawdź ustawienia: minimum ≤ cel ≤ maksimum, limit tygodniowy do 80 h oraz maksimum zmiany ≥ minimum.'); return;
-    }
+    if (!profile.saved) return;
+    if (profile.dirty && !profile.valid) { setError('Popraw zaznaczone pola profilu pracy przed generowaniem grafiku.'); return; }
     setLoading(true); setError('');
     try {
-      const savedSettings = settingsDirty ? await saveScheduleSettings(settings) : settings;
-      setSettings(savedSettings); setSettingsDirty(false);
+      // Niezapisane zmiany profilu zapisujemy przed generowaniem, żeby grafik powstał z tych samych danych, które widać na ekranie.
+      const savedProfile = profile.dirty ? await profile.save() : profile.saved;
+      if (!savedProfile) return;
       setConfirmNoClasses(false);
-      const generated = await generateSchedule(weekStart, savedSettings, workaholic, confirmedNoClasses);
+      const generated = await generateSchedule(weekStart, savedProfile, workaholic, confirmedNoClasses);
       setSchedule(generated); onPreview(generated); setDirty(false);
     }
     catch (reason) {
@@ -148,7 +127,7 @@ export default function ScheduleScreen({ week, setWeek, now, active, onApproved,
     finally { setSaving(false); }
   };
   const approve = async () => {
-    if (!schedule?.version || dirty || settingsDirty) return;
+    if (!schedule?.version || dirty || profile.dirty) return;
     setSaving(true); setError('');
     try { setSchedule(await approveSchedule(weekStart, schedule.version)); onPreview(null); onApproved(); }
     catch (reason) { setError(reason instanceof Error ? reason.message : 'Nie udało się zatwierdzić grafiku.'); }
@@ -172,48 +151,13 @@ export default function ScheduleScreen({ week, setWeek, now, active, onApproved,
     </View>
     <Text style={[styles.subtitle, { marginTop: 0, marginBottom: 14 }]}>{selectedWeek}</Text>
 
+    <WorkProfileScreen state={profile} disabled={loading} />
+
     <View style={styles.card}>
-      <Text style={styles.heading}>Ustawienia planu</Text>
-      <Text style={[styles.muted, { marginTop: 4, marginBottom: 12 }]}>Ustaw limity tygodnia, długość zmian i przerwy. Zatwierdzony plan pojawi się jako wydarzenia „Praca” w kalendarzu.</Text>
-      <Text style={styles.label}>TRYB PRACY</Text>
-      <View accessibilityRole="radiogroup" style={[styles.row, { flexWrap: 'wrap', marginBottom: 12 }]}>
-        {(['elastyczny', 'zmianowy'] as const).map((value) => <Pressable key={value} accessibilityRole="radio" accessibilityState={{ checked: settings.mode === value }} onPress={() => changeSetting('mode', value)} style={{ paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: settings.mode === value ? palette.blue : palette.line, backgroundColor: settings.mode === value ? palette.blueSoft : palette.surfaceAlt }}><Text style={[styles.body, { fontWeight: '700' }]}>{modeLabel[value]}</Text></Pressable>)}
-      </View>
-      <View style={[styles.row, { flexWrap: 'wrap' }]}>{numericField('minimumHours', 'MINIMUM (GODZ./TYDZ.)')}{numericField('targetHours', 'PREFEROWANY CEL (GODZ./TYDZ.)')}{numericField('maximumHours', 'MAKSIMUM (GODZ./TYDZ.)')}</View>
-      <View style={[styles.row, { flexWrap: 'wrap' }]}>{numericField('commuteBufferMinutes', 'BUFOR DOJAZDU (MIN)')}{numericField('minimumRestMinutes', 'MIN. ODPOCZYNEK (MIN)')}</View>
-      <View style={[styles.row, { flexWrap: 'wrap' }]}>{numericField('minimumShiftMinutes', 'MIN. DŁUGOŚĆ ZMIANY (MIN)')}{numericField('maximumSlotMinutes', 'MAKS. DŁUGOŚĆ ZMIANY (MIN)')}{numericField('maxHoursPerDay', 'MAKS. GODZIN PRACY NA DZIEŃ')}</View>
-      <View style={[styles.card, { borderColor: settings.availability.length ? palette.line : palette.amber }]}>
-        <View style={[styles.row, { justifyContent: 'space-between', flexWrap: 'wrap' }]}><View><Text style={styles.heading}>Dostępność do pracy</Text><Text style={styles.muted}>Grafik będzie układany wyłącznie w tych oknach.</Text></View>
-          <Button title="Dodaj okno" onPress={() => changeSetting('availability', [...settings.availability, { id: `availability-${Date.now()}`, dayOfWeek: 1, startTime: '08:00', endTime: '16:00' }])} /></View>
-        {!settings.availability.length && <Text style={[styles.error, { marginTop: 8 }]}>Ustaw co najmniej jedno okno dostępności przed generowaniem grafiku.</Text>}
-        {settings.availability.map((window) => <View key={window.id} style={{ paddingVertical: 10, borderTopWidth: 1, borderColor: palette.line }}>
-          <View style={[styles.row, { flexWrap: 'wrap', alignItems: 'flex-end' }]}>
-            <View style={[styles.row, { flexWrap: 'wrap' }]}>{weekdays.map((day, index) => <Pressable key={day} accessibilityRole="radio" accessibilityState={{ checked: window.dayOfWeek === index + 1 }} onPress={() => changeAvailability(window.id, { dayOfWeek: index + 1 })} style={[styles.button, window.dayOfWeek === index + 1 && { backgroundColor: palette.blueSoft, borderColor: palette.blue }]}><Text style={styles.buttonText}>{day}</Text></Pressable>)}</View>
-            <View style={{ minWidth: 88 }}><Text style={styles.label}>OD</Text><TextInput accessibilityLabel="Początek dostępności" value={window.startTime} onChangeText={(startTime) => changeAvailability(window.id, { startTime })} style={styles.input} /></View>
-            <View style={{ minWidth: 88 }}><Text style={styles.label}>DO</Text><TextInput accessibilityLabel="Koniec dostępności" value={window.endTime} onChangeText={(endTime) => changeAvailability(window.id, { endTime })} style={styles.input} /></View>
-            <Button title="Usuń" danger onPress={() => changeSetting('availability', settings.availability.filter((item) => item.id !== window.id))} />
-          </View>
-        </View>)}
-      </View>
-      {settings.mode === 'zmianowy' && <View style={styles.card}>
-        <View style={[styles.row, { justifyContent: 'space-between', flexWrap: 'wrap', marginBottom: 8 }]}><View><Text style={styles.heading}>Szablony zmian</Text><Text style={styles.muted}>Domyślne zmiany możesz zmienić lub dodać własne.</Text></View><Button title="Dodaj zmianę" onPress={() => { const id = `custom-${Date.now()}`; changeSetting('shiftTemplates', [...settings.shiftTemplates, { id, name: 'Nowa zmiana', startTime: '08:00', endTime: '16:00', endsNextDay: false, daysOfWeek: [1, 2, 3, 4, 5], active: true }]); }} /></View>
-        {settings.shiftTemplates.map((template) => <View key={template.id} style={{ paddingVertical: 10, borderTopWidth: 1, borderColor: palette.line }}>
-          <View style={[styles.row, { flexWrap: 'wrap' }]}>
-            <Field label="NAZWA" value={template.name} onChangeText={(name) => changeTemplate(template.id, { name })} />
-            <Field label="OD (HH:MM)" value={template.startTime} onChangeText={(startTime) => changeTemplate(template.id, { startTime })} />
-            <Field label="DO (HH:MM)" value={template.endTime} onChangeText={(endTime) => changeTemplate(template.id, { endTime })} />
-            <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: template.endsNextDay }} onPress={() => changeTemplate(template.id, { endsNextDay: !template.endsNextDay })} style={[styles.button, { marginBottom: 12 }]}><Text style={styles.buttonText}>{template.endsNextDay ? 'Kończy następnego dnia' : 'Kończy tego samego dnia'}</Text></Pressable>
-            <Button title="Usuń" danger onPress={() => changeSetting('shiftTemplates', settings.shiftTemplates.filter((item) => item.id !== template.id))} />
-          </View>
-          <View style={[styles.row, { flexWrap: 'wrap' }]}>{weekdays.map((day, index) => {
-            const dayOfWeek = index + 1, selected = template.daysOfWeek.includes(dayOfWeek);
-            return <Pressable key={day} accessibilityRole="checkbox" accessibilityState={{ checked: selected }} onPress={() => changeTemplate(template.id, { daysOfWeek: selected ? template.daysOfWeek.filter((value) => value !== dayOfWeek) : [...template.daysOfWeek, dayOfWeek].sort() })} style={[styles.button, selected && { backgroundColor: palette.blueSoft, borderColor: palette.blue }]}><Text style={styles.buttonText}>{day}</Text></Pressable>;
-          })}</View>
-        </View>)}
-      </View>}
+      <Text style={styles.heading}>Generowanie tygodnia</Text>
+      <Text style={[styles.muted, { marginTop: 4, marginBottom: 8 }]}>Zatwierdzony plan pojawi się jako wydarzenia „Praca” w kalendarzu.</Text>
       <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: workaholic }} onPress={() => setWorkaholic((value) => !value)} style={[styles.row, { alignSelf: 'flex-start', paddingVertical: 10, marginBottom: 8 }]}><Text style={{ color: palette.blue, fontSize: 18 }}>{workaholic ? '☑' : '□'}</Text><View><Text style={styles.body}>Pracoholik</Text><Text style={styles.muted}>Wyznacz maksymalną liczbę godzin możliwą do zaplanowania w tym tygodniu.</Text></View></Pressable>
-      {settingsDirty && <Button title={saving ? 'Zapisywanie…' : 'Zapisz ustawienia planu'} disabled={saving || loading} onPress={() => void saveSettings()} />}
-      <Button title={loading ? 'Przetwarzanie…' : 'Wygeneruj tydzień'} primary disabled={loading || saving || !settingsLoaded} onPress={() => void generate()} />
+      <Button title={loading ? 'Przetwarzanie…' : profile.dirty ? 'Zapisz profil i wygeneruj tydzień' : 'Wygeneruj tydzień'} primary disabled={loading || saving || profile.saving || !profile.saved} onPress={() => void generate()} />
       {confirmNoClasses && <View accessibilityRole="alert" style={[styles.card, { borderColor: palette.amber }]}>
         <Text style={styles.heading}>Brak zajęć w wybranym tygodniu</Text><Text style={styles.body}>Czy mimo to wygenerować plan na podstawie dostępności i pozostałych wydarzeń?</Text>
         <View style={[styles.row, { flexWrap: 'wrap', marginTop: 10 }]}><Button title="Kontynuuj bez zajęć" primary disabled={loading || saving} onPress={() => void generate(true)} /><Button title="Anuluj" disabled={loading || saving} onPress={() => setConfirmNoClasses(false)} /></View>
@@ -229,8 +173,23 @@ export default function ScheduleScreen({ week, setWeek, now, active, onApproved,
           {[['Zaplanuj', minutesLabel(schedule.proposedMinutes)], ['Razem z pracą', minutesLabel(schedule.totalMinutes)], [workaholic ? 'Maks. nowe zmiany' : 'Cel', minutesLabel(workaholic ? schedule.proposedMinutes : schedule.targetMinutes)], ['Do celu', minutesLabel(schedule.shortfallMinutes)]].map(([label, value]) => <View key={label} style={{ flexGrow: 1, minWidth: 120, padding: 12, borderRadius: 12, backgroundColor: palette.surfaceAlt }}><Text style={styles.label}>{label.toUpperCase()}</Text><Text style={[styles.heading, { fontSize: 19 }]}>{value}</Text></View>)}
         </View>
         {schedule.estimatedPayPln !== undefined && <Text style={styles.body}>Wynagrodzenie nowych zmian: {formatPln(schedule.estimatedPayPln)}{dirty ? ' (zapisz korekty, aby odświeżyć kwotę)' : ''}</Text>}
+        {!workaholic && schedule.targetMinutes > 0 && <TargetProgress plannedMinutes={schedule.totalMinutes} targetMinutes={schedule.targetMinutes} label="Praca w tym tygodniu względem celu"
+          note={profile.saved?.targetPeriod === 'month' ? `cel miesięczny ${formatNumber(profile.saved.targetHours)} h ≈ ${formatNumber(profile.saved.weeklyTargetHours)} h tygodniowo` : undefined} />}
         {!!schedule.optionalLecturesSkipped.length && <Text style={[styles.muted, { marginTop: 12 }]}>Pominięte zajęcia nieobowiązkowe: {schedule.optionalLecturesSkipped.join(', ')}</Text>}
         {schedule.violations.map((violation, index) => <Text key={`${violation.code}-${index}`} style={[styles.muted, { marginTop: 8, color: violation.severity === 'error' ? palette.red : palette.amber }]}>{violation.message}</Text>)}
+      </View>
+
+      {/* S23KC2S1P2-40: zajęcia uwzględnione przy planowaniu tego tygodnia (serie rozwinięte na konkretne daty). */}
+      <View style={styles.card}>
+        <Text style={styles.heading}>Zajęcia w tym tygodniu</Text>
+        <Text style={[styles.muted, { marginTop: 4, marginBottom: 8 }]}>Praca nie jest planowana w czasie zajęć obowiązkowych ani dojazdu przed i po nich. Zajęcia nieobowiązkowe są pomijane tylko wtedy, gdy inaczej nie da się zbliżyć do celu.</Text>
+        {!classes.length && <Text style={styles.muted}>Brak zajęć w kalendarzu na ten tydzień.</Text>}
+        {classes.map((event) => <View key={`${event.eventId}-${event.start}`} style={[styles.row, { flexWrap: 'wrap', paddingVertical: 6, borderTopWidth: 1, borderColor: palette.line }]}>
+          <Text style={[styles.body, { minWidth: 150 }]}>{classTimeLabel(event)}</Text>
+          <Text style={[styles.body, { flex: 1, fontWeight: '700' }]}>{event.title}{event.repeatWeekly ? ' · co tydzień' : ''}</Text>
+          <Text style={[styles.muted, { color: event.mandatory ? palette.red : palette.muted }]}>{event.mandatory ? 'obowiązkowe' : 'nieobowiązkowe'}</Text>
+        </View>)}
+        {typeof schedule.freeMinutes === 'number' && <Text style={[styles.muted, { marginTop: 10 }]}>Wolny czas na pracę w dostępności po odjęciu zajęć i dojazdów: {minutesLabel(schedule.freeMinutes)} ({windowsLabel(schedule.freeWindows?.length ?? 0)}).</Text>}
       </View>
 
       <View style={styles.card}>
@@ -244,13 +203,22 @@ export default function ScheduleScreen({ week, setWeek, now, active, onApproved,
             <Button title="Usuń" danger onPress={() => removeShift(shift.candidateId)} />
           </View>
           {shift.hourlyRatePln !== undefined && <Text style={styles.body}>{formatPln(shift.hourlyRatePln)}/h · {formatPln(shift.estimatedPayPln ?? 0)} {shift.rateKind === 'gross' ? 'brutto' : shift.rateKind === 'net' ? 'netto' : ''}</Text>}
-          <Text style={styles.muted}>Dojazd: {settings.commuteBufferMinutes} min przed i po zmianie — czas niepłatny.</Text>
+          <Text style={styles.muted}>Dojazd: {profile.saved?.commuteBufferMinutes ?? 0} min przed i po zmianie — czas niepłatny.</Text>
+          {(() => {
+            // S23KC2S1P2-195: wskazanie zajęć kolidujących ze zmianą – od razu przy ręcznej edycji, przed zapisem.
+            const message = conflictMessage(shiftClassConflicts(shift, schedule.blockingEvents));
+            return <>
+              {!!message.blocking && <Text accessibilityRole="alert" style={[styles.error, { marginTop: 6 }]}>{message.blocking}</Text>}
+              {!!message.optional && <Text style={[styles.muted, { marginTop: 6, color: palette.amber }]}>{message.optional}</Text>}
+            </>;
+          })()}
           {schedule.mode === 'zmianowy' && <View style={[styles.row, { flexWrap: 'wrap', marginTop: 8 }]} accessibilityLabel={`Szablon zmiany ${index + 1}`}>
-            {settings.shiftTemplates.filter((template) => template.active).map((template) => <Pressable key={template.id} accessibilityRole="radio" accessibilityState={{ checked: shift.templateId === template.id }} onPress={() => applyTemplate(shift.candidateId, template)} style={[styles.button, shift.templateId === template.id && { backgroundColor: palette.blueSoft, borderColor: palette.blue }]}><Text style={styles.buttonText}>{template.name}</Text></Pressable>)}
+            {templates.filter((template) => template.active).map((template) => <Pressable key={template.id} accessibilityRole="radio" accessibilityState={{ checked: shift.templateId === template.id }} onPress={() => applyTemplate(shift.candidateId, template)} style={[styles.button, shift.templateId === template.id && { backgroundColor: palette.blueSoft, borderColor: palette.blue }]}><Text style={styles.buttonText}>{template.name}</Text></Pressable>)}
           </View>}
         </View>)}
         {dirty && <Button title={saving ? 'Sprawdzanie i zapisywanie…' : 'Sprawdź i zapisz zmiany'} disabled={saving || loading || !schedule.version} onPress={() => void save()} />}
-        {!schedule.isApproved && <Button title={saving ? 'Zatwierdzanie…' : 'Zatwierdź grafik i dodaj do kalendarza'} primary disabled={saving || loading || dirty || settingsDirty || !schedule.version} onPress={() => void approve()} />}
+        {!schedule.isApproved && classCollision && <Text accessibilityRole="alert" style={styles.error}>Zmień albo usuń zmiany kolidujące z zajęciami obowiązkowymi – takiego grafiku nie można zatwierdzić.</Text>}
+        {!schedule.isApproved && <Button title={saving ? 'Zatwierdzanie…' : 'Zatwierdź grafik i dodaj do kalendarza'} primary disabled={saving || loading || dirty || profile.dirty || classCollision || !schedule.version} onPress={() => void approve()} />}
         {!schedule.isApproved && <Button title="Odrzuć propozycję" danger disabled={saving || loading || !schedule.version} onPress={() => setConfirmReject(true)} />}
         {confirmReject && !schedule.isApproved && <View accessibilityRole="alert" style={[styles.card, { borderColor: palette.red }]}>
           <Text style={styles.body}>{dirty ? 'Odrzucić propozycję i utracić niezapisane poprawki?' : 'Odrzucić tę propozycję? Zatwierdzone wcześniej wydarzenia pozostaną w kalendarzu.'}</Text>

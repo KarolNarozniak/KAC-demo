@@ -56,5 +56,7 @@ export async function calendarContext(c: PoolClient, userId: string, calendarId:
             events.push({ id: e.id + '@' + day, title: e.title, start: instant(day, e.local_start.slice(11), zone), end: instant(addDays(day, durationDays), e.local_end.slice(11), zone), category });
         }
     }
+    const blocks=await c.query('select id,title,start_time,end_time from blocks where user_id=$1',[userId]);
+    for(const block of blocks.rows)events.push({id:'block:'+block.id,title:block.title,start:block.start_time.toISOString(),end:block.end_time.toISOString(),category:'Personal'});
     return { zone, events };
 }

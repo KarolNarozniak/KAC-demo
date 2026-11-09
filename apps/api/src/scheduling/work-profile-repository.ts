@@ -1,5 +1,5 @@
 import type { Pool, PoolClient } from 'pg';
-import { WorkProfileRepository, mapProfile } from '../profile/repository.js';
+import { WorkProfileRepository, mapProfile } from '../profile/compensation-repository.js';
 import { ProfileError } from '../profile/availability.js';
 import { calculatePay, rateGrosz } from './pay.js';
 import { calendarContext, availabilityWindows, addDays, instant } from './context.js';

@@ -125,3 +125,7 @@ tak jak w dotychczasowym API. Parametry żądań nie pozwalają wskazać cudzego
 Po scaleniu master (2026-11-07) zaawansowany planer jest w zakładce **Grafik**, a wcześniejszy planer w **Asystencie**.
 Oba API działają wyłącznie pod `/api/v1`; wcześniejsze grafiki i ich kwoty są zachowane.
 Szczegóły migracji i walidacji: [`docs/merge-master-2026-11-07.md`](docs/merge-master-2026-11-07.md).
+
+Aktualizacja master 2026-11-09 dodaje cele miesięczne, szczegóły kolizji z zajęciami i zakładkę Blokady.
+Stawka i dostępność pozostają w Ustawieniach, a pełny profil z celem miesięcznym jest w Grafiku.
+Integracja i wyniki weryfikacji: [`docs/merge-master-2026-11-09.md`](docs/merge-master-2026-11-09.md).

@@ -3,7 +3,7 @@
   "info": {
     "title": "KAC — Work profile and scheduling",
     "version": "1.0.0",
-    "description": "Kontrakt modułów sprintu 204. Jest dokumentem uzupełniającym istniejące API kalendarza/importu. Tożsamość MVP wybierana na serwerze przez DB_DEMO_USER_ID/DB_DEMO_CALENDAR_ID; brak parametrów właściciela w żądaniach. Nie jest to uwierzytelnianie produkcyjne. Updated to /api/v1 after merging master; canonical full contract: apps/api/openapi/openapi.json."
+    "description": "Kontrakt modułów sprintu 204. Jest dokumentem uzupełniającym istniejące API kalendarza/importu. Tożsamość MVP wybierana na serwerze przez DB_DEMO_USER_ID/DB_DEMO_CALENDAR_ID; brak parametrów właściciela w żądaniach. Nie jest to uwierzytelnianie produkcyjne. Updated to /api/v1 after merging master; canonical full contract: apps/api/openapi/openapi.json. The earlier branch-specific profile payload now lives at /api/v1/work-profile/compensation; the canonical /api/v1/work-profile follows the monthly-target contract on master."
   },
   "tags": [
     {
@@ -14,7 +14,7 @@
     }
   ],
   "paths": {
-    "/api/v1/work-profile": {
+    "/api/v1/work-profile/compensation": {
       "get": {
         "tags": [
           "Work profile"

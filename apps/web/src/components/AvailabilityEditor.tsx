@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, Pressable } from 'react-native';
 import { mergeAvailability, subtractMandatory, mandatoryWeeklyIntervals } from '../domain/availability';
 import { loadCalendar } from '../services/calendarApi';
-import { getAvailability, saveAvailability, type Availability, type Interval } from '../services/workProfileApi';
+import { getAvailability, saveAvailability, type Availability, type Interval } from '../services/compensationApi';
 import TimeField from './TimeField';
 import { useTheme } from './ui';
 

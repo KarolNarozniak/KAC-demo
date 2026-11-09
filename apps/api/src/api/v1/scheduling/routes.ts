@@ -1,9 +1,11 @@
 import { ProfileError } from '../../../profile/availability.js';
 import type { FastifyInstance } from 'fastify';
 import { generateSchedule, validateSchedule } from '../../../scheduling/generator.js';
+import { freeWindows, listBlockingOccurrences } from '../../../scheduling/constraints.js';
 import { expandEventsForWeek, localInstant, validWeekStart } from '../../../scheduling/time.js';
-import { ProfileVersionConflictError, ScheduleAlreadyApprovedError, ScheduleVersionConflictError, type ScheduleRepository } from '../../../scheduling/repository.js';
-import type { CandidateShift, ManualShiftInput, PlannerOverrides, PlanningContext, ScheduleGenerationResult, ScheduleProfileSettings } from '../../../scheduling/types.js';
+import { invalidScheduleSchema, scheduleResponseSchema } from './schemas.js';
+import { ScheduleAlreadyApprovedError, ScheduleVersionConflictError, type ScheduleRepository } from '../../../scheduling/repository.js';
+import type { CandidateShift, ManualShiftInput, PlannerOverrides, PlanningContext, ScheduleGenerationResult } from '../../../scheduling/types.js';
 
 const schedulerOverridesSchema = {
   type: 'object', additionalProperties: false,
@@ -38,25 +40,6 @@ const versionSchema = { params: { type: 'object', required: ['weekStart'], prope
 const listSchema = { querystring: { type: 'object', required: ['from', 'to'], additionalProperties: false, properties: {
   from: { type: 'string', format: 'date' }, to: { type: 'string', format: 'date' }, limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 }, offset: { type: 'integer', minimum: 0, default: 0 },
 } } } as const;
-const settingsSchema = { body: { type: 'object', required: ['mode', 'minimumHours', 'targetHours', 'maximumHours', 'commuteBufferMinutes', 'minimumRestMinutes', 'minimumShiftMinutes', 'maximumSlotMinutes', 'maxHoursPerDay', 'profileVersion', 'availability', 'preferredWorkWindows', 'blockedPeriods', 'shiftTemplates'], additionalProperties: false,
-  properties: { ...schedulerOverridesSchema.properties, profileVersion: { type: 'string', minLength: 1 },
-    availability: { type: 'array', maxItems: 70, items: { type: 'object', required: ['id', 'dayOfWeek', 'startTime', 'endTime'], additionalProperties: false,
-      properties: { id: idSchema, dayOfWeek: { type: 'integer', minimum: 1, maximum: 7 }, startTime: { type: 'string', pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' }, endTime: { type: 'string', pattern: '^(([01]\\d|2[0-3]):[0-5]\\d|24:00)$' } } } },
-    preferredWorkWindows: { type: 'array', maxItems: 70, items: { type: 'object', required: ['id', 'dayOfWeek', 'startTime', 'endTime', 'weight'], additionalProperties: false,
-      properties: { id: idSchema, dayOfWeek: { type: 'integer', minimum: 1, maximum: 7 }, startTime: { type: 'string', pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' }, endTime: { type: 'string', pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' }, weight: { type: 'number', minimum: 0, maximum: 100 } } } },
-    blockedPeriods: { type: 'array', maxItems: 100, items: { type: 'object', required: ['id', 'type', 'start', 'end'], additionalProperties: false,
-      properties: { id: idSchema, type: { type: 'string', minLength: 1, maxLength: 80 }, start: { type: 'string', format: 'date-time' }, end: { type: 'string', format: 'date-time' }, reason: { type: 'string', maxLength: 200 } } } },
-  } } } as const;
-
-const settingsFromContext = (context: PlanningContext): ScheduleProfileSettings => ({
-  mode: context.profile.mode, minimumHours: context.profile.minimumHours, targetHours: context.profile.targetHours,
-  maximumHours: context.profile.maximumHours, commuteBufferMinutes: context.profile.commuteBufferMinutes,
-  minimumRestMinutes: context.profile.minimumRestMinutes, minimumShiftMinutes: context.profile.minimumShiftMinutes,
-  maximumSlotMinutes: context.profile.maximumSlotMinutes, maxHoursPerDay: context.profile.maxHoursPerDay,
-  profileVersion: context.profile.profileVersion, availability: context.availability,
-  preferredWorkWindows: context.preferredWorkWindows, blockedPeriods: context.blockedPeriods, shiftTemplates: context.shiftTemplates,
-});
-
 export async function schedulingRoutes(app: FastifyInstance, options: { repository?: ScheduleRepository }) {
   const scheduleRepository = options.repository;
   const planningContextFor = async (weekStart: string): Promise<PlanningContext | null> => {
@@ -68,44 +51,25 @@ export async function schedulingRoutes(app: FastifyInstance, options: { reposito
     return { ...context, events: context.events.filter((event) => !ids.has(event.id)) };
   };
 
-  app.get('/scheduling/settings', { schema: { tags: ['Scheduling'], summary: 'Read scheduler settings', description: 'Returns weekly targets, working availability, preferred windows, blocked periods, shift templates and the profile concurrency version.', operationId: 'getScheduleSettings', response: { 200: objectResponse, 404: objectResponse, 503: objectResponse } } }, async (_request, reply) => {
-    if (!scheduleRepository) return reply.code(503).send({ error: 'scheduling_not_configured' });
-    try {
-      const context = await scheduleRepository.getPlanningContext();
-      return context ? settingsFromContext(context) : reply.code(404).send({ error: 'work_profile_not_found' });
-    } catch (error) {
-      app.log.error({ err: error }, 'Schedule settings lookup failed');
-      return reply.code(503).send({ error: 'schedule_settings_lookup_failed' });
-    }
-  });
+  /**
+   * S23KC2S1P2-40: do każdego grafiku dołączamy zajęcia i wydarzenia tygodnia (blockingEvents) oraz wolne przedziały,
+   * wyliczone z bieżącego kalendarza. Dzięki temu ekran pokaże też zajęcia dodane po wygenerowaniu propozycji.
+   */
+  const withClassContext = (schedule: ScheduleGenerationResult, context: PlanningContext): ScheduleGenerationResult => {
+    const parameters = schedule.parameters as PlannerOverrides & { commuteBufferMinutes?: number; minimumRestMinutes?: number; minimumShiftMinutes?: number };
+    const occurrences = listBlockingOccurrences(context, schedule.weekStart, {
+      commuteBufferMinutes: Number(parameters.commuteBufferMinutes ?? context.profile.commuteBufferMinutes),
+      minimumRestMinutes: Number(parameters.minimumRestMinutes ?? context.profile.minimumRestMinutes),
+    });
+    const free = freeWindows(context, schedule.weekStart, occurrences, Number(parameters.minimumShiftMinutes ?? context.profile.minimumShiftMinutes));
+    return { ...schedule, blockingEvents: occurrences, freeWindows: free.windows, freeMinutes: free.freeMinutes };
+  };
 
-  app.put<{ Body: ScheduleProfileSettings }>('/scheduling/settings', { schema: { ...settingsSchema, tags: ['Scheduling'], summary: 'Update scheduler settings', description: 'Atomically updates working constraints, recurring availability, preferred windows, blocked periods and shift templates. Requires the current profileVersion.', operationId: 'updateScheduleSettings', response: { 200: objectResponse, 400: objectResponse, 404: objectResponse, 409: objectResponse } } }, async (request, reply) => {
-    if (!scheduleRepository) return reply.code(503).send({ error: 'scheduling_not_configured' });
-    const settings = request.body;
-    if (settings.minimumHours > settings.targetHours || settings.targetHours > settings.maximumHours || settings.maximumSlotMinutes < settings.minimumShiftMinutes ||
-      !settings.availability.every((window) => window.endTime > window.startTime) ||
-      !settings.preferredWorkWindows.every((window) => window.endTime > window.startTime) ||
-      !settings.blockedPeriods.every((period) => new Date(period.end).getTime() > new Date(period.start).getTime())) {
-      return reply.code(400).send({ error: 'invalid_scheduler_settings' });
-    }
-    try {
-      const context = await scheduleRepository.getPlanningContext();
-      if (!context) return reply.code(404).send({ error: 'work_profile_not_found' });
-      if (settings.profileVersion !== context.profile.profileVersion) return reply.code(409).send({ error: 'profile_version_conflict', profileVersion: context.profile.profileVersion });
-      await scheduleRepository.saveSettings(context, settings);
-      const updated = await scheduleRepository.getPlanningContext();
-      return updated ? settingsFromContext(updated) : reply.code(404).send({ error: 'work_profile_not_found' });
-    } catch (error) {
-      if(error instanceof ProfileError)return reply.code(error.status).send({error:error.code,details:error.details});
-      if (error instanceof ProfileVersionConflictError) return reply.code(409).send({ error: 'profile_version_conflict' });
-      request.log.error({ err: error }, 'Schedule settings update failed');
-      return reply.code(400).send({ error: 'schedule_settings_update_failed' });
-    }
-  });
+  // Ustawienia profilu (limity, cel, dostępność, szablony) obsługuje moduł profilu pracy: GET/PUT /api/v1/work-profile.
 
   app.post<{ Body: { weekStart: string; profileVersion: string; confirmNoClasses?: boolean; overrides?: PlannerOverrides } }>('/schedules/generate', { schema: {
-    ...generateSchema, tags: ['Scheduling'], summary: 'Generate a weekly schedule', description: 'Creates a deterministic draft. If no classes occur in the week, confirmation is required. Published planner shifts are excluded from the planning baseline so a replacement can reduce the previous hours.',
-    operationId: 'generateSchedule', response: { 201: scheduleResponse, 422: objectResponse, 400: objectResponse, 404: objectResponse, 409: objectResponse, 503: objectResponse },
+    ...generateSchema, tags: ['Scheduling'], summary: 'Generate a weekly schedule', description: 'Creates a deterministic draft. Weekly class series are expanded into the selected week; work is planned only in availability minus mandatory classes and commute buffers. If no classes occur in the week, confirmation is required. If free time cannot cover the target, the result contains insufficient_free_time. Published planner shifts are excluded from the planning baseline so a replacement can reduce the previous hours.',
+    operationId: 'generateSchedule', response: { 201: scheduleResponseSchema, 422: objectResponse, 400: objectResponse, 404: objectResponse, 409: objectResponse, 503: objectResponse },
   } }, async (request, reply) => {
     if (!scheduleRepository) return reply.code(503).send({ error: 'scheduling_not_configured' });
     if (!validWeekStart(request.body.weekStart)) return reply.code(400).send({ error: 'invalid_week_start' });
@@ -119,9 +83,9 @@ export async function schedulingRoutes(app: FastifyInstance, options: { reposito
       if (!classes.length && !request.body.confirmNoClasses) return reply.code(409).send({ error: 'no_classes_for_week', requiresConfirmation: true });
       const generated = generateSchedule(context, request.body.weekStart, request.body.overrides ?? {});
       generated.parameters.profileVersion = context.profile.profileVersion;
-      return reply.code(201).send(await scheduleRepository.saveSchedule(context, generated));
+      return reply.code(201).send(withClassContext(await scheduleRepository.saveSchedule(context, generated), context));
     } catch (error) {
-      if(error instanceof ProfileError)return reply.code(error.status).send({error:error.code,details:error.details});
+      if(error instanceof ProfileError){if(error.code==='invalid_schedule')return reply.code(422).send({error:error.code,...error.details as object});return reply.code(error.status).send({error:error.code,details:error.details});}
       if (error instanceof Error && error.message.includes('Ustawienia')) return reply.code(400).send({ error: 'invalid_scheduler_settings', message: error.message });
       request.log.error({ err: error }, 'Schedule generation failed');
       return reply.code(503).send({ error: 'schedule_generation_failed' });
@@ -129,7 +93,8 @@ export async function schedulingRoutes(app: FastifyInstance, options: { reposito
   });
 
   app.post<{ Params: { weekStart: string }; Body: { expectedVersion: number } }>('/schedules/:weekStart/approve', { schema: { ...versionSchema,
-    tags: ['Scheduling'], summary: 'Validate and approve a schedule', description: 'Revalidates the draft against current profile/calendar constraints, then atomically publishes the shifts as calendar events. Previous planner-generated events are replaced only after validation.', operationId: 'approveSchedule',
+    tags: ['Scheduling'], summary: 'Validate and approve a schedule', description: 'Revalidates the draft against current profile/calendar constraints, then atomically publishes the shifts as calendar events. Previous planner-generated events are replaced only after validation. A shift overlapping a mandatory class (including commute buffer) returns 422 with class_collision.', operationId: 'approveSchedule',
+    response: { 200: scheduleResponseSchema, 422: invalidScheduleSchema },
   } }, async (request, reply) => {
     if (!scheduleRepository) return reply.code(503).send({ error: 'scheduling_not_configured' });
     if (!validWeekStart(request.params.weekStart)) return reply.code(400).send({ error: 'invalid_week_start' });
@@ -146,9 +111,9 @@ export async function schedulingRoutes(app: FastifyInstance, options: { reposito
       });
       if (validation.errors.length) return reply.code(422).send({ error: 'invalid_schedule', errors: validation.errors, warnings: validation.warnings });
       const schedule = await scheduleRepository.approveSchedule(request.params.weekStart, request.body.expectedVersion);
-      return schedule ? schedule : reply.code(404).send({ error: 'schedule_not_found' });
+      return schedule ? withClassContext(schedule, context) : reply.code(404).send({ error: 'schedule_not_found' });
     } catch (error) {
-      if(error instanceof ProfileError)return reply.code(error.status).send({error:error.code,details:error.details});
+      if(error instanceof ProfileError){if(error.code==='invalid_schedule')return reply.code(422).send({error:error.code,...error.details as object});return reply.code(error.status).send({error:error.code,details:error.details});}
       if (error instanceof ScheduleAlreadyApprovedError) return reply.code(409).send({ error: 'schedule_already_approved' });
       if (error instanceof ScheduleVersionConflictError) return reply.code(409).send({ error: 'schedule_version_conflict', currentVersion: error.actualVersion });
       request.log.error({ err: error }, 'Schedule approval failed');
@@ -163,7 +128,7 @@ export async function schedulingRoutes(app: FastifyInstance, options: { reposito
     if (!validWeekStart(request.params.weekStart)) return reply.code(400).send({ error: 'invalid_week_start' });
     try { return { rejected: true, schedule: await scheduleRepository.rejectSchedule(request.params.weekStart, request.body.expectedVersion) }; }
     catch (error) {
-      if(error instanceof ProfileError)return reply.code(error.status).send({error:error.code,details:error.details});
+      if(error instanceof ProfileError){if(error.code==='invalid_schedule')return reply.code(422).send({error:error.code,...error.details as object});return reply.code(error.status).send({error:error.code,details:error.details});}
       if (error instanceof ScheduleVersionConflictError) return reply.code(409).send({ error: 'schedule_version_conflict', currentVersion: error.actualVersion });
       if (error instanceof ScheduleAlreadyApprovedError) return reply.code(409).send({ error: 'schedule_already_approved' });
       request.log.error({ err: error }, 'Schedule rejection failed');
@@ -178,33 +143,35 @@ export async function schedulingRoutes(app: FastifyInstance, options: { reposito
     if (request.query.from > request.query.to) return reply.code(400).send({ error: 'invalid_date_range' });
     try { return await scheduleRepository.listSchedules({ from: request.query.from, to: request.query.to, limit: request.query.limit ?? 20, offset: request.query.offset ?? 0 }); }
     catch (error) {
-      if(error instanceof ProfileError)return reply.code(error.status).send({error:error.code,details:error.details}); request.log.error({ err: error }, 'Schedule list failed'); return reply.code(503).send({ error: 'schedule_list_failed' }); }
+      if(error instanceof ProfileError){if(error.code==='invalid_schedule')return reply.code(422).send({error:error.code,...error.details as object});return reply.code(error.status).send({error:error.code,details:error.details});} request.log.error({ err: error }, 'Schedule list failed'); return reply.code(503).send({ error: 'schedule_list_failed' }); }
   });
 
-  app.get<{ Params: { id: string } }>('/schedules/id/:id', { schema: { tags: ['Scheduling'], summary: 'Get a schedule version by ID', operationId: 'getScheduleById', params: { type: 'object', required: ['id'], properties: { id: idSchema } }, response: { 200: scheduleResponse, 404: objectResponse, 503: objectResponse } } }, async (request, reply) => {
+  app.get<{ Params: { id: string } }>('/schedules/id/:id', { schema: { tags: ['Scheduling'], summary: 'Get a schedule version by ID', operationId: 'getScheduleById', params: { type: 'object', required: ['id'], properties: { id: idSchema } }, response: { 200: scheduleResponseSchema, 404: objectResponse, 503: objectResponse } } }, async (request, reply) => {
     if (!scheduleRepository) return reply.code(503).send({ error: 'scheduling_not_configured' });
     try {
       const schedule = await scheduleRepository.getScheduleById(request.params.id);
-      return schedule ? schedule : reply.code(404).send({ error: 'schedule_not_found' });
-    } catch (error) {
-      if(error instanceof ProfileError)return reply.code(error.status).send({error:error.code,details:error.details}); request.log.error({ err: error }, 'Schedule lookup failed'); return reply.code(503).send({ error: 'schedule_lookup_failed' }); }
+      if (!schedule) return reply.code(404).send({ error: 'schedule_not_found' });
+      const context = await planningContextFor(schedule.weekStart);
+      return context ? withClassContext(schedule, context) : schedule;
+    } catch (error) { request.log.error({ err: error }, 'Schedule lookup failed'); return reply.code(503).send({ error: 'schedule_lookup_failed' }); }
   });
 
-  app.get<{ Params: { weekStart: string } }>('/schedules/:weekStart', { schema: { tags: ['Scheduling'], summary: 'Get latest schedule for a week', description: 'Returns the latest non-rejected version whose week starts on the supplied Monday.', operationId: 'getLatestSchedule', params: { type: 'object', required: ['weekStart'], properties: { weekStart: weekStartSchema } }, response: { 200: scheduleResponse, 400: objectResponse, 404: objectResponse, 503: objectResponse } } }, async (request, reply) => {
+  app.get<{ Params: { weekStart: string } }>('/schedules/:weekStart', { schema: { tags: ['Scheduling'], summary: 'Get latest schedule for a week', description: 'Returns the latest non-rejected version whose week starts on the supplied Monday.', operationId: 'getLatestSchedule', params: { type: 'object', required: ['weekStart'], properties: { weekStart: weekStartSchema } }, response: { 200: scheduleResponseSchema, 400: objectResponse, 404: objectResponse, 503: objectResponse } } }, async (request, reply) => {
     if (!scheduleRepository) return reply.code(503).send({ error: 'scheduling_not_configured' });
     if (!validWeekStart(request.params.weekStart)) return reply.code(400).send({ error: 'invalid_week_start' });
     try {
-      const schedule = await scheduleRepository.getLatestSchedule(request.params.weekStart);
-      return schedule ? schedule : reply.code(404).send({ error: 'schedule_not_found' });
+      const [schedule, context] = await Promise.all([scheduleRepository.getLatestSchedule(request.params.weekStart), planningContextFor(request.params.weekStart)]);
+      if (!schedule) return reply.code(404).send({ error: 'schedule_not_found' });
+      return context ? withClassContext(schedule, context) : schedule;
     } catch (error) {
-      if(error instanceof ProfileError)return reply.code(error.status).send({error:error.code,details:error.details});
+      if(error instanceof ProfileError){if(error.code==='invalid_schedule')return reply.code(422).send({error:error.code,...error.details as object});return reply.code(error.status).send({error:error.code,details:error.details});}
       request.log.error({ err: error }, 'Schedule lookup failed');
       return reply.code(503).send({ error: 'schedule_lookup_failed' });
     }
   });
 
   app.put<{ Params: { weekStart: string }; Body: { shifts: ManualShiftInput[]; expectedVersion: number } }>('/schedules/:weekStart', { schema: { ...updateSchema,
-    tags: ['Scheduling'], summary: 'Validate and save manual schedule edits', description: 'Validates edits against availability, calendar events, shift templates, weekly and daily limits. Uses expectedVersion to detect concurrent changes.', operationId: 'updateSchedule', response: { 200: scheduleResponse, 400: objectResponse, 404: objectResponse, 409: objectResponse, 422: objectResponse, 503: objectResponse },
+    tags: ['Scheduling'], summary: 'Validate and save manual schedule edits', description: 'Validates edits against availability, calendar events, shift templates, weekly and daily limits. A shift overlapping a mandatory class (including commute buffer) is rejected with class_collision. Uses expectedVersion to detect concurrent changes.', operationId: 'updateSchedule', response: { 200: scheduleResponseSchema, 400: objectResponse, 404: objectResponse, 409: objectResponse, 422: invalidScheduleSchema, 503: objectResponse },
   } }, async (request, reply) => {
     if (!scheduleRepository) return reply.code(503).send({ error: 'scheduling_not_configured' });
     const { weekStart } = request.params;
@@ -243,9 +210,9 @@ export async function schedulingRoutes(app: FastifyInstance, options: { reposito
         violations: validation.warnings, generatedAt: new Date().toISOString() };
       delete edited.scheduleId;
       delete edited.version;
-      return await scheduleRepository.saveSchedule(context, edited, request.body.expectedVersion);
+      return withClassContext(await scheduleRepository.saveSchedule(context, edited, request.body.expectedVersion), context);
     } catch (error) {
-      if(error instanceof ProfileError)return reply.code(error.status).send({error:error.code,details:error.details});
+      if(error instanceof ProfileError){if(error.code==='invalid_schedule')return reply.code(422).send({error:error.code,...error.details as object});return reply.code(error.status).send({error:error.code,details:error.details});}
       if (error instanceof ScheduleVersionConflictError) return reply.code(409).send({ error: 'schedule_version_conflict', currentVersion: error.actualVersion });
       request.log.error({ err: error }, 'Schedule update failed');
       return reply.code(503).send({ error: 'schedule_update_failed' });

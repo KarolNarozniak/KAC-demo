@@ -1,10 +1,10 @@
 import type { FastifyInstance, FastifySchema, FastifyError } from 'fastify';
 const contracts: Record<string, FastifySchema> = {
-  "GET /work-profile": {
+  "GET /work-profile/compensation": {
     "tags": [
       "Work profile"
     ],
-    "operationId": "get_work_profile",
+    "operationId": "getWorkCompensation",
     "summary": "Odczyt aktywnego profilu",
     "description": "",
     "response": {
@@ -152,11 +152,11 @@ const contracts: Record<string, FastifySchema> = {
       }
     }
   },
-  "PUT /work-profile": {
+  "PUT /work-profile/compensation": {
     "tags": [
       "Work profile"
     ],
-    "operationId": "put_work_profile",
+    "operationId": "updateWorkCompensation",
     "summary": "Zapis pełnego profilu z wersją",
     "description": "Zwiększa wersję wspólną z dostępnością. Nie zmienia wydarzeń ani snapshotów. 0 jest dozwolone; null oznacza brak. Kwota wymaga gross lub net; maksimum dwie cyfry po przecinku, numeric(12,2).",
     "response": {

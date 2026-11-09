@@ -1,4 +1,4 @@
-import type { WorkProfileRepository } from '../profile/repository.js';
+import type { WorkProfileRepository as CompensationRepository } from '../profile/compensation-repository.js';
 import type { SchedulingRepository } from '../scheduling/work-profile-repository.js';
 import type { CalendarOverview, EventInput } from '../database.js';
 import type { ExistingEvent } from '../import/rules.js';
@@ -6,6 +6,8 @@ import type { AcceptedRow, ConfirmResult, CreateSessionInput } from '../import/s
 import type { GoogleImportOptions } from './v1/imports/google-routes.js';
 import type { ScheduleRepository } from '../scheduling/repository.js';
 import type { ScheduleReader } from '../import/work-schedule/reader.js';
+import type { WorkProfileRepository } from '../profile/repository.js';
+import type { ScopeResolver } from './scope.js';
 
 export type CalendarRepository = {
   deleteEvent?: (eventId: string) => Promise<string[] | null>;
@@ -19,14 +21,22 @@ export type CalendarRepository = {
   cancelImportSession?: (sessionId: string) => Promise<boolean>;
   listEventsForImport?: () => Promise<ExistingEvent[]>;
   getImportUserName?: () => Promise<string>;
+
+  listBlocks?: (userId?:string) => Promise<Block[]>;
+  createBlock?: (input: BlockInput,userId?:string) => Promise<Block>;
+  deleteBlock?: (id: string,userId?:string) => Promise<boolean>;
 };
 
 export type ApiOptions = {
-  workProfile?: WorkProfileRepository | null;
+  workProfile?: CompensationRepository | null;
   scheduling?: SchedulingRepository | null;
   scheduleReader?: ScheduleReader;
   google?: GoogleImportOptions;
   scheduleRepository?: ScheduleRepository;
+  /** Profil pracy i cel godzin (S23KC2S1P2-15, S23KC2S1P2-39). */
+  workProfileRepository?: WorkProfileRepository;
+  /** Ustala użytkownika żądania po stronie serwera (S23KC2S1P2-185). Domyślnie użytkownik demonstracyjny. */
+  userScope?: ScopeResolver;
 };
 
 export type ApiDependencies = {
@@ -34,4 +44,22 @@ export type ApiDependencies = {
   scheduleRepository?: ScheduleRepository;
   scheduleReader: ScheduleReader;
   google?: GoogleImportOptions;
+};
+
+export type BlockType = 'vacation' | 'exam_session' | 'day_off';
+
+export type Block = {
+  id: string;
+  userId: string;
+  title: string;
+  startTime: string;
+  endTime: string;
+  type: BlockType;
+};
+
+export type BlockInput = {
+  title: string;
+  startTime: string;
+  endTime: string;
+  type: BlockType;
 };
