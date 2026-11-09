@@ -4,27 +4,34 @@ title: Profil pracy, dostępność i wynagrodzenie
 sidebar_position: 5
 ---
 
-Profil w zakładce **Grafik** przechowuje dostępność, warunki pracy oraz cel tygodniowy lub miesięczny. Sekcja **Stawka i dostępność** w Ustawieniach pozwala dodatkowo zapisać stawkę PLN i brutto/netto. Puste pole dojazdu jest brakiem ustawienia; jawne zero jest poprawne. Stawka zero jest również poprawna. Nie przeliczamy brutto na netto.
+## Jeden formularz i jeden planer
 
-Dostępność jest lokalnym szkicem do chwili zapisania. Anulowanie przywraca zapisaną kopię. Edytor scala przecięcia i pozwala zaakceptować wyłączenie obowiązkowych zajęć cyklicznych. API odrzuca nieznormalizowane przecięcia. Obsługiwany jest koniec dnia `24:00` i podział zakresu nocnego, także niedziela–poniedziałek. Zapis pełnej listy jest atomowy i kontroluje wspólną wersję profilu; błąd nie usuwa dotychczasowych danych.
+Zakładka **Grafik** zachowuje formularz i sposób planowania wprowadzony na masterze: tryb elastyczny lub zmianowy, minimum i maksimum godzin, cel tygodniowy lub miesięczny, dojazd, odpoczynek, długość zmiany, limit dzienny, dostępność oraz szablony. Stawkę PLN i brutto/netto dodano do tego samego formularza. Zapis, anulowanie, konflikt wersji i ostrzeżenie przy wyjściu obejmują cały szkic.
 
-## Dwa zachowane sposoby planowania
+Pełny profil obsługuje `GET/PUT /api/v1/work-profile`. Pominięcie nowych pól finansowych przez starszego klienta zachowuje dotychczasową stawkę i oznaczenie. `null` oznacza brak ustawionej stawki, a zero jest poprawną stawką. Nie przeliczamy brutto na netto. Profil z dawną stawką bez oznaczenia można nadal edytować; przed nowym planowaniem trzeba uzupełnić brutto/netto.
 
-- **Grafik**: zaawansowany generator z master, szablony zmian, limity dzienne, podgląd w kalendarzu, potwierdzenie tygodnia bez zajęć i zastępowanie poprzedniego planu. API: `/api/v1/schedules`.
-- **Asystent**: wcześniejszy prosty planer dostępności i odczyt jego historii. API: `/api/v1/work-profile/schedules`.
+`targetPeriod: month` zachowuje wpisany cel miesięczny. Generator korzysta z jego odpowiednika tygodniowego (miesiąc = 52/12 tygodnia). Zmiana stawki nie zmienia okresu celu.
 
-Oba korzystają z tych samych ustawień dostępności i kalendarza. Propozycje mają osobne cykle życia: odrzucenie lub akceptacja w jednym planerze nie zmienia rekordu propozycji drugiego. Wspólne wydarzenia kalendarza nadal ograniczają planowanie. Pełny profil tygodniowy/miesięczny: `/api/v1/work-profile` (wersja tekstowa `profileVersion`). Stawka i starszy formularz tygodniowy: `/api/v1/work-profile/compensation` (liczbowa `version`). Osobny zapis dostępności: `/api/v1/work-profile/availability`. Oba rodzaje wersji są aktualizowane wspólnie, więc równoległe formularze nie nadpisują zmian. Nie ma niewersjonowanych aliasów.
+## Dostępność jako część szkicu
 
-Dojazd jest niepłatnym buforem przed i po pracy, mieszczącym się w dostępności. Pomiędzy dwiema zmianami wymagana jest większa z wartości: dojazd lub odpoczynek, bez ich sumowania. Adres wydarzenia nie zmienia stałego bufora MVP. W Grafikach nieobowiązkowe wykłady zachowują miękką regułę pomijania z ostrzeżeniem.
+Edytor pozwala dodawać i usuwać przedziały oraz kopiować dzień na zaznaczone dni. Godziny zapisują się dopiero razem z profilem. Nakładanie jest scalane przed wysłaniem; API odrzuca nieznormalizowane przecięcia. Zakres nocny jest dzielony na granicy dnia, także niedziela–poniedziałek, z zachowaniem `24:00`.
 
-## Wynagrodzenie i historia
+Edytor pokazuje zapisaną sumę godzin i sumę szkicu oraz ostrzega, gdy zapisane godziny są mniejsze od celu. Informacje o obowiązkowych zajęciach pochodzą z kontekstu wybranego tygodnia obliczanego przez istniejący planer; opcjonalne wyłączenie tych godzin z powtarzalnego wzorca wymaga akceptacji. Niezależnie od wzorca generator zawsze uwzględnia zajęcia danego tygodnia. Zapis dostępności nie zmienia wydarzeń.
 
-Każda zapisana zmiana ma snapshot stawki, brutto/netto i kwoty. Obliczenie wykorzystuje rzeczywiste minuty między instantami (również przy DST) i całkowite grosze: `halfUp(rateGrosz * durationMinutes / 60)`. Suma jest sumą osobno zaokrąglonych zmian, bez wynagrodzenia za dojazd. Kwota dotyczy zmian tej propozycji, nie nieznanych historycznych stawek innych wydarzeń pracy. Zmiana profilu nie przelicza zapisanej historii. Po niezapisanej korekcie godzin kwota na ekranie pozostaje ostatnim snapshotem do ponownego zapisu.
+Osobny zasób `GET/PUT /api/v1/work-profile/availability` jest nadal obsługiwany przez **to samo repozytorium**. Zapis jest atomowy, kontroluje właściciela i wersję, a pusta lista usuwa dostępność. Liczbowa `version` jest tokenem zgodności tego zasobu; pełny formularz używa `profileVersion`. Oba zmieniają się przy zapisie tego samego profilu.
 
-Kanoniczny kontrakt znajduje się w [wygenerowanej referencji API](./api/openapi-reference). Schematy źródłowe są w `apps/api/src/api/v1/`. Przy aktualizacji starszej bazy migracje `007_work_profile_workflow.sql` i `009_work_profile_workflow_restore.sql` chronią stany wcześniejszych propozycji przed normalizacją cyklu życia wprowadzaną na master.
+## Planowanie i płaca
 
-## Cel miesięczny i blokady
+Generator i korekta zachowują limity dzienne i tygodniowe, szablony, istniejącą pracę, blokady i zajęcia. Nieobowiązkowe wykłady zachowują miękką regułę pomijania z ostrzeżeniem. Dojazd musi mieścić się w dostępności; pomiędzy dwiema zmianami wymagane jest `max(dojazd, odpoczynek)`, bez sumowania. Bufor nie jest płatną pracą i nie zależy od adresu ani usług map.
 
-`targetPeriod: month` zachowuje podany cel miesięczny, a planowanie korzysta z odpowiednika tygodniowego (miesiąc = 52/12 tygodnia). Zapis samej stawki zachowuje wybrany okres. Jawna zmiana celu tygodniowego w sekcji Stawka i dostępność przełącza cel na tygodniowy.
+Każda zapisana zmiana zachowuje stawkę, brutto/netto i kwotę. Obliczenie wykorzystuje rzeczywiste minuty między instantami, również przy DST, oraz całkowite grosze: `halfUp(rateGrosz * durationMinutes / 60)`. Podsumowanie jest sumą osobno zaokrąglonych zmian propozycji. Nie zgadujemy wynagrodzenia innych wydarzeń, które nie mają historycznej stawki. Po ręcznej korekcie kwota pozostaje ostatnim snapshotem do zapisu. Akceptacja ponownie sprawdza ograniczenia wewnątrz transakcji.
 
-Zakładka **Blokady** obsługuje urlopy, sesje egzaminacyjne i dni wolne przez `/api/v1/blocks`. API odczytuje i usuwa wyłącznie blokady użytkownika ustalonego przez serwer. Wymaga instantów ISO z offsetem; formularz przelicza wpisane lokalne daty na UTC. Blokady obowiązują w obu planerach i nie są kopiowane do edytowalnych blokad profilu. Tworzenie i usuwanie blokady blokuje kalendarze użytkownika, aby zmiana nie ominęła transakcyjnej walidacji akceptacji. Strukturę tabeli tworzy migracja `010_calendar_blocks.sql`, a nie konstruktor repozytorium.
+Przycisk **Historia wybranego tygodnia** pokazuje zapisane grafiki, również pochodzące z wcześniejszej implementacji. Widok historii jest tylko do odczytu i nie przelicza kwot aktualną stawką. Nowe propozycje powstają wyłącznie przez `/api/v1/schedules`. Wcześniejsze rekordy i wydarzenia pozostają w bazie.
+
+## Blokady i zgodność
+
+Zakładka **Blokady** zachowuje urlopy, sesje egzaminacyjne i dni wolne przez `/api/v1/blocks`. Odczyt i usunięcie są ograniczone do właściciela. API przyjmuje instants ISO z offsetem, a formularz zamienia lokalne wpisy na UTC. Blokady nie są kopiowane do edytowalnych blokad profilu. Tworzenie i usuwanie blokady blokuje kalendarze, aby nie ominąć walidacji akceptacji. Strukturę tabeli tworzy migracja `010_calendar_blocks.sql`.
+
+Wycofane adresy `/api/v1/work-profile/compensation` i `/api/v1/work-profile/schedules...` zwracają **410 workflow_consolidated** ze wskazaniem następcy. Nie uruchamiają drugiego silnika ani nie zapisują danych. Historia po ID pozostaje pod `/api/v1/schedules/id/{id}`. Nie ma niewersjonowanych aliasów.
+
+Kanonicznym kontraktem jest [generowana referencja API](./api/openapi-reference), pochodząca ze schematów Fastify w `apps/api/src/api/v1/` i eksportu `apps/api/openapi/openapi.json`.

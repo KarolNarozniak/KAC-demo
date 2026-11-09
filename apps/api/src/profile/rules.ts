@@ -1,3 +1,4 @@
+import { rateGrosz } from '../scheduling/pay.js';
 // Walidacja profilu pracy (S23KC2S1P2-15) i celu godzin (S23KC2S1P2-39, S23KC2S1P2-155).
 // Funkcje są czyste (bez bazy), więc da się je testować jednostkowo. Formularz w aplikacji ma te same reguły.
 import type { PlanningContext } from '../scheduling/types.js';
@@ -24,8 +25,12 @@ export const weeklyHours = (target: number, period: TargetPeriod) => period === 
 const EPSILON = 0.005;
 const toMinutes = (time: string) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
 
-export function validateWorkProfile(input: WorkProfileInput): { ok: true; value: ValidWorkProfile } | { ok: false; fields: FieldErrors } {
+export function validateWorkProfile(input: WorkProfileInput, current?: Pick<WorkProfile,'hourlyRatePln'|'rateKind'>): { ok: true; value: ValidWorkProfile } | { ok: false; fields: FieldErrors } {
   const fields: FieldErrors = {};
+  if(input.hourlyRatePln !== undefined && input.hourlyRatePln !== null){
+    try{rateGrosz(input.hourlyRatePln);}catch{fields.hourlyRatePln='invalid_hourly_rate';}
+    if(!input.rateKind && (input.hourlyRatePln!==current?.hourlyRatePln || current?.rateKind!=null))fields.rateKind='rate_kind_required';
+  }
   const period: TargetPeriod = input.targetPeriod ?? 'week';
   const value = (field: NumberField) => input[field];
 
@@ -76,7 +81,7 @@ export function validateWorkProfile(input: WorkProfileInput): { ok: true; value:
     const seen = new Set<string>();
     list.forEach((window, index) => {
       if (seen.has(window.id)) fields[`${name}.${index}`] = 'duplicate_id';
-      else if (toMinutes(window.endTime) <= toMinutes(window.startTime)) fields[`${name}.${index}`] = 'end_before_start';
+      else if (name==='availability' ? window.endTime===window.startTime : toMinutes(window.endTime) <= toMinutes(window.startTime)) fields[`${name}.${index}`] = 'end_before_start';
       seen.add(window.id);
     });
   };
@@ -118,6 +123,9 @@ export function profileFromContext(context: PlanningContext): WorkProfile {
   const targetPeriod: TargetPeriod = profile.targetPeriod ?? 'week';
   const targetHours = targetPeriod === 'month' ? profile.periodTargetHours ?? roundHours(profile.targetHours * WEEKS_PER_MONTH) : profile.targetHours;
   return {
+    hourlyRatePln:profile.hourlyRateConfigured===false ? null:profile.hourlyRatePln,
+    rateKind:profile.rateKind??null,
+    commuteConfigured:profile.commuteConfigured,
     profileId: profile.id,
     profileVersion: profile.profileVersion,
     timeZone: profile.timeZone,

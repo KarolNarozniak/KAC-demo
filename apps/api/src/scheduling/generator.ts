@@ -138,6 +138,7 @@ function buildCandidates(context: PlanningContext, weekStart: string, profile: E
   const weekEnd = new Date(Date.UTC(Number(weekStart.slice(0, 4)), Number(weekStart.slice(5, 7)) - 1, Number(weekStart.slice(8, 10)) + 7));
 
   const pushCandidate = (candidate: CandidateShift) => {
+    if(candidate.durationMinutes<profile.minimumShiftMinutes || profile.mode==='elastyczny'&&candidate.durationMinutes>profile.maximumSlotMinutes)return;
     if (candidate.start < weekBounds(weekStart, timeZone).start.toISOString() || new Date(candidate.end) <= new Date(candidate.start)) return;
     if (new Date(candidate.start) >= weekEnd) return;
     if (!intervalCovered(new Date(Date.parse(candidate.start)-profile.commuteBufferMinutes*60000), new Date(Date.parse(candidate.end)+profile.commuteBufferMinutes*60000), availability)) return;
@@ -433,10 +434,10 @@ export function validateSchedule(context: PlanningContext, weekStart: string, sh
       errors.push({ code: 'outside_week', severity: 'error', message: 'Zmiana musi zaczynać się w wybranym tygodniu; może kończyć się najwyżej następnego dnia.', candidateIds: [input.id], eventIds: [], details: {} });
       continue;
     }
-    if (wallMinutes < profile.minimumShiftMinutes) {
+    if (Math.round((end.getTime()-start.getTime())/60000) < profile.minimumShiftMinutes) {
       errors.push({ code: 'below_minimum_slot', severity: 'error', message: `Minimalna długość zmiany to ${profile.minimumShiftMinutes} minut.`, candidateIds: [input.id], eventIds: [], details: { wallMinutes } });
     }
-    if (profile.mode === 'elastyczny' && wallMinutes > profile.maximumSlotMinutes) {
+    if (profile.mode === 'elastyczny' && Math.round((end.getTime()-start.getTime())/60000) > profile.maximumSlotMinutes) {
       errors.push({ code: 'above_maximum_slot', severity: 'error', message: `Maksymalna długość zmiany to ${profile.maximumSlotMinutes} minut.`, candidateIds: [input.id], eventIds: [], details: { wallMinutes } });
     }
     if (profile.mode === 'zmianowy') {
@@ -460,7 +461,7 @@ export function validateSchedule(context: PlanningContext, weekStart: string, sh
       candidateIds: [input.id], eventIds: optionalIds,
       details: { penalty: optionalIds.length * DEFAULT_SCHEDULER_PENALTIES.optionalLecturePenalty },
     });
-    normalized.push({ candidateId: input.id, title: input.id, start: start.toISOString(), end: end.toISOString(), startLocal: input.startLocal, endLocal: input.endLocal, durationMinutes: wallMinutes, workDate: startDate, mode: profile.mode, optionalLectureIds: optionalIds, softPenalty: optionalIds.length * DEFAULT_SCHEDULER_PENALTIES.optionalLecturePenalty });
+    normalized.push({ candidateId: input.id, title: input.id, start: start.toISOString(), end: end.toISOString(), startLocal: input.startLocal, endLocal: input.endLocal, durationMinutes: Math.round((end.getTime()-start.getTime())/60000), workDate: startDate, mode: profile.mode, optionalLectureIds: optionalIds, softPenalty: optionalIds.length * DEFAULT_SCHEDULER_PENALTIES.optionalLecturePenalty });
   }
 
   const candidates = new Set(normalized.map(shift=>shift.candidateId));

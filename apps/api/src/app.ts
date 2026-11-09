@@ -1,8 +1,5 @@
 import { demoScope } from './api/scope.js';
-import { installWorkProfileContracts } from './api/v1/work-profile/contracts.js';
 import { registerWorkProfile } from './api/v1/work-profile/routes.js';
-import { registerScheduling } from './api/v1/work-profile/schedule-routes.js';
-import { Ajv } from 'ajv';
 import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import swagger from '@fastify/swagger';
@@ -77,13 +74,7 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
 
   const scheduleReader = options.scheduleReader ?? new DemoScheduleReader();
   app.register(async (v1) => {
-    await v1.register(async (profile) => {
-      installWorkProfileContracts(profile);
-      const ajv = new Ajv({ coerceTypes: false, removeAdditional: false, strict: false });
-      profile.setValidatorCompiler(({ schema }) => ajv.compile(schema));
-      registerWorkProfile(profile, options.workProfile ?? null, options.userScope ?? demoScope);
-      registerScheduling(profile, options.scheduling ?? null, options.userScope ?? demoScope);
-    });
+    registerWorkProfile(v1,options.workProfileRepository,options.userScope??demoScope);
     await healthRoutes(v1, { repository });
     await calendarRoutes(v1, { repository });
     await profileRoutes(v1, { repository: options.workProfileRepository, scope: options.userScope });

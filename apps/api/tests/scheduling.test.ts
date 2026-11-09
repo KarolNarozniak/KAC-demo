@@ -118,3 +118,11 @@ test('merged planner fits commute inside availability and uses max(rest, commute
   assert.equal(gap?.details.actualMinutes,59);
   assert.equal(gap?.details.requiredMinutes,60);
 });
+
+test('manual shifts use elapsed minutes at DST, consistently with stored pay',()=>{
+ const input=context({profile:{...context().profile,timeZone:'Europe/Warsaw',minimumHours:0,targetHours:3,maximumHours:12,maxHoursPerDay:12,commuteBufferMinutes:0},availability:[{id:'sun',dayOfWeek:7,startTime:'00:00',endTime:'06:00'}]});
+ const result=validateSchedule(input,'2026-03-23',[{id:'dst',startLocal:'2026-03-29T01:00',endLocal:'2026-03-29T04:00'}]);
+ assert.deepEqual(result.errors,[]);assert.equal(result.proposedMinutes,120);
+ const fall=validateSchedule(input,'2026-10-19',[{id:'dst',startLocal:'2026-10-25T01:00',endLocal:'2026-10-25T04:00'}]);
+ assert.deepEqual(fall.errors,[]);assert.equal(fall.proposedMinutes,240);
+});

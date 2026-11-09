@@ -1,7 +1,5 @@
-import CompensationScreen from './src/screens/CompensationScreen';
-import WorkScheduleScreen from './src/screens/WorkScheduleScreen';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Text, View, Pressable, Image, Modal } from 'react-native';
+import { Text, View, Pressable, Image, Modal, ScrollView } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -95,15 +93,14 @@ function CalendarApp() {
         route === 'Dziś' || route === 'Tydzień' ? <CalendarScreen active={active} now={now} weekLayout={weekLayout} todayOnly={route === 'Dziś'} week={week} setWeek={setWeek} draftSchedule={schedulePreview} /> :
         route === 'Grafik' ? <ScheduleScreen active={active} now={now} week={week} setWeek={setWeek} onPreview={setSchedulePreview} onApproved={() => setTab('Tydzień')} onUnsavedChange={onUnsavedChange} discardSignal={discardSignal} /> :
         route === 'Blokady' ? <BlocksScreen /> :
-        route === 'Ustawienia' ? <View style={[styles.content, { padding: 16 }]}>
+        route === 'Ustawienia' ? <ScrollView style={{ flex: 1, minHeight: 0 }} contentContainerStyle={[styles.content, { padding: 16, paddingBottom: 32 }]} keyboardShouldPersistTaps="handled">
           <View style={[styles.row, { justifyContent: 'space-between', marginBottom: 20 }]}><Text style={styles.heading}>Motyw</Text><ThemeToggle /></View>
-          <CompensationScreen />
            <Text style={[styles.heading, { marginBottom: 12 }]}>Układ tygodnia</Text>
           <View accessibilityRole="radiogroup" style={{ gap: 8 }}>
             {([{ id: 'days-left', label: 'Dni po lewej · godziny u góry' }, { id: 'days-top', label: 'Dni u góry · godziny po lewej' }] as const).map((option) => <Pressable key={option.id} accessibilityRole="radio" accessibilityState={{ checked: weekLayout === option.id, disabled: !settingsLoaded }} disabled={!settingsLoaded} onPress={() => void changeWeekLayout(option.id)} style={{ padding: 14, borderRadius: 8, borderWidth: 1, borderColor: weekLayout === option.id ? palette.blue : palette.line, backgroundColor: weekLayout === option.id ? palette.blueSoft : palette.surface }}><Text style={styles.body}>{weekLayout === option.id ? '◉' : '○'} {option.label}</Text></Pressable>)}
           </View>
           {!!storageError && <Text accessibilityRole="alert" style={styles.error}>{storageError}</Text>}
-        </View> : <WorkScheduleScreen />
+        </ScrollView> : <View style={[styles.content,{padding:16}]}><Text style={styles.heading}>Asystent</Text><Text style={styles.subtitle}>Wkrótce</Text></View>
       );
     }} />
 

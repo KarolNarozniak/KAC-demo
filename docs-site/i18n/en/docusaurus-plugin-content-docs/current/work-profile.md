@@ -4,27 +4,34 @@ title: Work profile, availability and pay
 sidebar_position: 5
 ---
 
-The profile in **Grafik** stores availability, work constraints and a weekly or monthly target. The **Stawka i dostępność** section in Settings additionally stores the hourly PLN rate and gross/net designation. An empty commute field means unconfigured; explicit zero is valid. A zero hourly rate is also valid. Gross and net amounts are never converted into each other.
+## One form and one planner
 
-Availability edits remain local until saved. Cancel restores the saved copy. The editor merges overlaps and asks users to accept exclusions for mandatory recurring classes. The API rejects unnormalized overlaps. End-of-day `24:00` and overnight intervals, including Sunday–Monday, are supported. Replacing the full list is atomic and checks the shared profile version; a failure preserves existing data.
+The **Grafik** tab preserves the form and planning workflow introduced on master: flexible/template modes, weekly minimum and maximum, weekly/monthly targets, commute, rest, shift duration, daily limits, availability and shift templates. The PLN hourly rate and gross/net designation extend the same form. Save, cancel, version conflicts and the unsaved-change warning cover the entire draft.
 
-## Both planning workflows are retained
+The complete profile uses `GET/PUT /api/v1/work-profile`. Older clients omitting the financial fields preserve the saved rate and designation. `null` means unconfigured; zero is a valid rate. Gross and net are not converted. An old profile with a rate but no designation remains editable, while new generation requires choosing gross/net.
 
-- **Grafik**: master's advanced generator, shift templates, daily limits, calendar preview, confirmation for weeks without classes, and replacement of previously published schedules. API: `/api/v1/schedules`.
-- **Asystent**: the earlier availability planner and access to its saved history. API: `/api/v1/work-profile/schedules`.
+`targetPeriod: month` preserves the entered monthly target. Generation uses its weekly equivalent (a month is 52/12 weeks). Updating the rate does not change the target period.
 
-Both share availability settings and calendar events. Their proposals have separate lifecycles: accepting or rejecting in one planner does not change the other's proposal records. Shared calendar events still constrain planning. The full weekly/monthly profile is `/api/v1/work-profile` with a string `profileVersion`. Compensation and the earlier weekly form use `/api/v1/work-profile/compensation` with an integer `version`. Separate availability edits use `/api/v1/work-profile/availability`. Both versions advance together so concurrent forms cannot overwrite changes. No unversioned aliases remain.
+## Availability belongs to the draft
 
-Commute is an unpaid buffer before and after work and must fit inside availability. Between work shifts the required gap is the larger of commute and rest, without adding them. Event addresses do not affect the fixed MVP buffer. The advanced planner retains master's soft optional-lecture rule, allowing a lecture to be skipped with a warning.
+Users can add/remove intervals and copy a day to selected days. Hours save only with the profile. The editor merges overlaps before sending; the API rejects unnormalized overlaps. Overnight intervals split at midnight, including Sunday–Monday, preserving `24:00`.
 
-## Pay and history
+The editor shows saved and draft weekly hours and warns when saved availability falls below the target. Mandatory-class information comes from the existing planner's selected-week context; excluding those hours from the recurring pattern requires explicit acceptance. Generation always applies that week's classes independently of the pattern. Saving availability does not change calendar events.
 
-Each saved shift snapshots its hourly rate, gross/net designation and amount. Calculation uses elapsed minutes between instants, including DST, and integer grosz: `halfUp(rateGrosz * durationMinutes / 60)`. The summary sums individually rounded shift amounts and excludes unpaid commute. It covers shifts in that proposal, not unknown historical rates of other work events. Updating the profile never recalculates saved history. After unsaved time edits, displayed amounts remain the previous snapshot until saved again.
+The separate `GET/PUT /api/v1/work-profile/availability` resource uses **the same repository**. Replacement is atomic, checks ownership/version and accepts an empty list to clear availability. Its integer `version` remains a compatibility token; the full form uses `profileVersion`. Both advance when the same profile changes.
 
-The canonical contract is the [generated API reference](./api/openapi-reference). Source schemas live in `apps/api/src/api/v1/`. For existing databases, `007_work_profile_workflow.sql` and `009_work_profile_workflow_restore.sql` preserve earlier proposal states across master's workflow normalization.
+## Planning and pay
 
-## Monthly targets and blocks
+Generation and edits retain daily/weekly limits, templates, existing work, blocks and classes. Optional lectures retain the soft rule allowing a skip with a warning. Commute must fit inside availability; between work shifts the gap is `max(commute, rest)`, without addition. The buffer is unpaid and independent of addresses or mapping services.
 
-`targetPeriod: month` preserves the entered monthly target; planning uses its weekly equivalent (a month is 52/12 weeks). Updating the rate alone preserves the selected period. Explicitly editing the weekly target in the compensation section switches the target back to weekly.
+Each saved shift snapshots its rate, gross/net designation and amount. Calculation uses elapsed minutes between instants, including DST, and integer grosz: `halfUp(rateGrosz * durationMinutes / 60)`. The summary sums individually rounded proposal shifts. It does not guess pay for other events lacking historical rates. After edits, displayed amounts remain the last snapshot until saved. Acceptance revalidates constraints inside the transaction.
 
-The **Blokady** tab manages vacations, exam sessions and days off through `/api/v1/blocks`. Reads and deletions are scoped to the server-resolved user. The API requires ISO instants with offsets; the form converts local input to UTC. Blocks constrain both planners and are not copied into editable profile blocks. Creating or deleting a block locks the user’s calendars so acceptance cannot miss a concurrent block change. Migration `010_calendar_blocks.sql` owns the table definition; repository constructors no longer run DDL.
+**Historia wybranego tygodnia** lists saved schedules, including records from the earlier implementation. History is read-only and never recalculates amounts using the current rate. New proposals use only `/api/v1/schedules`. Previous records and calendar events remain in the database.
+
+## Blocks and compatibility
+
+The **Blokady** tab retains vacations, exam sessions and days off through `/api/v1/blocks`. Reads/deletions are owner-scoped. The API requires ISO instants with offsets; the form converts local input to UTC. Calendar blocks are not copied into editable profile blocks. Creating/deleting blocks locks calendars to serialize against acceptance. Migration `010_calendar_blocks.sql` owns the table definition.
+
+Retired `/api/v1/work-profile/compensation` and `/api/v1/work-profile/schedules...` addresses return **410 workflow_consolidated** with a successor. They neither run another engine nor write data. History by ID remains at `/api/v1/schedules/id/{id}`. There are no unversioned aliases.
+
+The canonical contract is the [generated API reference](./api/openapi-reference), built from Fastify schemas in `apps/api/src/api/v1/` and `apps/api/openapi/openapi.json`.

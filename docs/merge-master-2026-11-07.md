@@ -1,3 +1,5 @@
+> Raport historyczny. Aktualne porównanie i docelowa integracja: [Historia i uporządkowanie integracji](./history-comparison-and-integration.md).
+
 # Scalenie master — 2026-11-07
 
 Gałąź robocza: `feature/sprint-204-michal`. Pobrano i scalono `origin/master` na commicie `245ef1f` (poprzednia baza: `dd87972`). Drzewo robocze przed scaleniem było czyste. Niczego nie opublikowano.

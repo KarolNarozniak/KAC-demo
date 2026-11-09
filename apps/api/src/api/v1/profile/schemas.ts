@@ -53,6 +53,7 @@ export const workProfileInputSchema = {
   additionalProperties: false,
   properties: {
     profileVersion: { type: 'string', minLength: 1, description: 'Wersja z ostatniego odczytu profilu (optimistic locking).' },
+    hourlyRatePln:{type:['number','null'],description:'Optional PLN hourly rate. Null means unconfigured; zero is valid. At most two decimal places.'},rateKind:{enum:['gross','net',null],description:'Gross/net designation, never converted. Required when supplying a rate.'},
     mode, targetPeriod, ...inputNumbers, availability, preferredWorkWindows, blockedPeriods, shiftTemplates,
   },
 } as const;
@@ -66,6 +67,7 @@ export const workProfileSchema = {
     'weeklyTargetHours', 'weeklyTargetMinutes', 'commuteBufferMinutes', 'minimumRestMinutes', 'minimumShiftMinutes', 'maximumSlotMinutes',
     'maxHoursPerDay', 'availability', 'preferredWorkWindows', 'blockedPeriods', 'shiftTemplates'],
   properties: {
+    hourlyRatePln:{type:['number','null']},rateKind:{enum:['gross','net',null]},commuteConfigured:{type:'boolean'},
     profileId: { type: 'string' },
     profileVersion: { type: 'string', description: 'Wersja profilu; trzeba ją odesłać przy zapisie.' },
     timeZone: { type: 'string', description: 'Strefa czasowa użytkownika (IANA).' },

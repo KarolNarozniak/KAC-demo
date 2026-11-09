@@ -40,7 +40,7 @@ test('S23KC2S1P2-15, 4a: puste pola i minimum większe niż maksimum', () => {
 });
 
 test('S23KC2S1P2-15: dostępne dni i godziny, blokady i szablony – koniec po początku', () => {
-  assert.deepEqual(errors({ availability: [{ id: 'A1', dayOfWeek: 1, startTime: '16:00', endTime: '08:00' }] }), { 'availability.0': 'end_before_start' });
+  assert.deepEqual(errors({ availability: [{ id: 'A1', dayOfWeek: 1, startTime: '16:00', endTime: '16:00' }] }), { 'availability.0': 'end_before_start' });
   assert.deepEqual(errors({ availability: [{ id: 'A1', dayOfWeek: 1, startTime: '08:00', endTime: '10:00' }, { id: 'A1', dayOfWeek: 2, startTime: '08:00', endTime: '10:00' }] }),
     { 'availability.1': 'duplicate_id' });
   assert.deepEqual(errors({ blockedPeriods: [{ id: 'B1', type: 'Sesja', start: '2026-02-01T00:00:00Z', end: '2026-01-25T00:00:00Z' }] }), { 'blockedPeriods.0': 'end_before_start' });

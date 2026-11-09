@@ -1,5 +1,3 @@
-import type { WorkProfileRepository as CompensationRepository } from '../profile/compensation-repository.js';
-import type { SchedulingRepository } from '../scheduling/work-profile-repository.js';
 import type { CalendarOverview, EventInput } from '../database.js';
 import type { ExistingEvent } from '../import/rules.js';
 import type { AcceptedRow, ConfirmResult, CreateSessionInput } from '../import/session.js';
@@ -28,8 +26,6 @@ export type CalendarRepository = {
 };
 
 export type ApiOptions = {
-  workProfile?: CompensationRepository | null;
-  scheduling?: SchedulingRepository | null;
   scheduleReader?: ScheduleReader;
   google?: GoogleImportOptions;
   scheduleRepository?: ScheduleRepository;
