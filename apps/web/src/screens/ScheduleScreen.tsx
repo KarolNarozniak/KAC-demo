@@ -1,4 +1,4 @@
-import {formatPln} from '../services/compensationApi';
+import {formatPln} from '../domain/pay';
 import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { addCalendarDays, localDateKey, startOfWeek } from '../domain/calendar';
@@ -8,7 +8,7 @@ import { formatNumber } from '../domain/workProfile';
 import { classTimeLabel, conflictMessage, shiftClassConflicts, weekClasses, windowsLabel } from '../domain/scheduleClasses';
 import { useWorkProfile } from '../hooks/useWorkProfile';
 import WorkProfileScreen from './WorkProfileScreen';
-import { approveSchedule, generateSchedule, loadSchedule, NoClassesConfirmationRequired, rejectSchedule, saveSchedule, type ScheduleShift, type ShiftTemplate, type WeeklySchedule, type WorkMode } from '../services/scheduleApi';
+import { approveSchedule, generateSchedule, loadSchedule, listSchedules, loadScheduleById, type ScheduleListItem, NoClassesConfirmationRequired, rejectSchedule, saveSchedule, type ScheduleShift, type ShiftTemplate, type WeeklySchedule, type WorkMode } from '../services/scheduleApi';
 
 type Props = { week: Date; setWeek: (value: Date) => void; now: Date; active: boolean; onApproved: () => void; onPreview: (schedule: WeeklySchedule | null) => void;
   /** Informuje aplikację o niezapisanych zmianach profilu (pytanie przy wyjściu z zakładki – S23KC2S1P2-15, 3a). */
@@ -23,6 +23,9 @@ export default function ScheduleScreen({ week, setWeek, now, active, onApproved,
   const monday = startOfWeek(week);
   const weekStart = localDateKey(monday);
   const [schedule, setSchedule] = useState<WeeklySchedule | null>(null);
+  const [history,setHistory]=useState<ScheduleListItem[]>([]);
+  const [historyTotal,setHistoryTotal]=useState(0);
+  const [historyReadOnly,setHistoryReadOnly]=useState(false);
   // Profil pracy (limity, cel, dojazd, dostępność, szablony) – S23KC2S1P2-15 i S23KC2S1P2-39.
   const profile = useWorkProfile(active);
   const templates = profile.saved?.shiftTemplates ?? [];
@@ -39,7 +42,7 @@ export default function ScheduleScreen({ week, setWeek, now, active, onApproved,
   useEffect(() => {
     if (!active) return;
     let current = true;
-    setLoading(true); setError(''); setDirty(false); setSchedule(null); onPreview(null);
+    setLoading(true); setError(''); setDirty(false);setHistory([]);setHistoryTotal(0);setHistoryReadOnly(false); setSchedule(null); onPreview(null);
     void loadSchedule(weekStart).then((value) => {
       if (!current) return;
       setSchedule(value);
@@ -54,8 +57,8 @@ export default function ScheduleScreen({ week, setWeek, now, active, onApproved,
   useEffect(() => { if (discardSignal) profile.cancel(); }, [discardSignal]);
 
   useEffect(() => {
-    onPreview(schedule && !schedule.isApproved ? schedule : null);
-  }, [schedule, onPreview]);
+    onPreview(schedule && !schedule.isApproved && !historyReadOnly ? schedule : null);
+  }, [schedule, onPreview,historyReadOnly]);
 
   const selectedWeek = `${monday.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' })} – ${addCalendarDays(monday, 6).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short', year: 'numeric' })}`;
   const changeShift = (id: string, field: 'startLocal' | 'endLocal', value: string) => {
@@ -111,7 +114,7 @@ export default function ScheduleScreen({ week, setWeek, now, active, onApproved,
       if (!savedProfile) return;
       setConfirmNoClasses(false);
       const generated = await generateSchedule(weekStart, savedProfile, workaholic, confirmedNoClasses);
-      setSchedule(generated); onPreview(generated); setDirty(false);
+      setSchedule(generated);setHistoryReadOnly(false); onPreview(generated); setDirty(false);
     }
     catch (reason) {
       if (reason instanceof NoClassesConfirmationRequired) { setConfirmNoClasses(true); return; }
@@ -142,6 +145,14 @@ export default function ScheduleScreen({ week, setWeek, now, active, onApproved,
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Nie udało się odrzucić propozycji.'); }
     finally { setSaving(false); }
   };
+  async function loadHistory(append=false){
+    setLoading(true);setError('');
+    try{const page=await listSchedules(weekStart,weekStart,20,append?history.length:0);setHistory(old=>append?[...old,...page.items]:page.items);setHistoryTotal(page.total);}catch(e){setError((e as Error).message);}finally{setLoading(false);}
+  }
+  async function selectHistory(id:string){
+    setLoading(true);setError('');
+    try{setSchedule(await loadScheduleById(id));setHistoryReadOnly(true);setConfirmReject(false);setDirty(false);onPreview(null);}catch(e){setError((e as Error).message);}finally{setLoading(false);}
+  }
   const shiftCount = schedule?.shifts.length ?? 0;
 
   return <ScrollView style={{ flex: 1 }} contentContainerStyle={{ width: '100%', maxWidth: 1120, alignSelf: 'center', padding: 16, paddingBottom: 40 }}>
@@ -151,7 +162,7 @@ export default function ScheduleScreen({ week, setWeek, now, active, onApproved,
     </View>
     <Text style={[styles.subtitle, { marginTop: 0, marginBottom: 14 }]}>{selectedWeek}</Text>
 
-    <WorkProfileScreen state={profile} disabled={loading} />
+    <WorkProfileScreen blockingEvents={schedule?.blockingEvents} state={profile} disabled={loading} />
 
     <View style={styles.card}>
       <Text style={styles.heading}>Generowanie tygodnia</Text>
@@ -164,6 +175,12 @@ export default function ScheduleScreen({ week, setWeek, now, active, onApproved,
       </View>}
     </View>
 
+    <View style={styles.card}>
+      <Button title="Historia wybranego tygodnia" disabled={loading||saving||dirty} onPress={()=>void loadHistory()}/>
+      {history.map(item=><Button key={item.scheduleId} title={`${item.status} · ${minutesLabel(item.totalMinutes)} · wersja ${item.version}`} disabled={loading||saving||dirty} onPress={()=>void selectHistory(item.scheduleId)}/>)}
+      {history.length<historyTotal&&<Button title="Pokaż więcej" disabled={loading} onPress={()=>void loadHistory(true)}/>}
+    </View>
+    {historyReadOnly&&<Text style={styles.muted}>Oglądasz zapisany grafik w trybie odczytu. Stawki i kwoty pochodzą z historii. Nową propozycję utworzysz przyciskiem „Wygeneruj tydzień”.</Text>}
     {loading && <Text accessibilityLiveRegion="polite" style={styles.muted}>Wczytywanie propozycji…</Text>}
     {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
     {schedule && <>
@@ -193,14 +210,14 @@ export default function ScheduleScreen({ week, setWeek, now, active, onApproved,
       </View>
 
       <View style={styles.card}>
-        <View style={[styles.row, { justifyContent: 'space-between', flexWrap: 'wrap', marginBottom: 12 }]}><View><Text style={styles.heading}>Proponowane zmiany</Text><Text style={styles.muted}>{shiftCount} zmian · możesz poprawić godziny przed zapisaniem</Text></View><Button title="Dodaj zmianę" disabled={saving || loading} onPress={addShift} /></View>
+        <View style={[styles.row, { justifyContent: 'space-between', flexWrap: 'wrap', marginBottom: 12 }]}><View><Text style={styles.heading}>Proponowane zmiany</Text><Text style={styles.muted}>{shiftCount} zmian · możesz poprawić godziny przed zapisaniem</Text></View><Button title="Dodaj zmianę" disabled={saving || loading || historyReadOnly} onPress={addShift} /></View>
         {!schedule.shifts.length && <Text style={styles.muted}>Brak zmian. Dodaj zmianę albo zmień ograniczenia.</Text>}
         {schedule.shifts.map((shift, index) => <View key={shift.candidateId} style={{ paddingVertical: 12, borderTopWidth: index === 0 ? 0 : 1, borderColor: palette.line }}>
           <View style={[styles.row, { flexWrap: 'wrap', alignItems: 'flex-end' }]}>
-            <View style={{ flex: 1, minWidth: 120 }}><Text style={styles.label}>DATA I POCZĄTEK</Text><TextInput accessibilityLabel={`Data i początek zmiany ${index + 1}`} value={shift.startLocal} onChangeText={(value) => changeShift(shift.candidateId, 'startLocal', value)} style={styles.input} /></View>
-            <View style={{ flex: 1, minWidth: 120 }}><Text style={styles.label}>KONIEC</Text><TextInput accessibilityLabel={`Koniec zmiany ${index + 1}`} value={shift.endLocal} onChangeText={(value) => changeShift(shift.candidateId, 'endLocal', value)} style={styles.input} /></View>
+            <View style={{ flex: 1, minWidth: 120 }}><Text style={styles.label}>DATA I POCZĄTEK</Text><TextInput accessibilityLabel={`Data i początek zmiany ${index + 1}`} editable={!historyReadOnly} value={shift.startLocal} onChangeText={(value) => changeShift(shift.candidateId, 'startLocal', value)} style={styles.input} /></View>
+            <View style={{ flex: 1, minWidth: 120 }}><Text style={styles.label}>KONIEC</Text><TextInput accessibilityLabel={`Koniec zmiany ${index + 1}`} editable={!historyReadOnly} value={shift.endLocal} onChangeText={(value) => changeShift(shift.candidateId, 'endLocal', value)} style={styles.input} /></View>
             <Text style={[styles.muted, { paddingBottom: 10 }]}>{minutesLabel(shift.durationMinutes)}</Text>
-            <Button title="Usuń" danger onPress={() => removeShift(shift.candidateId)} />
+            <Button title="Usuń" danger disabled={historyReadOnly} onPress={() => removeShift(shift.candidateId)} />
           </View>
           {shift.hourlyRatePln !== undefined && <Text style={styles.body}>{formatPln(shift.hourlyRatePln)}/h · {formatPln(shift.estimatedPayPln ?? 0)} {shift.rateKind === 'gross' ? 'brutto' : shift.rateKind === 'net' ? 'netto' : ''}</Text>}
           <Text style={styles.muted}>Dojazd: {profile.saved?.commuteBufferMinutes ?? 0} min przed i po zmianie — czas niepłatny.</Text>
@@ -212,15 +229,15 @@ export default function ScheduleScreen({ week, setWeek, now, active, onApproved,
               {!!message.optional && <Text style={[styles.muted, { marginTop: 6, color: palette.amber }]}>{message.optional}</Text>}
             </>;
           })()}
-          {schedule.mode === 'zmianowy' && <View style={[styles.row, { flexWrap: 'wrap', marginTop: 8 }]} accessibilityLabel={`Szablon zmiany ${index + 1}`}>
+          {!historyReadOnly && schedule.mode === 'zmianowy' && <View style={[styles.row, { flexWrap: 'wrap', marginTop: 8 }]} accessibilityLabel={`Szablon zmiany ${index + 1}`}>
             {templates.filter((template) => template.active).map((template) => <Pressable key={template.id} accessibilityRole="radio" accessibilityState={{ checked: shift.templateId === template.id }} onPress={() => applyTemplate(shift.candidateId, template)} style={[styles.button, shift.templateId === template.id && { backgroundColor: palette.blueSoft, borderColor: palette.blue }]}><Text style={styles.buttonText}>{template.name}</Text></Pressable>)}
           </View>}
         </View>)}
         {dirty && <Button title={saving ? 'Sprawdzanie i zapisywanie…' : 'Sprawdź i zapisz zmiany'} disabled={saving || loading || !schedule.version} onPress={() => void save()} />}
-        {!schedule.isApproved && classCollision && <Text accessibilityRole="alert" style={styles.error}>Zmień albo usuń zmiany kolidujące z zajęciami obowiązkowymi – takiego grafiku nie można zatwierdzić.</Text>}
-        {!schedule.isApproved && <Button title={saving ? 'Zatwierdzanie…' : 'Zatwierdź grafik i dodaj do kalendarza'} primary disabled={saving || loading || dirty || profile.dirty || classCollision || !schedule.version} onPress={() => void approve()} />}
-        {!schedule.isApproved && <Button title="Odrzuć propozycję" danger disabled={saving || loading || !schedule.version} onPress={() => setConfirmReject(true)} />}
-        {confirmReject && !schedule.isApproved && <View accessibilityRole="alert" style={[styles.card, { borderColor: palette.red }]}>
+        {!historyReadOnly && !schedule.isApproved && classCollision && <Text accessibilityRole="alert" style={styles.error}>Zmień albo usuń zmiany kolidujące z zajęciami obowiązkowymi – takiego grafiku nie można zatwierdzić.</Text>}
+        {!historyReadOnly && !schedule.isApproved && <Button title={saving ? 'Zatwierdzanie…' : 'Zatwierdź grafik i dodaj do kalendarza'} primary disabled={saving || loading || dirty || profile.dirty || classCollision || !schedule.version} onPress={() => void approve()} />}
+        {!historyReadOnly && !schedule.isApproved && <Button title="Odrzuć propozycję" danger disabled={saving || loading || !schedule.version} onPress={() => setConfirmReject(true)} />}
+        {!historyReadOnly && confirmReject && !schedule.isApproved && <View accessibilityRole="alert" style={[styles.card, { borderColor: palette.red }]}>
           <Text style={styles.body}>{dirty ? 'Odrzucić propozycję i utracić niezapisane poprawki?' : 'Odrzucić tę propozycję? Zatwierdzone wcześniej wydarzenia pozostaną w kalendarzu.'}</Text>
           <View style={[styles.row, { flexWrap: 'wrap', marginTop: 8 }]}><Button title={saving ? 'Odrzucanie…' : 'Tak, odrzuć'} danger disabled={saving || loading} onPress={() => void reject()} /><Button title="Anuluj" disabled={saving || loading} onPress={() => setConfirmReject(false)} /></View>
         </View>}

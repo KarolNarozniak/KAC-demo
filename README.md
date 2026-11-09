@@ -104,28 +104,19 @@ The phone must reach that API address; `localhost` on a phone points to the phon
 The native file picker accepts PNG/JPG/PDF. The work-schedule import can also take a photo
 with the camera. On-device OCR is not implemented. Use an SDK-compatible Expo client or development build.
 
-## Profil pracy i planowanie — sprint 204
+## Profil pracy i planowanie — spójna integracja
 
-Po aktualizacji uruchom `npm run db:migrate` (migracje 003–004) i dla nowej lokalnej bazy `npm run db:seed`.
-W **Ustawieniach → Profil pracy** ustaw stawkę PLN, brutto/netto, dojazd (0 jest poprawne),
-cel i limity godzin oraz dostępność tygodniową. Nowy profil jest niekompletny do chwili podania tych ustawień.
-W **Asystencie** wybierz poniedziałek tygodnia, wygeneruj propozycję, popraw zmiany i zaakceptuj lub odrzuć.
-Można też wczytać zapisane grafiki z danego tygodnia. Zmiana profilu nie przelicza ich historycznych kwot.
+W zakładce **Grafik** znajduje się formularz i planer z mastera: cele tygodniowe/miesięczne,
+limity, szablony i dostępność. Do tego samego formularza dodano stawkę PLN, brutto/netto oraz kopiowanie
+przedziałów. Cały szkic zapisuje się i anuluje wspólnie. Historia tygodnia pokazuje utrwalone stawki
+oraz kwoty, również starszych grafików. Ustawienia pozostają ekranem motywu i układu tygodnia.
 
-- Kontrakt OpenAPI: [`apps/api/openapi/openapi.json`](apps/api/openapi/openapi.json).
-- Wymagania i UC-07/UC-08: [`docs/requirements/sprint-204-kozlowski.md`](docs/requirements/sprint-204-kozlowski.md).
-- Decyzje, pokrycie 18 zgłoszeń i wyniki: [`docs/sprint-204-report.md`](docs/sprint-204-report.md).
-- Testy nowych modułów: `node_modules/.bin/tsx --test apps/api/tests/work-profile.test.ts apps/api/tests/work-profile-scheduling.test.ts`.
-- Test transakcji i snapshotów: `node_modules/.bin/tsx --test apps/api/tests/planning.integration.test.ts` — wymaga `DATABASE_URL`
-  i uprawnienia do tworzenia schematu; używa osobnego schematu, profili i kalendarza, sprząta własne dane.
+Nie ma drugiego aktywnego planera w Asystencie ani oddzielnego formularza stawek w Ustawieniach.
+API profilu to `/api/v1/work-profile`, a planowania `/api/v1/schedules`.
+Starsze adresy duplikujących przepływów zwracają 410 ze wskazaniem następcy; dane historyczne zachowano.
 
-Tożsamość użytkownika nadal wybierana jest po stronie serwera przez konfigurację konta demonstracyjnego,
-tak jak w dotychczasowym API. Parametry żądań nie pozwalają wskazać cudzego właściciela.
-
-Po scaleniu master (2026-11-07) zaawansowany planer jest w zakładce **Grafik**, a wcześniejszy planer w **Asystencie**.
-Oba API działają wyłącznie pod `/api/v1`; wcześniejsze grafiki i ich kwoty są zachowane.
-Szczegóły migracji i walidacji: [`docs/merge-master-2026-11-07.md`](docs/merge-master-2026-11-07.md).
-
-Aktualizacja master 2026-11-09 dodaje cele miesięczne, szczegóły kolizji z zajęciami i zakładkę Blokady.
-Stawka i dostępność pozostają w Ustawieniach, a pełny profil z celem miesięcznym jest w Grafiku.
-Integracja i wyniki weryfikacji: [`docs/merge-master-2026-11-09.md`](docs/merge-master-2026-11-09.md).
+- [Historia, porównanie i decyzje integracyjne](docs/history-comparison-and-integration.md).
+- [Kanoniczny OpenAPI](apps/api/openapi/openapi.json).
+- [Wymagania i UC-07/UC-08](docs/requirements/sprint-204-kozlowski.md).
+- Testy finansów i normalizacji: `node_modules/.bin/tsx --test apps/api/tests/pay.test.ts`.
+- Test całej integracji na izolowanym schemacie PostgreSQL: `node_modules/.bin/tsx --test apps/api/tests/planning.integration.test.ts`.

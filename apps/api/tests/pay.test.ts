@@ -2,7 +2,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizeAvailability } from '../src/profile/availability.js';
 import { calculatePay, rateGrosz } from '../src/scheduling/pay.js';
-import { buildApi } from '../src/app.js';
 test('availability splits Sunday night without losing midnight; touching allowed', () => {
     assert.deepEqual(normalizeAvailability([{ dayOfWeek: 7, startTime: '22:00', endTime: '02:00' }]), [{ dayOfWeek: 1, startTime: '00:00', endTime: '02:00' }, { dayOfWeek: 7, startTime: '22:00', endTime: '24:00' }]);
     assert.equal(normalizeAvailability([{ dayOfWeek: 1, startTime: '08:00', endTime: '09:00' }, { dayOfWeek: 1, startTime: '09:00', endTime: '10:00' }]).length, 2);
@@ -32,26 +31,13 @@ test('pay integer half-up, partial hours, zero, null, precision and DST', () => 
     assert.equal(calculatePay(30, '2026-03-29T01:00:00+01:00', '2026-03-29T04:00:00+02:00').durationMinutes, 120);
     assert.equal(calculatePay(30, '2026-10-25T01:00:00+02:00', '2026-10-25T04:00:00+01:00').durationMinutes, 240);
 });
-test('routes validate availability, conflict and profile precision', async () => {
-    let version = 1;
-    let intervals: any[] = [];
-    const repo = { getProfile: async () => ({ version }), listAvailability: async () => ({ version, intervals }), replaceAvailability: async (_u: string, rows: any[], v: number) => { if (v !== version) {
-            const { ProfileError } = await import('../src/profile/availability.js');
-            throw new ProfileError('version_conflict', 409);
-        } intervals = normalizeAvailability(rows); return { version: ++version, intervals }; }, saveProfile: async (_u: string, p: any) => p };
-    const app = buildApi(null, [], { workProfile: repo as any });
-    try {
-        assert.equal((await app.inject({ method: 'GET', url: '/api/v1/work-profile/availability' })).statusCode, 200);
-        const put = (payload: any) => app.inject({ method: 'PUT', url: '/api/v1/work-profile/availability', payload });
-        assert.equal((await put({ version: 1, intervals: [] })).statusCode, 200);
-        assert.equal((await put({ version: 1, intervals: [] })).statusCode, 409);
-        assert.equal((await put({ version: 2, intervals: [], extra: true })).statusCode, 400);
-        assert.equal((await put({ version: '2', intervals: [] })).statusCode, 400);
-        assert.equal((await put({ version: 2, intervals: [{ dayOfWeek: 0, startTime: '08:00', endTime: '09:00' }] })).statusCode, 400);
-        assert.equal((await put({ version: 2, intervals: [{ dayOfWeek: 1, startTime: '08:00', endTime: '10:00' }, { dayOfWeek: 1, startTime: '09:00', endTime: '11:00' }] })).statusCode, 422);
-        assert.equal((await app.inject({ method: 'PUT', url: '/api/v1/work-profile/compensation', payload: { version: 1, hourlyRatePln: 1.001, rateKind: 'gross', commuteMinutes: 0, minRestMinutes: 0, minHours: null, targetHours: null, maxHours: null } })).statusCode, 422);
-    }
-    finally {
-        await app.close();
-    }
+
+import {validateWorkProfile} from '../src/profile/rules.js';
+const profile={profileVersion:'v1',mode:'elastyczny' as const,minimumHours:0,targetHours:20,maximumHours:30,commuteBufferMinutes:0,minimumRestMinutes:0,minimumShiftMinutes:120,maximumSlotMinutes:360,maxHoursPerDay:8,availability:[],preferredWorkWindows:[],blockedPeriods:[],shiftTemplates:[]};
+test('financial fields extend the canonical profile without breaking old clients',()=>{
+ assert.equal(validateWorkProfile(profile).ok,true);
+ assert.equal(validateWorkProfile({...profile,hourlyRatePln:0,rateKind:'gross'}).ok,true);
+ assert.equal(validateWorkProfile({...profile,hourlyRatePln:null,rateKind:null}).ok,true);
+ for(const hourlyRatePln of [-1,1.001,10000000000]){const result=validateWorkProfile({...profile,hourlyRatePln,rateKind:'net'});assert.equal(result.ok,false);if(!result.ok)assert.equal(result.fields.hourlyRatePln,'invalid_hourly_rate');}
+ const missing=validateWorkProfile({...profile,hourlyRatePln:30,rateKind:null});assert.equal(missing.ok,false);if(!missing.ok)assert.equal(missing.fields.rateKind,'rate_kind_required');
 });

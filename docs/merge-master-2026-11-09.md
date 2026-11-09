@@ -1,3 +1,5 @@
+> Raport historyczny. Aktualne porównanie i docelowa integracja: [Historia i uporządkowanie integracji](./history-comparison-and-integration.md).
+
 # Aktualizacja master — 2026-11-09
 
 Pobrano `origin/master` na commicie `cde8cec` i scalono z `feature/sprint-204-michal` (poprzedni HEAD: `ba352c1`). Przed rozpoczęciem drzewo było czyste. Nie wykonano push ani zmian w Jira.

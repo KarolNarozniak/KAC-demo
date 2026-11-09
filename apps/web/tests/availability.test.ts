@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mergeAvailability, subtractMandatory, mandatoryWeeklyIntervals } from '../src/domain/availability.ts';
-import { editedInstant, localFields } from '../src/domain/scheduleTime.ts';
 test('editor merges overlap, splits Sunday night and clips mandatory classes without changing draft', () => {
     const draft = [{ dayOfWeek: 7, startTime: '22:00', endTime: '02:00' }, { dayOfWeek: 1, startTime: '01:00', endTime: '04:00' }];
     const before = structuredClone(draft);
@@ -16,9 +15,4 @@ test('only recurring mandatory classes alter weekly availability; one-offs remai
     const e = { category: 'Class', mandatory: true, repeatWeekly: true, start: '2026-11-08T23:00', end: '2026-11-09T01:00' };
     assert.deepEqual(mandatoryWeeklyIntervals([e]), [{ dayOfWeek: 7, startTime: '23:00', endTime: '24:00' }, { dayOfWeek: 1, startTime: '00:00', endTime: '01:00' }]);
     assert.deepEqual(mandatoryWeeklyIntervals([{ ...e, repeatWeekly: false }, { ...e, mandatory: false }]), []);
-});
-test('unchanged local edit retains original DST instant', () => {
-    const original = '2026-10-25T01:30:00Z', f = localFields(original);
-    assert.equal(editedInstant(original, f.date, f.time), original);
-    assert.throws(() => editedInstant(original, '2026-02-30', '10:00'));
 });

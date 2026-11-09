@@ -1,123 +1,44 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, Pressable } from 'react-native';
-import { mergeAvailability, subtractMandatory, mandatoryWeeklyIntervals } from '../domain/availability';
-import { loadCalendar } from '../services/calendarApi';
-import { getAvailability, saveAvailability, type Availability, type Interval } from '../services/compensationApi';
+import type {BlockingEvent} from '../services/scheduleApi';
+import React,{useEffect,useMemo,useState} from 'react';
+import {View,Text,Pressable} from 'react-native';
+import {Button,useTheme} from './ui';
 import TimeField from './TimeField';
-import { useTheme } from './ui';
-
-const days = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek', 'Sobota', 'Niedziela'];
-
-export default function AvailabilityEditor({ initial, targetHours, onSaved }: {
-  initial: Availability; targetHours: number | null; onSaved: () => void;
-}) {
-  const { styles } = useTheme();
-  const [saved, setSaved] = useState(initial);
-  const [rows, setRows] = useState(initial.intervals);
-  const [busy, setBusy] = useState(false);
-  const pending = useRef(false);
-  const [error, setError] = useState('');
-  const [message, setMessage] = useState('');
-  const [copyDays, setCopyDays] = useState<number[]>([]);
-  const [blocked, setBlocked] = useState<Interval[]>([]);
-  const [calendarLoaded, setCalendarLoaded] = useState(false);
-  const [preview, setPreview] = useState<Interval[] | null>(null);
-
-  useEffect(() => {
-    void loadCalendar().then(events => {
-      setBlocked(mandatoryWeeklyIntervals(events));
-      setCalendarLoaded(true);
-    }).catch(e => setError('Nie udało się sprawdzić zajęć: ' + e.message));
-  }, []);
-  // A profile save advances the shared version without discarding this editor's draft.
-  useEffect(() => setSaved(old => ({ ...old, version: initial.version })), [initial.version]);
-
-  const changeRows = (next: Interval[]) => { setRows(next); setPreview(null); setMessage(''); };
-  const update = (index: number, key: 'startTime' | 'endTime', value: string) =>
-    changeRows(rows.map((row, i) => i === index ? { ...row, [key]: value } : row));
-  const hours = saved.intervals.reduce((sum, row) => {
-    const minutes = (time: string) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3));
-    return sum + (minutes(row.endTime) - minutes(row.startTime)) / 60;
-  }, 0);
-
-  async function save() {
-    if (pending.current) return;
-    if (!calendarLoaded) {
-      setError('Przed zapisem wymagane jest wczytanie zajęć. Odśwież profil.');
-      return;
-    }
-    let normalized: Interval[];
-    try { normalized = mergeAvailability(rows); }
-    catch (e) { setError((e as Error).message); return; }
-    const clipped = subtractMandatory(normalized, blocked);
-    if (JSON.stringify(normalized) !== JSON.stringify(clipped)) {
-      setPreview(clipped);
-      setError('Przedziały kolidują z obowiązkowymi zajęciami. Zaakceptuj wyłączenie zajętych części albo popraw godziny.');
-      return;
-    }
-    pending.current = true;
-    setBusy(true); setPreview(null); setError(''); setMessage('');
-    try {
-      const result = await saveAvailability({ version: saved.version, intervals: normalized });
-      setSaved(result); setRows(result.intervals); setMessage('Zapisano dostępność.'); onSaved();
-    } catch (e) { setError((e as Error).message); }
-    finally { pending.current = false; setBusy(false); }
-  }
-  async function reload() {
-    if (pending.current) return;
-    pending.current = true; setBusy(true);
-    try {
-      const [result, events] = await Promise.all([getAvailability(), loadCalendar()]);
-      setSaved(result); changeRows(result.intervals);
-      setBlocked(mandatoryWeeklyIntervals(events)); setCalendarLoaded(true); setError('');
-      onSaved();
-    } catch (e) { setError((e as Error).message); }
-    finally { pending.current = false; setBusy(false); }
-  }
-  function copyDay(day: number) {
-    const unchanged = rows.filter(row => !copyDays.includes(row.dayOfWeek) || row.dayOfWeek === day);
-    const copies = copyDays.filter(target => target !== day).flatMap(target =>
-      rows.filter(row => row.dayOfWeek === day).map(row => ({ ...row, dayOfWeek: target })));
-    changeRows([...unchanged, ...copies]);
-  }
-  const button = (label: string, action: () => void) => (
-    <Pressable disabled={busy} onPress={action} style={{ padding: 10 }}>
-      <Text style={styles.body}>{label}</Text>
-    </Pressable>
-  );
-
-  return <View style={{ gap: 8 }}>
-    <Text style={styles.heading}>Dostępność tygodniowa</Text>
-    <Text style={styles.body}>Zapisano: {hours.toFixed(2)} godz./tydzień</Text>
-    {hours === 0 && <Text style={styles.error}>Brak dostępności — nie można wygenerować grafiku.</Text>}
-    {targetHours !== null && hours < targetHours && <Text style={styles.error}>Dostępność mniejsza od celu. Cel może być nieosiągalny.</Text>}
-    {days.map((day, d) => <View key={day}>
-      <Text style={styles.heading}>{day}</Text>
-      {rows.map((row, i) => row.dayOfWeek === d + 1 ? <View key={i} style={{ gap: 4 }}>
-        <View pointerEvents={busy ? 'none' : 'auto'}>
-          <TimeField disabled={busy} label={`${day}: od`} value={row.startTime} onChange={value => update(i, 'startTime', value)} />
-          <TimeField disabled={busy} label={`${day}: do${row.endTime === '24:00' ? ' — koniec dnia 24:00' : ''}`}
-            value={row.endTime === '24:00' ? '00:00' : row.endTime} onChange={value => update(i, 'endTime', value)} />
-        </View>
-        {button('Ustaw koniec dnia (24:00)', () => update(i, 'endTime', '24:00'))}
-        {button('Usuń', () => changeRows(rows.filter((_, index) => index !== i)))}
-      </View> : null)}
-      {button('Dodaj przedział', () => changeRows([...rows, { dayOfWeek: d + 1, startTime: '08:00', endTime: '16:00' }]))}
-      {button(copyDays.includes(d + 1) ? '☑ Cel kopiowania' : '☐ Cel kopiowania', () =>
-        setCopyDays(copyDays.includes(d + 1) ? copyDays.filter(n => n !== d + 1) : [...copyDays, d + 1]))}
-      {button('Kopiuj ten dzień na zaznaczone dni', () => copyDay(d + 1))}
-    </View>)}
-    <Text style={styles.body}>Dostępność powtarza się co tydzień. Obowiązkowe zajęcia cykliczne są wyłączane po Twojej akceptacji. Pozostałe wydarzenia ograniczą konkretny grafik.</Text>
-    {preview && <View>
-      <Text style={styles.error}>Niedostępne: {blocked.map(row => `${days[row.dayOfWeek - 1]} ${row.startTime}–${row.endTime}`).join(', ')}</Text>
-      {button('Akceptuj wyłączenie zajętych części', () => {
-        changeRows(preview); setError(''); setMessage('Przejrzyj przedziały i wybierz Zapisz.');
-      })}
-    </View>}
-    {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
-    {!!message && <Text style={styles.body}>{message}</Text>}
-    {button(busy ? 'Zapisywanie…' : 'Zapisz dostępność', () => void save())}
-    {button('Anuluj', () => { changeRows(saved.intervals); setError(''); })}
-    {button('Wczytaj ponownie', () => void reload())}
-  </View>;
+import {mergeAvailability,subtractMandatory,mandatoryWeeklyIntervals,type Interval} from '../domain/availability';
+import type {AvailabilityWindow} from '../services/workProfileApi';
+const days=['Poniedziałek','Wtorek','Środa','Czwartek','Piątek','Sobota','Niedziela'];
+/** Controlled part of Karol's profile form: never sends a separate save request. */
+export default function AvailabilityEditor({value,saved,targetHours,blockingEvents,messages={},disabled=false,onChange}:{value:AvailabilityWindow[];saved:AvailabilityWindow[];targetHours:number|null;blockingEvents?:BlockingEvent[];messages?:Record<string,string>;disabled?:boolean;onChange:(value:AvailabilityWindow[])=>void}){
+ const {styles,palette}=useTheme();const [targets,setTargets]=useState<number[]>([]);const blocked=useMemo(()=>mandatoryWeeklyIntervals((blockingEvents??[]).map(event=>({category:event.category,mandatory:event.mandatory,repeatWeekly:event.repeatWeekly,start:event.startLocal,end:event.endLocal}))),[blockingEvents]);const [preview,setPreview]=useState<Interval[]|null>(null);const [error,setError]=useState('');
+ useEffect(()=>setPreview(null),[blockingEvents]);
+ const identified=(rows:Interval[])=>rows.map((row,index)=>({...row,id:value.find(old=>old.dayOfWeek===row.dayOfWeek&&old.startTime===row.startTime&&old.endTime===row.endTime)?.id??`availability-${Date.now()}-${index}`}));
+ const change=(rows:AvailabilityWindow[])=>{setPreview(null);onChange(rows);};
+ const update=(id:string,key:'startTime'|'endTime',time:string)=>change(value.map(row=>row.id===id?{...row,[key]:time}:row));
+ const hours=(rows:Interval[])=>{try{return mergeAvailability(rows).reduce((sum,row)=>sum+(Number(row.endTime.slice(0,2))*60+Number(row.endTime.slice(3))-Number(row.startTime.slice(0,2))*60-Number(row.startTime.slice(3)))/60,0);}catch{return null;}};
+ const available=hours(saved),draftHours=hours(value);
+ function review(){try{const normalized=mergeAvailability(value);const clipped=subtractMandatory(normalized,blocked);if(JSON.stringify(normalized)!==JSON.stringify(clipped)){setPreview(clipped);setError('Zajęte części wymagają akceptacji wyłączenia albo poprawienia godzin.');}else{change(identified(normalized));setError('');}}catch(e){setError((e as Error).message);}}
+ return <View style={[styles.card,{borderColor:value.length?palette.line:palette.amber}]}>
+  <Text style={styles.heading}>Dostępne dni i godziny</Text>{!!messages.availability&&<Text style={styles.error}>{messages.availability}</Text>}
+  <Text style={styles.muted}>Zmiany zapisujesz wspólnie z całym profilem. Nakładające przedziały zostaną scalone; zakres nocny przejdzie na kolejny dzień.</Text>
+  <Text style={styles.body}>Zapisano: {(available??0).toFixed(2)} godz./tydzień · Szkic: {draftHours===null?'popraw godziny':draftHours.toFixed(2)+' godz.'}</Text>
+  {!value.length&&<Text style={styles.error}>Brak dostępności — nie można wygenerować grafiku.</Text>}
+  {targetHours!==null&&available!==null&&available<targetHours&&<Text style={styles.error}>Zapisana dostępność jest mniejsza od celu tygodniowego. Cel może być nieosiągalny.</Text>}
+  {days.map((day,index)=><View key={day} style={{marginTop:12}}>
+   <Text style={styles.heading}>{day}</Text>
+   {value.filter(row=>row.dayOfWeek===index+1).map(row=><View key={row.id} style={[styles.row,{flexWrap:'wrap'}]}>
+    <TimeField invalid={!!messages[`availability.${value.indexOf(row)}`]} label="Od" disabled={disabled} value={row.startTime} onChange={time=>update(row.id,'startTime',time)}/>
+    <TimeField invalid={!!messages[`availability.${value.indexOf(row)}`]} label={row.endTime==='24:00'?'Do: koniec dnia 24:00':'Do'} disabled={disabled} value={row.endTime==='24:00'?'00:00':row.endTime} onChange={time=>update(row.id,'endTime',time)}/>
+    {!!messages[`availability.${value.indexOf(row)}`]&&<Text style={styles.error}>{messages[`availability.${value.indexOf(row)}`]}</Text>}
+    <Button title="24:00" disabled={disabled} onPress={()=>update(row.id,'endTime','24:00')}/><Button title="Usuń" danger disabled={disabled} onPress={()=>change(value.filter(item=>item.id!==row.id))}/>
+   </View>)}
+   <View style={[styles.row,{flexWrap:'wrap'}]}>
+    <Button title="Dodaj okno" disabled={disabled} onPress={()=>change([...value,{id:`availability-${Date.now()}-${index}`,dayOfWeek:index+1,startTime:'08:00',endTime:'16:00'}])}/>
+    <Pressable accessibilityRole="checkbox" accessibilityState={{checked:targets.includes(index+1)}} disabled={disabled} onPress={()=>setTargets(targets.includes(index+1)?targets.filter(day=>day!==index+1):[...targets,index+1])} style={styles.button}><Text style={styles.buttonText}>{targets.includes(index+1)?'☑':'☐'} Cel kopiowania</Text></Pressable>
+    <Button title="Kopiuj na zaznaczone dni" disabled={disabled||!targets.length} onPress={()=>{const source=value.filter(row=>row.dayOfWeek===index+1);change([...value.filter(row=>row.dayOfWeek===index+1||!targets.includes(row.dayOfWeek)),...targets.filter(day=>day!==index+1).flatMap(day=>source.map((row,n)=>({...row,id:`copy-${Date.now()}-${day}-${n}`,dayOfWeek:day}))) ]);}}/>
+   </View>
+  </View>)}
+  <Text style={styles.muted}>Kolizje z zajęciami są sprawdzane przez generator. Wyłączenie godzin zajęć z całego wzorca tygodniowego wymaga Twojej akceptacji.</Text>
+  <Button title="Scal i uwzględnij zajęcia wybranego tygodnia" disabled={disabled} onPress={review}/>
+  {preview&&<View><Text style={styles.error}>{blocked.map(row=>`${days[row.dayOfWeek-1]} ${row.startTime}–${row.endTime}`).join(', ')}</Text><Button title="Akceptuj wyłączenie zajętych części" disabled={disabled} onPress={()=>{change(identified(preview));setError('');}}/></View>}
+  {!!error&&<Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
+ </View>;
 }

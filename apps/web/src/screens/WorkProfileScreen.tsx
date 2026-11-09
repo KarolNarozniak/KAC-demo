@@ -1,3 +1,5 @@
+import type {BlockingEvent} from '../services/scheduleApi';
+import AvailabilityEditor from '../components/AvailabilityEditor';
 // Profil pracy (S23KC2S1P2-15, S23KC2S1P2-181) z celem godzin (S23KC2S1P2-39, S23KC2S1P2-156).
 // Ekran jest osadzony w zakładce „Grafik”, nad generowaniem tygodnia. Stan formularza trzyma hook useWorkProfile.
 import React from 'react';
@@ -10,7 +12,7 @@ import type { NumberField, ShiftTemplate, WorkMode } from '../services/workProfi
 const modeLabel: Record<WorkMode, string> = { elastyczny: 'Elastyczny', zmianowy: 'Zmianowy' };
 const weekdays = ['Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'Sb', 'Nd'];
 
-export default function WorkProfileScreen({ state, disabled = false }: { state: WorkProfileState; disabled?: boolean }) {
+export default function WorkProfileScreen({ state, blockingEvents, disabled = false }: { state: WorkProfileState; blockingEvents?:BlockingEvent[]; disabled?: boolean }) {
   const { palette, styles } = useTheme();
   const { draft, errors, dirty, valid, saving } = state;
 
@@ -36,7 +38,7 @@ export default function WorkProfileScreen({ state, disabled = false }: { state: 
       {!!text && <Text accessibilityRole="alert" style={[styles.error, { marginTop: -8 }]}>{text}</Text>}
     </View>;
   };
-  const radio = <T extends string>(options: readonly T[], selected: T, label: (value: T) => string, onSelect: (value: T) => void) =>
+  const radio = <T extends string>(options: readonly T[], selected: T|null|undefined, label: (value: T) => string, onSelect: (value: T) => void) =>
     <View accessibilityRole="radiogroup" style={[styles.row, { flexWrap: 'wrap', marginBottom: 12 }]}>
       {options.map((value) => <Pressable key={value} accessibilityRole="radio" accessibilityState={{ checked: selected === value, disabled: locked }} disabled={locked} onPress={() => onSelect(value)}
         style={{ paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: selected === value ? palette.blue : palette.line, backgroundColor: selected === value ? palette.blueSoft : palette.surfaceAlt }}>
@@ -53,6 +55,13 @@ export default function WorkProfileScreen({ state, disabled = false }: { state: 
 
     <Text style={styles.label}>TRYB PRACY</Text>
     {radio(['elastyczny', 'zmianowy'] as const, draft.mode, (value) => modeLabel[value], (mode) => set({ mode }))}
+
+    <Text style={styles.label}>STAWKA GODZINOWA PLN</Text>
+    <Field label="PLN / GODZ." value={draft.hourlyRateText??''} keyboardType="decimal-pad" editable={!locked} onChangeText={hourlyRateText=>set({hourlyRateText:hourlyRateText.replace(',','.')})} invalid={!!message('hourlyRatePln')} placeholder="np. 30,00"/>
+    {!!message('hourlyRatePln')&&<Text style={styles.error}>{message('hourlyRatePln')}</Text>}
+    {radio(['gross','net'] as const,draft.rateKind,value=>value==='gross'?'Brutto':'Netto',rateKind=>set({rateKind}))}
+    {!!message('rateKind')&&<Text style={styles.error}>{message('rateKind')}</Text>}
+    <Text style={styles.muted}>Zero jest poprawną stawką; puste pole oznacza brak ustawienia. Stawka i brutto/netto zapisują się razem z profilem.</Text>
 
     <Text style={styles.label}>LIMITY GODZIN W TYGODNIU</Text>
     <View style={[styles.row, { flexWrap: 'wrap', alignItems: 'flex-start' }]}>
@@ -77,22 +86,7 @@ export default function WorkProfileScreen({ state, disabled = false }: { state: 
       {numberField('maxHoursPerDay', 'MAKS. GODZIN PRACY NA DZIEŃ')}
     </View>
 
-    <View style={[styles.card, { borderColor: draft.availability.length ? palette.line : palette.amber }]}>
-      <View style={[styles.row, { justifyContent: 'space-between', flexWrap: 'wrap' }]}>
-        <View><Text style={styles.heading}>Dostępne dni i godziny</Text><Text style={styles.muted}>Grafik będzie układany wyłącznie w tych oknach.</Text></View>
-        <Button title="Dodaj okno" disabled={locked} onPress={() => set({ availability: [...draft.availability, { id: `availability-${Date.now()}`, dayOfWeek: 1, startTime: '08:00', endTime: '16:00' }] })} />
-      </View>
-      {!draft.availability.length && <Text style={[styles.error, { marginTop: 8 }]}>Ustaw co najmniej jedno okno dostępności przed generowaniem grafiku.</Text>}
-      {draft.availability.map((window, index) => <View key={window.id} style={{ paddingVertical: 10, borderTopWidth: 1, borderColor: palette.line }}>
-        <View style={[styles.row, { flexWrap: 'wrap', alignItems: 'flex-end' }]}>
-          <View style={[styles.row, { flexWrap: 'wrap' }]}>{weekdays.map((day, dayIndex) => <Pressable key={day} accessibilityRole="radio" accessibilityState={{ checked: window.dayOfWeek === dayIndex + 1 }} disabled={locked} onPress={() => changeAvailability(window.id, { dayOfWeek: dayIndex + 1 })} style={[styles.button, window.dayOfWeek === dayIndex + 1 && { backgroundColor: palette.blueSoft, borderColor: palette.blue }]}><Text style={styles.buttonText}>{day}</Text></Pressable>)}</View>
-          <View style={{ minWidth: 88 }}><Text style={styles.label}>OD</Text><TextInput accessibilityLabel={`Początek dostępności ${index + 1}`} editable={!locked} value={window.startTime} onChangeText={(startTime) => changeAvailability(window.id, { startTime })} style={[styles.input, !!message(`availability.${index}`) && { borderColor: palette.red }]} /></View>
-          <View style={{ minWidth: 88 }}><Text style={styles.label}>DO</Text><TextInput accessibilityLabel={`Koniec dostępności ${index + 1}`} editable={!locked} value={window.endTime} onChangeText={(endTime) => changeAvailability(window.id, { endTime })} style={[styles.input, !!message(`availability.${index}`) && { borderColor: palette.red }]} /></View>
-          <Button title="Usuń" danger disabled={locked} onPress={() => set({ availability: draft.availability.filter((item) => item.id !== window.id) })} />
-        </View>
-        {!!message(`availability.${index}`) && <Text accessibilityRole="alert" style={styles.error}>{message(`availability.${index}`)}</Text>}
-      </View>)}
-    </View>
+    <AvailabilityEditor messages={Object.fromEntries(Object.keys(errors).filter(field=>field.startsWith('availability')).map(field=>[field,message(field)]))} blockingEvents={blockingEvents} value={draft.availability} saved={state.saved?.availability??[]} targetHours={state.saved?.weeklyTargetHours??null} disabled={locked} onChange={availability=>set({availability})}/>
 
     {draft.mode === 'zmianowy' && <View style={styles.card}>
       <View style={[styles.row, { justifyContent: 'space-between', flexWrap: 'wrap', marginBottom: 8 }]}>

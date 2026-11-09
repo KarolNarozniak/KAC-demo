@@ -13,6 +13,8 @@ export type NumberField = typeof NUMBER_FIELDS[number];
 /** Treść PUT /api/v1/work-profile: całe ustawienia profilu i wersja, na której pracował formularz. */
 export type WorkProfileInput = Record<NumberField, number | null> & {
   profileVersion: string;
+  hourlyRatePln?: number | null;
+  rateKind?: 'gross' | 'net' | null;
   mode: WorkMode;
   /** Okres, którego dotyczy targetHours (S23KC2S1P2-39). Domyślnie tydzień. */
   targetPeriod?: TargetPeriod;
@@ -31,6 +33,7 @@ export type ValidWorkProfile = Omit<WorkProfileInput, NumberField | 'targetPerio
 
 /** Odpowiedź GET/PUT /api/v1/work-profile. */
 export type WorkProfile = Omit<ValidWorkProfile, 'weeklyTargetHours'> & {
+  commuteConfigured?:boolean;
   profileId: string;
   timeZone: string;
   /** Cel w wybranym okresie w pełnych minutach (S23KC2S1P2-154). */
@@ -52,11 +55,13 @@ export type FieldError =
   | 'shorter_than_minimum'
   | 'end_before_start'
   | 'duplicate_id'
-  | 'overlap';
+  | 'overlap'
+  | 'invalid_hourly_rate'
+  | 'rate_kind_required';
 
 export const FIELD_ERRORS: readonly FieldError[] = [
   'required', 'negative', 'must_be_positive', 'out_of_range', 'not_whole_number', 'min_greater_than_max',
-  'target_below_min', 'target_above_max', 'shorter_than_minimum', 'end_before_start', 'duplicate_id', 'overlap',
+  'target_below_min', 'target_above_max', 'shorter_than_minimum', 'end_before_start', 'duplicate_id', 'overlap', 'invalid_hourly_rate', 'rate_kind_required',
 ];
 
 export type FieldErrors = Record<string, FieldError>;

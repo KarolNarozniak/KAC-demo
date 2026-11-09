@@ -33,7 +33,7 @@ test('S23KC2S1P2-15, 4a: puste pole, minimum większe niż maksimum, tekst zamia
   assert.equal(validateDraft(withNumbers({ commuteBufferMinutes: '12,5' })).commuteBufferMinutes, 'not_whole_number');
   assert.equal(validateDraft(withNumbers({ minimumShiftMinutes: '240', maximumSlotMinutes: '180' })).maximumSlotMinutes, 'shorter_than_minimum');
   assert.equal(validateDraft({ ...draftFromProfile(profile), availability: [{ id: 'A1', dayOfWeek: 1, startTime: '8:00', endTime: '16:00' }] })['availability.0'], 'invalid_time');
-  assert.equal(validateDraft({ ...draftFromProfile(profile), availability: [{ id: 'A1', dayOfWeek: 1, startTime: '16:00', endTime: '08:00' }] })['availability.0'], 'end_before_start');
+  assert.equal(validateDraft({ ...draftFromProfile(profile), availability: [{ id: 'A1', dayOfWeek: 1, startTime: '16:00', endTime: '08:00' }] })['availability.0'], undefined);
 });
 
 test('S23KC2S1P2-39: cel – brak, zero, ujemny, zakres i cel miesięczny względem limitów tygodniowych', () => {
@@ -57,4 +57,10 @@ test('S23KC2S1P2-156: licznik zaplanowanych minut względem celu', () => {
   assert.equal(targetProgress(1500, 1200).status, 'above');
   assert.equal(formatMinutes(750), '12 h 30 min');
   assert.equal(formatMinutes(45), '45 min');
+});
+
+test('hourly rate and copied overnight availability share the monthly profile save',()=>{
+ const draft={...draftFromProfile({...profile,targetPeriod:'month',targetHours:100,hourlyRatePln:30,rateKind:'gross'}),hourlyRateText:'30,50',availability:[{id:'night',dayOfWeek:7,startTime:'22:00',endTime:'02:00'}]};
+ assert.deepEqual(validateDraft(draft),{});const input=inputFromDraft(draft);assert.equal(input.hourlyRatePln,30.5);assert.equal(input.targetPeriod,'month');assert.equal(input.targetHours,100);assert.deepEqual(input.availability.map(({dayOfWeek,startTime,endTime})=>({dayOfWeek,startTime,endTime})),[{dayOfWeek:1,startTime:'00:00',endTime:'02:00'},{dayOfWeek:7,startTime:'22:00',endTime:'24:00'}]);
+ assert.equal(validateDraft({...draft,hourlyRateText:'1,001'}).hourlyRatePln,'invalid_hourly_rate');
 });

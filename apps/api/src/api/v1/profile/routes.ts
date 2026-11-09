@@ -27,9 +27,10 @@ export async function profileRoutes(app: FastifyInstance, options: { repository?
 
   app.put<{ Body: WorkProfileInput }>('/work-profile', { schema: updateWorkProfileRoute }, async (request, reply) => {
     if (!repository) return reply.code(503).send({ error: 'work_profile_not_configured' });
-    const checked = validateWorkProfile(request.body);
-    if (!checked.ok) return reply.code(422).send({ error: 'invalid_work_profile', fields: checked.fields });
     try {
+      const current=request.body.hourlyRatePln!=null&&!request.body.rateKind ? await repository.getProfile(scope(request)) : undefined;
+      const checked = validateWorkProfile(request.body,current??undefined);
+      if (!checked.ok) return reply.code(422).send({ error: 'invalid_work_profile', fields: checked.fields });
       const result = await repository.saveProfile(scope(request), request.body.profileVersion, checked.value);
       if (result.kind === 'not-found') return reply.code(404).send({ error: 'work_profile_not_found' });
       if (result.kind === 'conflict') return reply.code(409).send({ error: 'profile_version_conflict', profile: result.current });

@@ -14,6 +14,8 @@ export type NumberField = typeof NUMBER_FIELDS[number];
 
 /** Treść zapisu profilu. Puste pole liczbowe to null – serwer odpowie wtedy błędem przy polu. */
 export type WorkProfileInput = Record<NumberField, number | null> & {
+  hourlyRatePln?:number|null;
+  rateKind?:'gross'|'net'|null;
   profileVersion: string;
   mode: WorkMode;
   targetPeriod: TargetPeriod;
@@ -25,6 +27,7 @@ export type WorkProfileInput = Record<NumberField, number | null> & {
 
 /** Profil zwracany przez API. targetHours dotyczy okresu targetPeriod; weeklyTargetHours to cel tygodniowy dla generatora. */
 export type WorkProfile = Omit<WorkProfileInput, NumberField> & Record<NumberField, number> & {
+  commuteConfigured?:boolean;
   profileId: string;
   timeZone: string;
   targetMinutes: number;

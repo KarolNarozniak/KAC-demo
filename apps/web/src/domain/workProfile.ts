@@ -1,3 +1,4 @@
+import { mergeAvailability } from './availability.ts';
 // Profil pracy (S23KC2S1P2-15) i cel godzin (S23KC2S1P2-39): formularz, walidacja i licznik celu.
 // Reguły są takie same jak w API (apps/api/src/profile/rules.ts) – serwer i tak sprawdza dane jeszcze raz.
 import type { NumberField, TargetPeriod, WorkProfile, WorkProfileInput } from '../services/workProfileApi';
@@ -7,7 +8,7 @@ export const WEEKS_PER_MONTH = 52 / 12;
 export const PERIOD_LABEL: Record<TargetPeriod, string> = { week: 'tydzień', month: 'miesiąc' };
 
 /** Formularz: pola liczbowe jako tekst, żeby puste pole było puste, a nie zerem. */
-export type ProfileDraft = Omit<WorkProfileInput, NumberField> & { numbers: Record<NumberField, string> };
+export type ProfileDraft = Omit<WorkProfileInput, NumberField | 'hourlyRatePln'> & { baseHourlyRate?:number|null; hourlyRateText?:string; numbers: Record<NumberField, string> };
 export type FieldMessages = Record<string, string>;
 
 const roundHours = (hours: number) => Math.round(hours * 100) / 100;
@@ -33,6 +34,9 @@ export function draftFromProfile(profile: WorkProfile): ProfileDraft {
   const { minimumHours, targetHours, maximumHours, commuteBufferMinutes, minimumRestMinutes, minimumShiftMinutes, maximumSlotMinutes, maxHoursPerDay } = profile;
   const values = { minimumHours, targetHours, maximumHours, commuteBufferMinutes, minimumRestMinutes, minimumShiftMinutes, maximumSlotMinutes, maxHoursPerDay };
   return {
+    baseHourlyRate:profile.hourlyRatePln??null,
+    hourlyRateText:profile.hourlyRatePln==null?'':formatNumber(profile.hourlyRatePln),
+    rateKind:profile.rateKind??null,
     profileVersion: profile.profileVersion,
     mode: profile.mode,
     targetPeriod: profile.targetPeriod,
@@ -40,17 +44,18 @@ export function draftFromProfile(profile: WorkProfile): ProfileDraft {
     preferredWorkWindows: profile.preferredWorkWindows,
     blockedPeriods: profile.blockedPeriods,
     shiftTemplates: profile.shiftTemplates,
-    numbers: Object.fromEntries(Object.entries(values).map(([key, value]) => [key, formatNumber(value)])) as Record<NumberField, string>,
+    numbers: Object.fromEntries(Object.entries(values).map(([key, value]) => [key, key==='commuteBufferMinutes'&&profile.commuteConfigured===false?'':formatNumber(value)])) as Record<NumberField, string>,
   };
 }
 
 export function inputFromDraft(draft: ProfileDraft): WorkProfileInput {
-  const { numbers, ...rest } = draft;
+  const { numbers, hourlyRateText, baseHourlyRate:_baseRate, ...rest } = draft;
   const parsed = Object.fromEntries(Object.entries(numbers).map(([key, text]) => {
     const value = parseNumber(text);
     return [key, value === null || Number.isNaN(value) ? null : value];
   })) as Record<NumberField, number | null>;
-  return { ...rest, ...parsed };
+  const availability=mergeAvailability(rest.availability).map((window,index)=>({...window,id:rest.availability.find(old=>old.dayOfWeek===window.dayOfWeek&&old.startTime===window.startTime&&old.endTime===window.endTime)?.id??`normalized-${window.dayOfWeek}-${index}`}));
+  return { ...rest,...(hourlyRateText===undefined?{}:{hourlyRatePln:parseNumber(hourlyRateText)}),availability, ...parsed };
 }
 
 /** Czy formularz różni się od zapisanego profilu (S23KC2S1P2-15, 3a: pytanie przy wyjściu bez zapisu). */
@@ -87,7 +92,10 @@ export function errorMessage(field: string, code: string, draft: ProfileDraft): 
     case 'target_below_min': return `Cel${weekly} jest niższy niż minimum godzin.`;
     case 'target_above_max': return `Cel${weekly} jest wyższy niż maksimum godzin.`;
     case 'shorter_than_minimum': return 'Maksymalna długość zmiany nie może być krótsza niż minimalna.';
-    case 'end_before_start': return 'Koniec musi być później niż początek.';
+    case 'end_before_start': return field.startsWith('availability')?'Początek i koniec nie mogą być jednakowe.':'Koniec musi być później niż początek.';
+    case 'invalid_hourly_rate':return 'Stawka PLN musi być nieujemna, mieć najwyżej dwa miejsca po przecinku i wynosić do 9 999 999 999,99.';
+    case 'rate_kind_required':return 'Wybierz brutto albo netto.';
+    case 'overlap':return 'Przedziały dostępności nakładają się.';
     case 'duplicate_id': return 'Ten wpis się powtarza.';
     case 'invalid_time': return 'Wpisz godzinę w formacie GG:MM, np. 08:00.';
     default: return 'Popraw to pole.';
@@ -100,6 +108,7 @@ const minutesOf = (time: string) => Number(time.slice(0, 2)) * 60 + Number(time.
 /** Walidacja formularza: zwraca kody błędów przy polach (te same co w API) i 'not_a_number' / 'invalid_time' dla tekstu. */
 export function validateDraft(draft: ProfileDraft): Record<string, string> {
   const errors: Record<string, string> = {};
+  if(draft.hourlyRateText!==undefined){const rate=parseNumber(draft.hourlyRateText);if(rate!==null){if(!Number.isFinite(rate)||rate<0||rate>9999999999.99||Number(rate.toFixed(2))!==rate)errors.hourlyRatePln='invalid_hourly_rate';if(!draft.rateKind && rate!==draft.baseHourlyRate)errors.rateKind='rate_kind_required';}}
   const value = (field: NumberField) => parseNumber(draft.numbers[field]);
   const check = (field: NumberField, kind: 'hours' | 'minutes', min: number, max: number, positive = false) => {
     const current = value(field);
@@ -131,7 +140,7 @@ export function validateDraft(draft: ProfileDraft): Record<string, string> {
   draft.availability.forEach((window, index) => {
     const key = `availability.${index}`;
     if (!TIME.test(window.startTime) || (!TIME.test(window.endTime) && window.endTime !== '24:00')) errors[key] = 'invalid_time';
-    else if (minutesOf(window.endTime) <= minutesOf(window.startTime)) errors[key] = 'end_before_start';
+    else if (window.endTime === window.startTime) errors[key] = 'end_before_start';
   });
   draft.shiftTemplates.forEach((template, index) => {
     const key = `shiftTemplates.${index}`;

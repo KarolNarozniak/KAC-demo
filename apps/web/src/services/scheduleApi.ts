@@ -92,7 +92,7 @@ export async function generateSchedule(weekStart: string, profile: WorkProfile, 
     if (result.error === 'profile_version_conflict') throw new Error('Ustawienia profilu zmieniły się. Odśwież ekran i spróbuj ponownie.');
     if (result.error === 'profile_setup_required') throw new Error('Uzupełnij dostępność i cel godzinowy w ustawieniach planu.');
   }
-  if (response.status === 422) throw new Error('Uzupełnij stawkę PLN, brutto/netto i dojazd w Ustawieniach → Profil pracy.');
+  if (response.status === 422) {const data=await response.json();throw new Error(data.error==='profile_incomplete'?'Uzupełnij stawkę PLN, brutto/netto i dojazd w profilu pracy powyżej.':data.error==='pay_overflow'?'Wynagrodzenie przekracza obsługiwany zakres kwot.':'Sprawdź ograniczenia profilu pracy.');}
   if (!response.ok) throw new Error('Nie udało się wygenerować grafiku. Sprawdź profil pracy i ustawienia tygodnia.');
   return response.json();
 }

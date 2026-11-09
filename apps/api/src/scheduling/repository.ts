@@ -233,37 +233,38 @@ export class PostgresScheduleRepository {
 
   async getScheduleById(scheduleId: string, calendarId = config.demoCalendarId): Promise<ScheduleGenerationResult | null> {
     const result = await this.connectionPool.query(`select id_kalendarza, to_char(tydzien_od, 'YYYY-MM-DD') as week_start
-      from t_grafiki where generator_version <> 'work-profile-v1' and id_grafiku = $1 and id_kalendarza = $2`, [scheduleId, calendarId]);
+      from t_grafiki where id_grafiku = $1 and id_kalendarza = $2`, [scheduleId, calendarId]);
     const row = result.rows[0];
     return row ? this.readSchedule(row.week_start, row.id_kalendarza, scheduleId) : null;
   }
 
   async listSchedules(filters: { from: string; to: string; limit: number; offset: number }, calendarId = config.demoCalendarId) {
     const [result, countResult] = await Promise.all([this.connectionPool.query(`select g.id_grafiku, g.tydzien_od::text as week_start, g.status,
-        g.solution_status, g.version, g.approved_at, g.rejected_at, g.target_minutes, g.total_minutes, g.shortfall_minutes,
+        g.solution_status, g.generator_version,g.plan_godzin,g.cel_godzin, g.version, g.approved_at, g.rejected_at, g.target_minutes, g.total_minutes, g.shortfall_minutes,
         count(*) over()::integer as total_count
-      from t_grafiki g where g.generator_version <> 'work-profile-v1' and g.id_kalendarza = $1 and g.tydzien_od between $2::date and $3::date
+      from t_grafiki g where g.id_kalendarza = $1 and g.tydzien_od between $2::date and $3::date
       order by g.tydzien_od desc, g.version desc limit $4 offset $5`, [calendarId, filters.from, filters.to, filters.limit, filters.offset]),
-      this.connectionPool.query(`select count(*)::integer as total from t_grafiki where generator_version <> 'work-profile-v1' and id_kalendarza = $1 and tydzien_od between $2::date and $3::date`, [calendarId, filters.from, filters.to])]);
-    return { items: result.rows.map((row) => ({ scheduleId: row.id_grafiku, weekStart: row.week_start, status: row.status,
-      solutionStatus: row.solution_status, version: Number(row.version), isApproved: Boolean(row.approved_at), isRejected: Boolean(row.rejected_at),
-      targetMinutes: Number(row.target_minutes), totalMinutes: Number(row.total_minutes), shortfallMinutes: Number(row.shortfall_minutes) })),
+      this.connectionPool.query(`select count(*)::integer as total from t_grafiki where id_kalendarza = $1 and tydzien_od between $2::date and $3::date`, [calendarId, filters.from, filters.to])]);
+    return { items: result.rows.map((row) => ({ scheduleId: row.id_grafiku, weekStart: row.week_start, status: row.status.toLowerCase(),
+      solutionStatus: row.solution_status, version: Number(row.version), generatorVersion:row.generator_version,isApproved: Boolean(row.approved_at)||row.status==='Accepted', isRejected: Boolean(row.rejected_at)||row.status==='Rejected',
+      targetMinutes: row.generator_version==='work-profile-v1'?Math.round(Number(row.cel_godzin)*60):Number(row.target_minutes), totalMinutes:row.generator_version==='work-profile-v1'?Math.round(Number(row.plan_godzin)*60):Number(row.total_minutes), shortfallMinutes:row.generator_version==='work-profile-v1'?Math.max(0,Math.round((Number(row.cel_godzin)-Number(row.plan_godzin))*60)):Number(row.shortfall_minutes) })),
        total: Number(countResult.rows[0].total), limit: filters.limit, offset: filters.offset };
   }
 
   private async readSchedule(weekStart: string, calendarId: string, scheduleId?: string, connection: Pick<Pool, 'query'> = this.connectionPool): Promise<ScheduleGenerationResult | null> {
     const result = await connection.query(`select g.*, to_char(g.tydzien_od, 'YYYY-MM-DD') as week_start,
         (select coalesce(jsonb_agg(jsonb_build_object(
-        'hourlyRatePln', z.stawka_pln, 'estimatedPayPln', z.wynagrodzenie_pln, 'rateKind', z.rodzaj_stawki, 'candidateId', z.candidate_id, 'templateId', z.template_id, 'optionalLectureIds', z.optional_lecture_ids,
+        'hourlyRatePln', z.stawka_pln, 'estimatedPayPln', z.wynagrodzenie_pln, 'rateKind', z.rodzaj_stawki, 'candidateId', coalesce(z.candidate_id,z.id_zmiany), 'templateId', z.template_id, 'optionalLectureIds', z.optional_lecture_ids,
         'softPenalty', z.soft_penalty, 'calendarEventId', z.id_wydarzenia, 'title', 'Praca', 'start', z.rozpoczecie, 'end', z.zakonczenie,
-        'durationMinutes', round(z.godziny * 60)::integer, 'mode', g.tryb_pracy)), '[]'::jsonb) from t_zmiany_pracy z where z.id_grafiku = g.id_grafiku) as shift_rows,
+        'durationMinutes', round(extract(epoch from(z.zakonczenie-z.rozpoczecie))/60)::integer, 'mode', g.tryb_pracy)), '[]'::jsonb) from t_zmiany_pracy z where z.id_grafiku = g.id_grafiku) as shift_rows,
         (select coalesce(jsonb_agg(jsonb_build_object('code', o.kod, 'severity', o.typ, 'message', o.opis,
         'candidateIds', o.szczegoly->'candidateIds', 'eventIds', o.szczegoly->'eventIds', 'details', o.szczegoly)), '[]'::jsonb) from t_ograniczenia_grafiku o where o.id_grafiku = g.id_grafiku) as violation_rows
-      from t_grafiki g where g.generator_version <> 'work-profile-v1' and g.id_kalendarza = $1 and g.tydzien_od = $2::date
+      from t_grafiki g where ($3::text is not null or g.generator_version <> 'work-profile-v1') and g.id_kalendarza = $1 and g.tydzien_od = $2::date
         and ($3::text is not null or g.rejected_at is null) and ($3::text is null or g.id_grafiku = $3)
       order by g.version desc limit 1`, [calendarId, weekStart, scheduleId ?? null]);
     const row = result.rows[0];
     if (!row) return null;
+    if(row.generator_version==='work-profile-v1'){row.status=row.status.toLowerCase();row.proposed_minutes=Math.round(Number(row.plan_godzin)*60);row.total_minutes=row.proposed_minutes;row.target_minutes=Math.round(Number(row.cel_godzin)*60);row.shortfall_minutes=Math.max(0,row.target_minutes-row.total_minutes);row.solution_status=row.czy_osiagalny?'target_met':'not_found';if(row.status==='accepted')row.approved_at=row.approved_at??row.updated_at;}
     const snapshot = row.input_snapshot ?? {};
     const snapshotContext = snapshot.context ?? {};
     const { context: _context, ...savedParameters } = snapshot;

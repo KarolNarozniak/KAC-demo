@@ -16,517 +16,14 @@
     "schemas": {}
   },
   "paths": {
-    "/api/v1/work-profile/compensation": {
-      "get": {
-        "operationId": "getWorkCompensation",
-        "summary": "Odczyt aktywnego profilu",
-        "tags": [
-          "Work profile"
-        ],
-        "responses": {
-          "200": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "version",
-                    "hourlyRatePln",
-                    "rateKind",
-                    "commuteMinutes",
-                    "minRestMinutes",
-                    "minHours",
-                    "targetHours",
-                    "maxHours"
-                  ],
-                  "properties": {
-                    "version": {
-                      "type": "integer",
-                      "minimum": 1
-                    },
-                    "hourlyRatePln": {
-                      "anyOf": [
-                        {
-                          "type": "number",
-                          "minimum": 0,
-                          "maximum": 9999999999.99,
-                          "multipleOf": 0.01
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ],
-                      "description": "PLN/h; null = brak stawki i profile_incomplete przy generowaniu. Zero jest jawną poprawną stawką."
-                    },
-                    "rateKind": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "enum": [
-                            "gross",
-                            "net"
-                          ]
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ],
-                      "description": "gross = brutto, net = netto. Wymagane przy ustawionej stawce. Bez konwersji podatkowej."
-                    },
-                    "commuteMinutes": {
-                      "anyOf": [
-                        {
-                          "type": "integer",
-                          "minimum": 0,
-                          "maximum": 10080
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ],
-                      "description": "Jeden stały bufor MVP przed i po pracy, również dla pustego location; bez map i geokodowania. Null oznacza nieustawiony dojazd i blokuje planowanie; 0 jest poprawne."
-                    },
-                    "minRestMinutes": {
-                      "type": "integer",
-                      "minimum": 0,
-                      "maximum": 10080
-                    },
-                    "minHours": {
-                      "anyOf": [
-                        {
-                          "type": "number",
-                          "minimum": 0,
-                          "maximum": 999.99,
-                          "multipleOf": 0.01
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "targetHours": {
-                      "anyOf": [
-                        {
-                          "type": "number",
-                          "minimum": 0,
-                          "maximum": 999.99,
-                          "multipleOf": 0.01
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "maxHours": {
-                      "anyOf": [
-                        {
-                          "type": "number",
-                          "maximum": 999.99,
-                          "multipleOf": 0.01,
-                          "exclusiveMinimum": 0
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    }
-                  },
-                  "example": {
-                    "version": 1,
-                    "hourlyRatePln": 30,
-                    "rateKind": "gross",
-                    "commuteMinutes": 30,
-                    "minRestMinutes": 660,
-                    "minHours": 10,
-                    "targetHours": 20,
-                    "maxHours": 30
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    },
-                    "details": {}
-                  }
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    },
-                    "details": {}
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "operationId": "updateWorkCompensation",
-        "summary": "Zapis pełnego profilu z wersją",
-        "tags": [
-          "Work profile"
-        ],
-        "description": "Zwiększa wersję wspólną z dostępnością. Nie zmienia wydarzeń ani snapshotów. 0 jest dozwolone; null oznacza brak. Kwota wymaga gross lub net; maksimum dwie cyfry po przecinku, numeric(12,2).",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "version",
-                  "hourlyRatePln",
-                  "rateKind",
-                  "commuteMinutes",
-                  "minRestMinutes",
-                  "minHours",
-                  "targetHours",
-                  "maxHours"
-                ],
-                "properties": {
-                  "version": {
-                    "type": "integer",
-                    "minimum": 1
-                  },
-                  "hourlyRatePln": {
-                    "anyOf": [
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
-                  "rateKind": {
-                    "enum": [
-                      "gross",
-                      "net",
-                      null
-                    ]
-                  },
-                  "commuteMinutes": {
-                    "anyOf": [
-                      {
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": 10080
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
-                  "minRestMinutes": {
-                    "type": "integer",
-                    "minimum": 0,
-                    "maximum": 10080
-                  },
-                  "minHours": {
-                    "anyOf": [
-                      {
-                        "type": "number",
-                        "minimum": 0,
-                        "maximum": 999.99
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
-                  "targetHours": {
-                    "anyOf": [
-                      {
-                        "type": "number",
-                        "minimum": 0,
-                        "maximum": 999.99
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
-                  "maxHours": {
-                    "anyOf": [
-                      {
-                        "type": "number",
-                        "exclusiveMinimum": 0,
-                        "maximum": 999.99
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "version",
-                    "hourlyRatePln",
-                    "rateKind",
-                    "commuteMinutes",
-                    "minRestMinutes",
-                    "minHours",
-                    "targetHours",
-                    "maxHours"
-                  ],
-                  "properties": {
-                    "version": {
-                      "type": "integer",
-                      "minimum": 1
-                    },
-                    "hourlyRatePln": {
-                      "anyOf": [
-                        {
-                          "type": "number",
-                          "minimum": 0,
-                          "maximum": 9999999999.99,
-                          "multipleOf": 0.01
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ],
-                      "description": "PLN/h; null = brak stawki i profile_incomplete przy generowaniu. Zero jest jawną poprawną stawką."
-                    },
-                    "rateKind": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "enum": [
-                            "gross",
-                            "net"
-                          ]
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ],
-                      "description": "gross = brutto, net = netto. Wymagane przy ustawionej stawce. Bez konwersji podatkowej."
-                    },
-                    "commuteMinutes": {
-                      "anyOf": [
-                        {
-                          "type": "integer",
-                          "minimum": 0,
-                          "maximum": 10080
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ],
-                      "description": "Jeden stały bufor MVP przed i po pracy, również dla pustego location; bez map i geokodowania. Null oznacza nieustawiony dojazd i blokuje planowanie; 0 jest poprawne."
-                    },
-                    "minRestMinutes": {
-                      "type": "integer",
-                      "minimum": 0,
-                      "maximum": 10080
-                    },
-                    "minHours": {
-                      "anyOf": [
-                        {
-                          "type": "number",
-                          "minimum": 0,
-                          "maximum": 999.99,
-                          "multipleOf": 0.01
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "targetHours": {
-                      "anyOf": [
-                        {
-                          "type": "number",
-                          "minimum": 0,
-                          "maximum": 999.99,
-                          "multipleOf": 0.01
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "maxHours": {
-                      "anyOf": [
-                        {
-                          "type": "number",
-                          "maximum": 999.99,
-                          "multipleOf": 0.01,
-                          "exclusiveMinimum": 0
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    }
-                  },
-                  "example": {
-                    "version": 1,
-                    "hourlyRatePln": 30,
-                    "rateKind": "gross",
-                    "commuteMinutes": 30,
-                    "minRestMinutes": 660,
-                    "minHours": 10,
-                    "targetHours": 20,
-                    "maxHours": 30
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    },
-                    "details": {}
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    },
-                    "details": {}
-                  }
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    },
-                    "details": {}
-                  }
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    },
-                    "details": {}
-                  }
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    },
-                    "details": {}
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/work-profile/availability": {
       "get": {
-        "operationId": "get_work_profile_availability",
-        "summary": "Odczyt tygodniowej dostępności",
+        "operationId": "getWorkAvailability",
+        "summary": "Read weekly availability",
         "tags": [
           "Work profile"
         ],
+        "description": "Reads availability through the canonical work-profile repository and returns both concurrency tokens. No second profile is maintained.",
         "responses": {
           "200": {
             "description": "Default Response",
@@ -534,7 +31,6 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": false,
                   "required": [
                     "version",
                     "intervals"
@@ -544,9 +40,11 @@
                       "type": "integer",
                       "minimum": 1
                     },
+                    "profileVersion": {
+                      "type": "string"
+                    },
                     "intervals": {
                       "type": "array",
-                      "maxItems": 1000,
                       "items": {
                         "type": "object",
                         "additionalProperties": false,
@@ -583,7 +81,6 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": false,
                   "required": [
                     "error"
                   ],
@@ -591,7 +88,10 @@
                     "error": {
                       "type": "string"
                     },
-                    "details": {}
+                    "details": {},
+                    "successor": {
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -603,7 +103,6 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": false,
                   "required": [
                     "error"
                   ],
@@ -611,7 +110,10 @@
                     "error": {
                       "type": "string"
                     },
-                    "details": {}
+                    "details": {},
+                    "successor": {
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -620,12 +122,12 @@
         }
       },
       "put": {
-        "operationId": "put_work_profile_availability",
-        "summary": "Atomowe zastąpienie dostępności",
+        "operationId": "replaceWorkAvailability",
+        "summary": "Replace weekly availability atomically",
         "tags": [
           "Work profile"
         ],
-        "description": "Dni ISO 1–7. Zakresy nocne dzielone na północy, również 7→1. Zachowuje 24:00, sortuje po dniu i początku. Duplikaty i przecięcia: 422; stykające zakresy dozwolone. Edytor scala przecięcia przed PUT. Pusta lista usuwa dostępność. Blokada profilu FOR UPDATE, kontrola wersji, rollback całej operacji. Nie modyfikuje wydarzeń.",
+        "description": "Owner-scoped replacement locks the same profile as the full form. Supports empty weeks, 24:00 and overnight splitting, rejects overlaps and stale versions. Does not edit calendar events.",
         "requestBody": {
           "required": true,
           "content": {
@@ -682,7 +184,6 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": false,
                   "required": [
                     "version",
                     "intervals"
@@ -692,9 +193,11 @@
                       "type": "integer",
                       "minimum": 1
                     },
+                    "profileVersion": {
+                      "type": "string"
+                    },
                     "intervals": {
                       "type": "array",
-                      "maxItems": 1000,
                       "items": {
                         "type": "object",
                         "additionalProperties": false,
@@ -731,7 +234,6 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": false,
                   "required": [
                     "error"
                   ],
@@ -739,7 +241,10 @@
                     "error": {
                       "type": "string"
                     },
-                    "details": {}
+                    "details": {},
+                    "successor": {
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -751,7 +256,6 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": false,
                   "required": [
                     "error"
                   ],
@@ -759,7 +263,10 @@
                     "error": {
                       "type": "string"
                     },
-                    "details": {}
+                    "details": {},
+                    "successor": {
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -771,7 +278,6 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": false,
                   "required": [
                     "error"
                   ],
@@ -779,7 +285,10 @@
                     "error": {
                       "type": "string"
                     },
-                    "details": {}
+                    "details": {},
+                    "successor": {
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -791,7 +300,6 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": false,
                   "required": [
                     "error"
                   ],
@@ -799,7 +307,10 @@
                     "error": {
                       "type": "string"
                     },
-                    "details": {}
+                    "details": {},
+                    "successor": {
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -811,7 +322,6 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": false,
                   "required": [
                     "error"
                   ],
@@ -819,7 +329,10 @@
                     "error": {
                       "type": "string"
                     },
-                    "details": {}
+                    "details": {},
+                    "successor": {
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -828,167 +341,55 @@
         }
       }
     },
-    "/api/v1/work-profile/schedules/generate": {
-      "post": {
-        "operationId": "post_work_profile_schedules_generate",
-        "summary": "Generowanie propozycji",
+    "/api/v1/work-profile/compensation": {
+      "get": {
+        "operationId": "retired_GET__work_profile_compensation",
+        "summary": "Retired duplicate workflow",
         "tags": [
-          "Scheduling"
+          "Work profile"
         ],
-        "description": "Wymaga ustawienia stawki, rodzaju kwoty, dojazdu i celu; brak daje profile_incomplete z details.fields. Algorytm deterministyczny wypełnia najwcześniejsze poprawne okna, respektuje maksymalną liczbę godzin. Nie gwarantuje globalnie optymalnego planu. Brak okien daje pustą propozycję i achievable=false, jeśli cel > 0. Płatna praca mieści się w tygodniu; bufor może korzystać z ciągłej dostępności sąsiedniego tygodnia. Wydarzenia cykliczne materializowane w strefie kalendarza, odstępy liczone na instantach. Między Work i Class/Personal wymagany commuteMinutes, między Work i Work max(commuteMinutes,minRestMinutes), bez sumowania. Bufor mieści się w ciągłym oknie dostępności. Nie powstają wydarzenia dojazdu ani pracy do chwili akceptacji.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "week"
-                ],
-                "properties": {
-                  "week": {
-                    "type": "string",
-                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
-                  }
-                }
-              }
-            }
-          }
-        },
+        "description": "The duplicate branch-specific editor/planner has been consolidated into the existing full work profile and scheduler. Historical proposals remain readable using `/api/v1/schedules/id/{id}`.",
+        "deprecated": true,
         "responses": {
-          "200": {
+          "410": {
             "description": "Default Response",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": false,
                   "required": [
-                    "id",
-                    "status",
-                    "week",
-                    "commuteMinutes",
-                    "plannedHours",
-                    "targetHours",
-                    "estimatedPayPln",
-                    "achievable",
-                    "shifts"
+                    "error"
                   ],
                   "properties": {
-                    "id": {
+                    "error": {
                       "type": "string"
                     },
-                    "status": {
-                      "type": "string",
-                      "enum": [
-                        "Proposed",
-                        "Accepted",
-                        "Rejected"
-                      ]
-                    },
-                    "week": {
-                      "type": "string",
-                      "format": "date"
-                    },
-                    "commuteMinutes": {
-                      "anyOf": [
-                        {
-                          "type": "integer",
-                          "minimum": 0,
-                          "maximum": 10080
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "plannedHours": {
-                      "type": "number",
-                      "minimum": 0
-                    },
-                    "targetHours": {
-                      "type": "number",
-                      "minimum": 0
-                    },
-                    "estimatedPayPln": {
-                      "type": "number",
-                      "minimum": 0,
-                      "description": "Suma kwot zaokrąglonych osobno dla zmian, a nie ponowne przeliczenie łącznego czasu. Zero przy braku zmian. Dojazd nie jest płatny."
-                    },
-                    "achievable": {
-                      "type": "boolean"
-                    },
-                    "shifts": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "additionalProperties": false,
-                        "required": [
-                          "id",
-                          "start",
-                          "end",
-                          "category",
-                          "hourlyRatePln",
-                          "estimatedPayPln",
-                          "rateKind"
-                        ],
-                        "properties": {
-                          "id": {
-                            "type": "string"
-                          },
-                          "start": {
-                            "type": "string",
-                            "format": "date-time"
-                          },
-                          "end": {
-                            "type": "string",
-                            "format": "date-time"
-                          },
-                          "category": {
-                            "enum": [
-                              "Work"
-                            ]
-                          },
-                          "hourlyRatePln": {
-                            "type": "number",
-                            "minimum": 0,
-                            "description": "Trwały snapshot stawki PLN/h w momencie generowania. Nie aktualizuje się po zmianie profilu."
-                          },
-                          "estimatedPayPln": {
-                            "type": "number",
-                            "minimum": 0,
-                            "description": "Snapshot kwoty: halfUp(rateGrosz × rzeczywiste minuty / 60) / 100; zaokrąglanie osobno dla każdej zmiany."
-                          },
-                          "rateKind": {
-                            "anyOf": [
-                              {
-                                "type": "string",
-                                "enum": [
-                                  "gross",
-                                  "net"
-                                ]
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          }
-                        }
-                      }
+                    "details": {},
+                    "successor": {
+                      "type": "string"
                     }
                   }
                 }
               }
             }
-          },
-          "400": {
+          }
+        }
+      },
+      "put": {
+        "operationId": "retired_PUT__work_profile_compensation",
+        "summary": "Retired duplicate workflow",
+        "tags": [
+          "Work profile"
+        ],
+        "description": "The duplicate branch-specific editor/planner has been consolidated into the existing full work profile and scheduler. Historical proposals remain readable using `/api/v1/schedules/id/{id}`.",
+        "deprecated": true,
+        "responses": {
+          "410": {
             "description": "Default Response",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": false,
                   "required": [
                     "error"
                   ],
@@ -996,87 +397,10 @@
                     "error": {
                       "type": "string"
                     },
-                    "details": {}
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
+                    "details": {},
+                    "successor": {
                       "type": "string"
-                    },
-                    "details": {}
-                  }
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    },
-                    "details": {}
-                  }
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    },
-                    "details": {}
-                  }
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    },
-                    "details": {}
+                    }
                   }
                 }
               }
@@ -1087,158 +411,55 @@
     },
     "/api/v1/work-profile/schedules": {
       "get": {
-        "operationId": "get_work_profile_schedules",
-        "summary": "Lista zapisanych grafików dla tygodnia",
+        "operationId": "retired_GET__work_profile_schedules",
+        "summary": "Retired duplicate workflow",
         "tags": [
-          "Scheduling"
+          "Work profile"
         ],
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
-            },
-            "in": "query",
-            "name": "week",
-            "required": true
-          }
-        ],
+        "description": "The duplicate branch-specific editor/planner has been consolidated into the existing full work profile and scheduler. Historical proposals remain readable using `/api/v1/schedules/id/{id}`.",
+        "deprecated": true,
         "responses": {
-          "200": {
+          "410": {
             "description": "Default Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "required": [
-                      "id",
-                      "status",
-                      "week",
-                      "commuteMinutes",
-                      "plannedHours",
-                      "targetHours",
-                      "estimatedPayPln",
-                      "achievable",
-                      "shifts"
-                    ],
-                    "properties": {
-                      "id": {
-                        "type": "string"
-                      },
-                      "status": {
-                        "type": "string",
-                        "enum": [
-                          "Proposed",
-                          "Accepted",
-                          "Rejected"
-                        ]
-                      },
-                      "week": {
-                        "type": "string",
-                        "format": "date"
-                      },
-                      "commuteMinutes": {
-                        "anyOf": [
-                          {
-                            "type": "integer",
-                            "minimum": 0,
-                            "maximum": 10080
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ]
-                      },
-                      "plannedHours": {
-                        "type": "number",
-                        "minimum": 0
-                      },
-                      "targetHours": {
-                        "type": "number",
-                        "minimum": 0
-                      },
-                      "estimatedPayPln": {
-                        "type": "number",
-                        "minimum": 0,
-                        "description": "Suma kwot zaokrąglonych osobno dla zmian, a nie ponowne przeliczenie łącznego czasu. Zero przy braku zmian. Dojazd nie jest płatny."
-                      },
-                      "achievable": {
-                        "type": "boolean"
-                      },
-                      "shifts": {
-                        "type": "array",
-                        "items": {
-                          "type": "object",
-                          "additionalProperties": false,
-                          "required": [
-                            "id",
-                            "start",
-                            "end",
-                            "category",
-                            "hourlyRatePln",
-                            "estimatedPayPln",
-                            "rateKind"
-                          ],
-                          "properties": {
-                            "id": {
-                              "type": "string"
-                            },
-                            "start": {
-                              "type": "string",
-                              "format": "date-time"
-                            },
-                            "end": {
-                              "type": "string",
-                              "format": "date-time"
-                            },
-                            "category": {
-                              "enum": [
-                                "Work"
-                              ]
-                            },
-                            "hourlyRatePln": {
-                              "type": "number",
-                              "minimum": 0,
-                              "description": "Trwały snapshot stawki PLN/h w momencie generowania. Nie aktualizuje się po zmianie profilu."
-                            },
-                            "estimatedPayPln": {
-                              "type": "number",
-                              "minimum": 0,
-                              "description": "Snapshot kwoty: halfUp(rateGrosz × rzeczywiste minuty / 60) / 100; zaokrąglanie osobno dla każdej zmiany."
-                            },
-                            "rateKind": {
-                              "anyOf": [
-                                {
-                                  "type": "string",
-                                  "enum": [
-                                    "gross",
-                                    "net"
-                                  ]
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ]
-                            }
-                          }
-                        }
-                      }
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {},
+                    "successor": {
+                      "type": "string"
                     }
                   }
                 }
               }
             }
-          },
-          "400": {
+          }
+        }
+      }
+    },
+    "/api/v1/work-profile/schedules/generate": {
+      "post": {
+        "operationId": "retired_POST__work_profile_schedules_generate",
+        "summary": "Retired duplicate workflow",
+        "tags": [
+          "Work profile"
+        ],
+        "description": "The duplicate branch-specific editor/planner has been consolidated into the existing full work profile and scheduler. Historical proposals remain readable using `/api/v1/schedules/id/{id}`.",
+        "deprecated": true,
+        "responses": {
+          "410": {
             "description": "Default Response",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": false,
                   "required": [
                     "error"
                   ],
@@ -1246,27 +467,10 @@
                     "error": {
                       "type": "string"
                     },
-                    "details": {}
-                  }
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
+                    "details": {},
+                    "successor": {
                       "type": "string"
-                    },
-                    "details": {}
+                    }
                   }
                 }
               }
@@ -1277,11 +481,12 @@
     },
     "/api/v1/work-profile/schedules/{id}": {
       "get": {
-        "operationId": "get_work_profile_schedules_id",
-        "summary": "Odczyt grafiku i snapshotów",
+        "operationId": "retired_GET__work_profile_schedules_id",
+        "summary": "Retired duplicate workflow",
         "tags": [
-          "Scheduling"
+          "Work profile"
         ],
+        "description": "The duplicate branch-specific editor/planner has been consolidated into the existing full work profile and scheduler. Historical proposals remain readable using `/api/v1/schedules/id/{id}`.",
         "parameters": [
           {
             "schema": {
@@ -1294,664 +499,25 @@
             "required": true
           }
         ],
+        "deprecated": true,
         "responses": {
-          "200": {
+          "410": {
             "description": "Default Response",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": false,
                   "required": [
-                    "id",
-                    "status",
-                    "week",
-                    "commuteMinutes",
-                    "plannedHours",
-                    "targetHours",
-                    "estimatedPayPln",
-                    "achievable",
-                    "shifts"
+                    "error"
                   ],
                   "properties": {
-                    "id": {
+                    "error": {
                       "type": "string"
                     },
-                    "status": {
-                      "type": "string",
-                      "enum": [
-                        "Proposed",
-                        "Accepted",
-                        "Rejected"
-                      ]
-                    },
-                    "week": {
-                      "type": "string",
-                      "format": "date"
-                    },
-                    "commuteMinutes": {
-                      "anyOf": [
-                        {
-                          "type": "integer",
-                          "minimum": 0,
-                          "maximum": 10080
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "plannedHours": {
-                      "type": "number",
-                      "minimum": 0
-                    },
-                    "targetHours": {
-                      "type": "number",
-                      "minimum": 0
-                    },
-                    "estimatedPayPln": {
-                      "type": "number",
-                      "minimum": 0,
-                      "description": "Suma kwot zaokrąglonych osobno dla zmian, a nie ponowne przeliczenie łącznego czasu. Zero przy braku zmian. Dojazd nie jest płatny."
-                    },
-                    "achievable": {
-                      "type": "boolean"
-                    },
-                    "shifts": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "additionalProperties": false,
-                        "required": [
-                          "id",
-                          "start",
-                          "end",
-                          "category",
-                          "hourlyRatePln",
-                          "estimatedPayPln",
-                          "rateKind"
-                        ],
-                        "properties": {
-                          "id": {
-                            "type": "string"
-                          },
-                          "start": {
-                            "type": "string",
-                            "format": "date-time"
-                          },
-                          "end": {
-                            "type": "string",
-                            "format": "date-time"
-                          },
-                          "category": {
-                            "enum": [
-                              "Work"
-                            ]
-                          },
-                          "hourlyRatePln": {
-                            "type": "number",
-                            "minimum": 0,
-                            "description": "Trwały snapshot stawki PLN/h w momencie generowania. Nie aktualizuje się po zmianie profilu."
-                          },
-                          "estimatedPayPln": {
-                            "type": "number",
-                            "minimum": 0,
-                            "description": "Snapshot kwoty: halfUp(rateGrosz × rzeczywiste minuty / 60) / 100; zaokrąglanie osobno dla każdej zmiany."
-                          },
-                          "rateKind": {
-                            "anyOf": [
-                              {
-                                "type": "string",
-                                "enum": [
-                                  "gross",
-                                  "net"
-                                ]
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          }
-                        }
-                      }
+                    "details": {},
+                    "successor": {
+                      "type": "string"
                     }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    },
-                    "details": {}
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    },
-                    "details": {}
-                  }
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    },
-                    "details": {}
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/work-profile/schedules/{id}/accept": {
-      "post": {
-        "operationId": "post_work_profile_schedules_id_accept",
-        "summary": "Atomowa akceptacja i zapis do kalendarza",
-        "tags": [
-          "Scheduling"
-        ],
-        "description": "Blokuje własny kalendarz oraz grafik; ponownie sprawdza bieżące ograniczenia, w tym nowe wydarzenia. Wszystkie zmiany albo żadna. Nie modyfikuje snapshotów kwot ani rodzaju kwoty. Ponowna akceptacja: 409. commuteMinutes w odpowiedzi jest snapshotem bufora użytego przy generowaniu; walidacja używa aktualnego profilu.",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 100
-            },
-            "in": "path",
-            "name": "id",
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "id",
-                    "status",
-                    "week",
-                    "commuteMinutes",
-                    "plannedHours",
-                    "targetHours",
-                    "estimatedPayPln",
-                    "achievable",
-                    "shifts"
-                  ],
-                  "properties": {
-                    "id": {
-                      "type": "string"
-                    },
-                    "status": {
-                      "type": "string",
-                      "enum": [
-                        "Proposed",
-                        "Accepted",
-                        "Rejected"
-                      ]
-                    },
-                    "week": {
-                      "type": "string",
-                      "format": "date"
-                    },
-                    "commuteMinutes": {
-                      "anyOf": [
-                        {
-                          "type": "integer",
-                          "minimum": 0,
-                          "maximum": 10080
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "plannedHours": {
-                      "type": "number",
-                      "minimum": 0
-                    },
-                    "targetHours": {
-                      "type": "number",
-                      "minimum": 0
-                    },
-                    "estimatedPayPln": {
-                      "type": "number",
-                      "minimum": 0,
-                      "description": "Suma kwot zaokrąglonych osobno dla zmian, a nie ponowne przeliczenie łącznego czasu. Zero przy braku zmian. Dojazd nie jest płatny."
-                    },
-                    "achievable": {
-                      "type": "boolean"
-                    },
-                    "shifts": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "additionalProperties": false,
-                        "required": [
-                          "id",
-                          "start",
-                          "end",
-                          "category",
-                          "hourlyRatePln",
-                          "estimatedPayPln",
-                          "rateKind"
-                        ],
-                        "properties": {
-                          "id": {
-                            "type": "string"
-                          },
-                          "start": {
-                            "type": "string",
-                            "format": "date-time"
-                          },
-                          "end": {
-                            "type": "string",
-                            "format": "date-time"
-                          },
-                          "category": {
-                            "enum": [
-                              "Work"
-                            ]
-                          },
-                          "hourlyRatePln": {
-                            "type": "number",
-                            "minimum": 0,
-                            "description": "Trwały snapshot stawki PLN/h w momencie generowania. Nie aktualizuje się po zmianie profilu."
-                          },
-                          "estimatedPayPln": {
-                            "type": "number",
-                            "minimum": 0,
-                            "description": "Snapshot kwoty: halfUp(rateGrosz × rzeczywiste minuty / 60) / 100; zaokrąglanie osobno dla każdej zmiany."
-                          },
-                          "rateKind": {
-                            "anyOf": [
-                              {
-                                "type": "string",
-                                "enum": [
-                                  "gross",
-                                  "net"
-                                ]
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    },
-                    "details": {}
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    },
-                    "details": {}
-                  }
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    },
-                    "details": {}
-                  }
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    },
-                    "details": {}
-                  }
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    },
-                    "details": {}
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/work-profile/schedules/{id}/reject": {
-      "post": {
-        "operationId": "post_work_profile_schedules_id_reject",
-        "summary": "Odrzucenie propozycji bez zapisu wydarzeń",
-        "tags": [
-          "Scheduling"
-        ],
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 100
-            },
-            "in": "path",
-            "name": "id",
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "id",
-                    "status",
-                    "week",
-                    "commuteMinutes",
-                    "plannedHours",
-                    "targetHours",
-                    "estimatedPayPln",
-                    "achievable",
-                    "shifts"
-                  ],
-                  "properties": {
-                    "id": {
-                      "type": "string"
-                    },
-                    "status": {
-                      "type": "string",
-                      "enum": [
-                        "Proposed",
-                        "Accepted",
-                        "Rejected"
-                      ]
-                    },
-                    "week": {
-                      "type": "string",
-                      "format": "date"
-                    },
-                    "commuteMinutes": {
-                      "anyOf": [
-                        {
-                          "type": "integer",
-                          "minimum": 0,
-                          "maximum": 10080
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "plannedHours": {
-                      "type": "number",
-                      "minimum": 0
-                    },
-                    "targetHours": {
-                      "type": "number",
-                      "minimum": 0
-                    },
-                    "estimatedPayPln": {
-                      "type": "number",
-                      "minimum": 0,
-                      "description": "Suma kwot zaokrąglonych osobno dla zmian, a nie ponowne przeliczenie łącznego czasu. Zero przy braku zmian. Dojazd nie jest płatny."
-                    },
-                    "achievable": {
-                      "type": "boolean"
-                    },
-                    "shifts": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "additionalProperties": false,
-                        "required": [
-                          "id",
-                          "start",
-                          "end",
-                          "category",
-                          "hourlyRatePln",
-                          "estimatedPayPln",
-                          "rateKind"
-                        ],
-                        "properties": {
-                          "id": {
-                            "type": "string"
-                          },
-                          "start": {
-                            "type": "string",
-                            "format": "date-time"
-                          },
-                          "end": {
-                            "type": "string",
-                            "format": "date-time"
-                          },
-                          "category": {
-                            "enum": [
-                              "Work"
-                            ]
-                          },
-                          "hourlyRatePln": {
-                            "type": "number",
-                            "minimum": 0,
-                            "description": "Trwały snapshot stawki PLN/h w momencie generowania. Nie aktualizuje się po zmianie profilu."
-                          },
-                          "estimatedPayPln": {
-                            "type": "number",
-                            "minimum": 0,
-                            "description": "Snapshot kwoty: halfUp(rateGrosz × rzeczywiste minuty / 60) / 100; zaokrąglanie osobno dla każdej zmiany."
-                          },
-                          "rateKind": {
-                            "anyOf": [
-                              {
-                                "type": "string",
-                                "enum": [
-                                  "gross",
-                                  "net"
-                                ]
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    },
-                    "details": {}
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    },
-                    "details": {}
-                  }
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    },
-                    "details": {}
-                  }
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    },
-                    "details": {}
                   }
                 }
               }
@@ -1962,37 +528,12 @@
     },
     "/api/v1/work-profile/schedules/{id}/shifts/{shiftId}": {
       "put": {
-        "operationId": "put_work_profile_schedules_id_shifts_shiftId",
-        "summary": "Korekta zmiany w propozycji",
+        "operationId": "retired_PUT__work_profile_schedules_id_shifts_shiftId",
+        "summary": "Retired duplicate workflow",
         "tags": [
-          "Scheduling"
+          "Work profile"
         ],
-        "description": "Sprawdza aktualny profil, dostępność, odstępy i wydarzenia, także poza tygodniem. Odrzucenie zachowuje poprzednią zmianę. Przelicza kwotę tylko według snapshotu stawki tej zmiany; nie stosuje bieżącej stawki profilu.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "start",
-                  "end"
-                ],
-                "properties": {
-                  "start": {
-                    "type": "string",
-                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:00(?:\\.000)?(?:Z|[+-]\\d{2}:\\d{2})$"
-                  },
-                  "end": {
-                    "type": "string",
-                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:00(?:\\.000)?(?:Z|[+-]\\d{2}:\\d{2})$"
-                  }
-                }
-              }
-            }
-          }
-        },
+        "description": "The duplicate branch-specific editor/planner has been consolidated into the existing full work profile and scheduler. Historical proposals remain readable using `/api/v1/schedules/id/{id}`.",
         "parameters": [
           {
             "schema": {
@@ -2015,139 +556,61 @@
             "required": true
           }
         ],
+        "deprecated": true,
         "responses": {
-          "200": {
+          "410": {
             "description": "Default Response",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": false,
                   "required": [
-                    "id",
-                    "status",
-                    "week",
-                    "commuteMinutes",
-                    "plannedHours",
-                    "targetHours",
-                    "estimatedPayPln",
-                    "achievable",
-                    "shifts"
+                    "error"
                   ],
                   "properties": {
-                    "id": {
+                    "error": {
                       "type": "string"
                     },
-                    "status": {
-                      "type": "string",
-                      "enum": [
-                        "Proposed",
-                        "Accepted",
-                        "Rejected"
-                      ]
-                    },
-                    "week": {
-                      "type": "string",
-                      "format": "date"
-                    },
-                    "commuteMinutes": {
-                      "anyOf": [
-                        {
-                          "type": "integer",
-                          "minimum": 0,
-                          "maximum": 10080
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "plannedHours": {
-                      "type": "number",
-                      "minimum": 0
-                    },
-                    "targetHours": {
-                      "type": "number",
-                      "minimum": 0
-                    },
-                    "estimatedPayPln": {
-                      "type": "number",
-                      "minimum": 0,
-                      "description": "Suma kwot zaokrąglonych osobno dla zmian, a nie ponowne przeliczenie łącznego czasu. Zero przy braku zmian. Dojazd nie jest płatny."
-                    },
-                    "achievable": {
-                      "type": "boolean"
-                    },
-                    "shifts": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "additionalProperties": false,
-                        "required": [
-                          "id",
-                          "start",
-                          "end",
-                          "category",
-                          "hourlyRatePln",
-                          "estimatedPayPln",
-                          "rateKind"
-                        ],
-                        "properties": {
-                          "id": {
-                            "type": "string"
-                          },
-                          "start": {
-                            "type": "string",
-                            "format": "date-time"
-                          },
-                          "end": {
-                            "type": "string",
-                            "format": "date-time"
-                          },
-                          "category": {
-                            "enum": [
-                              "Work"
-                            ]
-                          },
-                          "hourlyRatePln": {
-                            "type": "number",
-                            "minimum": 0,
-                            "description": "Trwały snapshot stawki PLN/h w momencie generowania. Nie aktualizuje się po zmianie profilu."
-                          },
-                          "estimatedPayPln": {
-                            "type": "number",
-                            "minimum": 0,
-                            "description": "Snapshot kwoty: halfUp(rateGrosz × rzeczywiste minuty / 60) / 100; zaokrąglanie osobno dla każdej zmiany."
-                          },
-                          "rateKind": {
-                            "anyOf": [
-                              {
-                                "type": "string",
-                                "enum": [
-                                  "gross",
-                                  "net"
-                                ]
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          }
-                        }
-                      }
+                    "details": {},
+                    "successor": {
+                      "type": "string"
                     }
                   }
                 }
               }
             }
-          },
-          "400": {
+          }
+        }
+      }
+    },
+    "/api/v1/work-profile/schedules/{id}/accept": {
+      "post": {
+        "operationId": "retired_POST__work_profile_schedules_id_accept",
+        "summary": "Retired duplicate workflow",
+        "tags": [
+          "Work profile"
+        ],
+        "description": "The duplicate branch-specific editor/planner has been consolidated into the existing full work profile and scheduler. Historical proposals remain readable using `/api/v1/schedules/id/{id}`.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "deprecated": true,
+        "responses": {
+          "410": {
             "description": "Default Response",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": false,
                   "required": [
                     "error"
                   ],
@@ -2155,19 +618,46 @@
                     "error": {
                       "type": "string"
                     },
-                    "details": {}
+                    "details": {},
+                    "successor": {
+                      "type": "string"
+                    }
                   }
                 }
               }
             }
-          },
-          "404": {
+          }
+        }
+      }
+    },
+    "/api/v1/work-profile/schedules/{id}/reject": {
+      "post": {
+        "operationId": "retired_POST__work_profile_schedules_id_reject",
+        "summary": "Retired duplicate workflow",
+        "tags": [
+          "Work profile"
+        ],
+        "description": "The duplicate branch-specific editor/planner has been consolidated into the existing full work profile and scheduler. Historical proposals remain readable using `/api/v1/schedules/id/{id}`.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "deprecated": true,
+        "responses": {
+          "410": {
             "description": "Default Response",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": false,
                   "required": [
                     "error"
                   ],
@@ -2175,67 +665,10 @@
                     "error": {
                       "type": "string"
                     },
-                    "details": {}
-                  }
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
+                    "details": {},
+                    "successor": {
                       "type": "string"
-                    },
-                    "details": {}
-                  }
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    },
-                    "details": {}
-                  }
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Default Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    },
-                    "details": {}
+                    }
                   }
                 }
               }
@@ -2732,6 +1165,22 @@
                     "shiftTemplates"
                   ],
                   "properties": {
+                    "hourlyRatePln": {
+                      "type": [
+                        "null",
+                        "number"
+                      ]
+                    },
+                    "rateKind": {
+                      "enum": [
+                        "gross",
+                        "net",
+                        null
+                      ]
+                    },
+                    "commuteConfigured": {
+                      "type": "boolean"
+                    },
                     "profileId": {
                       "type": "string"
                     },
@@ -3065,6 +1514,21 @@
                     "minLength": 1,
                     "description": "Wersja z ostatniego odczytu profilu (optimistic locking)."
                   },
+                  "hourlyRatePln": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "description": "Optional PLN hourly rate. Null means unconfigured; zero is valid. At most two decimal places."
+                  },
+                  "rateKind": {
+                    "enum": [
+                      "gross",
+                      "net",
+                      null
+                    ],
+                    "description": "Gross/net designation, never converted. Required when supplying a rate."
+                  },
                   "mode": {
                     "type": "string",
                     "enum": [
@@ -3352,6 +1816,22 @@
                     "shiftTemplates"
                   ],
                   "properties": {
+                    "hourlyRatePln": {
+                      "type": [
+                        "null",
+                        "number"
+                      ]
+                    },
+                    "rateKind": {
+                      "enum": [
+                        "gross",
+                        "net",
+                        null
+                      ]
+                    },
+                    "commuteConfigured": {
+                      "type": "boolean"
+                    },
                     "profileId": {
                       "type": "string"
                     },
@@ -3667,6 +2147,22 @@
                         "shiftTemplates"
                       ],
                       "properties": {
+                        "hourlyRatePln": {
+                          "type": [
+                            "null",
+                            "number"
+                          ]
+                        },
+                        "rateKind": {
+                          "enum": [
+                            "gross",
+                            "net",
+                            null
+                          ]
+                        },
+                        "commuteConfigured": {
+                          "type": "boolean"
+                        },
                         "profileId": {
                           "type": "string"
                         },
@@ -3953,7 +2449,9 @@
                           "shorter_than_minimum",
                           "end_before_start",
                           "duplicate_id",
-                          "overlap"
+                          "overlap",
+                          "invalid_hourly_rate",
+                          "rate_kind_required"
                         ]
                       }
                     }

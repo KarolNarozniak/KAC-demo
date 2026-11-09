@@ -1,3 +1,5 @@
+> Raport historyczny. Aktualne porównanie i docelowa integracja: [Historia i uporządkowanie integracji](./history-comparison-and-integration.md).
+
 Aktualny stan po kolejnym scaleniu: [raport 2026-11-09](./merge-master-2026-11-09.md).
 
 # Raport realizacji sprintu 204 — Michał Kozłowski
