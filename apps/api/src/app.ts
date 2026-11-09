@@ -18,7 +18,7 @@ const API_PREFIX = '/api/v1';
 
 export function buildApi(repository: CalendarRepository | null, allowedOrigins: string[] = [], options: ApiOptions = {}) {
   const app: FastifyInstance = Fastify({ logger: true });
-  app.decorate('repository', repository);
+  app.decorate('repository', repository as any);
   const allowAnyOrigin = allowedOrigins.includes('*');
   const origins = new Set(allowedOrigins);
 
@@ -76,7 +76,7 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
     await profileRoutes(v1, { repository: options.workProfileRepository, scope: options.userScope });
     await schedulingRoutes(v1, { repository: options.scheduleRepository });
     await importRoutes(v1, { repository, scheduleRepository: options.scheduleRepository, scheduleReader, google: options.google });
-	await blockRoutes(v1, { repository });
+	await blockRoutes(v1);
     registerGoogleImport(v1, repository, options.google);
   }, { prefix: API_PREFIX });
 

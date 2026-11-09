@@ -13,6 +13,23 @@ import {
   type CreateSessionInput,
   type SavedEvent,
 } from './import/session.js';
+export type BlockType = 'vacation' | 'exam_session' | 'day_off';
+
+export type Block = {
+  id: string;
+  userId: string;
+  title: string;
+  startTime: string;
+  endTime: string;
+  type: BlockType;
+};
+
+export type BlockInput = {
+  title: string;
+  startTime: string;
+  endTime: string;
+  type: BlockType;
+};
 
 export const pool = config.databaseUrl
   ? new Pool({
@@ -231,38 +248,6 @@ async createBlock(input: BlockInput, userId = config.demoUserId): Promise<Block>
       };
     } finally {
       client.release();
-    }
-  }
-
-  async updateEvent(eventId: string, input: EventInput, userId = config.demoUserId, calendarId = config.demoCalendarId) {
-    const client = await this.connectionPool.connect();
-    try {
-      await client.query('BEGIN');
-      const owner = await client.query(`
-        select u.strefa_czasowa from t_kalendarze c
-        join t_uzytkownicy u on u.id_uzytkownika = c.id_uzytkownika
-        where c.id_kalendarza = $1 and c.id_uzytkownika = $2 and c.aktywny = true
-      `, [calendarId, userId]);
-      if (!owner.rowCount) throw new Error('calendar_not_found');
-      const timezone = owner.rows[0].strefa_czasowa;
-
-      const category = { Class: 'Zajęcia', Work: 'Praca', Personal: 'Prywatne' }[input.category];
-
-      await client.query(`
-        update t_wydarzenia 
-        set tytul = $1, rozpoczecie = $2::timestamp at time zone $9, zakonczenie = $3::timestamp at time zone $9, 
-            id_kategorii = (select id_kategorii from t_kategorie where nazwa = $4),
-            miejsce = $5, obowiazkowe = $6, powtarzaj_co_tydzien = $7
-        where id_wydarzenia = $8 and id_kalendarza = $10
-      `, [input.title.trim(), input.start, input.end, category, input.location, input.mandatory, input.repeatWeekly, eventId, timezone, calendarId]);
-
-      await client.query('COMMIT');
-      return { id: eventId, ...input, title: input.title.trim() };
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally { 
-      client.release(); 
     }
   }
 

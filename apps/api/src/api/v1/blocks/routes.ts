@@ -1,5 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import type { BlockInput } from '../../contracts.js';
+import { PostgresCalendarRepository } from '../../../database.js';
+declare module 'fastify' {
+  interface FastifyInstance {
+    repository: PostgresCalendarRepository;
+  }
+}
 
 export async function blockRoutes(app: FastifyInstance) {
   app.get('/blocks', async (request, reply) => {
