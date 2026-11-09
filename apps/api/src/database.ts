@@ -13,6 +13,7 @@ import {
   type CreateSessionInput,
   type SavedEvent,
 } from './import/session.js';
+
 export type BlockType = 'vacation' | 'exam_session' | 'day_off';
 
 export type Block = {
@@ -62,9 +63,24 @@ export type CalendarOverview = {
 };
 
 export class PostgresCalendarRepository {
-  constructor(private readonly connectionPool: Pool) {}
+  constructor(private readonly connectionPool: Pool) {
+    this.ensureBlocksTable().catch(() => {});
+  }
 
-  // Account IDs are server selected until authentication is implemented.
+  async ensureBlocksTable() {
+    await this.connectionPool.query(`
+      CREATE TABLE IF NOT EXISTS blocks (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id VARCHAR(255) NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        start_time TIMESTAMP WITH TIME ZONE NOT NULL,
+        end_time TIMESTAMP WITH TIME ZONE NOT NULL,
+        type VARCHAR(50) NOT NULL CHECK (type IN ('vacation', 'exam_session', 'day_off')),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+  }
+
   async createEvent(input: EventInput, userId = config.demoUserId, calendarId = config.demoCalendarId) {
     return this.saveEvent(input, undefined, userId, calendarId);
   }
@@ -77,7 +93,6 @@ export class PostgresCalendarRepository {
     const client = await this.connectionPool.connect();
     try {
       await client.query('BEGIN');
-      // All writers lock the same owned calendar, including imports and deletions.
       const owner = await client.query(`select u.strefa_czasowa from t_kalendarze c
         join t_uzytkownicy u on u.id_uzytkownika = c.id_uzytkownika
         where c.id_kalendarza = $1 and c.id_uzytkownika = $2 and c.aktywny = true for update of c`, [calendarId, userId]);
@@ -156,10 +171,9 @@ export class PostgresCalendarRepository {
       throw error;
     } finally { client.release(); }
   }
-  
-  // --- Metody dla Blokowanie dni wolnych i sesji ---
 
   async listBlocks(): Promise<Block[]> {
+    await this.ensureBlocksTable();
     const result = await this.connectionPool.query(
       'SELECT id, user_id as "userId", title, start_time as "startTime", end_time as "endTime", type FROM blocks ORDER BY start_time ASC'
     );
@@ -170,7 +184,8 @@ export class PostgresCalendarRepository {
     }));
   }
 
-async createBlock(input: BlockInput, userId = config.demoUserId): Promise<Block> {
+  async createBlock(input: BlockInput, userId = config.demoUserId): Promise<Block> {
+    await this.ensureBlocksTable();
     const startTimeIso = new Date(input.startTime).toISOString();
     const endTimeIso = new Date(input.endTime).toISOString();
 
@@ -189,6 +204,7 @@ async createBlock(input: BlockInput, userId = config.demoUserId): Promise<Block>
   }
 
   async deleteBlock(id: string): Promise<boolean> {
+    await this.ensureBlocksTable();
     const result = await this.connectionPool.query('DELETE FROM blocks WHERE id = $1 RETURNING id', [id]);
     return (result.rowCount ?? 0) > 0;
   }
@@ -251,77 +267,71 @@ async createBlock(input: BlockInput, userId = config.demoUserId): Promise<Block>
     }
   }
 
-	async updateSeriesFrom(eventId: string, input: EventInput, userId = config.demoUserId, calendarId = config.demoCalendarId) {
-		const client = await this.connectionPool.connect();
-		try {
-		  await client.query('BEGIN');
-		  const owner = await client.query(`
-			select u.strefa_czasowa from t_kalendarze c
-			join t_uzytkownicy u on u.id_uzytkownika = c.id_uzytkownika
-			where c.id_kalendarza = $1 and c.id_uzytkownika = $2 and c.aktywny = true
-		  `, [calendarId, userId]);
-		  if (!owner.rowCount) throw new Error('calendar_not_found');
-		  const timezone = owner.rows[0].strefa_czasowa;
+  async updateSeriesFrom(eventId: string, input: EventInput, userId = config.demoUserId, calendarId = config.demoCalendarId) {
+    const client = await this.connectionPool.connect();
+    try {
+      await client.query('BEGIN');
+      const owner = await client.query(`
+        select u.strefa_czasowa from t_kalendarze c
+        join t_uzytkownicy u on u.id_uzytkownika = c.id_uzytkownika
+        where c.id_kalendarza = $1 and c.id_uzytkownika = $2 and c.aktywny = true
+      `, [calendarId, userId]);
+      if (!owner.rowCount) throw new Error('calendar_not_found');
+      const timezone = owner.rows[0].strefa_czasowa;
 
-		  // Pobieramy identyfikator serii oraz datę rozpoczęcia wybranego wystąpienia
-		  const targetEvent = await client.query(`
-			select id_serii, rozpoczecie from t_wydarzenia
-			where id_wydarzenia = $1 and id_kalendarza = $2
-		  `, [eventId, calendarId]);
-		  if (!targetEvent.rowCount) throw new Error('event_not_found');
-		  const { id_serii, rozpoczecie } = targetEvent.rows[0];
+      const targetEvent = await client.query(`
+        select id_serii, rozpoczecie from t_wydarzenia
+        where id_wydarzenia = $1 and id_kalendarza = $2
+      `, [eventId, calendarId]);
+      if (!targetEvent.rowCount) throw new Error('event_not_found');
+      const { id_serii, rozpoczecie } = targetEvent.rows[0];
 
-		  const category = { Class: 'Zajęcia', Work: 'Praca', Personal: 'Prywatne' }[input.category];
+      const category = { Class: 'Zajęcia', Work: 'Praca', Personal: 'Prywatne' }[input.category];
 
-		  if (id_serii) {
-			// Aktualizujemy to wydarzenie oraz wszystkie następne w serii (rozpoczecie >= wybrane)
-			await client.query(`
-			  update t_wydarzenia
-			  set tytul = $1, 
-				  rozpoczecie = $2::timestamp at time zone $6, 
-				  zakonczenie = $3::timestamp at time zone $6, 
-				  id_kategorii = (select id_kategorii from t_kategorie where nazwa = $4),
-				  miejsce = $5, 
-				  obowiazkowe = $7, 
-				  powtarzaj_co_tydzien = $8
-			  where id_serii = $9 and id_kalendarza = $10 and rozpoczecie >= $11
-			`, [
-			  input.title.trim(), 
-			  input.start, 
-			  input.end, 
-			  category, 
-			  input.location, 
-			  timezone, 
-			  input.mandatory, 
-			  input.repeatWeekly, 
-			  id_serii, 
-			  calendarId, 
-			  rozpoczecie
-			]);
-		  } else {
-			// Jeśli wydarzenie nie należy do serii, traktujemy je jako zwykłe pojedyncze wydarzenie
-			await client.query(`
-			  update t_wydarzenia 
-			  set tytul = $1, rozpoczecie = $2::timestamp at time zone $6, zakonczenie = $3::timestamp at time zone $6, 
-				  id_kategorii = (select id_kategorii from t_kategorie where nazwa = $4),
-				  miejsce = $5, obowiazkowe = $7, powtarzaj_co_tydzien = $8
-			  where id_wydarzenia = $9 and id_kalendarza = $10
-			`, [input.title.trim(), input.start, input.end, category, input.location, input.mandatory, input.repeatWeekly, eventId, timezone, calendarId]);
-		  }
+      if (id_serii) {
+        await client.query(`
+          update t_wydarzenia
+          set tytul = $1, 
+              rozpoczecie = $2::timestamp at time zone $6, 
+              zakonczenie = $3::timestamp at time zone $6, 
+              id_kategorii = (select id_kategorii from t_kategorie where nazwa = $4),
+              miejsce = $5, 
+              obowiazkowe = $7, 
+              powtarzaj_co_tydzien = $8
+          where id_serii = $9 and id_kalendarza = $10 and rozpoczecie >= $11
+        `, [
+          input.title.trim(), 
+          input.start, 
+          input.end, 
+          category, 
+          input.location, 
+          timezone, 
+          input.mandatory, 
+          input.repeatWeekly, 
+          id_serii, 
+          calendarId, 
+          rozpoczecie
+        ]);
+      } else {
+        await client.query(`
+          update t_wydarzenia 
+          set tytul = $1, rozpoczecie = $2::timestamp at time zone $6, zakonczenie = $3::timestamp at time zone $6, 
+              id_kategorii = (select id_kategorii from t_kategorie where nazwa = $4),
+              miejsce = $5, obowiazkowe = $7, powtarzaj_co_tydzien = $8
+          where id_wydarzenia = $9 and id_kalendarza = $10
+        `, [input.title.trim(), input.start, input.end, category, input.location, input.mandatory, input.repeatWeekly, eventId, timezone, calendarId]);
+      }
 
-		  await client.query('COMMIT');
-		  return { id: eventId, ...input, title: input.title.trim() };
-		} catch (error) {
-		  await client.query('ROLLBACK');
-		  throw error;
-		} finally { 
-		  client.release(); 
-		}
-	  }
+      await client.query('COMMIT');
+      return { id: eventId, ...input, title: input.title.trim() };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally { 
+      client.release(); 
+    }
+  }
 
-  // --- Import: kontrola rozpoznanych danych przed zapisem (S23KC2S1P2-32) ---
-
-  /** Tworzy sesję importu: zapisuje odczytane wiersze jako pozycje do kontroli. Kalendarz pozostaje bez zmian. */
   async createImportSession(input: CreateSessionInput, userId = config.demoUserId): Promise<{ id: string; expiresAt: Date }> {
     const client = await this.connectionPool.connect();
     try {
@@ -363,7 +373,6 @@ async createBlock(input: BlockInput, userId = config.demoUserId): Promise<Block>
     }
   }
 
-  /** Każda akcja użytkownika w podglądzie przedłuża sesję o kolejne 15 minut. */
   async touchImportSession(sessionId: string, userId = config.demoUserId): Promise<void> {
     await this.connectionPool.query(
       `update t_importy set data_importu = now()
@@ -373,7 +382,6 @@ async createBlock(input: BlockInput, userId = config.demoUserId): Promise<Block>
     );
   }
 
-  /** Anulowanie importu: sesja kończy się bez zmian w kalendarzu (wynik „Anulowano”). */
   async cancelImportSession(sessionId: string, userId = config.demoUserId): Promise<boolean> {
     const result = await this.connectionPool.query(
       `update t_importy set status = 'Anulowany' where id_importu = $1 and id_uzytkownika = $2 and status = 'Podgląd'`,
@@ -382,14 +390,12 @@ async createBlock(input: BlockInput, userId = config.demoUserId): Promise<Block>
     return (result.rowCount ?? 0) > 0;
   }
 
-  /** Imię i nazwisko użytkownika – służy do rozpoznania jego zmian w grafiku wielu pracowników. */
   async getImportUserName(userId = config.demoUserId): Promise<string> {
     const result = await this.connectionPool.query(`select imie, nazwisko from t_uzytkownicy where id_uzytkownika = $1`, [userId]);
     const row = result.rows[0];
     return row ? `${row.imie} ${row.nazwisko}`.trim() : '';
   }
 
-  /** Aktywne wydarzenia kalendarza potrzebne do wykrywania duplikatów. */
   async listEventsForImport(calendarId = config.demoCalendarId, userId = config.demoUserId): Promise<ExistingEvent[]> {
     const result = await this.connectionPool.query(
       `select e.id_wydarzenia, e.tytul, e.rozpoczecie, e.powtarzaj_co_tydzien, u.strefa_czasowa
@@ -401,11 +407,6 @@ async createBlock(input: BlockInput, userId = config.demoUserId): Promise<Block>
     return result.rows.map((event) => ({ id: event.id_wydarzenia, title: event.tytul, start: new Date(event.rozpoczecie), repeatWeekly: event.powtarzaj_co_tydzien, timeZone: event.strefa_czasowa }));
   }
 
-  /**
-   * Zatwierdza import w jednej transakcji: albo zapisują się wszystkie zaakceptowane wiersze, albo żaden.
-   * Zmiany pracy będące duplikatami są dodawane, zastępowane albo pomijane zgodnie z decyzją użytkownika.
-   * Wiersze sesji, których użytkownik nie zaakceptował, dostają status „Odrzucona”.
-   */
   async confirmImportSession(
     sessionId: string,
     rows: AcceptedRow[],
@@ -443,7 +444,6 @@ async createBlock(input: BlockInput, userId = config.demoUserId): Promise<Block>
         return { kind: 'expired' };
       }
 
-      // Zapisać można tylko wiersze, które naprawdę należą do tej sesji.
       const known = await client.query(`select id_pozycji from t_pozycje_importu where id_importu = $1`, [sessionId]);
       const knownIds = new Set(known.rows.map((row) => row.id_pozycji as string));
       const unknown = rows.filter((row) => !knownIds.has(positionId(sessionId, row.id))).map((row) => row.id);
@@ -452,7 +452,6 @@ async createBlock(input: BlockInput, userId = config.demoUserId): Promise<Block>
         return { kind: 'unknown-rows', rowIds: unknown };
       }
 
-      // All import categories share the same title/start duplicate rule.
       const actions = new Map<string, PlanAction>(rows.map((row) => [row.id, { kind: 'insert', rowId: row.id }]));
       if (rows.length > 0) {
         const existing = (
@@ -480,12 +479,10 @@ async createBlock(input: BlockInput, userId = config.demoUserId): Promise<Block>
              values ($1, $2, $3, $4, $5, $8, $6, $7)
              returning id_wydarzenia`,
             [calendarId, CATEGORY_IDS[row.category], row.title, row.start, row.end, description, row.location ?? '',
-              // Pochodzenie wydarzenia (t_wydarzenia.zrodlo): „Google” dla importu z Google Calendar, „Import” dla plików.
               current.zrodlo === SOURCE_LABELS.google ? 'Google' : 'Import'],
           );
           eventId = inserted.rows[0].id_wydarzenia;
         } else if (action.kind === 'replace') {
-          // „Zastąp”: istniejące wydarzenie z kalendarza użytkownika dostaje zatwierdzone dane z importu.
           const updated = await client.query(
             `update t_wydarzenia
              set tytul = $3,
