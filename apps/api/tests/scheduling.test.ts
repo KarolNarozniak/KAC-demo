@@ -81,6 +81,7 @@ test('optional lectures are soft conflicts and reported when target needs them',
 test('shift mode chooses templates and manual edits retain hard constraints', () => {
   const input = context({
     profile: { ...context().profile, mode: 'zmianowy', minimumHours: 8, targetHours: 8, maximumHours: 8 },
+    availability: context().availability.map(window => ({...window,startTime:'07:45'})),
     shiftTemplates: [{ id: 'am', name: 'Morning', startTime: '08:00', endTime: '16:00', endsNextDay: false, daysOfWeek: [1, 2, 3, 4, 5], active: true }],
   });
   const result = generateSchedule(input, '2026-11-02');
@@ -97,4 +98,23 @@ test('greedy failure is not reported as a proof of infeasibility', () => {
   }), '2026-11-02');
   assert.equal(result.solutionStatus, 'not_found');
   assert.ok(result.shortfallMinutes > 0);
+});
+
+test('merged planner fits commute inside availability and uses max(rest, commute)', () => {
+  const input = context({
+    profile: {...context().profile, minimumHours:4,targetHours:4,maximumHours:4,commuteBufferMinutes:30,minimumRestMinutes:60,maximumSlotMinutes:120},
+    availability:[{id:'mon',dayOfWeek:1,startTime:'08:00',endTime:'14:00'}],
+  });
+  const result=generateSchedule(input,'2026-11-02');
+  assert.equal(result.proposedMinutes,240);
+  assert.equal(result.shifts.length,2);
+  assert.equal(result.shifts[0]?.startLocal,'2026-11-02T08:30');
+  assert.equal(result.shifts[1]?.startLocal,'2026-11-02T11:30');
+  const invalid=validateSchedule(input,'2026-11-02',[
+    {id:'a',startLocal:'2026-11-02T08:30',endLocal:'2026-11-02T10:30'},
+    {id:'b',startLocal:'2026-11-02T11:29',endLocal:'2026-11-02T13:29'},
+  ]);
+  const gap=invalid.errors.find(error=>error.code==='commute_gap_too_short');
+  assert.equal(gap?.details.actualMinutes,59);
+  assert.equal(gap?.details.requiredMinutes,60);
 });

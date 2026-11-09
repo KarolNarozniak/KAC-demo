@@ -1,3 +1,4 @@
+import { ProfileError } from '../../../profile/availability.js';
 import type { FastifyInstance } from 'fastify';
 import { validateWorkProfile } from '../../../profile/rules.js';
 import type { WorkProfileRepository } from '../../../profile/repository.js';
@@ -34,6 +35,7 @@ export async function profileRoutes(app: FastifyInstance, options: { repository?
       if (result.kind === 'conflict') return reply.code(409).send({ error: 'profile_version_conflict', profile: result.current });
       return result.profile;
     } catch (error) {
+      if(error instanceof ProfileError)return reply.code(422).send({error:'invalid_work_profile',fields:{availability:'overlap'}});
       request.log.error({ err: error }, 'Work profile update failed');
       return reply.code(503).send({ error: 'work_profile_unavailable' });
     }

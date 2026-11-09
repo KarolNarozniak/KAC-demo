@@ -4,7 +4,7 @@ import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/d
 import { Button, useTheme } from './ui';
 import type { TimeFieldProps } from './TimeField.types';
 
-export default function TimeField({ label, value, onChange, invalid = false }: TimeFieldProps) {
+export default function TimeField({ label, value, onChange, invalid = false, disabled = false }: TimeFieldProps) {
   const [open, setOpen] = useState(false);
   const { styles, palette, mode } = useTheme();
   const [hours, minutes] = value.split(':').map(Number);
@@ -31,7 +31,7 @@ export default function TimeField({ label, value, onChange, invalid = false }: T
   };
   return <View style={{ flex: 1, minWidth: 0, marginBottom: 12 }}>
     <Text style={[styles.label, invalid && { color: palette.red }]}>{label}</Text>
-    <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${value}`} accessibilityState={{ expanded: open }} onPress={showPicker} disabled={open} style={[styles.input, { minHeight: 44, justifyContent: 'center' }, invalid && { borderColor: palette.red, borderWidth: 2 }]}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${value}`} accessibilityState={{ expanded: open }} onPress={showPicker} disabled={open || disabled} style={[styles.input, { minHeight: 44, justifyContent: 'center' }, invalid && { borderColor: palette.red, borderWidth: 2 }]}>
       <Text style={valid ? styles.body : styles.muted}>{valid ? value : 'Wybierz godzinę'}</Text>
     </Pressable>
     {Platform.OS === 'ios' && <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>

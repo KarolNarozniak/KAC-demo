@@ -1,3 +1,4 @@
+import {formatPln} from '../services/compensationApi';
 import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { addCalendarDays, localDateKey, startOfWeek } from '../domain/calendar';
@@ -171,6 +172,7 @@ export default function ScheduleScreen({ week, setWeek, now, active, onApproved,
         <View style={[styles.row, { flexWrap: 'wrap', marginTop: 16 }]}>
           {[['Zaplanuj', minutesLabel(schedule.proposedMinutes)], ['Razem z pracą', minutesLabel(schedule.totalMinutes)], [workaholic ? 'Maks. nowe zmiany' : 'Cel', minutesLabel(workaholic ? schedule.proposedMinutes : schedule.targetMinutes)], ['Do celu', minutesLabel(schedule.shortfallMinutes)]].map(([label, value]) => <View key={label} style={{ flexGrow: 1, minWidth: 120, padding: 12, borderRadius: 12, backgroundColor: palette.surfaceAlt }}><Text style={styles.label}>{label.toUpperCase()}</Text><Text style={[styles.heading, { fontSize: 19 }]}>{value}</Text></View>)}
         </View>
+        {schedule.estimatedPayPln !== undefined && <Text style={styles.body}>Wynagrodzenie nowych zmian: {formatPln(schedule.estimatedPayPln)}{dirty ? ' (zapisz korekty, aby odświeżyć kwotę)' : ''}</Text>}
         {!workaholic && schedule.targetMinutes > 0 && <TargetProgress plannedMinutes={schedule.totalMinutes} targetMinutes={schedule.targetMinutes} label="Praca w tym tygodniu względem celu"
           note={profile.saved?.targetPeriod === 'month' ? `cel miesięczny ${formatNumber(profile.saved.targetHours)} h ≈ ${formatNumber(profile.saved.weeklyTargetHours)} h tygodniowo` : undefined} />}
         {!!schedule.optionalLecturesSkipped.length && <Text style={[styles.muted, { marginTop: 12 }]}>Pominięte zajęcia nieobowiązkowe: {schedule.optionalLecturesSkipped.join(', ')}</Text>}
@@ -200,6 +202,8 @@ export default function ScheduleScreen({ week, setWeek, now, active, onApproved,
             <Text style={[styles.muted, { paddingBottom: 10 }]}>{minutesLabel(shift.durationMinutes)}</Text>
             <Button title="Usuń" danger onPress={() => removeShift(shift.candidateId)} />
           </View>
+          {shift.hourlyRatePln !== undefined && <Text style={styles.body}>{formatPln(shift.hourlyRatePln)}/h · {formatPln(shift.estimatedPayPln ?? 0)} {shift.rateKind === 'gross' ? 'brutto' : shift.rateKind === 'net' ? 'netto' : ''}</Text>}
+          <Text style={styles.muted}>Dojazd: {profile.saved?.commuteBufferMinutes ?? 0} min przed i po zmianie — czas niepłatny.</Text>
           {(() => {
             // S23KC2S1P2-195: wskazanie zajęć kolidujących ze zmianą – od razu przy ręcznej edycji, przed zapisem.
             const message = conflictMessage(shiftClassConflicts(shift, schedule.blockingEvents));

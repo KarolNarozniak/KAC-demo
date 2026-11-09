@@ -1,3 +1,6 @@
+import { validateSchedule } from './generator.js';
+import { calculatePay } from './pay.js';
+import { ProfileError } from '../profile/availability.js';
 import type { Pool } from 'pg';
 import { config } from '../config.js';
 import { localDateTimeString } from './time.js';
@@ -7,37 +10,23 @@ export class ScheduleNotFoundError extends Error {}
 export class ScheduleAlreadyApprovedError extends Error {}
 export class ProfileVersionConflictError extends Error {}
 export class ScheduleVersionConflictError extends Error {
-  constructor(public expectedVersion: number, public actualVersion: number) { super('schedule_version_conflict'); }
+  constructor(public expectedVersion:number,public actualVersion:number){super('schedule_version_conflict');}
 }
-
-export type ScheduleRepository = Pick<PostgresScheduleRepository, 'getPlanningContext' | 'saveSchedule' | 'getLatestSchedule' | 'getScheduleById' | 'listSchedules' | 'getApprovedShiftEventIds' | 'approveSchedule' | 'rejectSchedule'>;
-
+export type ScheduleRepository = Pick<PostgresScheduleRepository, 'getPlanningContext'|'saveSchedule'|'getLatestSchedule'|'getScheduleById'|'listSchedules'|'getApprovedShiftEventIds'|'approveSchedule'|'rejectSchedule'>;
 export class PostgresScheduleRepository {
-  constructor(private readonly connectionPool: Pool) {
-    this.ensureBlocksTable().catch(() => {});
-  }
+  constructor(private readonly connectionPool: Pool) {}
 
-  async ensureBlocksTable() {
-    await this.connectionPool.query(`
-      CREATE TABLE IF NOT EXISTS blocks (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        user_id VARCHAR(255) NOT NULL,
-        title VARCHAR(255) NOT NULL,
-        start_time TIMESTAMP WITH TIME ZONE NOT NULL,
-        end_time TIMESTAMP WITH TIME ZONE NOT NULL,
-        type VARCHAR(50) NOT NULL CHECK (type IN ('vacation', 'exam_session', 'day_off')),
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-  }
-
-  async getPlanningContext(userId = config.demoUserId, calendarId = config.demoCalendarId, requestedProfileId?: string): Promise<PlanningContext | null> {
-    await this.ensureBlocksTable();
-    const profileResult = await this.connectionPool.query(`
+  async getPlanningContext(userId = config.demoUserId, calendarId = config.demoCalendarId, requestedProfileId?: string, connection: Pick<Pool, 'query'> = this.connectionPool): Promise<PlanningContext | null> {
+    let queue:Promise<unknown>=Promise.resolve();
+    const read=(sql:string,parameters:unknown[])=>{
+      const result=connection===this.connectionPool ? connection.query(sql,parameters) : queue.then(()=>connection.query(sql,parameters));
+      queue=result;return result;
+    };
+    const profileResult = await read(`
       select p.id_profilu, p.id_uzytkownika, c.id_kalendarza, u.strefa_czasowa,
         p.min_godzin_tydzien, p.cel_godzin_tydzien, p.max_godzin_tydzien, p.stawka_pln,
         p.czas_dojazdu_min, p.min_odpoczynku_min, p.tryb_pracy, p.min_slot_min, p.max_slot_min,
-        p.max_godzin_dzien, p.okres_celu, p.cel_godzin_miesiac, p.updated_at::text as profile_version
+        p.rodzaj_stawki, p.max_godzin_dzien, p.okres_celu, p.cel_godzin_miesiac, p.updated_at::text as profile_version
       from t_profile_pracy p
       join t_uzytkownicy u on u.id_uzytkownika = p.id_uzytkownika
       join t_kalendarze c on c.id_uzytkownika = p.id_uzytkownika and c.id_kalendarza = $2 and c.aktywny
@@ -46,24 +35,24 @@ export class PostgresScheduleRepository {
     const profile = profileResult.rows[0];
     if (!profile) return null;
     const profileId: string = profile.id_profilu;
-    
+
     const [availability, preferences, blocks, calendarBlocksResult, events, templates] = await Promise.all([
-      this.connectionPool.query(`select id_dostepnosci, dzien_tygodnia, od_godzina, do_godzina
+      read(`select id_dostepnosci, dzien_tygodnia, od_godzina, do_godzina
         from t_dostepnosc where id_profilu = $1 order by dzien_tygodnia, od_godzina`, [profileId]),
-      this.connectionPool.query(`select id_preferencji, dzien_tygodnia, od_godzina, do_godzina, waga
+      read(`select id_preferencji, dzien_tygodnia, od_godzina, do_godzina, waga
         from t_prefer_godziny where id_profilu = $1 order by dzien_tygodnia, od_godzina`, [profileId]),
-      this.connectionPool.query(`select id_blokady, typ, rozpoczecie, zakonczenie, powod
+      read(`select id_blokady, typ, rozpoczecie, zakonczenie, powod
         from t_blokady where id_profilu = $1 order by rozpoczecie`, [profileId]),
-      this.connectionPool.query(`select id, user_id, title, start_time, end_time, type
+      read(`select id, user_id, title, start_time, end_time, type
         from blocks where user_id = $1 order by start_time`, [userId]),
-      this.connectionPool.query(`select e.id_wydarzenia, e.tytul, e.obowiazkowe, e.powtarzaj_co_tydzien, e.zrodlo,
+      read(`select e.id_wydarzenia, e.tytul, e.obowiazkowe, e.powtarzaj_co_tydzien, e.zrodlo,
           to_char(e.rozpoczecie at time zone $2, 'YYYY-MM-DD"T"HH24:MI') as start_local,
           to_char(e.zakonczenie at time zone $2, 'YYYY-MM-DD"T"HH24:MI') as end_local,
           k.nazwa as category, s.data_konca::text as series_end_date
         from t_wydarzenia e join t_kategorie k on k.id_kategorii = e.id_kategorii
         left join t_serie s on s.id_serii = e.id_serii
         where e.id_kalendarza = $1 and e.status = 'Aktywne' order by e.rozpoczecie`, [profile.id_kalendarza, profile.strefa_czasowa]),
-      this.connectionPool.query(`select id_szablonu, nazwa, godzina_od, godzina_do, koniec_nastepnego_dnia, dni_tygodnia, aktywna
+      read(`select id_szablonu, nazwa, godzina_od, godzina_do, koniec_nastepnego_dnia, dni_tygodnia, aktywna
         from t_szablony_zmian where id_profilu = $1 order by nazwa`, [profileId]),
     ]);
 
@@ -81,6 +70,9 @@ export class PostgresScheduleRepository {
         targetHours: number(profile.cel_godzin_tydzien, 0),
         maximumHours: number(profile.max_godzin_tydzien, 40),
         hourlyRatePln: number(profile.stawka_pln, 0),
+        hourlyRateConfigured: profile.stawka_pln !== null,
+        commuteConfigured: profile.czas_dojazdu_min !== null,
+        rateKind: profile.rodzaj_stawki,
         commuteBufferMinutes: Number(profile.czas_dojazdu_min),
         minimumRestMinutes: Number(profile.min_odpoczynku_min),
         mode: profile.tryb_pracy,
@@ -93,10 +85,10 @@ export class PostgresScheduleRepository {
       },
       availability: availability.rows.map((row) => ({ id: row.id_dostepnosci, dayOfWeek: Number(row.dzien_tygodnia), startTime: time(row.od_godzina), endTime: time(row.do_godzina) })),
       preferredWorkWindows: preferences.rows.map((row) => ({ id: row.id_preferencji, dayOfWeek: Number(row.dzien_tygodnia), startTime: time(row.od_godzina), endTime: time(row.do_godzina), weight: Number(row.waga) })),
-      
+
       blockedPeriods: [
-        ...blocks.rows.map((row) => ({ id: String(row.id_blokady), type: row.typ, start: new Date(row.rozpoczecie).toISOString(), end: new Date(row.zakonczenie).toISOString(), reason: row.powod ?? undefined })),
-        ...calendarBlocksResult.rows.map((row) => ({ id: String(row.id), type: row.type, start: new Date(row.start_time).toISOString(), end: new Date(row.end_time).toISOString(), reason: row.title })),
+        ...blocks.rows.map((row) => ({ source:'profile' as const,id: String(row.id_blokady), type: row.typ, start: new Date(row.rozpoczecie).toISOString(), end: new Date(row.zakonczenie).toISOString(), reason: row.powod ?? undefined })),
+        ...calendarBlocksResult.rows.map((row) => ({ source:'calendar' as const,id: String(row.id), type: row.type, start: new Date(row.start_time).toISOString(), end: new Date(row.end_time).toISOString(), reason: row.title })),
       ],
 
       events: events.rows.map((row) => ({ id: row.id_wydarzenia, title: row.tytul, start: row.start_local, end: row.end_local,
@@ -111,10 +103,13 @@ export class PostgresScheduleRepository {
     try {
       await client.query('begin');
       await client.query('select id_kalendarza from t_kalendarze where id_kalendarza = $1 for update', [context.profile.calendarId]);
-      const latest = await client.query(`select coalesce(max(version), 0)::integer as version from t_grafiki where id_kalendarza = $1 and tydzien_od = $2`, [context.profile.calendarId, schedule.weekStart]);
+      const latest = await client.query(`select coalesce(max(version), 0)::integer as version from t_grafiki where generator_version <> 'work-profile-v1' and id_kalendarza = $1 and tydzien_od = $2`, [context.profile.calendarId, schedule.weekStart]);
       const currentVersion = Number(latest.rows[0].version);
       if (expectedVersion !== undefined && expectedVersion !== currentVersion) throw new ScheduleVersionConflictError(expectedVersion, currentVersion);
       const version = currentVersion + 1;
+      const payRows=schedule.shifts.map(shift=>calculatePay(shift.hourlyRatePln ?? context.profile.hourlyRatePln,shift.start,shift.end));
+      const totalPayGrosz=payRows.reduce((total,pay)=>total+pay.payGrosz,0);
+      if(totalPayGrosz>999999999999)throw new ProfileError('pay_overflow');
       const snapshot = { ...schedule.parameters, upperBoundMinutes: schedule.upperBoundMinutes,
         minimumShortfallMinutes: schedule.minimumShortfallMinutes, optionalLecturesSkipped: schedule.optionalLecturesSkipped,
         workdaysUsed: schedule.workdaysUsed, maximumCapacityMinutes: schedule.maximumCapacityMinutes, context };
@@ -124,17 +119,18 @@ export class PostgresScheduleRepository {
          version, generator_version, input_snapshot, tryb_pracy, solution_status)
         values ($1, $2, $3::date, ($3::date + 6), 'proposed', $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17::jsonb, $18, $19)
         returning id_grafiku`, [context.profile.id, context.profile.calendarId, schedule.weekStart,
-        schedule.targetMinutes / 60, schedule.totalMinutes / 60, schedule.totalMinutes / 60 * context.profile.hourlyRatePln,
+        schedule.targetMinutes / 60, schedule.totalMinutes / 60, totalPayGrosz / 100,
         schedule.solutionStatus === 'target_met', schedule.minimumMinutes / 60, schedule.maximumMinutes / 60, schedule.targetMinutes,
         schedule.existingWorkMinutes, schedule.proposedMinutes, schedule.totalMinutes, schedule.shortfallMinutes,
         version, schedule.generatorVersion, JSON.stringify(snapshot), schedule.mode, schedule.solutionStatus]);
       const scheduleId: string = inserted.rows[0].id_grafiku;
-      for (const shift of schedule.shifts) {
+      for (const [index,shift] of schedule.shifts.entries()) {
+        const pay=payRows[index]!;
         await client.query(`insert into t_zmiany_pracy
-          (id_grafiku, rozpoczecie, zakonczenie, godziny, stawka_pln, wynagrodzenie_pln, status, candidate_id, template_id, optional_lecture_ids, soft_penalty)
-          values ($1, $2::timestamptz, $3::timestamptz, $4, $5, $6, 'Proponowana', $7, $8, $9, $10)`, [scheduleId, shift.start, shift.end,
-          shift.durationMinutes / 60, context.profile.hourlyRatePln, shift.durationMinutes / 60 * context.profile.hourlyRatePln,
-          shift.candidateId, shift.templateId ?? null, shift.optionalLectureIds, shift.softPenalty]);
+          (id_grafiku, rozpoczecie, zakonczenie, godziny, stawka_pln, wynagrodzenie_pln, status, candidate_id, template_id, optional_lecture_ids, soft_penalty, rodzaj_stawki)
+          values ($1, $2::timestamptz, $3::timestamptz, $4, $5, $6, 'Proponowana', $7, $8, $9, $10, $11)`, [scheduleId, shift.start, shift.end,
+          pay.durationMinutes / 60, shift.hourlyRatePln ?? context.profile.hourlyRatePln, pay.estimatedPayPln,
+          shift.candidateId, shift.templateId ?? null, shift.optionalLectureIds, shift.softPenalty, shift.rateKind ?? context.profile.rateKind ?? null]);
       }
       for (const violation of schedule.violations) {
         await client.query(`insert into t_ograniczenia_grafiku
@@ -144,7 +140,7 @@ export class PostgresScheduleRepository {
           violation.code, JSON.stringify({ ...violation.details, candidateIds: violation.candidateIds, eventIds: violation.eventIds })]);
       }
       await client.query('commit');
-      return { ...schedule, scheduleId, version, isApproved: false, workflowStatus: 'proposed', approvedAt: undefined };
+      return { ...schedule, estimatedPayPln: totalPayGrosz/100, shifts:schedule.shifts.map((shift,i)=>({...shift,hourlyRatePln:shift.hourlyRatePln ?? context.profile.hourlyRatePln,estimatedPayPln:payRows[i]!.estimatedPayPln,rateKind:shift.rateKind ?? context.profile.rateKind ?? null})), scheduleId, version, isApproved: false, workflowStatus: 'proposed', approvedAt: undefined };
     } catch (error) {
       await client.query('rollback');
       throw error;
@@ -157,7 +153,7 @@ export class PostgresScheduleRepository {
       await client.query('begin');
       await client.query('select id_kalendarza from t_kalendarze where id_kalendarza = $1 for update', [calendarId]);
       const latest = await client.query(`select id_grafiku, version, approved_at from t_grafiki
-        where id_kalendarza = $1 and tydzien_od = $2::date and rejected_at is null order by version desc limit 1 for update`, [calendarId, weekStart]);
+        where generator_version <> 'work-profile-v1' and id_kalendarza = $1 and tydzien_od = $2::date and rejected_at is null order by version desc limit 1 for update`, [calendarId, weekStart]);
       const row = latest.rows[0];
       if (!row) { await client.query('rollback'); return null; }
       if (Number(row.version) !== expectedVersion) throw new ScheduleVersionConflictError(expectedVersion, Number(row.version));
@@ -165,8 +161,19 @@ export class PostgresScheduleRepository {
         await client.query('commit');
         return this.getLatestSchedule(weekStart, calendarId);
       }
+      const ownedProfile=await client.query(`select p.id_profilu,p.id_uzytkownika from t_profile_pracy p join t_grafiki g using(id_profilu) where g.id_grafiku=$1 for update of p`,[row.id_grafiku]);
+      const profile=ownedProfile.rows[0];
+      const context=profile ? await this.getPlanningContext(profile.id_uzytkownika,calendarId,profile.id_profilu,client) : null;
+      const proposal=await this.readSchedule(weekStart,calendarId,row.id_grafiku,client);
+      if(!context || !proposal) throw new ProfileError('work_profile_not_found',404);
+      if(proposal.parameters.profileVersion && proposal.parameters.profileVersion !== context.profile.profileVersion)throw new ProfileError('profile_version_conflict',409);
+      const published=await client.query(`select z.id_wydarzenia from t_zmiany_pracy z join t_grafiki g using(id_grafiku) where g.id_kalendarza=$1 and g.tydzien_od=$2::date and g.generator_version<>'work-profile-v1' and g.approved_at is not null`,[calendarId,weekStart]);
+      const excluded=new Set(published.rows.map(event=>event.id_wydarzenia));
+      context.events=context.events.filter(event=>!excluded.has(event.id));
+      const validation=validateSchedule(context,weekStart,proposal.shifts.map(shift=>({id:shift.candidateId,startLocal:shift.startLocal,endLocal:shift.endLocal,templateId:shift.templateId})),{mode:proposal.mode,minimumHours:proposal.minimumMinutes/60,targetHours:proposal.targetMinutes/60,maximumHours:proposal.maximumMinutes/60,maxHoursPerDay:Number(proposal.parameters.maxHoursPerDay??context.profile.maxHoursPerDay)});
+      if(validation.errors.length)throw new ProfileError('invalid_schedule',422,{errors:validation.errors,warnings:validation.warnings});
       const previousApproved = await client.query(`select id_grafiku from t_grafiki
-        where id_kalendarza = $1 and tydzien_od = $2::date and approved_at is not null and id_grafiku <> $3 for update`,
+        where generator_version <> 'work-profile-v1' and id_kalendarza = $1 and tydzien_od = $2::date and approved_at is not null and id_grafiku <> $3 for update`,
       [calendarId, weekStart, row.id_grafiku]);
       for (const previous of previousApproved.rows) {
         await client.query(`delete from t_wydarzenia where zrodlo = 'Plan pracy' and id_wydarzenia = any(
@@ -198,13 +205,13 @@ export class PostgresScheduleRepository {
       await client.query('begin');
       await client.query('select id_kalendarza from t_kalendarze where id_kalendarza = $1 for update', [calendarId]);
       const latest = await client.query(`select id_grafiku, version, approved_at from t_grafiki
-        where id_kalendarza = $1 and tydzien_od = $2::date and rejected_at is null order by version desc limit 1 for update`, [calendarId, weekStart]);
+        where generator_version <> 'work-profile-v1' and id_kalendarza = $1 and tydzien_od = $2::date and rejected_at is null order by version desc limit 1 for update`, [calendarId, weekStart]);
       const row = latest.rows[0];
       if (!row) { await client.query('rollback'); return null; }
       if (Number(row.version) !== expectedVersion) throw new ScheduleVersionConflictError(expectedVersion, Number(row.version));
       if (row.approved_at) throw new ScheduleAlreadyApprovedError('accepted_schedule_cannot_be_rejected');
       await client.query(`update t_grafiki set rejected_at = now(), status = 'rejected'
-        where id_kalendarza = $1 and tydzien_od = $2::date and approved_at is null and rejected_at is null`, [calendarId, weekStart]);
+        where generator_version <> 'work-profile-v1' and id_kalendarza = $1 and tydzien_od = $2::date and approved_at is null and rejected_at is null`, [calendarId, weekStart]);
       await client.query('commit');
       return this.getLatestSchedule(weekStart, calendarId);
     } catch (error) {
@@ -216,7 +223,7 @@ export class PostgresScheduleRepository {
   async getApprovedShiftEventIds(weekStart: string, calendarId = config.demoCalendarId): Promise<string[]> {
     const result = await this.connectionPool.query(`select z.id_wydarzenia from t_grafiki g
       join t_zmiany_pracy z on z.id_grafiku = g.id_grafiku
-      where g.id_kalendarza = $1 and g.tydzien_od = $2::date and g.approved_at is not null and z.id_wydarzenia is not null`, [calendarId, weekStart]);
+      where g.generator_version <> 'work-profile-v1' and g.id_kalendarza = $1 and g.tydzien_od = $2::date and g.approved_at is not null and z.id_wydarzenia is not null`, [calendarId, weekStart]);
     return result.rows.map((row) => row.id_wydarzenia as string);
   }
 
@@ -224,9 +231,9 @@ export class PostgresScheduleRepository {
     return this.readSchedule(weekStart, calendarId);
   }
 
-  async getScheduleById(scheduleId: string): Promise<ScheduleGenerationResult | null> {
+  async getScheduleById(scheduleId: string, calendarId = config.demoCalendarId): Promise<ScheduleGenerationResult | null> {
     const result = await this.connectionPool.query(`select id_kalendarza, to_char(tydzien_od, 'YYYY-MM-DD') as week_start
-      from t_grafiki where id_grafiku = $1`, [scheduleId]);
+      from t_grafiki where generator_version <> 'work-profile-v1' and id_grafiku = $1 and id_kalendarza = $2`, [scheduleId, calendarId]);
     const row = result.rows[0];
     return row ? this.readSchedule(row.week_start, row.id_kalendarza, scheduleId) : null;
   }
@@ -235,24 +242,24 @@ export class PostgresScheduleRepository {
     const [result, countResult] = await Promise.all([this.connectionPool.query(`select g.id_grafiku, g.tydzien_od::text as week_start, g.status,
         g.solution_status, g.version, g.approved_at, g.rejected_at, g.target_minutes, g.total_minutes, g.shortfall_minutes,
         count(*) over()::integer as total_count
-      from t_grafiki g where g.id_kalendarza = $1 and g.tydzien_od between $2::date and $3::date
+      from t_grafiki g where g.generator_version <> 'work-profile-v1' and g.id_kalendarza = $1 and g.tydzien_od between $2::date and $3::date
       order by g.tydzien_od desc, g.version desc limit $4 offset $5`, [calendarId, filters.from, filters.to, filters.limit, filters.offset]),
-      this.connectionPool.query(`select count(*)::integer as total from t_grafiki where id_kalendarza = $1 and tydzien_od between $2::date and $3::date`, [calendarId, filters.from, filters.to])]);
+      this.connectionPool.query(`select count(*)::integer as total from t_grafiki where generator_version <> 'work-profile-v1' and id_kalendarza = $1 and tydzien_od between $2::date and $3::date`, [calendarId, filters.from, filters.to])]);
     return { items: result.rows.map((row) => ({ scheduleId: row.id_grafiku, weekStart: row.week_start, status: row.status,
       solutionStatus: row.solution_status, version: Number(row.version), isApproved: Boolean(row.approved_at), isRejected: Boolean(row.rejected_at),
       targetMinutes: Number(row.target_minutes), totalMinutes: Number(row.total_minutes), shortfallMinutes: Number(row.shortfall_minutes) })),
        total: Number(countResult.rows[0].total), limit: filters.limit, offset: filters.offset };
   }
 
-  private async readSchedule(weekStart: string, calendarId: string, scheduleId?: string): Promise<ScheduleGenerationResult | null> {
-    const result = await this.connectionPool.query(`select g.*, to_char(g.tydzien_od, 'YYYY-MM-DD') as week_start,
+  private async readSchedule(weekStart: string, calendarId: string, scheduleId?: string, connection: Pick<Pool, 'query'> = this.connectionPool): Promise<ScheduleGenerationResult | null> {
+    const result = await connection.query(`select g.*, to_char(g.tydzien_od, 'YYYY-MM-DD') as week_start,
         (select coalesce(jsonb_agg(jsonb_build_object(
-        'candidateId', z.candidate_id, 'templateId', z.template_id, 'optionalLectureIds', z.optional_lecture_ids,
+        'hourlyRatePln', z.stawka_pln, 'estimatedPayPln', z.wynagrodzenie_pln, 'rateKind', z.rodzaj_stawki, 'candidateId', z.candidate_id, 'templateId', z.template_id, 'optionalLectureIds', z.optional_lecture_ids,
         'softPenalty', z.soft_penalty, 'calendarEventId', z.id_wydarzenia, 'title', 'Praca', 'start', z.rozpoczecie, 'end', z.zakonczenie,
         'durationMinutes', round(z.godziny * 60)::integer, 'mode', g.tryb_pracy)), '[]'::jsonb) from t_zmiany_pracy z where z.id_grafiku = g.id_grafiku) as shift_rows,
         (select coalesce(jsonb_agg(jsonb_build_object('code', o.kod, 'severity', o.typ, 'message', o.opis,
         'candidateIds', o.szczegoly->'candidateIds', 'eventIds', o.szczegoly->'eventIds', 'details', o.szczegoly)), '[]'::jsonb) from t_ograniczenia_grafiku o where o.id_grafiku = g.id_grafiku) as violation_rows
-      from t_grafiki g where g.id_kalendarza = $1 and g.tydzien_od = $2::date
+      from t_grafiki g where g.generator_version <> 'work-profile-v1' and g.id_kalendarza = $1 and g.tydzien_od = $2::date
         and ($3::text is not null or g.rejected_at is null) and ($3::text is null or g.id_grafiku = $3)
       order by g.version desc limit 1`, [calendarId, weekStart, scheduleId ?? null]);
     const row = result.rows[0];
@@ -264,13 +271,13 @@ export class PostgresScheduleRepository {
       const start = new Date(shift.start as string), end = new Date(shift.end as string);
       const startLocal = localDateTimeString(start, snapshotContext.profile?.timeZone ?? 'Europe/Warsaw');
       const endLocal = localDateTimeString(end, snapshotContext.profile?.timeZone ?? 'Europe/Warsaw');
-      return { candidateId: shift.candidateId as string, title: 'Praca', start: start.toISOString(), end: end.toISOString(), startLocal, endLocal,
+      return { hourlyRatePln:Number(shift.hourlyRatePln),estimatedPayPln:Number(shift.estimatedPayPln),rateKind:shift.rateKind as 'gross'|'net'|null, candidateId: shift.candidateId as string, title: 'Praca', start: start.toISOString(), end: end.toISOString(), startLocal, endLocal,
         durationMinutes: Number(shift.durationMinutes), workDate: startLocal.slice(0, 10), mode: row.tryb_pracy,
         templateId: shift.templateId as string | undefined, calendarEventId: shift.calendarEventId as string | undefined,
         optionalLectureIds: shift.optionalLectureIds as string[] ?? [], softPenalty: Number(shift.softPenalty ?? 0) };
     });
     return {
-      scheduleId: row.id_grafiku, version: Number(row.version), workflowStatus: row.status, isApproved: Boolean(row.approved_at), approvedAt: row.approved_at?.toISOString(), weekStart: row.week_start,
+      estimatedPayPln:Number(row.szac_placa_pln), scheduleId: row.id_grafiku, version: Number(row.version), workflowStatus: row.status, isApproved: Boolean(row.approved_at), approvedAt: row.approved_at?.toISOString(), weekStart: row.week_start,
       maximumCapacityMinutes: Number(snapshot.maximumCapacityMinutes ?? row.total_minutes),
       timeZone: snapshotContext.profile?.timeZone ?? 'Europe/Warsaw', mode: row.tryb_pracy, solutionStatus: row.solution_status,
       minimumMinutes: Number(row.min_godzin) * 60, targetMinutes: Number(row.target_minutes), maximumMinutes: Number(row.max_godzin) * 60,

@@ -51,11 +51,12 @@ export type FieldError =
   | 'target_above_max'
   | 'shorter_than_minimum'
   | 'end_before_start'
-  | 'duplicate_id';
+  | 'duplicate_id'
+  | 'overlap';
 
 export const FIELD_ERRORS: readonly FieldError[] = [
   'required', 'negative', 'must_be_positive', 'out_of_range', 'not_whole_number', 'min_greater_than_max',
-  'target_below_min', 'target_above_max', 'shorter_than_minimum', 'end_before_start', 'duplicate_id',
+  'target_below_min', 'target_above_max', 'shorter_than_minimum', 'end_before_start', 'duplicate_id', 'overlap',
 ];
 
 export type FieldErrors = Record<string, FieldError>;

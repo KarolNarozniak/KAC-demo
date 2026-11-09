@@ -10,7 +10,7 @@ const day = { type: 'integer', minimum: 1, maximum: 7, description: '1 = poniedz
 const availability = {
   type: 'array', maxItems: 70, description: 'Dni i godziny, w których student może pracować.',
   items: { type: 'object', required: ['id', 'dayOfWeek', 'startTime', 'endTime'], additionalProperties: false,
-    properties: { id, dayOfWeek: day, startTime: time, endTime: time } },
+    properties: { id, dayOfWeek: day, startTime: time, endTime: {type:'string',pattern:'^(([01]\\d|2[0-3]):[0-5]\\d|24:00)$'} } },
 } as const;
 const preferredWorkWindows = {
   type: 'array', maxItems: 70, description: 'Preferowane okna pracy z wagą 0–100.',

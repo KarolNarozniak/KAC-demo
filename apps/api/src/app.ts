@@ -1,3 +1,8 @@
+import { demoScope } from './api/scope.js';
+import { installWorkProfileContracts } from './api/v1/work-profile/contracts.js';
+import { registerWorkProfile } from './api/v1/work-profile/routes.js';
+import { registerScheduling } from './api/v1/work-profile/schedule-routes.js';
+import { Ajv } from 'ajv';
 import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import swagger from '@fastify/swagger';
@@ -18,7 +23,6 @@ const API_PREFIX = '/api/v1';
 
 export function buildApi(repository: CalendarRepository | null, allowedOrigins: string[] = [], options: ApiOptions = {}) {
   const app: FastifyInstance = Fastify({ logger: true });
-  app.decorate('repository', repository as any);
   const allowAnyOrigin = allowedOrigins.includes('*');
   const origins = new Set(allowedOrigins);
 
@@ -50,6 +54,7 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
       },
       servers: [{ url: process.env.OPENAPI_SERVER_URL?.trim() || 'http://localhost:4000', description: 'Current API host' }],
       tags: [
+        { name: 'Work profile', description: 'Versioned availability, hourly rates and pay snapshots.' },
         { name: 'System', description: 'Liveness and dependency readiness.' },
         { name: 'Calendar', description: 'Calendar overview and event lifecycle.' },
         { name: 'Work profile', description: 'Work limits, hour target, commute, availability and shift templates used by planning.' },
@@ -72,12 +77,19 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
 
   const scheduleReader = options.scheduleReader ?? new DemoScheduleReader();
   app.register(async (v1) => {
+    await v1.register(async (profile) => {
+      installWorkProfileContracts(profile);
+      const ajv = new Ajv({ coerceTypes: false, removeAdditional: false, strict: false });
+      profile.setValidatorCompiler(({ schema }) => ajv.compile(schema));
+      registerWorkProfile(profile, options.workProfile ?? null, options.userScope ?? demoScope);
+      registerScheduling(profile, options.scheduling ?? null, options.userScope ?? demoScope);
+    });
     await healthRoutes(v1, { repository });
     await calendarRoutes(v1, { repository });
     await profileRoutes(v1, { repository: options.workProfileRepository, scope: options.userScope });
     await schedulingRoutes(v1, { repository: options.scheduleRepository });
     await importRoutes(v1, { repository, scheduleRepository: options.scheduleRepository, scheduleReader, google: options.google });
-    await blockRoutes(v1);
+    await blockRoutes(v1,{repository,scope:options.userScope});
     registerGoogleImport(v1, repository, options.google);
   }, { prefix: API_PREFIX });
 

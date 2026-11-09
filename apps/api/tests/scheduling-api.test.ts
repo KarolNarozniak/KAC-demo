@@ -1,3 +1,4 @@
+import { ProfileError } from '../src/profile/availability.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { buildApi } from '../src/app.js';
@@ -12,6 +13,7 @@ const context: PlanningContext = {
 
 test('schedule API generates and persists a validated weekly proposal', async () => {
   let saved: ScheduleGenerationResult | undefined;
+  let failApproval=false;
   const app = buildApi(null, [], { scheduleRepository: {
     getPlanningContext: async () => context,
     getLatestSchedule: async () => saved ?? null,
@@ -20,7 +22,7 @@ test('schedule API generates and persists a validated weekly proposal', async ()
       solutionStatus: saved.solutionStatus, version: saved.version ?? 1, isApproved: saved.isApproved, isRejected: false,
       targetMinutes: saved.targetMinutes, totalMinutes: saved.totalMinutes, shortfallMinutes: saved.shortfallMinutes }] : [], total: saved ? 1 : 0, limit, offset }),
     getApprovedShiftEventIds: async () => [],
-    approveSchedule: async () => saved ? (saved = { ...saved, isApproved: true, approvedAt: new Date().toISOString() }) : null,
+    approveSchedule: async () => {if(failApproval)throw new ProfileError('invalid_schedule',422,{errors:[{code:'hard_conflict',severity:'error',message:'Synthetic concurrent block',candidateIds:[],eventIds:[],details:{}}],warnings:[]});return saved ? (saved = { ...saved, isApproved: true, approvedAt: new Date().toISOString() }) : null;},
     rejectSchedule: async () => { saved = null; return null; },
     saveSchedule: async (_context, schedule) => { saved = { ...schedule, scheduleId: 'G1', version: (saved?.version ?? 0) + 1 }; return saved; },
   } });
@@ -46,6 +48,11 @@ test('schedule API generates and persists a validated weekly proposal', async ()
       expectedVersion: 2, shifts: [{ id: 'bad', startLocal: '2026-11-02T06:00', endLocal: '2026-11-02T10:00' }],
     } });
     assert.equal(invalidEdit.statusCode, 422);
+    failApproval=true;
+    const concurrentBlock=await app.inject({method:'POST',url:'/api/v1/schedules/2026-11-02/approve',payload:{expectedVersion:2}});
+    assert.equal(concurrentBlock.statusCode,422,concurrentBlock.body);
+    assert.equal(concurrentBlock.json().errors[0].code,'hard_conflict');
+    failApproval=false;
     const approved = await app.inject({ method: 'POST', url: '/api/v1/schedules/2026-11-02/approve', payload: { expectedVersion: 2 } });
     assert.equal(approved.statusCode, 200);
     assert.equal(approved.json().isApproved, true);

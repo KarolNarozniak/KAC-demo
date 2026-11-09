@@ -18,14 +18,14 @@ test('PostgreSQL schedule persistence, retrieval, edits and version conflicts', 
   await pool.query(`insert into t_kalendarze (id_kalendarza, id_uzytkownika, nazwa, typ) values ($1, $2, 'Schedule test', 'Osobisty')`, [calendarId, userId]);
   await pool.query(`insert into t_profile_pracy
     (id_profilu, id_uzytkownika, stawka_pln, min_godzin_tydzien, cel_godzin_tydzien, max_godzin_tydzien,
-     czas_dojazdu_min, min_odpoczynku_min, aktywny, tryb_pracy, min_slot_min, max_slot_min)
-    values ($1, $2, 30, 2, 4, 8, 0, 0, true, 'elastyczny', 120, 360)`, [profileId, userId]);
+     rodzaj_stawki, czas_dojazdu_min, min_odpoczynku_min, aktywny, tryb_pracy, min_slot_min, max_slot_min)
+    values ($1, $2, 30, 2, 4, 8, 'gross', 0, 0, true, 'elastyczny', 120, 360)`, [profileId, userId]);
   await pool.query(`insert into t_dostepnosc (id_profilu, dzien_tygodnia, od_godzina, do_godzina, rodzaj)
     values ($1, 1, '08:00', '18:00', 'Dostępny'), ($1, 3, '08:00', '18:00', 'Dostępny')`, [profileId]);
   const app = buildApi(null, [], { scheduleRepository: {
     getPlanningContext: () => repository.getPlanningContext(userId, calendarId, profileId),
     getLatestSchedule: (weekStart) => repository.getLatestSchedule(weekStart, calendarId),
-    getScheduleById: repository.getScheduleById.bind(repository),
+    getScheduleById: (id) => repository.getScheduleById(id, calendarId),
     listSchedules: (filters) => repository.listSchedules(filters, calendarId),
     getApprovedShiftEventIds: (weekStart) => repository.getApprovedShiftEventIds(weekStart, calendarId),
     saveSchedule: repository.saveSchedule.bind(repository),

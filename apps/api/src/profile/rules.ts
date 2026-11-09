@@ -136,7 +136,7 @@ export function profileFromContext(context: PlanningContext): WorkProfile {
     maxHoursPerDay: profile.maxHoursPerDay,
     availability: context.availability,
     preferredWorkWindows: context.preferredWorkWindows,
-    blockedPeriods: context.blockedPeriods,
+    blockedPeriods: context.blockedPeriods.filter(block=>block.source !== 'calendar'),
     shiftTemplates: context.shiftTemplates,
   };
 }

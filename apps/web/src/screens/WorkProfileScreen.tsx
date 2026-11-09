@@ -133,4 +133,3 @@ export default function WorkProfileScreen({ state, disabled = false }: { state: 
     {!!state.notice && !dirty && <Text accessibilityLiveRegion="polite" style={[styles.muted, { color: palette.green, marginBottom: 8 }]}>{state.notice}</Text>}
   </View>;
 }
-

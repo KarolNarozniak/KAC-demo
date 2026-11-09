@@ -1,6 +1,8 @@
+import { validateCommuteGaps } from './constraints.js';
+import { ProfileError } from '../profile/availability.js';
 import { DEFAULT_SCHEDULER_PENALTIES } from './config.js';
 import { constraints, availabilityRanges, blockedPeriodIntervals, freeWindows, listBlockingOccurrences, paddedInterval, type Interval } from './constraints.js';
-import { addLocalDays, localDateKey, localDateTimeString, localInstant, minutesOfDay, overlap, overlapMinutes, validWeekStart, weekBounds } from './time.js';
+import { expandEventsForWeek, addLocalDays, localDateKey, localDateTimeString, localInstant, minutesOfDay, overlap, overlapMinutes, validWeekStart, weekBounds } from './time.js';
 import type {
   CandidateShift, ManualShiftInput, PlanningContext, PlannerOverrides,
   PreferredWorkWindow, ScheduleGenerationResult, ScheduleViolation, SolutionStatus, ValidationResult, WorkMode,
@@ -24,6 +26,7 @@ function hoursToMinutes(value: number): number {
 
 function profileFor(context: PlanningContext, overrides: PlannerOverrides): EffectiveProfile {
   const p = context.profile;
+  if(p.commuteConfigured === false)throw new ProfileError('profile_incomplete',422,{fields:['commuteMinutes']});
   const result: EffectiveProfile = {
     mode: overrides.mode ?? p.mode,
     minimumMinutes: hoursToMinutes(overrides.minimumHours ?? p.minimumHours),
@@ -85,7 +88,7 @@ function toCandidate(args: {
     end: args.end.toISOString(),
     startLocal: args.startLocal,
     endLocal: args.endLocal,
-    durationMinutes: args.durationMinutes,
+    durationMinutes: Math.round((args.end.getTime()-args.start.getTime())/60000),
     workDate: args.workDate,
     mode: args.mode,
     templateId: args.templateId,
@@ -137,7 +140,7 @@ function buildCandidates(context: PlanningContext, weekStart: string, profile: E
   const pushCandidate = (candidate: CandidateShift) => {
     if (candidate.start < weekBounds(weekStart, timeZone).start.toISOString() || new Date(candidate.end) <= new Date(candidate.start)) return;
     if (new Date(candidate.start) >= weekEnd) return;
-    if (!intervalCovered(new Date(candidate.start), new Date(candidate.end), availability)) return;
+    if (!intervalCovered(new Date(Date.parse(candidate.start)-profile.commuteBufferMinutes*60000), new Date(Date.parse(candidate.end)+profile.commuteBufferMinutes*60000), availability)) return;
     if (hardBlocks.some((block) => overlap(new Date(candidate.start), new Date(candidate.end), block.start, block.end))) return;
     candidate.optionalLectureIds = optionalLectures
       .filter((event) => overlap(new Date(candidate.start), new Date(candidate.end), event.start, event.end))
@@ -163,7 +166,7 @@ function buildCandidates(context: PlanningContext, weekStart: string, profile: E
           if (!start) continue;
           for (let duration = profile.minimumShiftMinutes; duration <= Math.min(profile.maximumSlotMinutes, to - startMinute); duration += step) {
             const endMinute = startMinute + duration;
-            if (endMinute >= 1440) continue;
+            if (endMinute > 1440) continue;
             const endTime = `${String(Math.floor(endMinute / 60)).padStart(2, '0')}:${String(endMinute % 60).padStart(2, '0')}`;
             const end = localInstant(dateKey, endTime, timeZone);
             if (!end || end <= start) continue;
@@ -172,7 +175,7 @@ function buildCandidates(context: PlanningContext, weekStart: string, profile: E
               start,
               end,
               startLocal: `${dateKey}T${startTime}`,
-              endLocal: `${dateKey}T${endTime}`,
+              endLocal: endTime === '24:00' ? `${addLocalDays(dateKey,1)}T00:00` : `${dateKey}T${endTime}`,
               durationMinutes: duration,
               workDate: dateKey,
               mode: 'elastyczny',
@@ -231,7 +234,7 @@ function buildCandidates(context: PlanningContext, weekStart: string, profile: E
 function canAdd(candidate: CandidateShift, selected: CandidateShift[], hardBlocks: Interval[], profile: EffectiveProfile) {
   const start = new Date(candidate.start), end = new Date(candidate.end);
   if (hardBlocks.some((block) => overlap(start, end, block.start, block.end))) return false;
-  const requiredGap = (profile.minimumRestMinutes + profile.commuteBufferMinutes) * 60_000;
+  const requiredGap = (Math.max(profile.minimumRestMinutes, profile.commuteBufferMinutes)) * 60_000;
   return selected.every((item) => {
     const itemStart = new Date(item.start), itemEnd = new Date(item.end);
     return end.getTime() + requiredGap <= itemStart.getTime() || itemEnd.getTime() + requiredGap <= start.getTime();
@@ -281,6 +284,7 @@ function selectCandidates(candidates: CandidateShift[], context: PlanningContext
 }
 
 export function generateSchedule(context: PlanningContext, weekStart: string, overrides: PlannerOverrides = {}): ScheduleGenerationResult {
+  if(context.profile.hourlyRateConfigured === false || context.profile.rateKind === null)throw new ProfileError('profile_incomplete',422,{fields:['hourlyRatePln','rateKind']});
   if (!validWeekStart(weekStart)) throw new Error('weekStart musi być poniedziałkiem w lokalnym formacie YYYY-MM-DD.');
   const profile = profileFor(context, overrides);
   const generated = buildCandidates(context, weekStart, profile);
@@ -442,8 +446,8 @@ export function validateSchedule(context: PlanningContext, weekStart: string, sh
         errors.push({ code: 'shift_template_mismatch', severity: 'error', message: 'Zmiana musi odpowiadać aktywnemu szablonowi i jego dniowi tygodnia.', candidateIds: [input.id], eventIds: [], details: { templateId: input.templateId ?? null, dayOfWeek } });
       }
     }
-    if (!intervalCovered(start, end, availabilityRanges(context.availability, weekStart, context.profile.timeZone))) {
-      errors.push({ code: 'outside_availability', severity: 'error', message: 'Zmiana wykracza poza dostępność studenta.', candidateIds: [input.id], eventIds: [], details: {} });
+    if (!intervalCovered(new Date(start.getTime()-profile.commuteBufferMinutes*60000), new Date(end.getTime()+profile.commuteBufferMinutes*60000), availabilityRanges(context.availability, weekStart, context.profile.timeZone))) {
+      errors.push({ code: 'outside_availability', severity: 'error', message: 'Zmiana wraz z buforem dojazdu wykracza poza dostępność studenta.', candidateIds: [input.id], eventIds: [], details: {} });
     }
     // S23KC2S1P2-194: kolizja z zajęciami obowiązkowymi ma własny błąd ze wskazaniem zajęć; pozostałe blokady – hard_conflict.
     errors.push(...constraints.classCollision({ id: input.id, start, end }, generated.occurrences, context.profile.timeZone));
@@ -459,7 +463,15 @@ export function validateSchedule(context: PlanningContext, weekStart: string, sh
     normalized.push({ candidateId: input.id, title: input.id, start: start.toISOString(), end: end.toISOString(), startLocal: input.startLocal, endLocal: input.endLocal, durationMinutes: wallMinutes, workDate: startDate, mode: profile.mode, optionalLectureIds: optionalIds, softPenalty: optionalIds.length * DEFAULT_SCHEDULER_PENALTIES.optionalLecturePenalty });
   }
 
-  const gapMs = (profile.minimumRestMinutes + profile.commuteBufferMinutes) * 60_000;
+  const candidates = new Set(normalized.map(shift=>shift.candidateId));
+  const neighbors = expandEventsForWeek(context,weekStart).filter(event=>event.category!=='Class'||event.mandatory).map(event=>({id:event.id,title:event.title,start:event.occurrenceStart.toISOString(),end:event.occurrenceEnd.toISOString(),category:event.category}));
+  const proposed = normalized.map(shift=>({id:shift.candidateId,title:'Zmiana pracy',start:shift.start,end:shift.end,category:'Work' as const}));
+  for(const violation of validateCommuteGaps([...neighbors,...proposed],profile.commuteBufferMinutes,profile.minimumRestMinutes)) {
+    const ids=[violation.leftId,violation.rightId];
+    if(!ids.some(id=>candidates.has(id)))continue;
+    errors.push({code:'commute_gap_too_short',severity:'error',message:`Za krótka przerwa między ${violation.leftTitle||violation.leftId} i ${violation.rightTitle||violation.rightId}: brakuje ${Math.ceil(violation.requiredMinutes-violation.actualMinutes)} min.`,candidateIds:ids.filter(id=>candidates.has(id)),eventIds:ids.filter(id=>!candidates.has(id)),details:{...violation}});
+  }
+  const gapMs = (Math.max(profile.minimumRestMinutes, profile.commuteBufferMinutes)) * 60_000;
   for (let i = 0; i < normalized.length; i++) {
     for (let j = i + 1; j < normalized.length; j++) {
       const a = normalized[i], b = normalized[j];

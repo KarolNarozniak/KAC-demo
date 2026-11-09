@@ -2,6 +2,9 @@ import type { WorkMode, WorkProfile } from './workProfileApi';
 export type { ShiftTemplate, WorkMode } from './workProfileApi';
 
 export type ScheduleShift = {
+  hourlyRatePln?:number;
+  estimatedPayPln?:number;
+  rateKind?:'gross'|'net'|null;
   candidateId: string;
   title: string;
   start: string;
@@ -27,6 +30,7 @@ export type BlockingEvent = {
 /** Wolny przedział w dostępności po odjęciu zajęć i wydarzeń. */
 export type FreeWindow = { start: string; end: string; startLocal: string; endLocal: string; minutes: number };
 export type WeeklySchedule = {
+  estimatedPayPln?:number;
   scheduleId?: string;
   version?: number;
   isApproved: boolean;
@@ -88,6 +92,7 @@ export async function generateSchedule(weekStart: string, profile: WorkProfile, 
     if (result.error === 'profile_version_conflict') throw new Error('Ustawienia profilu zmieniły się. Odśwież ekran i spróbuj ponownie.');
     if (result.error === 'profile_setup_required') throw new Error('Uzupełnij dostępność i cel godzinowy w ustawieniach planu.');
   }
+  if (response.status === 422) throw new Error('Uzupełnij stawkę PLN, brutto/netto i dojazd w Ustawieniach → Profil pracy.');
   if (!response.ok) throw new Error('Nie udało się wygenerować grafiku. Sprawdź profil pracy i ustawienia tygodnia.');
   return response.json();
 }

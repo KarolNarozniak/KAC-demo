@@ -1,3 +1,4 @@
+import { normalizeAvailability } from './availability.js';
 import type { Pool, PoolClient } from 'pg';
 import type { UserScope } from '../api/scope.js';
 import { PostgresScheduleRepository } from '../scheduling/repository.js';
@@ -73,23 +74,16 @@ export class PostgresWorkProfileRepository implements WorkProfileRepository {
       min_godzin_tydzien = $2, cel_godzin_tydzien = $3, max_godzin_tydzien = $4,
       okres_celu = $5, cel_godzin_miesiac = $6,
       czas_dojazdu_min = $7, min_odpoczynku_min = $8, tryb_pracy = $9,
-      min_slot_min = $10, max_slot_min = $11, max_godzin_dzien = $12, updated_at = clock_timestamp()
+      min_slot_min = $10, max_slot_min = $11, max_godzin_dzien = $12, version=version+1, updated_at = clock_timestamp()
       where id_profilu = $1`, [profileId, value.minimumHours, value.weeklyTargetHours, value.maximumHours,
       monthly ? 'Miesiac' : 'Tydzien', monthly ? value.targetHours : null,
       value.commuteBufferMinutes, value.minimumRestMinutes, value.mode,
       value.minimumShiftMinutes, value.maximumSlotMinutes, value.maxHoursPerDay]);
 
     // Listy zapisujemy jako „stan docelowy”: usuwamy pozycje, których nie ma w formularzu, resztę dodajemy albo zmieniamy.
-    await client.query(`delete from t_dostepnosc where id_profilu = $1 and rodzaj = 'Dostępny' and not (id_dostepnosci = any($2::text[]))`,
-      [profileId, value.availability.map((window) => window.id)]);
-    for (const window of value.availability) {
-      await client.query(`insert into t_dostepnosc (id_dostepnosci, id_profilu, dzien_tygodnia, od_godzina, do_godzina, rodzaj)
-        values ($1, $2, $3, $4::time, $5::time, 'Dostępny')
-        on conflict (id_dostepnosci) do update set dzien_tygodnia = excluded.dzien_tygodnia,
-          od_godzina = excluded.od_godzina, do_godzina = excluded.do_godzina where t_dostepnosc.id_profilu = excluded.id_profilu`,
-      [window.id, profileId, window.dayOfWeek, window.startTime, window.endTime]);
-    }
-
+    const availability=normalizeAvailability(value.availability);
+    await client.query(`delete from t_dostepnosc where id_profilu=$1 and rodzaj='Dostępny'`,[profileId]);
+    for(const window of availability) await client.query(`insert into t_dostepnosc(id_profilu,dzien_tygodnia,od_godzina,do_godzina,rodzaj) values($1,$2,$3::time,$4::time,'Dostępny')`,[profileId,window.dayOfWeek,window.startTime,window.endTime]);
     await client.query(`delete from t_prefer_godziny where id_profilu = $1 and not (id_preferencji = any($2::text[]))`,
       [profileId, value.preferredWorkWindows.map((window) => window.id)]);
     for (const window of value.preferredWorkWindows) {

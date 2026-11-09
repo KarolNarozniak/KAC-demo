@@ -1,3 +1,5 @@
+import CompensationScreen from './src/screens/CompensationScreen';
+import WorkScheduleScreen from './src/screens/WorkScheduleScreen';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Text, View, Pressable, Image, Modal } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
@@ -33,7 +35,7 @@ function CalendarApp() {
   const [tab, setTab] = useState<typeof tabs[number]>('Dziś');
   const [week, setWeek] = useState(new Date());
   const [schedulePreview, setSchedulePreview] = useState<WeeklySchedule | null>(null);
-  
+
   // S23KC2S1P2-15, 3a: wyjście z zakładki „Grafik” z niezapisanymi zmianami profilu wymaga decyzji.
   const [unsavedProfile, setUnsavedProfile] = useState(false);
   const [pendingTab, setPendingTab] = useState<typeof tabs[number] | null>(null);
@@ -90,17 +92,18 @@ function CalendarApp() {
     <ScreenTransition screenIndex={tabs.indexOf(tab)} renderScreen={(index, active) => {
       const route = tabs[index];
       return (
-        route === 'Dziś' || route === 'Tydzień' ? <CalendarScreen active={active} now={now} weekLayout={weekLayout} todayOnly={route === 'Dziś'} week={week} setWeek={setWeek} draftSchedule={schedulePreview} /> : 
-        route === 'Grafik' ? <ScheduleScreen active={active} now={now} week={week} setWeek={setWeek} onPreview={setSchedulePreview} onApproved={() => setTab('Tydzień')} onUnsavedChange={onUnsavedChange} discardSignal={discardSignal} /> : 
-        route === 'Blokady' ? <BlocksScreen /> : 
+        route === 'Dziś' || route === 'Tydzień' ? <CalendarScreen active={active} now={now} weekLayout={weekLayout} todayOnly={route === 'Dziś'} week={week} setWeek={setWeek} draftSchedule={schedulePreview} /> :
+        route === 'Grafik' ? <ScheduleScreen active={active} now={now} week={week} setWeek={setWeek} onPreview={setSchedulePreview} onApproved={() => setTab('Tydzień')} onUnsavedChange={onUnsavedChange} discardSignal={discardSignal} /> :
+        route === 'Blokady' ? <BlocksScreen /> :
         route === 'Ustawienia' ? <View style={[styles.content, { padding: 16 }]}>
           <View style={[styles.row, { justifyContent: 'space-between', marginBottom: 20 }]}><Text style={styles.heading}>Motyw</Text><ThemeToggle /></View>
-          <Text style={[styles.heading, { marginBottom: 12 }]}>Układ tygodnia</Text>
+          <CompensationScreen />
+           <Text style={[styles.heading, { marginBottom: 12 }]}>Układ tygodnia</Text>
           <View accessibilityRole="radiogroup" style={{ gap: 8 }}>
             {([{ id: 'days-left', label: 'Dni po lewej · godziny u góry' }, { id: 'days-top', label: 'Dni u góry · godziny po lewej' }] as const).map((option) => <Pressable key={option.id} accessibilityRole="radio" accessibilityState={{ checked: weekLayout === option.id, disabled: !settingsLoaded }} disabled={!settingsLoaded} onPress={() => void changeWeekLayout(option.id)} style={{ padding: 14, borderRadius: 8, borderWidth: 1, borderColor: weekLayout === option.id ? palette.blue : palette.line, backgroundColor: weekLayout === option.id ? palette.blueSoft : palette.surface }}><Text style={styles.body}>{weekLayout === option.id ? '◉' : '○'} {option.label}</Text></Pressable>)}
           </View>
           {!!storageError && <Text accessibilityRole="alert" style={styles.error}>{storageError}</Text>}
-        </View> : <View style={[styles.content, { padding: 16 }]}><Text style={styles.heading}>Asystent</Text><Text style={styles.subtitle}>Wkrótce</Text></View>
+        </View> : <WorkScheduleScreen />
       );
     }} />
 

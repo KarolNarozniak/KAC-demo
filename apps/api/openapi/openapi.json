@@ -16,6 +16,2234 @@
     "schemas": {}
   },
   "paths": {
+    "/api/v1/work-profile/compensation": {
+      "get": {
+        "operationId": "getWorkCompensation",
+        "summary": "Odczyt aktywnego profilu",
+        "tags": [
+          "Work profile"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "version",
+                    "hourlyRatePln",
+                    "rateKind",
+                    "commuteMinutes",
+                    "minRestMinutes",
+                    "minHours",
+                    "targetHours",
+                    "maxHours"
+                  ],
+                  "properties": {
+                    "version": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "hourlyRatePln": {
+                      "anyOf": [
+                        {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 9999999999.99,
+                          "multipleOf": 0.01
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "PLN/h; null = brak stawki i profile_incomplete przy generowaniu. Zero jest jawną poprawną stawką."
+                    },
+                    "rateKind": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "gross",
+                            "net"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "gross = brutto, net = netto. Wymagane przy ustawionej stawce. Bez konwersji podatkowej."
+                    },
+                    "commuteMinutes": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 10080
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Jeden stały bufor MVP przed i po pracy, również dla pustego location; bez map i geokodowania. Null oznacza nieustawiony dojazd i blokuje planowanie; 0 jest poprawne."
+                    },
+                    "minRestMinutes": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 10080
+                    },
+                    "minHours": {
+                      "anyOf": [
+                        {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 999.99,
+                          "multipleOf": 0.01
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "targetHours": {
+                      "anyOf": [
+                        {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 999.99,
+                          "multipleOf": 0.01
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "maxHours": {
+                      "anyOf": [
+                        {
+                          "type": "number",
+                          "maximum": 999.99,
+                          "multipleOf": 0.01,
+                          "exclusiveMinimum": 0
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "example": {
+                    "version": 1,
+                    "hourlyRatePln": 30,
+                    "rateKind": "gross",
+                    "commuteMinutes": 30,
+                    "minRestMinutes": 660,
+                    "minHours": 10,
+                    "targetHours": 20,
+                    "maxHours": 30
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {}
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "updateWorkCompensation",
+        "summary": "Zapis pełnego profilu z wersją",
+        "tags": [
+          "Work profile"
+        ],
+        "description": "Zwiększa wersję wspólną z dostępnością. Nie zmienia wydarzeń ani snapshotów. 0 jest dozwolone; null oznacza brak. Kwota wymaga gross lub net; maksimum dwie cyfry po przecinku, numeric(12,2).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "version",
+                  "hourlyRatePln",
+                  "rateKind",
+                  "commuteMinutes",
+                  "minRestMinutes",
+                  "minHours",
+                  "targetHours",
+                  "maxHours"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "hourlyRatePln": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "rateKind": {
+                    "enum": [
+                      "gross",
+                      "net",
+                      null
+                    ]
+                  },
+                  "commuteMinutes": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 10080
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "minRestMinutes": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 10080
+                  },
+                  "minHours": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 999.99
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "targetHours": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 999.99
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "maxHours": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "exclusiveMinimum": 0,
+                        "maximum": 999.99
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "version",
+                    "hourlyRatePln",
+                    "rateKind",
+                    "commuteMinutes",
+                    "minRestMinutes",
+                    "minHours",
+                    "targetHours",
+                    "maxHours"
+                  ],
+                  "properties": {
+                    "version": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "hourlyRatePln": {
+                      "anyOf": [
+                        {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 9999999999.99,
+                          "multipleOf": 0.01
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "PLN/h; null = brak stawki i profile_incomplete przy generowaniu. Zero jest jawną poprawną stawką."
+                    },
+                    "rateKind": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "gross",
+                            "net"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "gross = brutto, net = netto. Wymagane przy ustawionej stawce. Bez konwersji podatkowej."
+                    },
+                    "commuteMinutes": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 10080
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Jeden stały bufor MVP przed i po pracy, również dla pustego location; bez map i geokodowania. Null oznacza nieustawiony dojazd i blokuje planowanie; 0 jest poprawne."
+                    },
+                    "minRestMinutes": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 10080
+                    },
+                    "minHours": {
+                      "anyOf": [
+                        {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 999.99,
+                          "multipleOf": 0.01
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "targetHours": {
+                      "anyOf": [
+                        {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 999.99,
+                          "multipleOf": 0.01
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "maxHours": {
+                      "anyOf": [
+                        {
+                          "type": "number",
+                          "maximum": 999.99,
+                          "multipleOf": 0.01,
+                          "exclusiveMinimum": 0
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "example": {
+                    "version": 1,
+                    "hourlyRatePln": 30,
+                    "rateKind": "gross",
+                    "commuteMinutes": 30,
+                    "minRestMinutes": 660,
+                    "minHours": 10,
+                    "targetHours": 20,
+                    "maxHours": 30
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {}
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {}
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {}
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {}
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/work-profile/availability": {
+      "get": {
+        "operationId": "get_work_profile_availability",
+        "summary": "Odczyt tygodniowej dostępności",
+        "tags": [
+          "Work profile"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "version",
+                    "intervals"
+                  ],
+                  "properties": {
+                    "version": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "intervals": {
+                      "type": "array",
+                      "maxItems": 1000,
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "dayOfWeek",
+                          "startTime",
+                          "endTime"
+                        ],
+                        "properties": {
+                          "dayOfWeek": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 7
+                          },
+                          "startTime": {
+                            "type": "string",
+                            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                          },
+                          "endTime": {
+                            "type": "string",
+                            "pattern": "^(([01]\\d|2[0-3]):[0-5]\\d|24:00)$"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {}
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "put_work_profile_availability",
+        "summary": "Atomowe zastąpienie dostępności",
+        "tags": [
+          "Work profile"
+        ],
+        "description": "Dni ISO 1–7. Zakresy nocne dzielone na północy, również 7→1. Zachowuje 24:00, sortuje po dniu i początku. Duplikaty i przecięcia: 422; stykające zakresy dozwolone. Edytor scala przecięcia przed PUT. Pusta lista usuwa dostępność. Blokada profilu FOR UPDATE, kontrola wersji, rollback całej operacji. Nie modyfikuje wydarzeń.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "version",
+                  "intervals"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "intervals": {
+                    "type": "array",
+                    "maxItems": 1000,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "dayOfWeek",
+                        "startTime",
+                        "endTime"
+                      ],
+                      "properties": {
+                        "dayOfWeek": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 7
+                        },
+                        "startTime": {
+                          "type": "string",
+                          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                        },
+                        "endTime": {
+                          "type": "string",
+                          "pattern": "^(([01]\\d|2[0-3]):[0-5]\\d|24:00)$"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "version",
+                    "intervals"
+                  ],
+                  "properties": {
+                    "version": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "intervals": {
+                      "type": "array",
+                      "maxItems": 1000,
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "dayOfWeek",
+                          "startTime",
+                          "endTime"
+                        ],
+                        "properties": {
+                          "dayOfWeek": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 7
+                          },
+                          "startTime": {
+                            "type": "string",
+                            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                          },
+                          "endTime": {
+                            "type": "string",
+                            "pattern": "^(([01]\\d|2[0-3]):[0-5]\\d|24:00)$"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {}
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {}
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {}
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {}
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/work-profile/schedules/generate": {
+      "post": {
+        "operationId": "post_work_profile_schedules_generate",
+        "summary": "Generowanie propozycji",
+        "tags": [
+          "Scheduling"
+        ],
+        "description": "Wymaga ustawienia stawki, rodzaju kwoty, dojazdu i celu; brak daje profile_incomplete z details.fields. Algorytm deterministyczny wypełnia najwcześniejsze poprawne okna, respektuje maksymalną liczbę godzin. Nie gwarantuje globalnie optymalnego planu. Brak okien daje pustą propozycję i achievable=false, jeśli cel > 0. Płatna praca mieści się w tygodniu; bufor może korzystać z ciągłej dostępności sąsiedniego tygodnia. Wydarzenia cykliczne materializowane w strefie kalendarza, odstępy liczone na instantach. Między Work i Class/Personal wymagany commuteMinutes, między Work i Work max(commuteMinutes,minRestMinutes), bez sumowania. Bufor mieści się w ciągłym oknie dostępności. Nie powstają wydarzenia dojazdu ani pracy do chwili akceptacji.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "week"
+                ],
+                "properties": {
+                  "week": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "status",
+                    "week",
+                    "commuteMinutes",
+                    "plannedHours",
+                    "targetHours",
+                    "estimatedPayPln",
+                    "achievable",
+                    "shifts"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "Proposed",
+                        "Accepted",
+                        "Rejected"
+                      ]
+                    },
+                    "week": {
+                      "type": "string",
+                      "format": "date"
+                    },
+                    "commuteMinutes": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 10080
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "plannedHours": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "targetHours": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "estimatedPayPln": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "Suma kwot zaokrąglonych osobno dla zmian, a nie ponowne przeliczenie łącznego czasu. Zero przy braku zmian. Dojazd nie jest płatny."
+                    },
+                    "achievable": {
+                      "type": "boolean"
+                    },
+                    "shifts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "start",
+                          "end",
+                          "category",
+                          "hourlyRatePln",
+                          "estimatedPayPln",
+                          "rateKind"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "start": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "end": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "category": {
+                            "enum": [
+                              "Work"
+                            ]
+                          },
+                          "hourlyRatePln": {
+                            "type": "number",
+                            "minimum": 0,
+                            "description": "Trwały snapshot stawki PLN/h w momencie generowania. Nie aktualizuje się po zmianie profilu."
+                          },
+                          "estimatedPayPln": {
+                            "type": "number",
+                            "minimum": 0,
+                            "description": "Snapshot kwoty: halfUp(rateGrosz × rzeczywiste minuty / 60) / 100; zaokrąglanie osobno dla każdej zmiany."
+                          },
+                          "rateKind": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "gross",
+                                  "net"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {}
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {}
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {}
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {}
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/work-profile/schedules": {
+      "get": {
+        "operationId": "get_work_profile_schedules",
+        "summary": "Lista zapisanych grafików dla tygodnia",
+        "tags": [
+          "Scheduling"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "in": "query",
+            "name": "week",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "status",
+                      "week",
+                      "commuteMinutes",
+                      "plannedHours",
+                      "targetHours",
+                      "estimatedPayPln",
+                      "achievable",
+                      "shifts"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "Proposed",
+                          "Accepted",
+                          "Rejected"
+                        ]
+                      },
+                      "week": {
+                        "type": "string",
+                        "format": "date"
+                      },
+                      "commuteMinutes": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 10080
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "plannedHours": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "targetHours": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "estimatedPayPln": {
+                        "type": "number",
+                        "minimum": 0,
+                        "description": "Suma kwot zaokrąglonych osobno dla zmian, a nie ponowne przeliczenie łącznego czasu. Zero przy braku zmian. Dojazd nie jest płatny."
+                      },
+                      "achievable": {
+                        "type": "boolean"
+                      },
+                      "shifts": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "id",
+                            "start",
+                            "end",
+                            "category",
+                            "hourlyRatePln",
+                            "estimatedPayPln",
+                            "rateKind"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "start": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "end": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "category": {
+                              "enum": [
+                                "Work"
+                              ]
+                            },
+                            "hourlyRatePln": {
+                              "type": "number",
+                              "minimum": 0,
+                              "description": "Trwały snapshot stawki PLN/h w momencie generowania. Nie aktualizuje się po zmianie profilu."
+                            },
+                            "estimatedPayPln": {
+                              "type": "number",
+                              "minimum": 0,
+                              "description": "Snapshot kwoty: halfUp(rateGrosz × rzeczywiste minuty / 60) / 100; zaokrąglanie osobno dla każdej zmiany."
+                            },
+                            "rateKind": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "gross",
+                                    "net"
+                                  ]
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {}
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/work-profile/schedules/{id}": {
+      "get": {
+        "operationId": "get_work_profile_schedules_id",
+        "summary": "Odczyt grafiku i snapshotów",
+        "tags": [
+          "Scheduling"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "status",
+                    "week",
+                    "commuteMinutes",
+                    "plannedHours",
+                    "targetHours",
+                    "estimatedPayPln",
+                    "achievable",
+                    "shifts"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "Proposed",
+                        "Accepted",
+                        "Rejected"
+                      ]
+                    },
+                    "week": {
+                      "type": "string",
+                      "format": "date"
+                    },
+                    "commuteMinutes": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 10080
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "plannedHours": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "targetHours": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "estimatedPayPln": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "Suma kwot zaokrąglonych osobno dla zmian, a nie ponowne przeliczenie łącznego czasu. Zero przy braku zmian. Dojazd nie jest płatny."
+                    },
+                    "achievable": {
+                      "type": "boolean"
+                    },
+                    "shifts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "start",
+                          "end",
+                          "category",
+                          "hourlyRatePln",
+                          "estimatedPayPln",
+                          "rateKind"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "start": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "end": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "category": {
+                            "enum": [
+                              "Work"
+                            ]
+                          },
+                          "hourlyRatePln": {
+                            "type": "number",
+                            "minimum": 0,
+                            "description": "Trwały snapshot stawki PLN/h w momencie generowania. Nie aktualizuje się po zmianie profilu."
+                          },
+                          "estimatedPayPln": {
+                            "type": "number",
+                            "minimum": 0,
+                            "description": "Snapshot kwoty: halfUp(rateGrosz × rzeczywiste minuty / 60) / 100; zaokrąglanie osobno dla każdej zmiany."
+                          },
+                          "rateKind": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "gross",
+                                  "net"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {}
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {}
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/work-profile/schedules/{id}/accept": {
+      "post": {
+        "operationId": "post_work_profile_schedules_id_accept",
+        "summary": "Atomowa akceptacja i zapis do kalendarza",
+        "tags": [
+          "Scheduling"
+        ],
+        "description": "Blokuje własny kalendarz oraz grafik; ponownie sprawdza bieżące ograniczenia, w tym nowe wydarzenia. Wszystkie zmiany albo żadna. Nie modyfikuje snapshotów kwot ani rodzaju kwoty. Ponowna akceptacja: 409. commuteMinutes w odpowiedzi jest snapshotem bufora użytego przy generowaniu; walidacja używa aktualnego profilu.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "status",
+                    "week",
+                    "commuteMinutes",
+                    "plannedHours",
+                    "targetHours",
+                    "estimatedPayPln",
+                    "achievable",
+                    "shifts"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "Proposed",
+                        "Accepted",
+                        "Rejected"
+                      ]
+                    },
+                    "week": {
+                      "type": "string",
+                      "format": "date"
+                    },
+                    "commuteMinutes": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 10080
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "plannedHours": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "targetHours": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "estimatedPayPln": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "Suma kwot zaokrąglonych osobno dla zmian, a nie ponowne przeliczenie łącznego czasu. Zero przy braku zmian. Dojazd nie jest płatny."
+                    },
+                    "achievable": {
+                      "type": "boolean"
+                    },
+                    "shifts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "start",
+                          "end",
+                          "category",
+                          "hourlyRatePln",
+                          "estimatedPayPln",
+                          "rateKind"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "start": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "end": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "category": {
+                            "enum": [
+                              "Work"
+                            ]
+                          },
+                          "hourlyRatePln": {
+                            "type": "number",
+                            "minimum": 0,
+                            "description": "Trwały snapshot stawki PLN/h w momencie generowania. Nie aktualizuje się po zmianie profilu."
+                          },
+                          "estimatedPayPln": {
+                            "type": "number",
+                            "minimum": 0,
+                            "description": "Snapshot kwoty: halfUp(rateGrosz × rzeczywiste minuty / 60) / 100; zaokrąglanie osobno dla każdej zmiany."
+                          },
+                          "rateKind": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "gross",
+                                  "net"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {}
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {}
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {}
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {}
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/work-profile/schedules/{id}/reject": {
+      "post": {
+        "operationId": "post_work_profile_schedules_id_reject",
+        "summary": "Odrzucenie propozycji bez zapisu wydarzeń",
+        "tags": [
+          "Scheduling"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "status",
+                    "week",
+                    "commuteMinutes",
+                    "plannedHours",
+                    "targetHours",
+                    "estimatedPayPln",
+                    "achievable",
+                    "shifts"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "Proposed",
+                        "Accepted",
+                        "Rejected"
+                      ]
+                    },
+                    "week": {
+                      "type": "string",
+                      "format": "date"
+                    },
+                    "commuteMinutes": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 10080
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "plannedHours": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "targetHours": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "estimatedPayPln": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "Suma kwot zaokrąglonych osobno dla zmian, a nie ponowne przeliczenie łącznego czasu. Zero przy braku zmian. Dojazd nie jest płatny."
+                    },
+                    "achievable": {
+                      "type": "boolean"
+                    },
+                    "shifts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "start",
+                          "end",
+                          "category",
+                          "hourlyRatePln",
+                          "estimatedPayPln",
+                          "rateKind"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "start": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "end": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "category": {
+                            "enum": [
+                              "Work"
+                            ]
+                          },
+                          "hourlyRatePln": {
+                            "type": "number",
+                            "minimum": 0,
+                            "description": "Trwały snapshot stawki PLN/h w momencie generowania. Nie aktualizuje się po zmianie profilu."
+                          },
+                          "estimatedPayPln": {
+                            "type": "number",
+                            "minimum": 0,
+                            "description": "Snapshot kwoty: halfUp(rateGrosz × rzeczywiste minuty / 60) / 100; zaokrąglanie osobno dla każdej zmiany."
+                          },
+                          "rateKind": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "gross",
+                                  "net"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {}
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {}
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {}
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/work-profile/schedules/{id}/shifts/{shiftId}": {
+      "put": {
+        "operationId": "put_work_profile_schedules_id_shifts_shiftId",
+        "summary": "Korekta zmiany w propozycji",
+        "tags": [
+          "Scheduling"
+        ],
+        "description": "Sprawdza aktualny profil, dostępność, odstępy i wydarzenia, także poza tygodniem. Odrzucenie zachowuje poprzednią zmianę. Przelicza kwotę tylko według snapshotu stawki tej zmiany; nie stosuje bieżącej stawki profilu.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "start",
+                  "end"
+                ],
+                "properties": {
+                  "start": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:00(?:\\.000)?(?:Z|[+-]\\d{2}:\\d{2})$"
+                  },
+                  "end": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:00(?:\\.000)?(?:Z|[+-]\\d{2}:\\d{2})$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "shiftId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "status",
+                    "week",
+                    "commuteMinutes",
+                    "plannedHours",
+                    "targetHours",
+                    "estimatedPayPln",
+                    "achievable",
+                    "shifts"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "Proposed",
+                        "Accepted",
+                        "Rejected"
+                      ]
+                    },
+                    "week": {
+                      "type": "string",
+                      "format": "date"
+                    },
+                    "commuteMinutes": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 10080
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "plannedHours": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "targetHours": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "estimatedPayPln": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "Suma kwot zaokrąglonych osobno dla zmian, a nie ponowne przeliczenie łącznego czasu. Zero przy braku zmian. Dojazd nie jest płatny."
+                    },
+                    "achievable": {
+                      "type": "boolean"
+                    },
+                    "shifts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "start",
+                          "end",
+                          "category",
+                          "hourlyRatePln",
+                          "estimatedPayPln",
+                          "rateKind"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "start": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "end": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "category": {
+                            "enum": [
+                              "Work"
+                            ]
+                          },
+                          "hourlyRatePln": {
+                            "type": "number",
+                            "minimum": 0,
+                            "description": "Trwały snapshot stawki PLN/h w momencie generowania. Nie aktualizuje się po zmianie profilu."
+                          },
+                          "estimatedPayPln": {
+                            "type": "number",
+                            "minimum": 0,
+                            "description": "Snapshot kwoty: halfUp(rateGrosz × rzeczywiste minuty / 60) / 100; zaokrąglanie osobno dla każdej zmiany."
+                          },
+                          "rateKind": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "gross",
+                                  "net"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {}
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {}
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {}
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {}
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/health/live": {
       "get": {
         "operationId": "healthLive",
@@ -602,8 +2830,7 @@
                           },
                           "endTime": {
                             "type": "string",
-                            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
-                            "description": "Czas lokalny HH:MM."
+                            "pattern": "^(([01]\\d|2[0-3]):[0-5]\\d|24:00)$"
                           }
                         }
                       }
@@ -942,8 +3169,7 @@
                         },
                         "endTime": {
                           "type": "string",
-                          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
-                          "description": "Czas lokalny HH:MM."
+                          "pattern": "^(([01]\\d|2[0-3]):[0-5]\\d|24:00)$"
                         }
                       }
                     }
@@ -1224,8 +3450,7 @@
                           },
                           "endTime": {
                             "type": "string",
-                            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
-                            "description": "Czas lokalny HH:MM."
+                            "pattern": "^(([01]\\d|2[0-3]):[0-5]\\d|24:00)$"
                           }
                         }
                       }
@@ -1540,8 +3765,7 @@
                               },
                               "endTime": {
                                 "type": "string",
-                                "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
-                                "description": "Czas lokalny HH:MM."
+                                "pattern": "^(([01]\\d|2[0-3]):[0-5]\\d|24:00)$"
                               }
                             }
                           }
@@ -1728,7 +3952,8 @@
                           "target_above_max",
                           "shorter_than_minimum",
                           "end_before_start",
-                          "duplicate_id"
+                          "duplicate_id",
+                          "overlap"
                         ]
                       }
                     }
@@ -1921,6 +4146,41 @@
                   "description": "Propozycja albo zatwierdzony grafik tygodnia. blockingEvents i freeWindows są wyliczane z bieżącego kalendarza i profilu.",
                   "additionalProperties": true,
                   "properties": {
+                    "estimatedPayPln": {
+                      "type": "number",
+                      "description": "Sum of individually rounded PLN pay snapshots for proposed shifts."
+                    },
+                    "shifts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true,
+                        "properties": {
+                          "hourlyRatePln": {
+                            "type": "number",
+                            "description": "Hourly rate snapshot in PLN."
+                          },
+                          "estimatedPayPln": {
+                            "type": "number",
+                            "description": "halfUp(rateGrosz * elapsedMinutes / 60) / 100; commute is unpaid."
+                          },
+                          "rateKind": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "gross",
+                                  "net"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
                     "blockingEvents": {
                       "type": "array",
                       "items": {
@@ -2216,6 +4476,17 @@
               }
             }
           },
+          "422": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
           "503": {
             "description": "Default Response",
             "content": {
@@ -2281,6 +4552,41 @@
                   "description": "Propozycja albo zatwierdzony grafik tygodnia. blockingEvents i freeWindows są wyliczane z bieżącego kalendarza i profilu.",
                   "additionalProperties": true,
                   "properties": {
+                    "estimatedPayPln": {
+                      "type": "number",
+                      "description": "Sum of individually rounded PLN pay snapshots for proposed shifts."
+                    },
+                    "shifts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true,
+                        "properties": {
+                          "hourlyRatePln": {
+                            "type": "number",
+                            "description": "Hourly rate snapshot in PLN."
+                          },
+                          "estimatedPayPln": {
+                            "type": "number",
+                            "description": "halfUp(rateGrosz * elapsedMinutes / 60) / 100; commute is unpaid."
+                          },
+                          "rateKind": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "gross",
+                                  "net"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
                     "blockingEvents": {
                       "type": "array",
                       "items": {
@@ -2952,7 +5258,44 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": true
+                  "additionalProperties": true,
+                  "properties": {
+                    "estimatedPayPln": {
+                      "type": "number",
+                      "description": "Sum of per-shift half-up pay snapshots in PLN; commute is unpaid."
+                    },
+                    "shifts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true,
+                        "properties": {
+                          "hourlyRatePln": {
+                            "type": "number",
+                            "description": "Hourly rate snapshot in PLN, never recalculated from the current profile."
+                          },
+                          "estimatedPayPln": {
+                            "type": "number",
+                            "description": "halfUp(rateGrosz * elapsedMinutes / 60) / 100."
+                          },
+                          "rateKind": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "gross",
+                                  "net"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -3012,6 +5355,41 @@
                   "description": "Propozycja albo zatwierdzony grafik tygodnia. blockingEvents i freeWindows są wyliczane z bieżącego kalendarza i profilu.",
                   "additionalProperties": true,
                   "properties": {
+                    "estimatedPayPln": {
+                      "type": "number",
+                      "description": "Sum of individually rounded PLN pay snapshots for proposed shifts."
+                    },
+                    "shifts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true,
+                        "properties": {
+                          "hourlyRatePln": {
+                            "type": "number",
+                            "description": "Hourly rate snapshot in PLN."
+                          },
+                          "estimatedPayPln": {
+                            "type": "number",
+                            "description": "halfUp(rateGrosz * elapsedMinutes / 60) / 100; commute is unpaid."
+                          },
+                          "rateKind": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "gross",
+                                  "net"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
                     "blockingEvents": {
                       "type": "array",
                       "items": {
@@ -3330,6 +5708,41 @@
                   "description": "Propozycja albo zatwierdzony grafik tygodnia. blockingEvents i freeWindows są wyliczane z bieżącego kalendarza i profilu.",
                   "additionalProperties": true,
                   "properties": {
+                    "estimatedPayPln": {
+                      "type": "number",
+                      "description": "Sum of individually rounded PLN pay snapshots for proposed shifts."
+                    },
+                    "shifts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true,
+                        "properties": {
+                          "hourlyRatePln": {
+                            "type": "number",
+                            "description": "Hourly rate snapshot in PLN."
+                          },
+                          "estimatedPayPln": {
+                            "type": "number",
+                            "description": "halfUp(rateGrosz * elapsedMinutes / 60) / 100; commute is unpaid."
+                          },
+                          "rateKind": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "gross",
+                                  "net"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
                     "blockingEvents": {
                       "type": "array",
                       "items": {
@@ -3711,6 +6124,41 @@
                   "description": "Propozycja albo zatwierdzony grafik tygodnia. blockingEvents i freeWindows są wyliczane z bieżącego kalendarza i profilu.",
                   "additionalProperties": true,
                   "properties": {
+                    "estimatedPayPln": {
+                      "type": "number",
+                      "description": "Sum of individually rounded PLN pay snapshots for proposed shifts."
+                    },
+                    "shifts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true,
+                        "properties": {
+                          "hourlyRatePln": {
+                            "type": "number",
+                            "description": "Hourly rate snapshot in PLN."
+                          },
+                          "estimatedPayPln": {
+                            "type": "number",
+                            "description": "halfUp(rateGrosz * elapsedMinutes / 60) / 100; commute is unpaid."
+                          },
+                          "rateKind": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "gross",
+                                  "net"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
                     "blockingEvents": {
                       "type": "array",
                       "items": {
@@ -5017,19 +7465,29 @@
         "tags": [
           "Blocks"
         ],
-        "description": "Retrieves all defined periods of unavailability such as vacations, exam sessions, and days off.",
+        "description": "Lists only the blocks belonging to the server-resolved user. Times are ISO instants with an explicit UTC offset.",
         "responses": {
           "200": {
-            "description": "List of blocks and exam sessions",
+            "description": "Default Response",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "array",
                   "items": {
                     "type": "object",
+                    "required": [
+                      "id",
+                      "userId",
+                      "title",
+                      "startTime",
+                      "endTime",
+                      "type"
+                    ],
+                    "additionalProperties": false,
                     "properties": {
                       "id": {
-                        "type": "string"
+                        "type": "string",
+                        "format": "uuid"
                       },
                       "userId": {
                         "type": "string"
@@ -5038,10 +7496,12 @@
                         "type": "string"
                       },
                       "startTime": {
-                        "type": "string"
+                        "type": "string",
+                        "format": "date-time"
                       },
                       "endTime": {
-                        "type": "string"
+                        "type": "string",
+                        "format": "date-time"
                       },
                       "type": {
                         "type": "string",
@@ -5057,12 +7517,15 @@
               }
             }
           },
-          "501": {
-            "description": "Not implemented",
+          "503": {
+            "description": "Default Response",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "error"
+                  ],
                   "properties": {
                     "error": {
                       "type": "string"
@@ -5076,11 +7539,11 @@
       },
       "post": {
         "operationId": "createBlock",
-        "summary": "Create a block or exam session",
+        "summary": "Create a block",
         "tags": [
           "Blocks"
         ],
-        "description": "Creates a new unavailability period (vacation, exam session, or day off) for scheduling calculations.",
+        "description": "Creates a vacation, exam session or day off for the server-resolved user. The end instant must follow the start instant. Blocks constrain both planning workflows.",
         "requestBody": {
           "required": true,
           "content": {
@@ -5093,15 +7556,20 @@
                   "endTime",
                   "type"
                 ],
+                "additionalProperties": false,
                 "properties": {
                   "title": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
                   },
                   "startTime": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "date-time"
                   },
                   "endTime": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "date-time"
                   },
                   "type": {
                     "type": "string",
@@ -5118,14 +7586,24 @@
         },
         "responses": {
           "201": {
-            "description": "Created block or exam session",
+            "description": "Default Response",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "id",
+                    "userId",
+                    "title",
+                    "startTime",
+                    "endTime",
+                    "type"
+                  ],
+                  "additionalProperties": false,
                   "properties": {
                     "id": {
-                      "type": "string"
+                      "type": "string",
+                      "format": "uuid"
                     },
                     "userId": {
                       "type": "string"
@@ -5134,10 +7612,12 @@
                       "type": "string"
                     },
                     "startTime": {
-                      "type": "string"
+                      "type": "string",
+                      "format": "date-time"
                     },
                     "endTime": {
-                      "type": "string"
+                      "type": "string",
+                      "format": "date-time"
                     },
                     "type": {
                       "type": "string",
@@ -5152,12 +7632,51 @@
               }
             }
           },
-          "501": {
-            "description": "Not implemented",
+          "400": {
+            "description": "Default Response",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
                   "properties": {
                     "error": {
                       "type": "string"
@@ -5173,15 +7692,16 @@
     "/api/v1/blocks/{id}": {
       "delete": {
         "operationId": "deleteBlock",
-        "summary": "Delete a block or exam session",
+        "summary": "Delete a block",
         "tags": [
           "Blocks"
         ],
-        "description": "Removes an existing block or exam session by its unique identifier.",
+        "description": "Deletes a block only when it belongs to the server-resolved user; foreign IDs are treated as not found.",
         "parameters": [
           {
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             },
             "in": "path",
             "name": "id",
@@ -5189,27 +7709,18 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Deletion success confirmation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    }
-                  }
-                }
-              }
-            }
+          "204": {
+            "description": "Default Response"
           },
-          "404": {
-            "description": "Block not found",
+          "400": {
+            "description": "Default Response",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "error"
+                  ],
                   "properties": {
                     "error": {
                       "type": "string"
@@ -5219,12 +7730,33 @@
               }
             }
           },
-          "501": {
-            "description": "Not implemented",
+          "404": {
+            "description": "Default Response",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
                   "properties": {
                     "error": {
                       "type": "string"
@@ -5902,6 +8434,10 @@
     }
   ],
   "tags": [
+    {
+      "name": "Work profile",
+      "description": "Versioned availability, hourly rates and pay snapshots."
+    },
     {
       "name": "System",
       "description": "Liveness and dependency readiness."

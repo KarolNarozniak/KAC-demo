@@ -77,6 +77,8 @@ export const scheduleResponseSchema = {
   description: 'Propozycja albo zatwierdzony grafik tygodnia. blockingEvents i freeWindows są wyliczane z bieżącego kalendarza i profilu.',
   additionalProperties: true,
   properties: {
+    estimatedPayPln:{type:'number',description:'Sum of individually rounded PLN pay snapshots for proposed shifts.'},
+    shifts:{type:'array',items:{type:'object',additionalProperties:true,properties:{hourlyRatePln:{type:'number',description:'Hourly rate snapshot in PLN.'},estimatedPayPln:{type:'number',description:'halfUp(rateGrosz * elapsedMinutes / 60) / 100; commute is unpaid.'},rateKind:{anyOf:[{type:'string',enum:['gross','net']},{type:'null'}]}}}},
     blockingEvents: { type: 'array', items: blockingEventSchema, description: 'Zajęcia i inne wydarzenia tygodnia uwzględnione przy planowaniu.' },
     freeWindows: { type: 'array', items: freeWindowSchema },
     freeMinutes: { type: 'integer', description: 'Suma wolnych przedziałów w minutach.' },

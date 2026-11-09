@@ -1,3 +1,5 @@
+import { SchedulingRepository } from './scheduling/work-profile-repository.js';
+import { WorkProfileRepository } from './profile/compensation-repository.js';
 import { buildApi } from './app.js';
 import { config } from './config.js';
 import { pool, PostgresCalendarRepository } from './database.js';
@@ -18,7 +20,7 @@ const scheduleReader = config.workScheduleReader === 'demo'
   ? new DemoScheduleReader()
   : new LocalScheduleReader(process.env.WORK_SCHEDULE_DEBUG === '1' ? { onText: printText } : {});
 // Użytkownika żądania ustala serwer (S23KC2S1P2-185). Do czasu logowania to użytkownik demonstracyjny z konfiguracji.
-const app = buildApi(repository, config.corsOrigins, { scheduleReader, scheduleRepository, workProfileRepository, userScope: demoScope, google: { oauth: config.google } });
+const app = buildApi(repository, config.corsOrigins, { workProfile: pool ? new WorkProfileRepository(pool) : null, scheduling: pool ? new SchedulingRepository(pool) : null, scheduleReader, scheduleRepository, workProfileRepository, userScope: demoScope, google: { oauth: config.google } });
 
 try {
   await app.listen({ host: '0.0.0.0', port: config.port });

@@ -28,7 +28,7 @@ export async function createBlock(input: BlockInput): Promise<Block> {
   const response = await fetch(`${API_URL}/blocks`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
+    body: JSON.stringify({...input,startTime:new Date(input.startTime).toISOString(),endTime:new Date(input.endTime).toISOString()}),
   });
   if (!response.ok) throw new Error('Nie udało się utworzyć blokady');
   return response.json();

@@ -1,0 +1,1272 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "KAC — Work profile and scheduling",
+    "version": "1.0.0",
+    "description": "Kontrakt modułów sprintu 204. Jest dokumentem uzupełniającym istniejące API kalendarza/importu. Tożsamość MVP wybierana na serwerze przez DB_DEMO_USER_ID/DB_DEMO_CALENDAR_ID; brak parametrów właściciela w żądaniach. Nie jest to uwierzytelnianie produkcyjne. Updated to /api/v1 after merging master; canonical full contract: apps/api/openapi/openapi.json. The earlier branch-specific profile payload now lives at /api/v1/work-profile/compensation; the canonical /api/v1/work-profile follows the monthly-target contract on master."
+  },
+  "tags": [
+    {
+      "name": "Work profile"
+    },
+    {
+      "name": "Scheduling"
+    }
+  ],
+  "paths": {
+    "/api/v1/work-profile/compensation": {
+      "get": {
+        "tags": [
+          "Work profile"
+        ],
+        "summary": "Odczyt aktywnego profilu",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Sukces",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkProfile"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Brak własnego aktywnego profilu, kalendarza lub grafiku.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Baza nie jest skonfigurowana albo jest niedostępna. Zapis nie zmienia części danych.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Work profile"
+        ],
+        "summary": "Zapis pełnego profilu z wersją",
+        "description": "Zwiększa wersję wspólną z dostępnością. Nie zmienia wydarzeń ani snapshotów. 0 jest dozwolone; null oznacza brak. Kwota wymaga gross lub net; maksimum dwie cyfry po przecinku, numeric(12,2).",
+        "responses": {
+          "200": {
+            "description": "Sukces",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkProfile"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Niepoprawna struktura, format lub data. Nieznane właściwości i konwersja typów nie są dozwolone.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Brak własnego aktywnego profilu, kalendarza lub grafiku.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "version_conflict — profil zmieniony, albo schedule_closed — propozycja już zamknięta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Błąd semantyczny: availability_overlap, invalid_hourly_rate, rate_kind_required, invalid_hour_limits, profile_incomplete, invalid_shift, pay_overflow, max_hours_exceeded lub schedule_constraints.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                },
+                "example": {
+                  "error": "invalid_hourly_rate"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Baza nie jest skonfigurowana albo jest niedostępna. Zapis nie zmienia części danych.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkProfile"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/work-profile/availability": {
+      "get": {
+        "tags": [
+          "Work profile"
+        ],
+        "summary": "Odczyt tygodniowej dostępności",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Sukces",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AvailabilityResponse"
+                },
+                "examples": {
+                  "emptyWeek": {
+                    "value": {
+                      "version": 1,
+                      "intervals": []
+                    }
+                  },
+                  "endOfDay": {
+                    "value": {
+                      "version": 2,
+                      "intervals": [
+                        {
+                          "dayOfWeek": 7,
+                          "startTime": "22:00",
+                          "endTime": "24:00"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Brak własnego aktywnego profilu, kalendarza lub grafiku.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Baza nie jest skonfigurowana albo jest niedostępna. Zapis nie zmienia części danych.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Work profile"
+        ],
+        "summary": "Atomowe zastąpienie dostępności",
+        "description": "Dni ISO 1–7. Zakresy nocne dzielone na północy, również 7→1. Zachowuje 24:00, sortuje po dniu i początku. Duplikaty i przecięcia: 422; stykające zakresy dozwolone. Edytor scala przecięcia przed PUT. Pusta lista usuwa dostępność. Blokada profilu FOR UPDATE, kontrola wersji, rollback całej operacji. Nie modyfikuje wydarzeń.",
+        "responses": {
+          "200": {
+            "description": "Sukces",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AvailabilityResponse"
+                },
+                "examples": {
+                  "emptyWeek": {
+                    "value": {
+                      "version": 1,
+                      "intervals": []
+                    }
+                  },
+                  "endOfDay": {
+                    "value": {
+                      "version": 2,
+                      "intervals": [
+                        {
+                          "dayOfWeek": 7,
+                          "startTime": "22:00",
+                          "endTime": "24:00"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Niepoprawna struktura, format lub data. Nieznane właściwości i konwersja typów nie są dozwolone.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Brak własnego aktywnego profilu, kalendarza lub grafiku.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "version_conflict — profil zmieniony, albo schedule_closed — propozycja już zamknięta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Błąd semantyczny: availability_overlap, invalid_hourly_rate, rate_kind_required, invalid_hour_limits, profile_incomplete, invalid_shift, pay_overflow, max_hours_exceeded lub schedule_constraints.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Baza nie jest skonfigurowana albo jest niedostępna. Zapis nie zmienia części danych.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AvailabilityResponse"
+              },
+              "examples": {
+                "emptyWeek": {
+                  "value": {
+                    "version": 1,
+                    "intervals": []
+                  }
+                },
+                "endOfDay": {
+                  "value": {
+                    "version": 2,
+                    "intervals": [
+                      {
+                        "dayOfWeek": 7,
+                        "startTime": "22:00",
+                        "endTime": "24:00"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/work-profile/schedules": {
+      "get": {
+        "tags": [
+          "Scheduling"
+        ],
+        "summary": "Lista zapisanych grafików dla tygodnia",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Sukces",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ScheduleSummary"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Niepoprawna struktura, format lub data. Nieznane właściwości i konwersja typów nie są dozwolone.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Baza nie jest skonfigurowana albo jest niedostępna. Zapis nie zmienia części danych.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "week",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "Poprawna data poniedziałku w strefie kalendarza."
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/work-profile/schedules/generate": {
+      "post": {
+        "tags": [
+          "Scheduling"
+        ],
+        "summary": "Generowanie propozycji",
+        "description": "Wymaga ustawienia stawki, rodzaju kwoty, dojazdu i celu; brak daje profile_incomplete z details.fields. Algorytm deterministyczny wypełnia najwcześniejsze poprawne okna, respektuje maksymalną liczbę godzin. Nie gwarantuje globalnie optymalnego planu. Brak okien daje pustą propozycję i achievable=false, jeśli cel > 0. Płatna praca mieści się w tygodniu; bufor może korzystać z ciągłej dostępności sąsiedniego tygodnia. Wydarzenia cykliczne materializowane w strefie kalendarza, odstępy liczone na instantach. Między Work i Class/Personal wymagany commuteMinutes, między Work i Work max(commuteMinutes,minRestMinutes), bez sumowania. Bufor mieści się w ciągłym oknie dostępności. Nie powstają wydarzenia dojazdu ani pracy do chwili akceptacji.",
+        "responses": {
+          "200": {
+            "description": "Sukces",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleSummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Niepoprawna struktura, format lub data. Nieznane właściwości i konwersja typów nie są dozwolone.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Brak własnego aktywnego profilu, kalendarza lub grafiku.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "version_conflict — profil zmieniony, albo schedule_closed — propozycja już zamknięta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Błąd semantyczny: availability_overlap, invalid_hourly_rate, rate_kind_required, invalid_hour_limits, profile_incomplete, invalid_shift, pay_overflow, max_hours_exceeded lub schedule_constraints.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                },
+                "examples": {
+                  "gap": {
+                    "value": {
+                      "error": "schedule_constraints",
+                      "details": {
+                        "violations": [
+                          {
+                            "error": "commute_gap_too_short",
+                            "requiredMinutes": 30,
+                            "actualMinutes": 15,
+                            "leftId": "class-1",
+                            "rightId": "shift-1"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "availabilityBoundary": {
+                    "value": {
+                      "error": "schedule_constraints",
+                      "details": {
+                        "violations": [
+                          {
+                            "error": "commute_outside_availability",
+                            "shiftId": "shift-1",
+                            "requiredMinutes": 30
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Baza nie jest skonfigurowana albo jest niedostępna. Zapis nie zmienia części danych.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "week"
+                ],
+                "properties": {
+                  "week": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "Poprawna data poniedziałku w strefie kalendarza."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/work-profile/schedules/{id}": {
+      "get": {
+        "tags": [
+          "Scheduling"
+        ],
+        "summary": "Odczyt grafiku i snapshotów",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Sukces",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleSummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Niepoprawna struktura, format lub data. Nieznane właściwości i konwersja typów nie są dozwolone.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Brak własnego aktywnego profilu, kalendarza lub grafiku.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Baza nie jest skonfigurowana albo jest niedostępna. Zapis nie zmienia części danych.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/work-profile/schedules/{id}/shifts/{shiftId}": {
+      "put": {
+        "tags": [
+          "Scheduling"
+        ],
+        "summary": "Korekta zmiany w propozycji",
+        "description": "Sprawdza aktualny profil, dostępność, odstępy i wydarzenia, także poza tygodniem. Odrzucenie zachowuje poprzednią zmianę. Przelicza kwotę tylko według snapshotu stawki tej zmiany; nie stosuje bieżącej stawki profilu.",
+        "responses": {
+          "200": {
+            "description": "Sukces",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleSummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Niepoprawna struktura, format lub data. Nieznane właściwości i konwersja typów nie są dozwolone.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Brak własnego aktywnego profilu, kalendarza lub grafiku.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "version_conflict — profil zmieniony, albo schedule_closed — propozycja już zamknięta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Błąd semantyczny: availability_overlap, invalid_hourly_rate, rate_kind_required, invalid_hour_limits, profile_incomplete, invalid_shift, pay_overflow, max_hours_exceeded lub schedule_constraints.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                },
+                "examples": {
+                  "gap": {
+                    "value": {
+                      "error": "schedule_constraints",
+                      "details": {
+                        "violations": [
+                          {
+                            "error": "commute_gap_too_short",
+                            "requiredMinutes": 30,
+                            "actualMinutes": 15,
+                            "leftId": "class-1",
+                            "rightId": "shift-1"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "availabilityBoundary": {
+                    "value": {
+                      "error": "schedule_constraints",
+                      "details": {
+                        "violations": [
+                          {
+                            "error": "commute_outside_availability",
+                            "shiftId": "shift-1",
+                            "requiredMinutes": 30
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Baza nie jest skonfigurowana albo jest niedostępna. Zapis nie zmienia części danych.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShiftEdit"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "shiftId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/work-profile/schedules/{id}/accept": {
+      "post": {
+        "tags": [
+          "Scheduling"
+        ],
+        "summary": "Atomowa akceptacja i zapis do kalendarza",
+        "description": "Blokuje własny kalendarz oraz grafik; ponownie sprawdza bieżące ograniczenia, w tym nowe wydarzenia. Wszystkie zmiany albo żadna. Nie modyfikuje snapshotów kwot ani rodzaju kwoty. Ponowna akceptacja: 409. commuteMinutes w odpowiedzi jest snapshotem bufora użytego przy generowaniu; walidacja używa aktualnego profilu.",
+        "responses": {
+          "200": {
+            "description": "Sukces",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleSummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Niepoprawna struktura, format lub data. Nieznane właściwości i konwersja typów nie są dozwolone.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Brak własnego aktywnego profilu, kalendarza lub grafiku.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "version_conflict — profil zmieniony, albo schedule_closed — propozycja już zamknięta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Błąd semantyczny: availability_overlap, invalid_hourly_rate, rate_kind_required, invalid_hour_limits, profile_incomplete, invalid_shift, pay_overflow, max_hours_exceeded lub schedule_constraints.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                },
+                "examples": {
+                  "gap": {
+                    "value": {
+                      "error": "schedule_constraints",
+                      "details": {
+                        "violations": [
+                          {
+                            "error": "commute_gap_too_short",
+                            "requiredMinutes": 30,
+                            "actualMinutes": 15,
+                            "leftId": "class-1",
+                            "rightId": "shift-1"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "availabilityBoundary": {
+                    "value": {
+                      "error": "schedule_constraints",
+                      "details": {
+                        "violations": [
+                          {
+                            "error": "commute_outside_availability",
+                            "shiftId": "shift-1",
+                            "requiredMinutes": 30
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Baza nie jest skonfigurowana albo jest niedostępna. Zapis nie zmienia części danych.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/work-profile/schedules/{id}/reject": {
+      "post": {
+        "tags": [
+          "Scheduling"
+        ],
+        "summary": "Odrzucenie propozycji bez zapisu wydarzeń",
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "Sukces",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleSummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Niepoprawna struktura, format lub data. Nieznane właściwości i konwersja typów nie są dozwolone.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Brak własnego aktywnego profilu, kalendarza lub grafiku.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "version_conflict — profil zmieniony, albo schedule_closed — propozycja już zamknięta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Baza nie jest skonfigurowana albo jest niedostępna. Zapis nie zmienia części danych.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "WorkProfile": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "version",
+          "hourlyRatePln",
+          "rateKind",
+          "commuteMinutes",
+          "minRestMinutes",
+          "minHours",
+          "targetHours",
+          "maxHours"
+        ],
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "hourlyRatePln": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 9999999999.99,
+                "multipleOf": 0.01
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "PLN/h; null = brak stawki i profile_incomplete przy generowaniu. Zero jest jawną poprawną stawką."
+          },
+          "rateKind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "gross",
+                  "net"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "gross = brutto, net = netto. Wymagane przy ustawionej stawce. Bez konwersji podatkowej."
+          },
+          "commuteMinutes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 10080
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Jeden stały bufor MVP przed i po pracy, również dla pustego location; bez map i geokodowania. Null oznacza nieustawiony dojazd i blokuje planowanie; 0 jest poprawne."
+          },
+          "minRestMinutes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10080
+          },
+          "minHours": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 999.99,
+                "multipleOf": 0.01
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "targetHours": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 999.99,
+                "multipleOf": 0.01
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "maxHours": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 999.99,
+                "multipleOf": 0.01,
+                "exclusiveMinimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "example": {
+          "version": 1,
+          "hourlyRatePln": 30,
+          "rateKind": "gross",
+          "commuteMinutes": 30,
+          "minRestMinutes": 660,
+          "minHours": 10,
+          "targetHours": 20,
+          "maxHours": 30
+        }
+      },
+      "AvailabilityInterval": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "dayOfWeek",
+          "startTime",
+          "endTime"
+        ],
+        "properties": {
+          "dayOfWeek": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 7
+          },
+          "startTime": {
+            "type": "string",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+          },
+          "endTime": {
+            "type": "string",
+            "pattern": "^(([01]\\d|2[0-3]):[0-5]\\d|24:00)$"
+          }
+        }
+      },
+      "AvailabilityResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "version",
+          "intervals"
+        ],
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "intervals": {
+            "type": "array",
+            "maxItems": 1000,
+            "items": {
+              "$ref": "#/components/schemas/AvailabilityInterval"
+            }
+          }
+        }
+      },
+      "ValidationError": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "details": {}
+        }
+      },
+      "CommuteViolation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "error",
+          "requiredMinutes",
+          "actualMinutes",
+          "leftId",
+          "rightId"
+        ],
+        "properties": {
+          "error": {
+            "const": "commute_gap_too_short"
+          },
+          "requiredMinutes": {
+            "type": "number",
+            "minimum": 0
+          },
+          "actualMinutes": {
+            "type": "number",
+            "description": "Ujemne przy nakładaniu samych wydarzeń."
+          },
+          "leftId": {
+            "type": "string"
+          },
+          "rightId": {
+            "type": "string"
+          },
+          "leftTitle": {
+            "type": "string"
+          },
+          "rightTitle": {
+            "type": "string"
+          }
+        },
+        "example": {
+          "error": "commute_gap_too_short",
+          "requiredMinutes": 30,
+          "actualMinutes": 15,
+          "leftId": "class-1",
+          "rightId": "shift-1"
+        }
+      },
+      "AvailabilityViolation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "error",
+          "shiftId",
+          "requiredMinutes"
+        ],
+        "properties": {
+          "error": {
+            "const": "commute_outside_availability"
+          },
+          "shiftId": {
+            "type": "string"
+          },
+          "requiredMinutes": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "example": {
+          "error": "commute_outside_availability",
+          "shiftId": "shift-1",
+          "requiredMinutes": 30
+        }
+      },
+      "ScheduleShift": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "start",
+          "end",
+          "category",
+          "hourlyRatePln",
+          "estimatedPayPln",
+          "rateKind"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "end": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "category": {
+            "const": "Work"
+          },
+          "hourlyRatePln": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Trwały snapshot stawki PLN/h w momencie generowania. Nie aktualizuje się po zmianie profilu."
+          },
+          "estimatedPayPln": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Snapshot kwoty: halfUp(rateGrosz × rzeczywiste minuty / 60) / 100; zaokrąglanie osobno dla każdej zmiany."
+          },
+          "rateKind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "gross",
+                  "net"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "ScheduleSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "status",
+          "week",
+          "commuteMinutes",
+          "plannedHours",
+          "targetHours",
+          "estimatedPayPln",
+          "achievable",
+          "shifts"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "Proposed",
+              "Accepted",
+              "Rejected"
+            ]
+          },
+          "week": {
+            "type": "string",
+            "format": "date"
+          },
+          "commuteMinutes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 10080
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "plannedHours": {
+            "type": "number",
+            "minimum": 0
+          },
+          "targetHours": {
+            "type": "number",
+            "minimum": 0
+          },
+          "estimatedPayPln": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Suma kwot zaokrąglonych osobno dla zmian, a nie ponowne przeliczenie łącznego czasu. Zero przy braku zmian. Dojazd nie jest płatny."
+          },
+          "achievable": {
+            "type": "boolean"
+          },
+          "shifts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScheduleShift"
+            }
+          }
+        }
+      },
+      "ShiftEdit": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "start",
+          "end"
+        ],
+        "properties": {
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Rzeczywisty instant z Z lub offsetem, sekundy 00; pełne minuty."
+          },
+          "end": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    }
+  }
+}

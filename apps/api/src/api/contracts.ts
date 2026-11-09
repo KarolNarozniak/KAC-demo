@@ -1,3 +1,5 @@
+import type { WorkProfileRepository as CompensationRepository } from '../profile/compensation-repository.js';
+import type { SchedulingRepository } from '../scheduling/work-profile-repository.js';
 import type { CalendarOverview, EventInput } from '../database.js';
 import type { ExistingEvent } from '../import/rules.js';
 import type { AcceptedRow, ConfirmResult, CreateSessionInput } from '../import/session.js';
@@ -19,13 +21,15 @@ export type CalendarRepository = {
   cancelImportSession?: (sessionId: string) => Promise<boolean>;
   listEventsForImport?: () => Promise<ExistingEvent[]>;
   getImportUserName?: () => Promise<string>;
-  
-  listBlocks?: () => Promise<Block[]>;
-  createBlock?: (input: BlockInput) => Promise<Block>;
-  deleteBlock?: (id: string) => Promise<boolean>;
+
+  listBlocks?: (userId?:string) => Promise<Block[]>;
+  createBlock?: (input: BlockInput,userId?:string) => Promise<Block>;
+  deleteBlock?: (id: string,userId?:string) => Promise<boolean>;
 };
 
 export type ApiOptions = {
+  workProfile?: CompensationRepository | null;
+  scheduling?: SchedulingRepository | null;
   scheduleReader?: ScheduleReader;
   google?: GoogleImportOptions;
   scheduleRepository?: ScheduleRepository;

@@ -69,21 +69,21 @@ export function BlocksScreen() {
 
       <View style={styles.formCard}>
         <Text style={styles.sectionTitle}>Dodaj nową blokadę</Text>
-        
+
         <TextInput
           placeholder="Tytuł (np. Sesja zimowa, Urlop)"
           value={title}
           onChangeText={setTitle}
           style={styles.input}
         />
-        
+
         <TextInput
           placeholder="Od (np. 2026-02-01T08:00)"
           value={startTime}
           onChangeText={setStartTime}
           style={styles.input}
         />
-        
+
         <TextInput
           placeholder="Do (np. 2026-02-15T20:00)"
           value={endTime}

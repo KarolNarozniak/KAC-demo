@@ -1,5 +1,5 @@
 import { requireCollisionDecision, validateTimedEvent, EventNotFoundError, type TimedEvent } from './collisions.js';
-import { Pool } from 'pg';
+import { Pool, type PoolClient } from 'pg';
 import { config } from './config.js';
 import { CATEGORY_IDS, type ExistingEvent } from './import/rules.js';
 import { planImport, type PlanAction } from './import/plan.js';
@@ -63,23 +63,7 @@ export type CalendarOverview = {
 };
 
 export class PostgresCalendarRepository {
-  constructor(private readonly connectionPool: Pool) {
-    this.ensureBlocksTable().catch(() => {});
-  }
-
-  async ensureBlocksTable() {
-    await this.connectionPool.query(`
-      CREATE TABLE IF NOT EXISTS blocks (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        user_id VARCHAR(255) NOT NULL,
-        title VARCHAR(255) NOT NULL,
-        start_time TIMESTAMP WITH TIME ZONE NOT NULL,
-        end_time TIMESTAMP WITH TIME ZONE NOT NULL,
-        type VARCHAR(50) NOT NULL CHECK (type IN ('vacation', 'exam_session', 'day_off')),
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-  }
+  constructor(private readonly connectionPool: Pool) {}
 
   async createEvent(input: EventInput, userId = config.demoUserId, calendarId = config.demoCalendarId) {
     return this.saveEvent(input, undefined, userId, calendarId);
@@ -172,49 +156,51 @@ export class PostgresCalendarRepository {
     } finally { client.release(); }
   }
 
-  async listBlocks(): Promise<Block[]> {
-    await this.ensureBlocksTable();
+  async listBlocks(userId = config.demoUserId): Promise<Block[]> {
     const result = await this.connectionPool.query(
-      'SELECT id, user_id as "userId", title, start_time as "startTime", end_time as "endTime", type FROM blocks ORDER BY start_time ASC'
+      'SELECT id, user_id as "userId", title, start_time as "startTime", end_time as "endTime", type FROM blocks WHERE user_id=$1 ORDER BY start_time ASC', [userId]
     );
     return result.rows.map(row => ({
       ...row,
-      startTime: row.startTime.toISOString().slice(0, 16),
-      endTime: row.endTime.toISOString().slice(0, 16),
+      startTime: row.startTime.toISOString(),
+      endTime: row.endTime.toISOString(),
     }));
   }
 
-  async createBlock(input: BlockInput, userId = config.demoUserId): Promise<Block> {
-    await this.ensureBlocksTable();
-    const startTimeIso = new Date(input.startTime).toISOString();
-    const endTimeIso = new Date(input.endTime).toISOString();
-
-    const result = await this.connectionPool.query(
-      `INSERT INTO blocks (user_id, title, start_time, end_time, type) 
-       VALUES ($1, $2, $3, $4, $5) 
-       RETURNING id, user_id as "userId", title, start_time as "startTime", end_time as "endTime", type`,
-      [userId, input.title, startTimeIso, endTimeIso, input.type]
-    );
-    const row = result.rows[0];
-    return {
-      ...row,
-      startTime: row.startTime.toISOString().slice(0, 16),
-      endTime: row.endTime.toISOString().slice(0, 16),
-    };
+  private async mutateBlocks<T>(userId:string,operation:(client:PoolClient)=>Promise<T>):Promise<T> {
+    const client=await this.connectionPool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('select id_kalendarza from t_kalendarze where id_uzytkownika=$1 and aktywny order by id_kalendarza for update',[userId]);
+      const result=await operation(client);
+      await client.query('COMMIT');
+      return result;
+    } catch(error) {await client.query('ROLLBACK');throw error;}
+    finally {client.release();}
   }
 
-  async deleteBlock(id: string): Promise<boolean> {
-    await this.ensureBlocksTable();
-    const result = await this.connectionPool.query('DELETE FROM blocks WHERE id = $1 RETURNING id', [id]);
-    return (result.rowCount ?? 0) > 0;
+  async createBlock(input:BlockInput,userId=config.demoUserId):Promise<Block> {
+    const start=new Date(input.startTime).toISOString(),end=new Date(input.endTime).toISOString();
+    return this.mutateBlocks(userId,async client=>{
+      const result=await client.query(`insert into blocks(user_id,title,start_time,end_time,type) values($1,$2,$3,$4,$5) returning id,user_id as "userId",title,start_time as "startTime",end_time as "endTime",type`,[userId,input.title,start,end,input.type]);
+      const row=result.rows[0];
+      return {...row,startTime:row.startTime.toISOString(),endTime:row.endTime.toISOString()};
+    });
   }
-  
+
+  async deleteBlock(id:string,userId=config.demoUserId):Promise<boolean> {
+    return this.mutateBlocks(userId,async client=>{
+      const result=await client.query('delete from blocks where id=$1 and user_id=$2 returning id',[id,userId]);
+      return (result.rowCount??0)>0;
+    });
+  }
+
   async getEventOrSeries(eventId: string, userId = config.demoUserId, calendarId = config.demoCalendarId) {
     const client = await this.connectionPool.connect();
     try {
       const selected = await client.query(
-        `select e.id_serii 
-         from t_wydarzenia e 
+        `select e.id_serii
+         from t_wydarzenia e
          join t_kalendarze c on c.id_kalendarza = e.id_kalendarza
          where e.id_wydarzenia = $1 and c.id_kalendarza = $2 and c.id_uzytkownika = $3 and c.aktywny = true`,
         [eventId, calendarId, userId]
@@ -226,7 +212,7 @@ export class PostgresCalendarRepository {
         ? `select e.id_wydarzenia, e.tytul, e.rozpoczecie, e.zakonczenie,
                   e.obowiazkowe, e.powtarzaj_co_tydzien, e.miejsce,
                   to_char(e.rozpoczecie at time zone u.strefa_czasowa, 'YYYY-MM-DD"T"HH24:MI') as local_start,
-                  to_char(e.zakonczenie at time zone u.strefa_czasowa, 'YYYY-MM-DD"T"HH24:MI') as local_end, 
+                  to_char(e.zakonczenie at time zone u.strefa_czasowa, 'YYYY-MM-DD"T"HH24:MI') as local_end,
                   k.nazwa as kategoria, k.kolor_hex
            from t_wydarzenia e
            join t_kategorie k on k.id_kategorii = e.id_kategorii
@@ -237,7 +223,7 @@ export class PostgresCalendarRepository {
         : `select e.id_wydarzenia, e.tytul, e.rozpoczecie, e.zakonczenie,
                   e.obowiazkowe, e.powtarzaj_co_tydzien, e.miejsce,
                   to_char(e.rozpoczecie at time zone u.strefa_czasowa, 'YYYY-MM-DD"T"HH24:MI') as local_start,
-                  to_char(e.zakonczenie at time zone u.strefa_czasowa, 'YYYY-MM-DD"T"HH24:MI') as local_end, 
+                  to_char(e.zakonczenie at time zone u.strefa_czasowa, 'YYYY-MM-DD"T"HH24:MI') as local_end,
                   k.nazwa as kategoria, k.kolor_hex
            from t_wydarzenia e
            join t_kategorie k on k.id_kategorii = e.id_kategorii
@@ -291,31 +277,31 @@ export class PostgresCalendarRepository {
       if (id_serii) {
         await client.query(`
           update t_wydarzenia
-          set tytul = $1, 
-              rozpoczecie = $2::timestamp at time zone $6, 
-              zakonczenie = $3::timestamp at time zone $6, 
+          set tytul = $1,
+              rozpoczecie = $2::timestamp at time zone $6,
+              zakonczenie = $3::timestamp at time zone $6,
               id_kategorii = (select id_kategorii from t_kategorie where nazwa = $4),
-              miejsce = $5, 
-              obowiazkowe = $7, 
+              miejsce = $5,
+              obowiazkowe = $7,
               powtarzaj_co_tydzien = $8
           where id_serii = $9 and id_kalendarza = $10 and rozpoczecie >= $11
         `, [
-          input.title.trim(), 
-          input.start, 
-          input.end, 
-          category, 
-          input.location, 
-          timezone, 
-          input.mandatory, 
-          input.repeatWeekly, 
-          id_serii, 
-          calendarId, 
+          input.title.trim(),
+          input.start,
+          input.end,
+          category,
+          input.location,
+          timezone,
+          input.mandatory,
+          input.repeatWeekly,
+          id_serii,
+          calendarId,
           rozpoczecie
         ]);
       } else {
         await client.query(`
-          update t_wydarzenia 
-          set tytul = $1, rozpoczecie = $2::timestamp at time zone $6, zakonczenie = $3::timestamp at time zone $6, 
+          update t_wydarzenia
+          set tytul = $1, rozpoczecie = $2::timestamp at time zone $6, zakonczenie = $3::timestamp at time zone $6,
               id_kategorii = (select id_kategorii from t_kategorie where nazwa = $4),
               miejsce = $5, obowiazkowe = $7, powtarzaj_co_tydzien = $8
           where id_wydarzenia = $9 and id_kalendarza = $10
@@ -327,8 +313,8 @@ export class PostgresCalendarRepository {
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;
-    } finally { 
-      client.release(); 
+    } finally {
+      client.release();
     }
   }
 

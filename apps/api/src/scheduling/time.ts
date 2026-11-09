@@ -23,6 +23,7 @@ export function weekday(dateKey: string): number {
 }
 
 export function minutesOfDay(value: string): number | null {
+  if(value === '24:00')return 1440;
   const match = TIME_RE.exec(value);
   return match ? Number(match[1]) * 60 + Number(match[2]) : null;
 }
@@ -33,7 +34,7 @@ export function timeOfDay(minutes: number): string {
 }
 
 export function localInstant(dateKey: string, time: string, timeZone: string): Date | null {
-  return toInstant(dateKey, time, timeZone);
+  return time === '24:00' ? toInstant(addLocalDays(dateKey,1),'00:00',timeZone) : toInstant(dateKey, time, timeZone);
 }
 
 export function localDateKey(value: Date, timeZone: string): string {
@@ -73,7 +74,7 @@ export interface ExpandedPlanningEvent extends PlanningEvent {
 }
 
 export function expandEventsForWeek(context: PlanningContext, weekStart: string): ExpandedPlanningEvent[] {
-  const from = localInstant(weekStart, '00:00', context.profile.timeZone);
+  const from = localInstant(addLocalDays(weekStart,-8), '00:00', context.profile.timeZone);
   // Include Monday after the selected week so Sunday night shifts are checked against Monday classes.
   const until = localInstant(addLocalDays(weekStart, 8), '00:00', context.profile.timeZone);
   if (!from || !until) return [];

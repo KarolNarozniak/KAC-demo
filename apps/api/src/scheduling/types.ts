@@ -12,6 +12,9 @@ export interface PlanningProfile {
   targetHours: number;
   maximumHours: number;
   hourlyRatePln: number;
+  hourlyRateConfigured?: boolean;
+  commuteConfigured?: boolean;
+  rateKind?: 'gross' | 'net' | null;
   commuteBufferMinutes: number;
   minimumRestMinutes: number;
   mode: WorkMode;
@@ -41,6 +44,7 @@ export interface PreferredWorkWindow {
 }
 
 export interface BlockedPeriod {
+  source?: 'profile' | 'calendar';
   id: string;
   type: string;
   start: string;
@@ -96,6 +100,9 @@ export interface PlannerOverrides {
 }
 
 export interface CandidateShift {
+  hourlyRatePln?: number;
+  estimatedPayPln?: number;
+  rateKind?: 'gross' | 'net' | null;
   candidateId: string;
   title: string;
   start: string;
@@ -147,6 +154,7 @@ export interface FreeWindow {
 }
 
 export interface ScheduleGenerationResult {
+  estimatedPayPln?: number;
   scheduleId?: string;
   version?: number;
   isApproved: boolean;

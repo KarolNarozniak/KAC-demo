@@ -32,9 +32,9 @@ update t_profile_pracy set aktywny = false where id_uzytkownika = 'U001' and id_
 insert into t_profile_pracy (
   id_profilu, id_uzytkownika, stawka_pln, min_godzin_tydzien, cel_godzin_tydzien,
   max_godzin_tydzien, czas_dojazdu_min, min_odpoczynku_min, aktywny,
-  tryb_pracy, min_slot_min, max_slot_min
+  tryb_pracy, min_slot_min, max_slot_min, rodzaj_stawki
 )
-values ('P001', 'U001', 35.50, 10, 20, 30, 45, 60, true, 'elastyczny', 120, 360)
+values ('P001', 'U001', 35.50, 10, 20, 30, 45, 60, not exists(select 1 from t_profile_pracy where id_uzytkownika='U001' and aktywny and id_profilu<>'P001'), 'elastyczny', 120, 360, 'gross')
 on conflict (id_profilu) do update set
   stawka_pln = excluded.stawka_pln,
   min_godzin_tydzien = excluded.min_godzin_tydzien,
@@ -115,3 +115,5 @@ on conflict (id_wydarzenia) do update set
   status = excluded.status,
   opis = excluded.opis,
   miejsce = excluded.miejsce;
+
+-- Preserve the nullable commute and rate semantics of work-profile editing.

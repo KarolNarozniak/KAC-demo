@@ -14,8 +14,8 @@ test('grafik omija serię zajęć obowiązkowych, pokazuje ją w blockingEvents 
   await pool.query(`insert into t_uzytkownicy (id_uzytkownika, imie, nazwisko, email, strefa_czasowa) values ($1, 'Test', 'Zajęcia', $2, 'Europe/Warsaw')`, [userId, `${userId}@example.test`]);
   await pool.query(`insert into t_kalendarze (id_kalendarza, id_uzytkownika, nazwa, typ) values ($1, $2, 'Zajęcia test', 'Osobisty')`, [calendarId, userId]);
   await pool.query(`insert into t_profile_pracy (id_profilu, id_uzytkownika, stawka_pln, min_godzin_tydzien, cel_godzin_tydzien, max_godzin_tydzien,
-      czas_dojazdu_min, min_odpoczynku_min, aktywny, tryb_pracy, min_slot_min, max_slot_min)
-    values ($1, $2, 30, 0, 4, 10, 15, 0, true, 'elastyczny', 120, 360)`, [profileId, userId]);
+      rodzaj_stawki, czas_dojazdu_min, min_odpoczynku_min, aktywny, tryb_pracy, min_slot_min, max_slot_min)
+    values ($1, $2, 30, 0, 4, 10, 'gross', 15, 0, true, 'elastyczny', 120, 360)`, [profileId, userId]);
   await pool.query(`insert into t_dostepnosc (id_profilu, dzien_tygodnia, od_godzina, do_godzina, rodzaj) values ($1, 2, '08:00', '16:00', 'Dostępny')`, [profileId]);
   // Cotygodniowy wykład obowiązkowy założony we wrześniu (czas letni), wtorek 10:00–11:30.
   await pool.query(`insert into t_serie (id_serii, id_kalendarza, czestotliwosc, data_poczatku, bezterminowo) values ($1, $2, 'Tydzien', '2026-09-29', true)`, [`${calendarId}-series`, calendarId]);
@@ -24,7 +24,7 @@ test('grafik omija serię zajęć obowiązkowych, pokazuje ją w blockingEvents 
   const app = buildApi(null, [], { scheduleRepository: {
     getPlanningContext: () => repository.getPlanningContext(userId, calendarId, profileId),
     getLatestSchedule: (weekStart) => repository.getLatestSchedule(weekStart, calendarId),
-    getScheduleById: repository.getScheduleById.bind(repository),
+    getScheduleById: (id)=>repository.getScheduleById(id,calendarId),
     listSchedules: (filters) => repository.listSchedules(filters, calendarId),
     getApprovedShiftEventIds: (weekStart) => repository.getApprovedShiftEventIds(weekStart, calendarId),
     saveSchedule: repository.saveSchedule.bind(repository),
@@ -47,7 +47,8 @@ test('grafik omija serię zajęć obowiązkowych, pokazuje ją w blockingEvents 
     const rejected = await app.inject({ method: 'PUT', url: '/api/v1/schedules/2026-11-02', payload: { expectedVersion: schedule.version,
       shifts: [{ id: 'manual', startLocal: '2026-11-03T08:00', endLocal: '2026-11-03T10:00' }] } });
     assert.equal(rejected.statusCode, 422);
-    const [error] = rejected.json().errors;
+    const error = rejected.json().errors.find((item:{code:string})=>item.code==='class_collision');
+    assert.ok(error);
     assert.equal(error.code, 'class_collision');
     assert.equal(error.details.title, 'Analiza');
     assert.deepEqual([error.details.overlapStartLocal, error.details.overlapEndLocal], ['2026-11-03T09:45', '2026-11-03T10:00']);

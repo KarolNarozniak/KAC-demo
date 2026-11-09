@@ -130,7 +130,7 @@ export function validateDraft(draft: ProfileDraft): Record<string, string> {
 
   draft.availability.forEach((window, index) => {
     const key = `availability.${index}`;
-    if (!TIME.test(window.startTime) || !TIME.test(window.endTime)) errors[key] = 'invalid_time';
+    if (!TIME.test(window.startTime) || (!TIME.test(window.endTime) && window.endTime !== '24:00')) errors[key] = 'invalid_time';
     else if (minutesOf(window.endTime) <= minutesOf(window.startTime)) errors[key] = 'end_before_start';
   });
   draft.shiftTemplates.forEach((template, index) => {
