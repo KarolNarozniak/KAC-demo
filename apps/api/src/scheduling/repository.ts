@@ -286,12 +286,3 @@ export class PostgresScheduleRepository {
     };
   }
 }
-```[cite: 7]
-
-### Co zrobić teraz?
-1. Zapisz plik `apps/api/src/scheduling/repository.ts`.
-2. Zrób commita i wyślij zmiany na GitHuba:
-   ```bash
-   git add apps/api/src/scheduling/repository.ts
-   git commit -m "fix: ensure blocks table is auto-created in PostgresScheduleRepository too"
-   git push origin Krzysztof_Blokowanie_dni
