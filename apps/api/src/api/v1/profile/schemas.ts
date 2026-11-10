@@ -87,9 +87,15 @@ export const workProfileSchema = {
   },
 } as const;
 
+const errorText: Record<string, { summary: string; description: string }> = {
+  work_profile_not_found: { summary: 'Użytkownik nie ma profilu pracy', description: 'Profil pracy jeszcze nie istnieje, więc nie ma czego odczytać ani zmienić.' },
+  work_profile_not_configured: { summary: 'Serwer uruchomiony bez bazy danych', description: 'API działa bez skonfigurowanej bazy (brak DATABASE_URL), więc profilu nie da się odczytać ani zapisać.' },
+  work_profile_unavailable: { summary: 'Baza danych nie odpowiada', description: 'Błąd po stronie serwera, nie danych. Spróbuj ponownie za chwilę.' },
+};
+
 const error = (codes: string[], description: string) => ({
   type: 'object', description, required: ['error'], properties: { error: { type: 'string', enum: codes } },
-  'x-examples': Object.fromEntries(codes.map((code) => [code, { summary: code, value: { error: code } }])),
+  'x-examples': Object.fromEntries(codes.map((code) => [code, { ...errorText[code], value: { error: code } }])),
 }) as const;
 
 export const invalidProfileSchema = {

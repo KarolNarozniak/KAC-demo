@@ -53,7 +53,7 @@ const updateSchema = {
 } as const;
 const versionSchema = { params: { type: 'object', required: ['weekStart'], properties: { weekStart: weekStartSchema } },
   body: withExamples({ type: 'object', required: ['expectedVersion'], additionalProperties: false, properties: { expectedVersion: { type: 'integer', minimum: 1, description: 'version grafiku z ostatniego odczytu.' } } },
-    { current: { summary: 'Aktualna wersja grafiku', value: { expectedVersion: 2 } } }) } as const;
+    { current: { summary: 'Wersja grafiku z ostatniego odczytu', description: 'expectedVersion to version grafiku, który użytkownik widzi na ekranie. Jeśli ktoś w międzyczasie zmienił grafik, serwer zwróci 409 zamiast zatwierdzić albo odrzucić inną wersję niż ta, którą użytkownik oglądał.', value: { expectedVersion: 2 } } }) } as const;
 const listSchema = { querystring: { type: 'object', required: ['from', 'to'], additionalProperties: false, properties: {
   from: { type: 'string', format: 'date' }, to: { type: 'string', format: 'date' }, limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 }, offset: { type: 'integer', minimum: 0, default: 0 },
 } } } as const;
@@ -169,7 +169,7 @@ export async function schedulingRoutes(app: FastifyInstance, options: { reposito
   });
 
   app.get<{ Querystring: { from: string; to: string; limit?: number; offset?: number } }>('/schedules', { schema: {
-    ...listSchema, tags: ['Scheduling'], summary: 'List schedules by date range', description: 'Returns paginated schedule versions, including lifecycle and feasibility status.', operationId: 'listSchedules', response: { 200: listResponse, 400: documented(objectResponse, 'from jest późniejsze niż to.', { invalid_date_range: { summary: 'Odwrócony zakres dat', value: { error: 'invalid_date_range' } } }), 503: failure(503, 'Repozytorium nieskonfigurowane.', ['scheduling_not_configured']) },
+    ...listSchema, tags: ['Scheduling'], summary: 'List schedules by date range', description: 'Returns paginated schedule versions, including lifecycle and feasibility status.', operationId: 'listSchedules', response: { 200: listResponse, 400: documented(objectResponse, 'from jest późniejsze niż to.', { invalid_date_range: { summary: 'Odwrócony zakres dat', description: 'Data from jest późniejsza niż to – zamień je miejscami.', value: { error: 'invalid_date_range' } } }), 503: failure(503, 'Repozytorium nieskonfigurowane.', ['scheduling_not_configured']) },
   } }, async (request, reply) => {
     if (!scheduleRepository) return reply.code(503).send({ error: 'scheduling_not_configured' });
     if (request.query.from > request.query.to) return reply.code(400).send({ error: 'invalid_date_range' });

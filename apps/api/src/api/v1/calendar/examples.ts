@@ -7,8 +7,8 @@ const lecture = { title: 'Algorytmy – wykład', start: '2026-11-16T10:00', end
 
 export const overviewExamples: NamedExamples = {
   overview: {
-    summary: 'Kalendarz z wydarzeniami',
-    description: 'Wydarzenia mają instanty UTC; serie cotygodniowe są rozwinięte na wystąpienia.',
+    summary: 'Kalendarz z zajęciami i pracą',
+    description: 'Wszystko, czego potrzebuje ekran kalendarza: użytkownik z jego strefą czasową, kalendarz, liczniki i lista wydarzeń. Czasy wydarzeń są w UTC (Z) – 09:00Z to 10:00 czasu polskiego zimą. mandatory: true oznacza zajęcia obowiązkowe, na które nie można zaplanować pracy.',
     value: {
       source: 'postgresql',
       user: { id: 'U001', name: 'Student Demo', timezone: 'Europe/Warsaw' },
@@ -23,41 +23,49 @@ export const overviewExamples: NamedExamples = {
 };
 
 export const eventInputExamples: NamedExamples = {
-  oneOff: { summary: 'Jednorazowe wydarzenie', description: 'start i end to lokalny czas użytkownika (YYYY-MM-DDTHH:MM).', value: consultation },
-  weekly: { summary: 'Zajęcia co tydzień', description: 'repeatWeekly tworzy serię; edycja PUT zmienia całą serię.', value: lecture },
+  oneOff: {
+    summary: 'Jednorazowe spotkanie',
+    description: 'Konsultacje w czwartek 15:00–16:00. start i end podajemy w czasie polskim, bez strefy (format RRRR-MM-DDTGG:MM). Jeśli termin nachodzi na inne wydarzenie, serwer zwróci 409 z listą kolizji.',
+    value: consultation,
+  },
+  weekly: {
+    summary: 'Wykład co tydzień',
+    description: 'repeatWeekly: true tworzy serię – wykład powtarza się w każdy poniedziałek 10:00–13:15. mandatory: true oznacza zajęcia obowiązkowe: generator grafiku nigdy nie zaplanuje na nie pracy. Zmiana serii przez PUT zmienia wszystkie jej wystąpienia.',
+    value: lecture,
+  },
   override: {
     summary: 'Zapis mimo kolizji',
-    description: 'collisionToken z odpowiedzi 409 potwierdza, że użytkownik widział te same konflikty.',
+    description: 'Drugi krok po odpowiedzi 409: użytkownik zobaczył kolizję i mimo to chce zapisać. Wysyłamy te same dane plus collisionToken z odpowiedzi 409. Token potwierdza, że użytkownik widział dokładnie te konflikty – jeśli w międzyczasie doszły nowe, serwer znów zwróci 409.',
     value: { ...consultation, collisionToken: '5f2b9c0e7d4a1b3c6e8f0a2d4c6b8e0f1a3c5e7b9d1f3a5c7e9b1d3f5a7c9e1b' },
   },
 };
 
 export const savedEventExamples: NamedExamples = {
-  saved: { summary: 'Zapisane wydarzenie', value: { id: eventId, ...consultation } },
+  saved: { summary: 'Zapisane wydarzenie', description: 'Serwer zwraca wysłane dane razem z nadanym id – jest ono potrzebne do późniejszej edycji (PUT) albo usunięcia (DELETE).', value: { id: eventId, ...consultation } },
 };
 
 export const collisionExamples: NamedExamples = {
   collision: {
-    summary: 'Kolizja z innym wydarzeniem',
-    description: 'Popraw termin albo wyślij ponownie z collisionToken, żeby zapisać mimo kolizji.',
+    summary: 'Termin nachodzi na inne wydarzenie',
+    description: 'Nic nie zostało zapisane. conflicts pokazuje, z czym jest kolizja i w jakich godzinach: konsultacje 15:00–16:00 nachodzą na laboratorium 15:30–16:30, więc wspólna część to 15:30–16:00 (w odpowiedzi w UTC: overlapStart 14:30Z – overlapEnd 15:00Z). Użytkownik może zmienić termin albo zapisać mimo to – wtedy wysyła żądanie ponownie z collisionToken (zobacz przykład żądania „Zapis mimo kolizji”).',
     value: {
       error: 'event_collision',
-      conflicts: [{ id: 'E-ALG', title: 'Algorytmy – wykład', category: 'Class', start: '2026-11-19T14:30:00.000Z', end: '2026-11-19T15:30:00.000Z', overlapStart: '2026-11-19T14:30:00.000Z', overlapEnd: '2026-11-19T15:00:00.000Z' }],
+      conflicts: [{ id: 'E-LAB', title: 'Sieci komputerowe – laboratorium', category: 'Class', start: '2026-11-19T14:30:00.000Z', end: '2026-11-19T15:30:00.000Z', overlapStart: '2026-11-19T14:30:00.000Z', overlapEnd: '2026-11-19T15:00:00.000Z' }],
       collisionToken: '5f2b9c0e7d4a1b3c6e8f0a2d4c6b8e0f1a3c5e7b9d1f3a5c7e9b1d3f5a7c9e1b',
     },
   },
 };
 
 export const deletedEventExamples: NamedExamples = {
-  single: { summary: 'Usunięte wydarzenie', value: { deletedIds: [eventId] } },
-  series: { summary: 'Usunięta seria', description: 'Dla serii zwracane są identyfikatory wszystkich usuniętych wystąpień.', value: { deletedIds: ['E-ALG', 'E-ALG-2', 'E-ALG-3'] } },
+  single: { summary: 'Usunięte jedno wydarzenie', description: 'deletedIds zawiera id usuniętego wydarzenia – aplikacja może je od razu usunąć z ekranu.', value: { deletedIds: [eventId] } },
+  series: { summary: 'Usunięta cała seria', description: 'Usunięcie wydarzenia cotygodniowego usuwa całą serię; deletedIds zawiera id wszystkich usuniętych wystąpień.', value: { deletedIds: ['E-ALG', 'E-ALG-2', 'E-ALG-3'] } },
 };
 
 export const readyExamples: NamedExamples = {
-  connected: { summary: 'API i baza działają', value: { api: 'ok', database: 'connected' } },
+  connected: { summary: 'Wszystko działa', description: 'Serwer API odpowiada i ma połączenie z bazą PostgreSQL – aplikacja jest gotowa do pracy.', value: { api: 'ok', database: 'connected' } },
 };
 
 export const notReadyExamples: NamedExamples = {
-  notConfigured: { summary: 'Brak DATABASE_URL', value: { api: 'ok', database: 'not-configured' } },
-  unavailable: { summary: 'Baza nie odpowiada', value: { api: 'ok', database: 'unavailable' } },
+  notConfigured: { summary: 'Serwer bez bazy danych', description: 'API działa, ale uruchomiono je bez adresu bazy (DATABASE_URL). Odpowiedzą tylko endpointy, które nie potrzebują bazy.', value: { api: 'ok', database: 'not-configured' } },
+  unavailable: { summary: 'Baza nie odpowiada', description: 'API działa, ale nie może połączyć się z bazą – np. kontener PostgreSQL jest wyłączony. Uruchom bazę (npm run db:up).', value: { api: 'ok', database: 'unavailable' } },
 };

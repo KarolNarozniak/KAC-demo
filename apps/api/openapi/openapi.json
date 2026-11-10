@@ -75,8 +75,8 @@
                 },
                 "examples": {
                   "twoRanges": {
-                    "summary": "Po zapisie dnia z dwoma zakresami",
-                    "description": "Lista jest zastępowana w całości; version rośnie o 1.",
+                    "summary": "Dwa przedziały w jednym dniu – po zapisie",
+                    "description": "Serwer zapisał dostępność i zwraca ją w całości. Numer wersji wzrósł z 3 na 4, bo dostępność się zmieniła. version to nowy numer wersji dostępności – wyślij go przy następnym zapisie. profileVersion to wersja całego profilu pracy, potrzebna do generowania grafiku.",
                     "value": {
                       "version": 4,
                       "profileVersion": "pv-8",
@@ -100,7 +100,8 @@
                     }
                   },
                   "emptyWeek": {
-                    "summary": "Pusty tydzień",
+                    "summary": "Pusty tydzień – po zapisie",
+                    "description": "Dostępność jest pusta: student nie ma żadnych godzin do pracy. version to nowy numer wersji dostępności – wyślij go przy następnym zapisie. profileVersion to wersja całego profilu pracy, potrzebna do generowania grafiku.",
                     "value": {
                       "version": 4,
                       "profileVersion": "pv-8",
@@ -108,7 +109,8 @@
                     }
                   },
                   "overnight": {
-                    "summary": "Zakres przez północ po podziale",
+                    "summary": "Przedział przez północ – po zapisie",
+                    "description": "Wysłany przedział sobota 22:00–02:00 został podzielony na sobotę 22:00–24:00 i niedzielę 00:00–02:00. version to nowy numer wersji dostępności – wyślij go przy następnym zapisie. profileVersion to wersja całego profilu pracy, potrzebna do generowania grafiku.",
                     "value": {
                       "version": 4,
                       "profileVersion": "pv-8",
@@ -152,7 +154,8 @@
                 },
                 "examples": {
                   "missing": {
-                    "summary": "Brak profilu pracy",
+                    "summary": "Użytkownik nie ma profilu pracy",
+                    "description": "Dostępność należy do profilu pracy, a ten użytkownik jeszcze go nie ma. Najpierw trzeba utworzyć profil.",
                     "value": {
                       "error": "profile_not_found"
                     }
@@ -183,13 +186,15 @@
                 },
                 "examples": {
                   "unavailable": {
-                    "summary": "Baza danych niedostępna",
+                    "summary": "Baza danych nie odpowiada",
+                    "description": "Błąd po stronie serwera, nie danych. Spróbuj ponownie za chwilę.",
                     "value": {
                       "error": "work_profile_unavailable"
                     }
                   },
                   "notConfigured": {
-                    "summary": "Repozytorium nieskonfigurowane",
+                    "summary": "Serwer uruchomiony bez bazy danych",
+                    "description": "API działa bez skonfigurowanej bazy (brak DATABASE_URL), więc profilu nie da się odczytać ani zapisać.",
                     "value": {
                       "error": "work_profile_not_configured"
                     }
@@ -256,8 +261,8 @@
               },
               "examples": {
                 "twoRanges": {
-                  "summary": "Dzień z dwoma zakresami",
-                  "description": "Poniedziałek rano i wieczorem, środa po południu.",
+                  "summary": "Dwa przedziały w jednym dniu",
+                  "description": "Student może pracować w poniedziałek rano (8:00–12:00) i wieczorem (16:00–20:00), a w środę po południu (12:00–20:00). dayOfWeek: 1 = poniedziałek … 7 = niedziela. Wysłana lista zastępuje całą dotychczasową dostępność. Pole version to numer wersji dostępności z ostatniego odczytu (GET). Serwer sprawdza, czy nikt w międzyczasie nie zmienił dostępności – jeśli zmienił, zwróci 409 zamiast nadpisać cudze zmiany.",
                   "value": {
                     "version": 3,
                     "intervals": [
@@ -280,16 +285,16 @@
                   }
                 },
                 "emptyWeek": {
-                  "summary": "Pusty tydzień",
-                  "description": "Usuwa całą dostępność. Bez dostępności nie można wygenerować grafiku.",
+                  "summary": "Usunięcie całej dostępności",
+                  "description": "Pusta lista intervals kasuje wszystkie przedziały – student nie może teraz pracować w żadnym dniu. Uwaga: dopóki dostępność jest pusta, nie da się wygenerować grafiku pracy. Pole version to numer wersji dostępności z ostatniego odczytu (GET). Serwer sprawdza, czy nikt w międzyczasie nie zmienił dostępności – jeśli zmienił, zwróci 409 zamiast nadpisać cudze zmiany.",
                   "value": {
                     "version": 3,
                     "intervals": []
                   }
                 },
                 "untilMidnight": {
-                  "summary": "Koniec o 24:00",
-                  "description": "Piątek do końca dnia; 24:00 jest dozwolone tylko jako koniec przedziału.",
+                  "summary": "Praca do końca dnia (24:00)",
+                  "description": "Piątek od 18:00 do północy. Wartość 24:00 oznacza „do końca dnia” i wolno jej użyć tylko jako godziny zakończenia, nigdy jako początku. Pole version to numer wersji dostępności z ostatniego odczytu (GET). Serwer sprawdza, czy nikt w międzyczasie nie zmienił dostępności – jeśli zmienił, zwróci 409 zamiast nadpisać cudze zmiany.",
                   "value": {
                     "version": 3,
                     "intervals": [
@@ -302,8 +307,8 @@
                   }
                 },
                 "overnight": {
-                  "summary": "Zakres przez północ",
-                  "description": "Sobota 22:00–02:00 zostanie zapisana jako sobota 22:00–24:00 i niedziela 00:00–02:00.",
+                  "summary": "Przedział przez północ",
+                  "description": "Sobota od 22:00 do 2:00 w nocy. Koniec jest wcześniej niż początek, więc serwer sam podzieli to na dwa przedziały: sobota 22:00–24:00 i niedziela 00:00–02:00 (zobacz przykład odpowiedzi „Przedział przez północ – po zapisie”). Pole version to numer wersji dostępności z ostatniego odczytu (GET). Serwer sprawdza, czy nikt w międzyczasie nie zmienił dostępności – jeśli zmienił, zwróci 409 zamiast nadpisać cudze zmiany.",
                   "value": {
                     "version": 3,
                     "intervals": [
@@ -370,8 +375,8 @@
                 },
                 "examples": {
                   "twoRanges": {
-                    "summary": "Po zapisie dnia z dwoma zakresami",
-                    "description": "Lista jest zastępowana w całości; version rośnie o 1.",
+                    "summary": "Dwa przedziały w jednym dniu – po zapisie",
+                    "description": "Serwer zapisał dostępność i zwraca ją w całości. Numer wersji wzrósł z 3 na 4, bo dostępność się zmieniła. version to nowy numer wersji dostępności – wyślij go przy następnym zapisie. profileVersion to wersja całego profilu pracy, potrzebna do generowania grafiku.",
                     "value": {
                       "version": 4,
                       "profileVersion": "pv-8",
@@ -395,7 +400,8 @@
                     }
                   },
                   "emptyWeek": {
-                    "summary": "Pusty tydzień",
+                    "summary": "Pusty tydzień – po zapisie",
+                    "description": "Dostępność jest pusta: student nie ma żadnych godzin do pracy. version to nowy numer wersji dostępności – wyślij go przy następnym zapisie. profileVersion to wersja całego profilu pracy, potrzebna do generowania grafiku.",
                     "value": {
                       "version": 4,
                       "profileVersion": "pv-8",
@@ -403,7 +409,8 @@
                     }
                   },
                   "overnight": {
-                    "summary": "Zakres przez północ po podziale",
+                    "summary": "Przedział przez północ – po zapisie",
+                    "description": "Wysłany przedział sobota 22:00–02:00 został podzielony na sobotę 22:00–24:00 i niedzielę 00:00–02:00. version to nowy numer wersji dostępności – wyślij go przy następnym zapisie. profileVersion to wersja całego profilu pracy, potrzebna do generowania grafiku.",
                     "value": {
                       "version": 4,
                       "profileVersion": "pv-8",
@@ -447,8 +454,8 @@
                 },
                 "examples": {
                   "invalid": {
-                    "summary": "Błędny przedział",
-                    "description": "Np. początek równy końcowi.",
+                    "summary": "Błędne godziny w przedziale",
+                    "description": "Jeden z przedziałów ma złe godziny, np. początek równy końcowi (12:00–12:00). details.dayOfWeek wskazuje dzień, w którym jest błąd. Nic nie zostało zapisane.",
                     "value": {
                       "error": "invalid_availability",
                       "details": {
@@ -482,7 +489,8 @@
                 },
                 "examples": {
                   "missing": {
-                    "summary": "Brak profilu pracy",
+                    "summary": "Użytkownik nie ma profilu pracy",
+                    "description": "Dostępność należy do profilu pracy, a ten użytkownik jeszcze go nie ma. Najpierw trzeba utworzyć profil.",
                     "value": {
                       "error": "profile_not_found"
                     }
@@ -513,8 +521,8 @@
                 },
                 "examples": {
                   "stale": {
-                    "summary": "Nieaktualna wersja dostępności",
-                    "description": "Odczytaj dostępność ponownie i wyślij aktualne version.",
+                    "summary": "Ktoś zmienił dostępność w międzyczasie",
+                    "description": "Wysłane version jest starsze niż zapisane – dostępność zmieniono np. w drugiej karcie przeglądarki. Pobierz ją ponownie (GET), nanieś zmiany i wyślij z nowym version. Nic nie zostało nadpisane.",
                     "value": {
                       "error": "version_conflict"
                     }
@@ -545,7 +553,8 @@
                 },
                 "examples": {
                   "overlap": {
-                    "summary": "Nakładające się przedziały",
+                    "summary": "Przedziały nachodzą na siebie",
+                    "description": "Dwa przedziały w tym samym dniu się nakładają, np. 8:00–12:00 i 11:00–14:00. details.dayOfWeek wskazuje ten dzień. Połącz je w jeden albo rozdziel. Nic nie zostało zapisane.",
                     "value": {
                       "error": "availability_overlap",
                       "details": {
@@ -579,13 +588,15 @@
                 },
                 "examples": {
                   "unavailable": {
-                    "summary": "Baza danych niedostępna",
+                    "summary": "Baza danych nie odpowiada",
+                    "description": "Błąd po stronie serwera, nie danych. Spróbuj ponownie za chwilę.",
                     "value": {
                       "error": "work_profile_unavailable"
                     }
                   },
                   "notConfigured": {
-                    "summary": "Repozytorium nieskonfigurowane",
+                    "summary": "Serwer uruchomiony bez bazy danych",
+                    "description": "API działa bez skonfigurowanej bazy (brak DATABASE_URL), więc profilu nie da się odczytać ani zapisać.",
                     "value": {
                       "error": "work_profile_not_configured"
                     }
@@ -627,7 +638,8 @@
                 },
                 "examples": {
                   "ok": {
-                    "summary": "API działa",
+                    "summary": "Serwer odpowiada",
+                    "description": "Sprawdza tylko, czy proces API działa – bez łączenia z bazą. Do sprawdzenia bazy służy /health/ready.",
                     "value": {
                       "api": "ok"
                     }
@@ -659,7 +671,8 @@
                 },
                 "examples": {
                   "connected": {
-                    "summary": "API i baza działają",
+                    "summary": "Wszystko działa",
+                    "description": "Serwer API odpowiada i ma połączenie z bazą PostgreSQL – aplikacja jest gotowa do pracy.",
                     "value": {
                       "api": "ok",
                       "database": "connected"
@@ -680,7 +693,8 @@
                 },
                 "examples": {
                   "notConfigured": {
-                    "summary": "Brak DATABASE_URL",
+                    "summary": "Serwer bez bazy danych",
+                    "description": "API działa, ale uruchomiono je bez adresu bazy (DATABASE_URL). Odpowiedzą tylko endpointy, które nie potrzebują bazy.",
                     "value": {
                       "api": "ok",
                       "database": "not-configured"
@@ -688,6 +702,7 @@
                   },
                   "unavailable": {
                     "summary": "Baza nie odpowiada",
+                    "description": "API działa, ale nie może połączyć się z bazą – np. kontener PostgreSQL jest wyłączony. Uruchom bazę (npm run db:up).",
                     "value": {
                       "api": "ok",
                       "database": "unavailable"
@@ -720,8 +735,8 @@
                 },
                 "examples": {
                   "overview": {
-                    "summary": "Kalendarz z wydarzeniami",
-                    "description": "Wydarzenia mają instanty UTC; serie cotygodniowe są rozwinięte na wystąpienia.",
+                    "summary": "Kalendarz z zajęciami i pracą",
+                    "description": "Wszystko, czego potrzebuje ekran kalendarza: użytkownik z jego strefą czasową, kalendarz, liczniki i lista wydarzeń. Czasy wydarzeń są w UTC (Z) – 09:00Z to 10:00 czasu polskiego zimą. mandatory: true oznacza zajęcia obowiązkowe, na które nie można zaplanować pracy.",
                     "value": {
                       "source": "postgresql",
                       "user": {
@@ -786,6 +801,7 @@
                 "examples": {
                   "calendar_not_found": {
                     "summary": "Brak kalendarza",
+                    "description": "Użytkownik nie ma jeszcze kalendarza.",
                     "value": {
                       "error": "calendar_not_found"
                     }
@@ -818,12 +834,14 @@
                 "examples": {
                   "database_unavailable": {
                     "summary": "Baza niedostępna",
+                    "description": "Błąd po stronie serwera, nie danych – spróbuj ponownie za chwilę. Nic nie zostało zmienione.",
                     "value": {
                       "error": "database_unavailable"
                     }
                   },
                   "database_not_configured": {
                     "summary": "Brak DATABASE_URL",
+                    "description": "API działa bez skonfigurowanej bazy danych (brak DATABASE_URL), więc ta operacja jest niedostępna.",
                     "value": {
                       "error": "database_not_configured"
                     }
@@ -899,8 +917,8 @@
               },
               "examples": {
                 "oneOff": {
-                  "summary": "Jednorazowe wydarzenie",
-                  "description": "start i end to lokalny czas użytkownika (YYYY-MM-DDTHH:MM).",
+                  "summary": "Jednorazowe spotkanie",
+                  "description": "Konsultacje w czwartek 15:00–16:00. start i end podajemy w czasie polskim, bez strefy (format RRRR-MM-DDTGG:MM). Jeśli termin nachodzi na inne wydarzenie, serwer zwróci 409 z listą kolizji.",
                   "value": {
                     "title": "Konsultacje z promotorem",
                     "start": "2026-11-19T15:00",
@@ -912,8 +930,8 @@
                   }
                 },
                 "weekly": {
-                  "summary": "Zajęcia co tydzień",
-                  "description": "repeatWeekly tworzy serię; edycja PUT zmienia całą serię.",
+                  "summary": "Wykład co tydzień",
+                  "description": "repeatWeekly: true tworzy serię – wykład powtarza się w każdy poniedziałek 10:00–13:15. mandatory: true oznacza zajęcia obowiązkowe: generator grafiku nigdy nie zaplanuje na nie pracy. Zmiana serii przez PUT zmienia wszystkie jej wystąpienia.",
                   "value": {
                     "title": "Algorytmy – wykład",
                     "start": "2026-11-16T10:00",
@@ -926,7 +944,7 @@
                 },
                 "override": {
                   "summary": "Zapis mimo kolizji",
-                  "description": "collisionToken z odpowiedzi 409 potwierdza, że użytkownik widział te same konflikty.",
+                  "description": "Drugi krok po odpowiedzi 409: użytkownik zobaczył kolizję i mimo to chce zapisać. Wysyłamy te same dane plus collisionToken z odpowiedzi 409. Token potwierdza, że użytkownik widział dokładnie te konflikty – jeśli w międzyczasie doszły nowe, serwer znów zwróci 409.",
                   "value": {
                     "title": "Konsultacje z promotorem",
                     "start": "2026-11-19T15:00",
@@ -955,6 +973,7 @@
                 "examples": {
                   "saved": {
                     "summary": "Zapisane wydarzenie",
+                    "description": "Serwer zwraca wysłane dane razem z nadanym id – jest ono potrzebne do późniejszej edycji (PUT) albo usunięcia (DELETE).",
                     "value": {
                       "id": "a1b2c3d4-0000-4000-8000-000000000001",
                       "title": "Konsultacje z promotorem",
@@ -981,13 +1000,15 @@
                 },
                 "examples": {
                   "invalid_event": {
-                    "summary": "Koniec nie jest po początku",
+                    "summary": "Błędny termin",
+                    "description": "Koniec wydarzenia nie jest później niż początek, data nie istnieje (np. 30 lutego) albo tytuł jest pusty. Nic nie zostało zapisane.",
                     "value": {
                       "error": "invalid_event"
                     }
                   },
                   "validation": {
-                    "summary": "Błąd schematu (Fastify)",
+                    "summary": "Brakujące albo złe pole",
+                    "description": "Żądanie odrzucone przed sprawdzeniem terminu: brakuje wymaganego pola albo ma złą wartość. message wskazuje pole – tu category musi być jedną z: Class, Work, Personal.",
                     "value": {
                       "statusCode": 400,
                       "code": "FST_ERR_VALIDATION",
@@ -1010,14 +1031,14 @@
                 },
                 "examples": {
                   "collision": {
-                    "summary": "Kolizja z innym wydarzeniem",
-                    "description": "Popraw termin albo wyślij ponownie z collisionToken, żeby zapisać mimo kolizji.",
+                    "summary": "Termin nachodzi na inne wydarzenie",
+                    "description": "Nic nie zostało zapisane. conflicts pokazuje, z czym jest kolizja i w jakich godzinach: konsultacje 15:00–16:00 nachodzą na laboratorium 15:30–16:30, więc wspólna część to 15:30–16:00 (w odpowiedzi w UTC: overlapStart 14:30Z – overlapEnd 15:00Z). Użytkownik może zmienić termin albo zapisać mimo to – wtedy wysyła żądanie ponownie z collisionToken (zobacz przykład żądania „Zapis mimo kolizji”).",
                     "value": {
                       "error": "event_collision",
                       "conflicts": [
                         {
-                          "id": "E-ALG",
-                          "title": "Algorytmy – wykład",
+                          "id": "E-LAB",
+                          "title": "Sieci komputerowe – laboratorium",
                           "category": "Class",
                           "start": "2026-11-19T14:30:00.000Z",
                           "end": "2026-11-19T15:30:00.000Z",
@@ -1056,12 +1077,14 @@
                 "examples": {
                   "event_not_saved": {
                     "summary": "Zapis nie powiódł się",
+                    "description": "Błąd po stronie serwera, nie danych – spróbuj ponownie za chwilę. Nic nie zostało zmienione.",
                     "value": {
                       "error": "event_not_saved"
                     }
                   },
                   "database_not_configured": {
                     "summary": "Brak DATABASE_URL",
+                    "description": "API działa bez skonfigurowanej bazy danych (brak DATABASE_URL), więc ta operacja jest niedostępna.",
                     "value": {
                       "error": "database_not_configured"
                     }
@@ -1137,8 +1160,8 @@
               },
               "examples": {
                 "oneOff": {
-                  "summary": "Jednorazowe wydarzenie",
-                  "description": "start i end to lokalny czas użytkownika (YYYY-MM-DDTHH:MM).",
+                  "summary": "Jednorazowe spotkanie",
+                  "description": "Konsultacje w czwartek 15:00–16:00. start i end podajemy w czasie polskim, bez strefy (format RRRR-MM-DDTGG:MM). Jeśli termin nachodzi na inne wydarzenie, serwer zwróci 409 z listą kolizji.",
                   "value": {
                     "title": "Konsultacje z promotorem",
                     "start": "2026-11-19T15:00",
@@ -1150,8 +1173,8 @@
                   }
                 },
                 "weekly": {
-                  "summary": "Zajęcia co tydzień",
-                  "description": "repeatWeekly tworzy serię; edycja PUT zmienia całą serię.",
+                  "summary": "Wykład co tydzień",
+                  "description": "repeatWeekly: true tworzy serię – wykład powtarza się w każdy poniedziałek 10:00–13:15. mandatory: true oznacza zajęcia obowiązkowe: generator grafiku nigdy nie zaplanuje na nie pracy. Zmiana serii przez PUT zmienia wszystkie jej wystąpienia.",
                   "value": {
                     "title": "Algorytmy – wykład",
                     "start": "2026-11-16T10:00",
@@ -1164,7 +1187,7 @@
                 },
                 "override": {
                   "summary": "Zapis mimo kolizji",
-                  "description": "collisionToken z odpowiedzi 409 potwierdza, że użytkownik widział te same konflikty.",
+                  "description": "Drugi krok po odpowiedzi 409: użytkownik zobaczył kolizję i mimo to chce zapisać. Wysyłamy te same dane plus collisionToken z odpowiedzi 409. Token potwierdza, że użytkownik widział dokładnie te konflikty – jeśli w międzyczasie doszły nowe, serwer znów zwróci 409.",
                   "value": {
                     "title": "Konsultacje z promotorem",
                     "start": "2026-11-19T15:00",
@@ -1205,6 +1228,7 @@
                 "examples": {
                   "saved": {
                     "summary": "Zapisane wydarzenie",
+                    "description": "Serwer zwraca wysłane dane razem z nadanym id – jest ono potrzebne do późniejszej edycji (PUT) albo usunięcia (DELETE).",
                     "value": {
                       "id": "a1b2c3d4-0000-4000-8000-000000000001",
                       "title": "Konsultacje z promotorem",
@@ -1231,13 +1255,15 @@
                 },
                 "examples": {
                   "invalid_event": {
-                    "summary": "Koniec nie jest po początku",
+                    "summary": "Błędny termin",
+                    "description": "Koniec wydarzenia nie jest później niż początek, data nie istnieje (np. 30 lutego) albo tytuł jest pusty. Nic nie zostało zapisane.",
                     "value": {
                       "error": "invalid_event"
                     }
                   },
                   "validation": {
-                    "summary": "Błąd schematu (Fastify)",
+                    "summary": "Brakujące albo złe pole",
+                    "description": "Żądanie odrzucone przed sprawdzeniem terminu: brakuje wymaganego pola albo ma złą wartość. message wskazuje pole – tu category musi być jedną z: Class, Work, Personal.",
                     "value": {
                       "statusCode": 400,
                       "code": "FST_ERR_VALIDATION",
@@ -1272,6 +1298,7 @@
                 "examples": {
                   "event_not_found": {
                     "summary": "Brak wydarzenia",
+                    "description": "Nie ma wydarzenia o tym identyfikatorze – mogło zostać już usunięte.",
                     "value": {
                       "error": "event_not_found"
                     }
@@ -1291,14 +1318,14 @@
                 },
                 "examples": {
                   "collision": {
-                    "summary": "Kolizja z innym wydarzeniem",
-                    "description": "Popraw termin albo wyślij ponownie z collisionToken, żeby zapisać mimo kolizji.",
+                    "summary": "Termin nachodzi na inne wydarzenie",
+                    "description": "Nic nie zostało zapisane. conflicts pokazuje, z czym jest kolizja i w jakich godzinach: konsultacje 15:00–16:00 nachodzą na laboratorium 15:30–16:30, więc wspólna część to 15:30–16:00 (w odpowiedzi w UTC: overlapStart 14:30Z – overlapEnd 15:00Z). Użytkownik może zmienić termin albo zapisać mimo to – wtedy wysyła żądanie ponownie z collisionToken (zobacz przykład żądania „Zapis mimo kolizji”).",
                     "value": {
                       "error": "event_collision",
                       "conflicts": [
                         {
-                          "id": "E-ALG",
-                          "title": "Algorytmy – wykład",
+                          "id": "E-LAB",
+                          "title": "Sieci komputerowe – laboratorium",
                           "category": "Class",
                           "start": "2026-11-19T14:30:00.000Z",
                           "end": "2026-11-19T15:30:00.000Z",
@@ -1337,12 +1364,14 @@
                 "examples": {
                   "event_not_saved": {
                     "summary": "Zapis nie powiódł się",
+                    "description": "Błąd po stronie serwera, nie danych – spróbuj ponownie za chwilę. Nic nie zostało zmienione.",
                     "value": {
                       "error": "event_not_saved"
                     }
                   },
                   "database_not_configured": {
                     "summary": "Brak DATABASE_URL",
+                    "description": "API działa bez skonfigurowanej bazy danych (brak DATABASE_URL), więc ta operacja jest niedostępna.",
                     "value": {
                       "error": "database_not_configured"
                     }
@@ -1384,7 +1413,8 @@
                 },
                 "examples": {
                   "single": {
-                    "summary": "Usunięte wydarzenie",
+                    "summary": "Usunięte jedno wydarzenie",
+                    "description": "deletedIds zawiera id usuniętego wydarzenia – aplikacja może je od razu usunąć z ekranu.",
                     "value": {
                       "deletedIds": [
                         "a1b2c3d4-0000-4000-8000-000000000001"
@@ -1392,8 +1422,8 @@
                     }
                   },
                   "series": {
-                    "summary": "Usunięta seria",
-                    "description": "Dla serii zwracane są identyfikatory wszystkich usuniętych wystąpień.",
+                    "summary": "Usunięta cała seria",
+                    "description": "Usunięcie wydarzenia cotygodniowego usuwa całą serię; deletedIds zawiera id wszystkich usuniętych wystąpień.",
                     "value": {
                       "deletedIds": [
                         "E-ALG",
@@ -1429,6 +1459,7 @@
                 "examples": {
                   "event_not_found": {
                     "summary": "Brak wydarzenia",
+                    "description": "Nie ma wydarzenia o tym identyfikatorze – mogło zostać już usunięte.",
                     "value": {
                       "error": "event_not_found"
                     }
@@ -1461,12 +1492,14 @@
                 "examples": {
                   "event_not_deleted": {
                     "summary": "Usunięcie nie powiodło się",
+                    "description": "Błąd po stronie serwera, nie danych – spróbuj ponownie za chwilę. Nic nie zostało zmienione.",
                     "value": {
                       "error": "event_not_deleted"
                     }
                   },
                   "database_not_configured": {
                     "summary": "Brak DATABASE_URL",
+                    "description": "API działa bez skonfigurowanej bazy danych (brak DATABASE_URL), więc ta operacja jest niedostępna.",
                     "value": {
                       "error": "database_not_configured"
                     }
@@ -1781,7 +1814,8 @@
                 },
                 "examples": {
                   "profile": {
-                    "summary": "Aktywny profil pracy",
+                    "summary": "Zapisany profil pracy",
+                    "description": "Profil po zapisie. Oprócz wysłanych pól serwer dolicza: weeklyTargetHours / weeklyTargetMinutes (cel przeliczony na tydzień – z niego korzysta generator), targetMinutes (cel w minutach) i timeZone (strefa czasowa użytkownika). profileVersion zmienił się z pv-7 na pv-8 – przy kolejnym zapisie trzeba wysłać pv-8.",
                     "value": {
                       "profileId": "c0a8f1d2-6b3e-4a51-9e2f-7d4c1b0a9e11",
                       "profileVersion": "pv-8",
@@ -1880,7 +1914,8 @@
                 },
                 "examples": {
                   "work_profile_not_found": {
-                    "summary": "work_profile_not_found",
+                    "summary": "Użytkownik nie ma profilu pracy",
+                    "description": "Profil pracy jeszcze nie istnieje, więc nie ma czego odczytać ani zmienić.",
                     "value": {
                       "error": "work_profile_not_found"
                     }
@@ -1911,13 +1946,15 @@
                 },
                 "examples": {
                   "work_profile_not_configured": {
-                    "summary": "work_profile_not_configured",
+                    "summary": "Serwer uruchomiony bez bazy danych",
+                    "description": "API działa bez skonfigurowanej bazy (brak DATABASE_URL), więc profilu nie da się odczytać ani zapisać.",
                     "value": {
                       "error": "work_profile_not_configured"
                     }
                   },
                   "work_profile_unavailable": {
-                    "summary": "work_profile_unavailable",
+                    "summary": "Baza danych nie odpowiada",
+                    "description": "Błąd po stronie serwera, nie danych. Spróbuj ponownie za chwilę.",
                     "value": {
                       "error": "work_profile_unavailable"
                     }
@@ -2234,8 +2271,8 @@
               },
               "examples": {
                 "weekly": {
-                  "summary": "Cel tygodniowy, praca elastyczna",
-                  "description": "Formularz odsyła profileVersion z ostatniego odczytu.",
+                  "summary": "Student chce pracować 16 h tygodniowo",
+                  "description": "Pełny zapis profilu: od 8 do 20 h tygodniowo (cel 16 h), maks. 8 h dziennie, zmiany po 4–8 h, 30 min dojazdu przed i po zajęciach, stawka 32,50 zł brutto. Dostępność: pn–pt 12:00–20:00, w środę woli popołudnie (waga 70 ze 100), a na czas sesji zimowej praca jest zablokowana. profileVersion to wersja z ostatniego odczytu profilu (GET) – chroni przed nadpisaniem zmian zrobionych w innym oknie.",
                   "value": {
                     "profileVersion": "pv-7",
                     "hourlyRatePln": 32.5,
@@ -2304,8 +2341,8 @@
                   }
                 },
                 "monthly": {
-                  "summary": "Cel miesięczny bez stawki",
-                  "description": "Cel 64 h na miesiąc to ok. 14,77 h tygodniowo (miesiąc = 52/12 tygodnia). Stawka null oznacza brak konfiguracji.",
+                  "summary": "Cel miesięczny, bez podanej stawki",
+                  "description": "Ten sam profil, ale cel liczony na miesiąc: 64 h miesięcznie. Generator grafiku przelicza go na tydzień (64 h ÷ 52/12 tygodnia ≈ 14,77 h). Stawka null znaczy „jeszcze nie podano” – wtedy grafik nie pokaże szacowanego wynagrodzenia (0 zł byłoby poprawną stawką, a null to jej brak).",
                   "value": {
                     "profileVersion": "pv-7",
                     "hourlyRatePln": null,
@@ -2657,7 +2694,8 @@
                 },
                 "examples": {
                   "profile": {
-                    "summary": "Aktywny profil pracy",
+                    "summary": "Zapisany profil pracy",
+                    "description": "Profil po zapisie. Oprócz wysłanych pól serwer dolicza: weeklyTargetHours / weeklyTargetMinutes (cel przeliczony na tydzień – z niego korzysta generator), targetMinutes (cel w minutach) i timeZone (strefa czasowa użytkownika). profileVersion zmienił się z pv-7 na pv-8 – przy kolejnym zapisie trzeba wysłać pv-8.",
                     "value": {
                       "profileId": "c0a8f1d2-6b3e-4a51-9e2f-7d4c1b0a9e11",
                       "profileVersion": "pv-8",
@@ -2756,7 +2794,8 @@
                 },
                 "examples": {
                   "work_profile_not_found": {
-                    "summary": "work_profile_not_found",
+                    "summary": "Użytkownik nie ma profilu pracy",
+                    "description": "Profil pracy jeszcze nie istnieje, więc nie ma czego odczytać ani zmienić.",
                     "value": {
                       "error": "work_profile_not_found"
                     }
@@ -3075,8 +3114,8 @@
                 },
                 "examples": {
                   "stale": {
-                    "summary": "Nieaktualna wersja profilu",
-                    "description": "Profil zmieniono w innym oknie. Odpowiedź zawiera aktualny profil z nową wersją.",
+                    "summary": "Ktoś zmienił profil w międzyczasie",
+                    "description": "Wysłany profileVersion jest nieaktualny – profil zmieniono np. w drugiej karcie (tu ktoś podniósł cel do 18 h). Nic nie zostało nadpisane. W polu profile serwer od razu zwraca aktualny profil: formularz może go pokazać albo nanieść swoje zmiany i wysłać je z nowym profileVersion (pv-9).",
                     "value": {
                       "error": "profile_version_conflict",
                       "profile": {
@@ -3202,7 +3241,8 @@
                 },
                 "examples": {
                   "limits": {
-                    "summary": "Minimum większe od maksimum",
+                    "summary": "Minimum godzin większe od maksimum",
+                    "description": "Np. minimum 25 h, a maksimum 20 h tygodniowo. W polu fields klucz to nazwa błędnego pola, a wartość to kod błędu – formularz może wyświetlić komunikat przy tym polu. Zapisany profil się nie zmienił.",
                     "value": {
                       "error": "invalid_work_profile",
                       "fields": {
@@ -3211,7 +3251,8 @@
                     }
                   },
                   "fields": {
-                    "summary": "Kilka błędnych pól",
+                    "summary": "Kilka błędów naraz",
+                    "description": "Serwer zwraca wszystkie błędy jednocześnie: czas dojazdu nie jest pełną liczbą minut (np. 12,5), pierwszy przedział dostępności (availability.0 – numeracja od zera) kończy się przed początkiem, a dzienny limit godzin wynosi 0. Zapisany profil się nie zmienił.",
                     "value": {
                       "error": "invalid_work_profile",
                       "fields": {
@@ -3247,13 +3288,15 @@
                 },
                 "examples": {
                   "work_profile_not_configured": {
-                    "summary": "work_profile_not_configured",
+                    "summary": "Serwer uruchomiony bez bazy danych",
+                    "description": "API działa bez skonfigurowanej bazy (brak DATABASE_URL), więc profilu nie da się odczytać ani zapisać.",
                     "value": {
                       "error": "work_profile_not_configured"
                     }
                   },
                   "work_profile_unavailable": {
-                    "summary": "work_profile_unavailable",
+                    "summary": "Baza danych nie odpowiada",
+                    "description": "Błąd po stronie serwera, nie danych. Spróbuj ponownie za chwilę.",
                     "value": {
                       "error": "work_profile_unavailable"
                     }
@@ -3411,16 +3454,16 @@
               },
               "examples": {
                 "basic": {
-                  "summary": "Grafik na tydzień",
-                  "description": "profileVersion pochodzi z GET /api/v1/work-profile.",
+                  "summary": "Ułóż grafik na tydzień od 16 listopada",
+                  "description": "Najprostsze żądanie: serwer sam ułoży propozycję zmian na tydzień zaczynający się w poniedziałek weekStart (musi to być poniedziałek). profileVersion to wersja profilu pracy z ostatniego odczytu (GET /api/v1/work-profile) – jeśli profil zmienił się w międzyczasie, serwer zwróci 409, żeby nie układać grafiku na starych ustawieniach.",
                   "value": {
                     "weekStart": "2026-11-16",
                     "profileVersion": "pv-7"
                   }
                 },
                 "noClasses": {
-                  "summary": "Tydzień bez zajęć (potwierdzony)",
-                  "description": "Bez confirmNoClasses tydzień bez zajęć zwraca 409 no_classes_for_week.",
+                  "summary": "Tydzień bez zajęć (np. przerwa świąteczna)",
+                  "description": "W tym tygodniu w kalendarzu nie ma żadnych zajęć. To może być pomyłka (np. nie zaimportowano planu), więc serwer najpierw odpowiada 409 no_classes_for_week i pyta o potwierdzenie. confirmNoClasses: true oznacza: „wiem, że nie ma zajęć, układaj grafik”.",
                   "value": {
                     "weekStart": "2026-12-28",
                     "profileVersion": "pv-7",
@@ -3428,8 +3471,8 @@
                   }
                 },
                 "overrides": {
-                  "summary": "Jednorazowa zmiana ustawień",
-                  "description": "overrides dotyczą tylko tej propozycji; profil pozostaje bez zmian.",
+                  "summary": "Inne ustawienia tylko dla tego tygodnia",
+                  "description": "Student chce w tym tygodniu pracować mniej: cel 12 h zamiast 16 h i najwyżej 6 h dziennie. overrides zmieniają ustawienia tylko dla tej jednej propozycji – zapisany profil pracy zostaje bez zmian.",
                   "value": {
                     "weekStart": "2026-11-16",
                     "profileVersion": "pv-7",
@@ -3750,8 +3793,8 @@
                 },
                 "examples": {
                   "full": {
-                    "summary": "Pełna propozycja (target_met)",
-                    "description": "Cel 16 h osiągnięty; zmiany omijają wykład wraz z 30 min dojazdu.",
+                    "summary": "Udało się osiągnąć cel (target_met)",
+                    "description": "Generator zaplanował 3 zmiany: pn 14:00–18:00, wt i śr 12:30–19:30 – razem 18 h (totalMinutes: 1080), przy celu 16 h (targetMinutes: 960), więc cel jest osiągnięty i shortfallMinutes = 0. Poniedziałkowa zmiana zaczyna się dopiero o 14:00, bo wykład kończy się o 13:15, a potem jest 30 min na dojazd. estimatedPayPln: 585 zł to szacowane wynagrodzenie przy stawce 32,50 zł/h. blockingEvents to zajęcia, które generator musiał ominąć, a freeWindows – wolne okna, w których mógł planować. Wszystkie czasy z literą Z są w UTC; startLocal/endLocal pokazują czas polski.",
                     "value": {
                       "weekStart": "2026-11-16",
                       "timeZone": "Europe/Warsaw",
@@ -3913,8 +3956,8 @@
                     }
                   },
                   "partial": {
-                    "summary": "Częściowa propozycja (not_found)",
-                    "description": "Heurystyka nie znalazła pełnego grafiku – nie oznacza to dowodu, że cel jest nieosiągalny. shortfallMinutes podaje brakujące minuty.",
+                    "summary": "Cel osiągnięty tylko częściowo (not_found)",
+                    "description": "Student jest dostępny tylko we wtorek 14:00–20:00, więc generator zaplanował jedną zmianę 14:30–19:30 (5 h) zamiast 16 h. shortfallMinutes: 660 – brakuje 11 h do celu, a minimumShortfallMinutes: 180 – brakuje 3 h nawet do minimum 8 h. violations wyjaśnia, dlaczego: za mało wolnego czasu po odjęciu zajęć i dojazdów. To nadal poprawna odpowiedź (201), nie błąd – użytkownik może zmienić dostępność albo cel i wygenerować grafik ponownie. not_found znaczy „nie znaleziono pełnego grafiku”, a nie „na pewno się nie da”.",
                     "value": {
                       "weekStart": "2026-11-16",
                       "timeZone": "Europe/Warsaw",
@@ -4057,8 +4100,8 @@
                     }
                   },
                   "empty": {
-                    "summary": "Pusty wynik (proven_infeasible)",
-                    "description": "Po odjęciu zajęć i dojazdu nie zostaje wolny czas – brak zmian jest udowodniony, to nie jest błąd serwera.",
+                    "summary": "Nie da się ułożyć żadnej zmiany (proven_infeasible)",
+                    "description": "Student jest dostępny tylko w poniedziałek 9:00–14:00, a wtedy ma wykład 10:00–13:15 plus 30 min dojazdu – nie zostaje żaden wolny czas (freeMinutes: 0). Grafik jest pusty (shifts: []) i serwer wie na pewno, że przy tych ustawieniach nic się nie da zaplanować (proven_infeasible). To poprawna odpowiedź 201, nie awaria serwera – awaria to 503.",
                     "value": {
                       "weekStart": "2026-11-16",
                       "timeZone": "Europe/Warsaw",
@@ -4177,13 +4220,15 @@
                 },
                 "examples": {
                   "invalid_week_start": {
-                    "summary": "weekStart nie jest poniedziałkiem",
+                    "summary": "Data nie jest poniedziałkiem",
+                    "description": "weekStart musi być poniedziałkiem w formacie RRRR-MM-DD, np. 2026-11-16. Nic nie zostało zrobione.",
                     "value": {
                       "error": "invalid_week_start"
                     }
                   },
                   "invalid_scheduler_settings": {
-                    "summary": "Sprzeczne ustawienia generatora",
+                    "summary": "Sprzeczne limity godzin",
+                    "description": "Ustawienia (z profilu albo z overrides) się wykluczają – np. cel 20 h przy maksimum 16 h. message wyjaśnia, jaki warunek musi być spełniony.",
                     "value": {
                       "error": "invalid_scheduler_settings",
                       "message": "Ustawienia muszą spełniać: 0 ≤ minimum ≤ cel ≤ maksimum w tygodniu."
@@ -4204,7 +4249,8 @@
                 },
                 "examples": {
                   "work_profile_not_found": {
-                    "summary": "Brak profilu pracy",
+                    "summary": "Użytkownik nie ma profilu pracy",
+                    "description": "Bez profilu pracy (dostępności, celu godzin) nie da się ułożyć grafiku. Najpierw trzeba go utworzyć.",
                     "value": {
                       "error": "work_profile_not_found"
                     }
@@ -4224,14 +4270,16 @@
                 },
                 "examples": {
                   "profile_version_conflict": {
-                    "summary": "Profil zmienił się po odczycie",
+                    "summary": "Profil pracy zmienił się w międzyczasie",
+                    "description": "Ktoś zmienił profil po tym, jak go odczytano (np. w innej karcie), więc grafik byłby ułożony na starych ustawieniach. profileVersion w odpowiedzi to aktualna wersja – odśwież profil i spróbuj ponownie.",
                     "value": {
                       "error": "profile_version_conflict",
                       "profileVersion": "pv-8"
                     }
                   },
                   "profile_setup_required": {
-                    "summary": "Brak dostępności albo celu",
+                    "summary": "Profil nie jest uzupełniony",
+                    "description": "W profilu brakuje danych potrzebnych do ułożenia grafiku. missing mówi czego: availability – dostępności, target – celu godzin.",
                     "value": {
                       "error": "profile_setup_required",
                       "missing": [
@@ -4240,7 +4288,8 @@
                     }
                   },
                   "no_classes_for_week": {
-                    "summary": "Tydzień bez zajęć – wymagane potwierdzenie",
+                    "summary": "Tydzień bez zajęć – potrzebne potwierdzenie",
+                    "description": "W tym tygodniu w kalendarzu nie ma zajęć. Może to być przerwa, ale też brak zaimportowanego planu. Jeśli to zamierzone, wyślij żądanie ponownie z confirmNoClasses: true.",
                     "value": {
                       "error": "no_classes_for_week",
                       "requiresConfirmation": true
@@ -4552,8 +4601,8 @@
                 },
                 "examples": {
                   "classCollision": {
-                    "summary": "Kolizja z zajęciami obowiązkowymi",
-                    "description": "Zmiana 12:00–16:00 nachodzi na wykład 10:00–13:15 z 30 min dojazdu (część wspólna 12:00–13:45).",
+                    "summary": "Zmiana koliduje z wykładem",
+                    "description": "Nic nie zostało zapisane. errors to powody odrzucenia: class_collision – zmiana 12:00–16:00 nachodzi na wykład 10:00–13:15 razem z 30 min dojazdu, czyli część wspólna to 12:00–13:45 (overlapStartLocal–overlapEndLocal); outside_availability – z doliczonym 30 min dojazdu zmiana zaczynałaby się już o 11:30, a student jest dostępny dopiero od 12:00. warnings to tylko ostrzeżenia, które same nie blokują zapisu (tu: grafik byłby poniżej celu godzin).",
                     "value": {
                       "error": "invalid_schedule",
                       "errors": [
@@ -4621,14 +4670,15 @@
                 },
                 "examples": {
                   "scheduling_not_configured": {
-                    "summary": "Repozytorium grafików nieskonfigurowane",
+                    "summary": "Serwer uruchomiony bez bazy danych",
+                    "description": "API działa bez skonfigurowanej bazy (brak DATABASE_URL), więc grafików nie da się zapisać ani odczytać.",
                     "value": {
                       "error": "scheduling_not_configured"
                     }
                   },
                   "schedule_generation_failed": {
-                    "summary": "Błąd infrastruktury przy generowaniu",
-                    "description": "Nie mylić z pustym wynikiem proven_infeasible (201).",
+                    "summary": "Awaria serwera przy układaniu grafiku",
+                    "description": "Coś poszło nie tak po stronie serwera (np. baza przestała odpowiadać). To co innego niż pusty grafik proven_infeasible – tamten jest poprawną odpowiedzią 201. Spróbuj ponownie za chwilę.",
                     "value": {
                       "error": "schedule_generation_failed"
                     }
@@ -4668,7 +4718,8 @@
               },
               "examples": {
                 "current": {
-                  "summary": "Aktualna wersja grafiku",
+                  "summary": "Wersja grafiku z ostatniego odczytu",
+                  "description": "expectedVersion to version grafiku, który użytkownik widzi na ekranie. Jeśli ktoś w międzyczasie zmienił grafik, serwer zwróci 409 zamiast zatwierdzić albo odrzucić inną wersję niż ta, którą użytkownik oglądał.",
                   "value": {
                     "expectedVersion": 2
                   }
@@ -4996,8 +5047,8 @@
                 },
                 "examples": {
                   "approved": {
-                    "summary": "Zatwierdzony grafik",
-                    "description": "Zmiany zapisano w kalendarzu jako wydarzenia kategorii Work.",
+                    "summary": "Grafik zatwierdzony",
+                    "description": "Użytkownik zaakceptował propozycję: zmiany zostały zapisane w kalendarzu jako wydarzenia kategorii Praca. isApproved: true, workflowStatus: accepted, a approvedAt mówi, kiedy to się stało. Przed zapisem serwer jeszcze raz sprawdza grafik z aktualnym kalendarzem.",
                     "value": {
                       "weekStart": "2026-11-16",
                       "timeZone": "Europe/Warsaw",
@@ -5174,7 +5225,8 @@
                 },
                 "examples": {
                   "invalid_week_start": {
-                    "summary": "weekStart nie jest poniedziałkiem",
+                    "summary": "Data nie jest poniedziałkiem",
+                    "description": "weekStart musi być poniedziałkiem w formacie RRRR-MM-DD, np. 2026-11-16. Nic nie zostało zrobione.",
                     "value": {
                       "error": "invalid_week_start"
                     }
@@ -5194,13 +5246,15 @@
                 },
                 "examples": {
                   "work_profile_not_found": {
-                    "summary": "Brak profilu pracy",
+                    "summary": "Użytkownik nie ma profilu pracy",
+                    "description": "Bez profilu pracy (dostępności, celu godzin) nie da się ułożyć grafiku. Najpierw trzeba go utworzyć.",
                     "value": {
                       "error": "work_profile_not_found"
                     }
                   },
                   "schedule_not_found": {
-                    "summary": "Brak grafiku",
+                    "summary": "Nie ma takiego grafiku",
+                    "description": "Dla tego tygodnia (albo id) nie ma żadnej propozycji – trzeba ją najpierw wygenerować.",
                     "value": {
                       "error": "schedule_not_found"
                     }
@@ -5220,14 +5274,16 @@
                 },
                 "examples": {
                   "schedule_version_conflict": {
-                    "summary": "Grafik zmienił się po odczycie",
+                    "summary": "Grafik zmienił się w międzyczasie",
+                    "description": "Wysłane expectedVersion jest nieaktualne – ktoś już poprawił ten grafik. currentVersion to aktualna wersja: odczytaj grafik ponownie i powtórz zmianę. Nic nie zostało nadpisane.",
                     "value": {
                       "error": "schedule_version_conflict",
                       "currentVersion": 3
                     }
                   },
                   "profile_version_conflict": {
-                    "summary": "Profil zmienił się po odczycie",
+                    "summary": "Profil pracy zmienił się w międzyczasie",
+                    "description": "Ktoś zmienił profil po tym, jak go odczytano (np. w innej karcie), więc grafik byłby ułożony na starych ustawieniach. profileVersion w odpowiedzi to aktualna wersja – odśwież profil i spróbuj ponownie.",
                     "value": {
                       "error": "profile_version_conflict",
                       "profileVersion": "pv-8"
@@ -5235,6 +5291,7 @@
                   },
                   "schedule_already_approved": {
                     "summary": "Grafik jest już zatwierdzony",
+                    "description": "Zatwierdzonego grafiku nie można już poprawiać, zatwierdzać ponownie ani odrzucać. Żeby coś zmienić, wygeneruj nową propozycję na ten tydzień.",
                     "value": {
                       "error": "schedule_already_approved"
                     }
@@ -5545,8 +5602,8 @@
                 },
                 "examples": {
                   "classCollision": {
-                    "summary": "Kolizja z zajęciami obowiązkowymi",
-                    "description": "Zmiana 12:00–16:00 nachodzi na wykład 10:00–13:15 z 30 min dojazdu (część wspólna 12:00–13:45).",
+                    "summary": "Zmiana koliduje z wykładem",
+                    "description": "Nic nie zostało zapisane. errors to powody odrzucenia: class_collision – zmiana 12:00–16:00 nachodzi na wykład 10:00–13:15 razem z 30 min dojazdu, czyli część wspólna to 12:00–13:45 (overlapStartLocal–overlapEndLocal); outside_availability – z doliczonym 30 min dojazdu zmiana zaczynałaby się już o 11:30, a student jest dostępny dopiero od 12:00. warnings to tylko ostrzeżenia, które same nie blokują zapisu (tu: grafik byłby poniżej celu godzin).",
                     "value": {
                       "error": "invalid_schedule",
                       "errors": [
@@ -5614,7 +5671,8 @@
                 },
                 "examples": {
                   "scheduling_not_configured": {
-                    "summary": "Repozytorium grafików nieskonfigurowane",
+                    "summary": "Serwer uruchomiony bez bazy danych",
+                    "description": "API działa bez skonfigurowanej bazy (brak DATABASE_URL), więc grafików nie da się zapisać ani odczytać.",
                     "value": {
                       "error": "scheduling_not_configured"
                     }
@@ -5654,7 +5712,8 @@
               },
               "examples": {
                 "current": {
-                  "summary": "Aktualna wersja grafiku",
+                  "summary": "Wersja grafiku z ostatniego odczytu",
+                  "description": "expectedVersion to version grafiku, który użytkownik widzi na ekranie. Jeśli ktoś w międzyczasie zmienił grafik, serwer zwróci 409 zamiast zatwierdzić albo odrzucić inną wersję niż ta, którą użytkownik oglądał.",
                   "value": {
                     "expectedVersion": 2
                   }
@@ -5702,8 +5761,8 @@
                 },
                 "examples": {
                   "rejected": {
-                    "summary": "Propozycje odrzucone",
-                    "description": "schedule to ostatni nieodrzucony grafik tygodnia (np. wcześniej zatwierdzony) albo null.",
+                    "summary": "Propozycja odrzucona",
+                    "description": "Wszystkie niezatwierdzone propozycje dla tego tygodnia zostały odrzucone. Kalendarz się nie zmienił – wcześniej zatwierdzone zmiany zostają. schedule pokazuje grafik, który teraz obowiązuje w tym tygodniu (wcześniej zatwierdzony), albo null, jeśli żadnego nie ma.",
                     "value": {
                       "rejected": true,
                       "schedule": null
@@ -5724,7 +5783,8 @@
                 },
                 "examples": {
                   "invalid_week_start": {
-                    "summary": "weekStart nie jest poniedziałkiem",
+                    "summary": "Data nie jest poniedziałkiem",
+                    "description": "weekStart musi być poniedziałkiem w formacie RRRR-MM-DD, np. 2026-11-16. Nic nie zostało zrobione.",
                     "value": {
                       "error": "invalid_week_start"
                     }
@@ -5744,7 +5804,8 @@
                 },
                 "examples": {
                   "schedule_version_conflict": {
-                    "summary": "Grafik zmienił się po odczycie",
+                    "summary": "Grafik zmienił się w międzyczasie",
+                    "description": "Wysłane expectedVersion jest nieaktualne – ktoś już poprawił ten grafik. currentVersion to aktualna wersja: odczytaj grafik ponownie i powtórz zmianę. Nic nie zostało nadpisane.",
                     "value": {
                       "error": "schedule_version_conflict",
                       "currentVersion": 3
@@ -5752,6 +5813,7 @@
                   },
                   "schedule_already_approved": {
                     "summary": "Grafik jest już zatwierdzony",
+                    "description": "Zatwierdzonego grafiku nie można już poprawiać, zatwierdzać ponownie ani odrzucać. Żeby coś zmienić, wygeneruj nową propozycję na ten tydzień.",
                     "value": {
                       "error": "schedule_already_approved"
                     }
@@ -5771,7 +5833,8 @@
                 },
                 "examples": {
                   "scheduling_not_configured": {
-                    "summary": "Repozytorium grafików nieskonfigurowane",
+                    "summary": "Serwer uruchomiony bez bazy danych",
+                    "description": "API działa bez skonfigurowanej bazy (brak DATABASE_URL), więc grafików nie da się zapisać ani odczytać.",
                     "value": {
                       "error": "scheduling_not_configured"
                     }
@@ -5912,7 +5975,8 @@
                 },
                 "examples": {
                   "page": {
-                    "summary": "Strona listy grafików",
+                    "summary": "Dwa ostatnie tygodnie",
+                    "description": "Lista wersji grafików w podanym zakresie dat, od najnowszego tygodnia. Tydzień 16.11 ma propozycję czekającą na zatwierdzenie (status: proposed), a tydzień 9.11 – zatwierdzony grafik, w którym zabrakło 4 h do celu (shortfallMinutes: 240). total to liczba wszystkich grafików w zakresie; limit i offset służą do stronicowania (np. offset: 20 = druga strona po 20).",
                     "value": {
                       "items": [
                         {
@@ -5963,6 +6027,7 @@
                 "examples": {
                   "invalid_date_range": {
                     "summary": "Odwrócony zakres dat",
+                    "description": "Data from jest późniejsza niż to – zamień je miejscami.",
                     "value": {
                       "error": "invalid_date_range"
                     }
@@ -5982,7 +6047,8 @@
                 },
                 "examples": {
                   "scheduling_not_configured": {
-                    "summary": "Repozytorium grafików nieskonfigurowane",
+                    "summary": "Serwer uruchomiony bez bazy danych",
+                    "description": "API działa bez skonfigurowanej bazy (brak DATABASE_URL), więc grafików nie da się zapisać ani odczytać.",
                     "value": {
                       "error": "scheduling_not_configured"
                     }
@@ -6320,8 +6386,8 @@
                 },
                 "examples": {
                   "full": {
-                    "summary": "Pełna propozycja (target_met)",
-                    "description": "Cel 16 h osiągnięty; zmiany omijają wykład wraz z 30 min dojazdu.",
+                    "summary": "Udało się osiągnąć cel (target_met)",
+                    "description": "Generator zaplanował 3 zmiany: pn 14:00–18:00, wt i śr 12:30–19:30 – razem 18 h (totalMinutes: 1080), przy celu 16 h (targetMinutes: 960), więc cel jest osiągnięty i shortfallMinutes = 0. Poniedziałkowa zmiana zaczyna się dopiero o 14:00, bo wykład kończy się o 13:15, a potem jest 30 min na dojazd. estimatedPayPln: 585 zł to szacowane wynagrodzenie przy stawce 32,50 zł/h. blockingEvents to zajęcia, które generator musiał ominąć, a freeWindows – wolne okna, w których mógł planować. Wszystkie czasy z literą Z są w UTC; startLocal/endLocal pokazują czas polski.",
                     "value": {
                       "weekStart": "2026-11-16",
                       "timeZone": "Europe/Warsaw",
@@ -6483,8 +6549,8 @@
                     }
                   },
                   "partial": {
-                    "summary": "Częściowa propozycja (not_found)",
-                    "description": "Heurystyka nie znalazła pełnego grafiku – nie oznacza to dowodu, że cel jest nieosiągalny. shortfallMinutes podaje brakujące minuty.",
+                    "summary": "Cel osiągnięty tylko częściowo (not_found)",
+                    "description": "Student jest dostępny tylko we wtorek 14:00–20:00, więc generator zaplanował jedną zmianę 14:30–19:30 (5 h) zamiast 16 h. shortfallMinutes: 660 – brakuje 11 h do celu, a minimumShortfallMinutes: 180 – brakuje 3 h nawet do minimum 8 h. violations wyjaśnia, dlaczego: za mało wolnego czasu po odjęciu zajęć i dojazdów. To nadal poprawna odpowiedź (201), nie błąd – użytkownik może zmienić dostępność albo cel i wygenerować grafik ponownie. not_found znaczy „nie znaleziono pełnego grafiku”, a nie „na pewno się nie da”.",
                     "value": {
                       "weekStart": "2026-11-16",
                       "timeZone": "Europe/Warsaw",
@@ -6627,8 +6693,8 @@
                     }
                   },
                   "empty": {
-                    "summary": "Pusty wynik (proven_infeasible)",
-                    "description": "Po odjęciu zajęć i dojazdu nie zostaje wolny czas – brak zmian jest udowodniony, to nie jest błąd serwera.",
+                    "summary": "Nie da się ułożyć żadnej zmiany (proven_infeasible)",
+                    "description": "Student jest dostępny tylko w poniedziałek 9:00–14:00, a wtedy ma wykład 10:00–13:15 plus 30 min dojazdu – nie zostaje żaden wolny czas (freeMinutes: 0). Grafik jest pusty (shifts: []) i serwer wie na pewno, że przy tych ustawieniach nic się nie da zaplanować (proven_infeasible). To poprawna odpowiedź 201, nie awaria serwera – awaria to 503.",
                     "value": {
                       "weekStart": "2026-11-16",
                       "timeZone": "Europe/Warsaw",
@@ -6747,7 +6813,8 @@
                 },
                 "examples": {
                   "schedule_not_found": {
-                    "summary": "Brak grafiku",
+                    "summary": "Nie ma takiego grafiku",
+                    "description": "Dla tego tygodnia (albo id) nie ma żadnej propozycji – trzeba ją najpierw wygenerować.",
                     "value": {
                       "error": "schedule_not_found"
                     }
@@ -6767,7 +6834,8 @@
                 },
                 "examples": {
                   "scheduling_not_configured": {
-                    "summary": "Repozytorium grafików nieskonfigurowane",
+                    "summary": "Serwer uruchomiony bez bazy danych",
+                    "description": "API działa bez skonfigurowanej bazy (brak DATABASE_URL), więc grafików nie da się zapisać ani odczytać.",
                     "value": {
                       "error": "scheduling_not_configured"
                     }
@@ -7106,8 +7174,8 @@
                 },
                 "examples": {
                   "full": {
-                    "summary": "Pełna propozycja (target_met)",
-                    "description": "Cel 16 h osiągnięty; zmiany omijają wykład wraz z 30 min dojazdu.",
+                    "summary": "Udało się osiągnąć cel (target_met)",
+                    "description": "Generator zaplanował 3 zmiany: pn 14:00–18:00, wt i śr 12:30–19:30 – razem 18 h (totalMinutes: 1080), przy celu 16 h (targetMinutes: 960), więc cel jest osiągnięty i shortfallMinutes = 0. Poniedziałkowa zmiana zaczyna się dopiero o 14:00, bo wykład kończy się o 13:15, a potem jest 30 min na dojazd. estimatedPayPln: 585 zł to szacowane wynagrodzenie przy stawce 32,50 zł/h. blockingEvents to zajęcia, które generator musiał ominąć, a freeWindows – wolne okna, w których mógł planować. Wszystkie czasy z literą Z są w UTC; startLocal/endLocal pokazują czas polski.",
                     "value": {
                       "weekStart": "2026-11-16",
                       "timeZone": "Europe/Warsaw",
@@ -7269,8 +7337,8 @@
                     }
                   },
                   "partial": {
-                    "summary": "Częściowa propozycja (not_found)",
-                    "description": "Heurystyka nie znalazła pełnego grafiku – nie oznacza to dowodu, że cel jest nieosiągalny. shortfallMinutes podaje brakujące minuty.",
+                    "summary": "Cel osiągnięty tylko częściowo (not_found)",
+                    "description": "Student jest dostępny tylko we wtorek 14:00–20:00, więc generator zaplanował jedną zmianę 14:30–19:30 (5 h) zamiast 16 h. shortfallMinutes: 660 – brakuje 11 h do celu, a minimumShortfallMinutes: 180 – brakuje 3 h nawet do minimum 8 h. violations wyjaśnia, dlaczego: za mało wolnego czasu po odjęciu zajęć i dojazdów. To nadal poprawna odpowiedź (201), nie błąd – użytkownik może zmienić dostępność albo cel i wygenerować grafik ponownie. not_found znaczy „nie znaleziono pełnego grafiku”, a nie „na pewno się nie da”.",
                     "value": {
                       "weekStart": "2026-11-16",
                       "timeZone": "Europe/Warsaw",
@@ -7413,8 +7481,8 @@
                     }
                   },
                   "empty": {
-                    "summary": "Pusty wynik (proven_infeasible)",
-                    "description": "Po odjęciu zajęć i dojazdu nie zostaje wolny czas – brak zmian jest udowodniony, to nie jest błąd serwera.",
+                    "summary": "Nie da się ułożyć żadnej zmiany (proven_infeasible)",
+                    "description": "Student jest dostępny tylko w poniedziałek 9:00–14:00, a wtedy ma wykład 10:00–13:15 plus 30 min dojazdu – nie zostaje żaden wolny czas (freeMinutes: 0). Grafik jest pusty (shifts: []) i serwer wie na pewno, że przy tych ustawieniach nic się nie da zaplanować (proven_infeasible). To poprawna odpowiedź 201, nie awaria serwera – awaria to 503.",
                     "value": {
                       "weekStart": "2026-11-16",
                       "timeZone": "Europe/Warsaw",
@@ -7533,7 +7601,8 @@
                 },
                 "examples": {
                   "invalid_week_start": {
-                    "summary": "weekStart nie jest poniedziałkiem",
+                    "summary": "Data nie jest poniedziałkiem",
+                    "description": "weekStart musi być poniedziałkiem w formacie RRRR-MM-DD, np. 2026-11-16. Nic nie zostało zrobione.",
                     "value": {
                       "error": "invalid_week_start"
                     }
@@ -7553,13 +7622,15 @@
                 },
                 "examples": {
                   "work_profile_not_found": {
-                    "summary": "Brak profilu pracy",
+                    "summary": "Użytkownik nie ma profilu pracy",
+                    "description": "Bez profilu pracy (dostępności, celu godzin) nie da się ułożyć grafiku. Najpierw trzeba go utworzyć.",
                     "value": {
                       "error": "work_profile_not_found"
                     }
                   },
                   "schedule_not_found": {
-                    "summary": "Brak grafiku",
+                    "summary": "Nie ma takiego grafiku",
+                    "description": "Dla tego tygodnia (albo id) nie ma żadnej propozycji – trzeba ją najpierw wygenerować.",
                     "value": {
                       "error": "schedule_not_found"
                     }
@@ -7579,7 +7650,8 @@
                 },
                 "examples": {
                   "scheduling_not_configured": {
-                    "summary": "Repozytorium grafików nieskonfigurowane",
+                    "summary": "Serwer uruchomiony bez bazy danych",
+                    "description": "API działa bez skonfigurowanej bazy (brak DATABASE_URL), więc grafików nie da się zapisać ani odczytać.",
                     "value": {
                       "error": "scheduling_not_configured"
                     }
@@ -7650,8 +7722,8 @@
               },
               "examples": {
                 "move": {
-                  "summary": "Przesunięcie wtorkowej zmiany o 30 min",
-                  "description": "Wysyłamy pełną listę zmian tygodnia i expectedVersion z ostatniego odczytu.",
+                  "summary": "Przesuń wtorkową zmianę o 30 minut",
+                  "description": "Wysyłamy wszystkie zmiany tygodnia – także te, których nie ruszamy. Zmieniona jest tylko druga: wtorek 13:00–20:00 zamiast 12:30–19:30. id to identyfikator zmiany z propozycji (candidateId), godziny są w czasie polskim. expectedVersion to version grafiku z ostatniego odczytu – jeśli ktoś w międzyczasie zmienił grafik, serwer zwróci 409.",
                   "value": {
                     "expectedVersion": 1,
                     "shifts": [
@@ -7674,7 +7746,8 @@
                   }
                 },
                 "collision": {
-                  "summary": "Zmiana nachodząca na zajęcia (zwróci 422)",
+                  "summary": "Zmiana nachodząca na wykład (serwer odrzuci)",
+                  "description": "Próba ustawienia zmiany w poniedziałek 12:00–16:00, choć do 13:15 trwa wykład obowiązkowy, a potem jest 30 min dojazdu. Serwer odrzuci to z kodem 422 i wyjaśni dlaczego (zobacz przykład odpowiedzi 422 „Zmiana koliduje z wykładem”).",
                   "value": {
                     "expectedVersion": 1,
                     "shifts": [
@@ -8009,8 +8082,8 @@
                 },
                 "examples": {
                   "moved": {
-                    "summary": "Zmiana przesunięta ręcznie",
-                    "description": "Sukces zwiększa version i przelicza podsumowanie; wydarzenia kalendarza powstają dopiero po zatwierdzeniu.",
+                    "summary": "Wtorkowa zmiana przesunięta",
+                    "description": "Korekta zapisana: wtorkowa zmiana trwa teraz 13:00–20:00 zamiast 12:30–19:30. version wzrósł z 1 na 2 – przy kolejnej korekcie albo zatwierdzeniu trzeba wysłać expectedVersion: 2. Zmiany są zapisane tylko w propozycji grafiku; w kalendarzu pojawią się dopiero po zatwierdzeniu (POST .../approve).",
                     "value": {
                       "weekStart": "2026-11-16",
                       "timeZone": "Europe/Warsaw",
@@ -8186,7 +8259,8 @@
                 },
                 "examples": {
                   "invalid_week_start": {
-                    "summary": "weekStart nie jest poniedziałkiem",
+                    "summary": "Data nie jest poniedziałkiem",
+                    "description": "weekStart musi być poniedziałkiem w formacie RRRR-MM-DD, np. 2026-11-16. Nic nie zostało zrobione.",
                     "value": {
                       "error": "invalid_week_start"
                     }
@@ -8206,13 +8280,15 @@
                 },
                 "examples": {
                   "work_profile_not_found": {
-                    "summary": "Brak profilu pracy",
+                    "summary": "Użytkownik nie ma profilu pracy",
+                    "description": "Bez profilu pracy (dostępności, celu godzin) nie da się ułożyć grafiku. Najpierw trzeba go utworzyć.",
                     "value": {
                       "error": "work_profile_not_found"
                     }
                   },
                   "schedule_not_found": {
-                    "summary": "Brak grafiku",
+                    "summary": "Nie ma takiego grafiku",
+                    "description": "Dla tego tygodnia (albo id) nie ma żadnej propozycji – trzeba ją najpierw wygenerować.",
                     "value": {
                       "error": "schedule_not_found"
                     }
@@ -8232,14 +8308,16 @@
                 },
                 "examples": {
                   "schedule_version_conflict": {
-                    "summary": "Grafik zmienił się po odczycie",
+                    "summary": "Grafik zmienił się w międzyczasie",
+                    "description": "Wysłane expectedVersion jest nieaktualne – ktoś już poprawił ten grafik. currentVersion to aktualna wersja: odczytaj grafik ponownie i powtórz zmianę. Nic nie zostało nadpisane.",
                     "value": {
                       "error": "schedule_version_conflict",
                       "currentVersion": 3
                     }
                   },
                   "profile_version_conflict": {
-                    "summary": "Profil zmienił się po odczycie",
+                    "summary": "Profil pracy zmienił się w międzyczasie",
+                    "description": "Ktoś zmienił profil po tym, jak go odczytano (np. w innej karcie), więc grafik byłby ułożony na starych ustawieniach. profileVersion w odpowiedzi to aktualna wersja – odśwież profil i spróbuj ponownie.",
                     "value": {
                       "error": "profile_version_conflict",
                       "profileVersion": "pv-8"
@@ -8247,6 +8325,7 @@
                   },
                   "schedule_already_approved": {
                     "summary": "Grafik jest już zatwierdzony",
+                    "description": "Zatwierdzonego grafiku nie można już poprawiać, zatwierdzać ponownie ani odrzucać. Żeby coś zmienić, wygeneruj nową propozycję na ten tydzień.",
                     "value": {
                       "error": "schedule_already_approved"
                     }
@@ -8557,8 +8636,8 @@
                 },
                 "examples": {
                   "classCollision": {
-                    "summary": "Kolizja z zajęciami obowiązkowymi",
-                    "description": "Zmiana 12:00–16:00 nachodzi na wykład 10:00–13:15 z 30 min dojazdu (część wspólna 12:00–13:45).",
+                    "summary": "Zmiana koliduje z wykładem",
+                    "description": "Nic nie zostało zapisane. errors to powody odrzucenia: class_collision – zmiana 12:00–16:00 nachodzi na wykład 10:00–13:15 razem z 30 min dojazdu, czyli część wspólna to 12:00–13:45 (overlapStartLocal–overlapEndLocal); outside_availability – z doliczonym 30 min dojazdu zmiana zaczynałaby się już o 11:30, a student jest dostępny dopiero od 12:00. warnings to tylko ostrzeżenia, które same nie blokują zapisu (tu: grafik byłby poniżej celu godzin).",
                     "value": {
                       "error": "invalid_schedule",
                       "errors": [
@@ -8626,7 +8705,8 @@
                 },
                 "examples": {
                   "scheduling_not_configured": {
-                    "summary": "Repozytorium grafików nieskonfigurowane",
+                    "summary": "Serwer uruchomiony bez bazy danych",
+                    "description": "API działa bez skonfigurowanej bazy (brak DATABASE_URL), więc grafików nie da się zapisać ani odczytać.",
                     "value": {
                       "error": "scheduling_not_configured"
                     }
@@ -8745,8 +8825,8 @@
               },
               "examples": {
                 "rows": {
-                  "summary": "Wiersze po poprawkach użytkownika",
-                  "description": "Druga zmiana kończy się następnego dnia (zmiana nocna).",
+                  "summary": "Dwie zmiany z grafiku pracy",
+                  "description": "Wiersze odczytane z pliku, ewentualnie poprawione przez użytkownika na ekranie kontroli. Druga zmiana trwa 22:00–06:00, czyli kończy się następnego dnia (zmiana nocna). Podgląd niczego nie zapisuje – tylko sprawdza wiersze. importSessionId (opcjonalnie) przedłuża sesję importu o kolejne 15 minut.",
                   "value": {
                     "rows": [
                       {
@@ -8786,7 +8866,7 @@
                 "examples": {
                   "preview": {
                     "summary": "Duplikat i zmiana nocna",
-                    "description": "r1 pokrywa się z istniejącym wydarzeniem, r2 wymaga potwierdzenia nocy przy zapisie.",
+                    "description": "Wynik sprawdzenia każdego wiersza. r1: w kalendarzu jest już taka sama zmiana (duplicateOfEvents) – przy zapisie użytkownik musi zdecydować, czy ją pominąć, zastąpić, czy zachować obie. r2: overnight: true – zmiana przechodzi przez północ i przy zapisie trzeba to potwierdzić. Czasy start/end są w UTC (13:00Z = 14:00 czasu polskiego).",
                     "value": {
                       "rows": [
                         {
@@ -8850,12 +8930,14 @@
                 "examples": {
                   "database_unavailable": {
                     "summary": "Baza niedostępna",
+                    "description": "Błąd po stronie serwera, nie danych – spróbuj ponownie za chwilę. Nic nie zostało zmienione.",
                     "value": {
                       "error": "database_unavailable"
                     }
                   },
                   "database_not_configured": {
                     "summary": "Brak DATABASE_URL",
+                    "description": "API działa bez skonfigurowanej bazy danych (brak DATABASE_URL), więc ta operacja jest niedostępna.",
                     "value": {
                       "error": "database_not_configured"
                     }
@@ -8987,7 +9069,8 @@
               },
               "examples": {
                 "work": {
-                  "summary": "Sesja importu grafiku pracy",
+                  "summary": "Import grafiku pracy z PDF",
+                  "description": "source mówi, co importujemy (work = grafik pracy, classes = plan zajęć), a format – skąd pochodzą dane. Serwer zapamiętuje wiersze do kontroli; kalendarz się nie zmienia, dopóki użytkownik nie zatwierdzi importu.",
                   "value": {
                     "source": "work",
                     "format": "PDF",
@@ -9027,7 +9110,8 @@
                 },
                 "examples": {
                   "created": {
-                    "summary": "Sesja do kontroli (15 min)",
+                    "summary": "Import czeka na sprawdzenie",
+                    "description": "importSessionId trzeba podać przy zatwierdzaniu albo anulowaniu importu. expiresAt to chwila wygaśnięcia: sesja wygasa po 15 minutach bez żadnej akcji. rows zawiera wynik sprawdzenia wierszy (jak w podglądzie).",
                     "value": {
                       "importSessionId": "7e1d2c3b-4a59-4687-b6a5-9c8d7e6f5a40",
                       "expiresAt": "2026-11-10T16:15:00.000Z",
@@ -9093,12 +9177,14 @@
                 "examples": {
                   "database_unavailable": {
                     "summary": "Baza niedostępna",
+                    "description": "Błąd po stronie serwera, nie danych – spróbuj ponownie za chwilę. Nic nie zostało zmienione.",
                     "value": {
                       "error": "database_unavailable"
                     }
                   },
                   "database_not_configured": {
                     "summary": "Brak DATABASE_URL",
+                    "description": "API działa bez skonfigurowanej bazy danych (brak DATABASE_URL), więc ta operacja jest niedostępna.",
                     "value": {
                       "error": "database_not_configured"
                     }
@@ -9212,8 +9298,8 @@
               },
               "examples": {
                 "confirm": {
-                  "summary": "Zatwierdzenie z decyzjami",
-                  "description": "Duplikat r1 zastępuje istniejące wydarzenie, zmiana nocna r2 jest potwierdzona.",
+                  "summary": "Zatwierdzenie z decyzjami użytkownika",
+                  "description": "Wysyłamy tylko wiersze, które użytkownik chce zapisać, razem z jego decyzjami. r1 była duplikatem: duplicateDecision: replace i replacementId: E-OLD znaczą „zastąp istniejące wydarzenie E-OLD” (inne opcje: skip – pomiń, keepBoth – zachowaj oba). r2 to zmiana nocna: overnightConfirmed: true potwierdza, że naprawdę kończy się następnego dnia.",
                   "value": {
                     "rows": [
                       {
@@ -9267,6 +9353,7 @@
                 "examples": {
                   "saved": {
                     "summary": "Zapisane wydarzenia",
+                    "description": "Zapis jest „wszystko albo nic”: albo zapisano wszystkie wiersze, albo żaden. summary podsumowuje: added – nowe wydarzenia, replaced – zastąpione duplikaty, skipped – pominięte, rejected – odrzucone. events to zapisane wydarzenia z nowymi id; rowId łączy je z wierszami z pliku.",
                     "value": {
                       "saved": 2,
                       "rejected": 0,
@@ -9327,6 +9414,7 @@
                 "examples": {
                   "import_session_not_found": {
                     "summary": "Brak sesji",
+                    "description": "Nie ma sesji importu o tym identyfikatorze. Trzeba wczytać plik od nowa.",
                     "value": {
                       "error": "import_session_not_found"
                     }
@@ -9358,6 +9446,7 @@
                 "examples": {
                   "import_session_closed": {
                     "summary": "Sesja zamknięta",
+                    "description": "Ten import został już zatwierdzony albo anulowany – nie można go zatwierdzić drugi raz.",
                     "value": {
                       "error": "import_session_closed"
                     }
@@ -9389,6 +9478,7 @@
                 "examples": {
                   "import_session_expired": {
                     "summary": "Sesja wygasła",
+                    "description": "Sesja importu wygasa po 15 minutach bez żadnej akcji. Wczytaj plik ponownie.",
                     "value": {
                       "error": "import_session_expired"
                     }
@@ -9409,6 +9499,7 @@
                 "examples": {
                   "overnight": {
                     "summary": "Niepotwierdzona zmiana nocna",
+                    "description": "Wiersz r2 kończy się następnego dnia, a nie ma overnightConfirmed: true. Nic nie zapisano – trzeba zapytać użytkownika i wysłać ponownie z potwierdzeniem.",
                     "value": {
                       "error": "overnight_not_confirmed",
                       "rowIds": [
@@ -9418,6 +9509,7 @@
                   },
                   "duplicates": {
                     "summary": "Brak decyzji o duplikacie",
+                    "description": "Wiersz r1 pokrywa się z wydarzeniem w kalendarzu, ale nie podano duplicateDecision (skip, replace albo keepBoth). Nic nie zapisano.",
                     "value": {
                       "error": "duplicate_decision_required",
                       "missingDecisions": [
@@ -9427,7 +9519,8 @@
                     }
                   },
                   "unknownRows": {
-                    "summary": "Wiersze spoza sesji",
+                    "summary": "Wiersz spoza tego importu",
+                    "description": "Wiersza r9 nie było w odczytanym pliku – można zatwierdzać tylko wiersze z tej sesji importu. Nic nie zapisano.",
                     "value": {
                       "error": "unknown_rows",
                       "rowIds": [
@@ -9463,12 +9556,14 @@
                 "examples": {
                   "database_unavailable": {
                     "summary": "Baza niedostępna",
+                    "description": "Błąd po stronie serwera, nie danych – spróbuj ponownie za chwilę. Nic nie zostało zmienione.",
                     "value": {
                       "error": "database_unavailable"
                     }
                   },
                   "database_not_configured": {
                     "summary": "Brak DATABASE_URL",
+                    "description": "API działa bez skonfigurowanej bazy danych (brak DATABASE_URL), więc ta operacja jest niedostępna.",
                     "value": {
                       "error": "database_not_configured"
                     }
@@ -9512,7 +9607,8 @@
                 },
                 "examples": {
                   "cancelled": {
-                    "summary": "Anulowano",
+                    "summary": "Import anulowany",
+                    "description": "Użytkownik zrezygnował z importu. Odczytane wiersze zostały odrzucone, a kalendarz się nie zmienił.",
                     "value": {
                       "status": "cancelled"
                     }
@@ -9544,6 +9640,7 @@
                 "examples": {
                   "import_session_not_active": {
                     "summary": "Sesja nieaktywna",
+                    "description": "Ten import został już zatwierdzony, anulowany albo wygasł, więc nie ma czego anulować.",
                     "value": {
                       "error": "import_session_not_active"
                     }
@@ -9576,12 +9673,14 @@
                 "examples": {
                   "database_unavailable": {
                     "summary": "Baza niedostępna",
+                    "description": "Błąd po stronie serwera, nie danych – spróbuj ponownie za chwilę. Nic nie zostało zmienione.",
                     "value": {
                       "error": "database_unavailable"
                     }
                   },
                   "database_not_configured": {
                     "summary": "Brak DATABASE_URL",
+                    "description": "API działa bez skonfigurowanej bazy danych (brak DATABASE_URL), więc ta operacja jest niedostępna.",
                     "value": {
                       "error": "database_not_configured"
                     }
@@ -9626,15 +9725,16 @@
               },
               "examples": {
                 "pdf": {
-                  "summary": "Plik PDF w base64",
-                  "description": "Wartość skrócona – w praktyce cały plik (do 5 MB).",
+                  "summary": "Plik PDF",
+                  "description": "Plik wysyłamy jako tekst base64 (zakodowana zawartość pliku) razem z jego nazwą. Tu wartość jest skrócona – w praktyce to cała zawartość pliku, maksymalnie 5 MB. Kalendarz się nie zmienia: serwer tylko odczytuje plik i zakłada import do sprawdzenia.",
                   "value": {
                     "fileName": "grafik-listopad.pdf",
                     "dataBase64": "JVBERi0xLjcKJcfsj6IKNSAwIG9iago8PC9MZW5ndGggNiAwIFI+PgpzdHJlYW0K..."
                   }
                 },
                 "ics": {
-                  "summary": "Plik ICS w base64",
+                  "summary": "Plik kalendarza ICS",
+                  "description": "Eksport kalendarza z USOS, Google, Outlooka albo Apple. Rodzaj pliku serwer rozpoznaje po zawartości, nie po rozszerzeniu. Wartość skrócona – w praktyce cały plik w base64.",
                   "value": {
                     "fileName": "plan.ics",
                     "dataBase64": "QkVHSU46VkNBTEVOREFSDQpWRVJTSU9OOjIuMA0K..."
@@ -9656,8 +9756,8 @@
                 },
                 "examples": {
                   "ics": {
-                    "summary": "Plan zajęć z pliku ICS",
-                    "description": "Pliki PDF i zdjęcia zwracają te same pola sesji (importSessionId, rows, preview, collisions) oraz dane semestru.",
+                    "summary": "Odczytany plan zajęć (plik ICS)",
+                    "description": "rows to odczytane zajęcia, preview – wynik ich sprawdzenia, collisions – kolizje z wydarzeniami już zapisanymi w kalendarzu (tu brak). eventCount to liczba wydarzeń w pliku, skipped – ile pominięto (np. całodniowe). Jeśli strefa czasowa pliku różni się od strefy użytkownika, godziny są przeliczane. Dla PDF i zdjęć odpowiedź ma te same pola sesji importu.",
                     "value": {
                       "source": "ics",
                       "importSessionId": "7e1d2c3b-4a59-4687-b6a5-9c8d7e6f5a40",
@@ -9716,19 +9816,22 @@
                 },
                 "examples": {
                   "unsupported": {
-                    "summary": "Nieobsługiwany format",
+                    "summary": "Nieobsługiwany rodzaj pliku",
+                    "description": "Plik nie jest PDF-em, zdjęciem PNG/JPG ani plikiem ICS (np. dokument Word). Kalendarz bez zmian.",
                     "value": {
                       "error": "unsupported-format"
                     }
                   },
                   "tooLarge": {
                     "summary": "Plik większy niż 5 MB",
+                    "description": "Zmniejsz plik albo zrób zrzut ekranu tylko potrzebnej części. Kalendarz bez zmian.",
                     "value": {
                       "error": "file-too-large"
                     }
                   },
                   "nothing": {
-                    "summary": "Nic nie rozpoznano",
+                    "summary": "Nic nie odczytano",
+                    "description": "Plik został otwarty, ale nie znaleziono w nim żadnych zmian (np. nieczytelne zdjęcie albo inny układ grafiku). Kalendarz bez zmian.",
                     "value": {
                       "error": "nothing_recognized",
                       "readStatusLabel": "Nie odczytano zmian"
@@ -9761,6 +9864,7 @@
                 "examples": {
                   "reader-busy": {
                     "summary": "Czytnik zajęty",
+                    "description": "Serwer odczytuje teraz inny plik (OCR działa po jednym pliku naraz). Wyślij plik ponownie za kilka sekund.",
                     "value": {
                       "error": "reader-busy"
                     }
@@ -9793,12 +9897,14 @@
                 "examples": {
                   "database_unavailable": {
                     "summary": "Baza niedostępna",
+                    "description": "Błąd po stronie serwera, nie danych – spróbuj ponownie za chwilę. Nic nie zostało zmienione.",
                     "value": {
                       "error": "database_unavailable"
                     }
                   },
                   "database_not_configured": {
                     "summary": "Brak DATABASE_URL",
+                    "description": "API działa bez skonfigurowanej bazy danych (brak DATABASE_URL), więc ta operacja jest niedostępna.",
                     "value": {
                       "error": "database_not_configured"
                     }
@@ -9843,15 +9949,16 @@
               },
               "examples": {
                 "pdf": {
-                  "summary": "Plik PDF w base64",
-                  "description": "Wartość skrócona – w praktyce cały plik (do 5 MB).",
+                  "summary": "Plik PDF",
+                  "description": "Plik wysyłamy jako tekst base64 (zakodowana zawartość pliku) razem z jego nazwą. Tu wartość jest skrócona – w praktyce to cała zawartość pliku, maksymalnie 5 MB. Kalendarz się nie zmienia: serwer tylko odczytuje plik i zakłada import do sprawdzenia.",
                   "value": {
                     "fileName": "grafik-listopad.pdf",
                     "dataBase64": "JVBERi0xLjcKJcfsj6IKNSAwIG9iago8PC9MZW5ndGggNiAwIFI+PgpzdHJlYW0K..."
                   }
                 },
                 "ics": {
-                  "summary": "Plik ICS w base64",
+                  "summary": "Plik kalendarza ICS",
+                  "description": "Eksport kalendarza z USOS, Google, Outlooka albo Apple. Rodzaj pliku serwer rozpoznaje po zawartości, nie po rozszerzeniu. Wartość skrócona – w praktyce cały plik w base64.",
                   "value": {
                     "fileName": "plan.ics",
                     "dataBase64": "QkVHSU46VkNBTEVOREFSDQpWRVJTSU9OOjIuMA0K..."
@@ -9874,6 +9981,7 @@
                 "examples": {
                   "read": {
                     "summary": "Odczytany grafik pracy",
+                    "description": "readStatus mówi, ile udało się odczytać (all – wszystko, partial – część). isOwn: true oznacza zmianę przypisaną do zalogowanego użytkownika (userName), a nie do współpracownika z tego samego grafiku. readerIsDemo: false – plik czytał prawdziwy OCR, nie dane demonstracyjne. Dalej: sprawdzenie wierszy i zatwierdzenie importu.",
                     "value": {
                       "importSessionId": "7e1d2c3b-4a59-4687-b6a5-9c8d7e6f5a40",
                       "expiresAt": "2026-11-10T16:15:00.000Z",
@@ -9953,19 +10061,22 @@
                 },
                 "examples": {
                   "unsupported": {
-                    "summary": "Nieobsługiwany format",
+                    "summary": "Nieobsługiwany rodzaj pliku",
+                    "description": "Plik nie jest PDF-em, zdjęciem PNG/JPG ani plikiem ICS (np. dokument Word). Kalendarz bez zmian.",
                     "value": {
                       "error": "unsupported-format"
                     }
                   },
                   "tooLarge": {
                     "summary": "Plik większy niż 5 MB",
+                    "description": "Zmniejsz plik albo zrób zrzut ekranu tylko potrzebnej części. Kalendarz bez zmian.",
                     "value": {
                       "error": "file-too-large"
                     }
                   },
                   "nothing": {
-                    "summary": "Nic nie rozpoznano",
+                    "summary": "Nic nie odczytano",
+                    "description": "Plik został otwarty, ale nie znaleziono w nim żadnych zmian (np. nieczytelne zdjęcie albo inny układ grafiku). Kalendarz bez zmian.",
                     "value": {
                       "error": "nothing_recognized",
                       "readStatusLabel": "Nie odczytano zmian"
@@ -9998,6 +10109,7 @@
                 "examples": {
                   "reader-busy": {
                     "summary": "Czytnik zajęty",
+                    "description": "Serwer odczytuje teraz inny plik (OCR działa po jednym pliku naraz). Wyślij plik ponownie za kilka sekund.",
                     "value": {
                       "error": "reader-busy"
                     }
@@ -10030,12 +10142,14 @@
                 "examples": {
                   "database_unavailable": {
                     "summary": "Baza niedostępna",
+                    "description": "Błąd po stronie serwera, nie danych – spróbuj ponownie za chwilę. Nic nie zostało zmienione.",
                     "value": {
                       "error": "database_unavailable"
                     }
                   },
                   "database_not_configured": {
                     "summary": "Brak DATABASE_URL",
+                    "description": "API działa bez skonfigurowanej bazy danych (brak DATABASE_URL), więc ta operacja jest niedostępna.",
                     "value": {
                       "error": "database_not_configured"
                     }
@@ -10106,7 +10220,8 @@
                 },
                 "examples": {
                   "blocks": {
-                    "summary": "Blokady użytkownika",
+                    "summary": "Dzień wolny i sesja",
+                    "description": "Lista wszystkich blokad zalogowanego użytkownika. Czasy w UTC (Z), np. 23.12 23:00Z to 24.12 00:00 czasu polskiego.",
                     "value": [
                       {
                         "id": "9a0b4c7d-2e1f-4a6b-8c3d-1f2e3a4b5c62",
@@ -10128,6 +10243,7 @@
                   },
                   "empty": {
                     "summary": "Brak blokad",
+                    "description": "Użytkownik nie ma żadnych blokad – pusta lista to poprawna odpowiedź, nie błąd.",
                     "value": []
                   }
                 }
@@ -10158,12 +10274,14 @@
                 "examples": {
                   "blocks_unavailable": {
                     "summary": "Odczyt blokad nie powiódł się",
+                    "description": "Błąd po stronie serwera, nie danych – spróbuj ponownie za chwilę. Nic nie zostało zmienione.",
                     "value": {
                       "error": "blocks_unavailable"
                     }
                   },
                   "blocks_not_configured": {
                     "summary": "Repozytorium blokad nieskonfigurowane",
+                    "description": "API działa bez skonfigurowanej bazy danych (brak DATABASE_URL), więc ta operacja jest niedostępna.",
                     "value": {
                       "error": "blocks_not_configured"
                     }
@@ -10222,8 +10340,8 @@
               },
               "examples": {
                 "examSession": {
-                  "summary": "Sesja egzaminacyjna (kilka dni)",
-                  "description": "Cały okres od poniedziałku 00:00 do niedzieli 24:00 czasu polskiego – koniec to początek następnego dnia.",
+                  "summary": "Sesja egzaminacyjna na dwa tygodnie",
+                  "description": "W czasie sesji generator grafiku nie zaplanuje żadnej pracy. Blokada trwa od poniedziałku 25 stycznia 00:00 do niedzieli 7 lutego włącznie – dlatego endTime to poniedziałek 8 lutego 00:00 (koniec nie jest wliczany). Czas podajemy z przesunięciem strefy: +01:00 to czas polski zimą.",
                   "value": {
                     "title": "Sesja zimowa",
                     "type": "exam_session",
@@ -10232,7 +10350,8 @@
                   }
                 },
                 "dayOff": {
-                  "summary": "Dzień wolny",
+                  "summary": "Jeden dzień wolny",
+                  "description": "Cały dzień 24 grudnia bez pracy: od 24.12 00:00 do 25.12 00:00. Tak zapisuje się każdy pełny dzień – koniec to północ następnego dnia.",
                   "value": {
                     "title": "Wigilia",
                     "type": "day_off",
@@ -10241,7 +10360,8 @@
                   }
                 },
                 "vacation": {
-                  "summary": "Urlop w godzinach",
+                  "summary": "Kilka godzin wolnego",
+                  "description": "Blokada nie musi obejmować całego dnia: tu tylko czwartek 8:00–12:30 (np. wizyta u lekarza). Poza tymi godzinami praca w tym dniu jest możliwa.",
                   "value": {
                     "title": "Wizyta u lekarza",
                     "type": "vacation",
@@ -10302,7 +10422,7 @@
                 "examples": {
                   "examSession": {
                     "summary": "Zapisana sesja egzaminacyjna",
-                    "description": "Czas jest zwracany w UTC (+01:00 → Z).",
+                    "description": "Serwer nadał blokadzie id (potrzebne do usunięcia) i przypisał ją do zalogowanego użytkownika (userId). Czasy są zwracane w UTC (litera Z na końcu), dlatego 25.01 00:00 czasu polskiego to 24.01 23:00Z – to ta sama chwila.",
                     "value": {
                       "id": "3f6c1a2e-8b4d-4e7f-a1c2-5d9e0b7f6a31",
                       "userId": "U001",
@@ -10346,7 +10466,8 @@
                 },
                 "examples": {
                   "validation": {
-                    "summary": "Błąd walidacji",
+                    "summary": "Dane nie mają wymaganego formatu",
+                    "description": "Serwer odrzucił żądanie, zanim cokolwiek zrobił: brakuje wymaganego pola albo wartość ma zły format. message mówi, które pole jest złe (np. body/startTime = pole startTime w treści żądania).",
                     "value": {
                       "statusCode": 400,
                       "code": "FST_ERR_VALIDATION",
@@ -10381,6 +10502,7 @@
                 "examples": {
                   "invalid_block": {
                     "summary": "Koniec nie jest po początku",
+                    "description": "Tytuł jest pusty albo koniec blokady nie jest później niż jej początek. Nic nie zostało zapisane.",
                     "value": {
                       "error": "invalid_block"
                     }
@@ -10413,12 +10535,14 @@
                 "examples": {
                   "block_not_saved": {
                     "summary": "Zapis nie powiódł się",
+                    "description": "Błąd po stronie serwera, nie danych – spróbuj ponownie za chwilę. Nic nie zostało zmienione.",
                     "value": {
                       "error": "block_not_saved"
                     }
                   },
                   "blocks_not_configured": {
                     "summary": "Repozytorium blokad nieskonfigurowane",
+                    "description": "API działa bez skonfigurowanej bazy danych (brak DATABASE_URL), więc ta operacja jest niedostępna.",
                     "value": {
                       "error": "blocks_not_configured"
                     }
@@ -10483,7 +10607,8 @@
                 },
                 "examples": {
                   "validation": {
-                    "summary": "Błąd walidacji",
+                    "summary": "Dane nie mają wymaganego formatu",
+                    "description": "Serwer odrzucił żądanie, zanim cokolwiek zrobił: brakuje wymaganego pola albo wartość ma zły format. message mówi, które pole jest złe (np. body/startTime = pole startTime w treści żądania).",
                     "value": {
                       "statusCode": 400,
                       "code": "FST_ERR_VALIDATION",
@@ -10518,6 +10643,7 @@
                 "examples": {
                   "block_not_found": {
                     "summary": "Brak blokady",
+                    "description": "Nie ma blokady o tym identyfikatorze albo należy ona do innego użytkownika (cudzych blokad nie widać).",
                     "value": {
                       "error": "block_not_found"
                     }
@@ -10550,12 +10676,14 @@
                 "examples": {
                   "block_not_deleted": {
                     "summary": "Usunięcie nie powiodło się",
+                    "description": "Błąd po stronie serwera, nie danych – spróbuj ponownie za chwilę. Nic nie zostało zmienione.",
                     "value": {
                       "error": "block_not_deleted"
                     }
                   },
                   "blocks_not_configured": {
                     "summary": "Repozytorium blokad nieskonfigurowane",
+                    "description": "API działa bez skonfigurowanej bazy danych (brak DATABASE_URL), więc ta operacja jest niedostępna.",
                     "value": {
                       "error": "blocks_not_configured"
                     }
@@ -10587,8 +10715,8 @@
                 },
                 "examples": {
                   "demo": {
-                    "summary": "Tryb demonstracyjny",
-                    "description": "Bez GOOGLE_CLIENT_ID; zgodę zapisuje POST .../consent.",
+                    "summary": "Konto demonstracyjne",
+                    "description": "Serwer nie ma skonfigurowanego dostępu do Google, więc używa przykładowego konta. Zamiast logowania w Google aplikacja pyta o zgodę u siebie i wysyła odpowiedź na POST /import/google/connections/{id}/consent. connectionId jest potrzebne we wszystkich kolejnych krokach.",
                     "value": {
                       "connectionId": "a07c583a-58a7-4a43-a4bf-e0da0c8cfb70",
                       "mode": "demo",
@@ -10596,8 +10724,8 @@
                     }
                   },
                   "google": {
-                    "summary": "OAuth Google",
-                    "description": "Aplikacja otwiera authUrl; Google wraca na /callback.",
+                    "summary": "Prawdziwe konto Google",
+                    "description": "Aplikacja otwiera authUrl – stronę Google, na której użytkownik loguje się i zgadza na odczyt kalendarza (tylko odczyt). Potem Google sam przekierowuje na /import/google/callback, a aplikacja sprawdza stan połączenia przez GET /import/google/connections/{id}.",
                     "value": {
                       "connectionId": "a07c583a-58a7-4a43-a4bf-e0da0c8cfb70",
                       "mode": "google",
@@ -10631,7 +10759,8 @@
                 },
                 "examples": {
                   "database_unavailable": {
-                    "summary": "Baza niedostępna",
+                    "summary": "Baza danych nie odpowiada",
+                    "description": "Błąd po stronie serwera, nie danych – spróbuj ponownie za chwilę. Nic nie zostało zmienione.",
                     "value": {
                       "error": "database_unavailable"
                     }
@@ -10669,13 +10798,15 @@
               },
               "examples": {
                 "allow": {
-                  "summary": "Zgoda na odczyt",
+                  "summary": "Zgoda na odczyt kalendarza",
+                  "description": "Tylko dla konta demonstracyjnego: użytkownik kliknął „Zezwól”. Przy prawdziwym koncie Google zgodę daje się na stronie Google.",
                   "value": {
                     "allow": true
                   }
                 },
                 "deny": {
                   "summary": "Odmowa",
+                  "description": "Użytkownik kliknął „Odmów” – import zostanie przerwany.",
                   "value": {
                     "allow": false
                   }
@@ -10708,14 +10839,16 @@
                 },
                 "examples": {
                   "allowed": {
-                    "summary": "Zgoda",
+                    "summary": "Użytkownik się zgodził",
+                    "description": "Konto jest połączone – można pobrać listę kalendarzy (GET .../calendars).",
                     "value": {
                       "status": "connected",
                       "email": "student.kac.demo@gmail.com"
                     }
                   },
                   "denied": {
-                    "summary": "Odmowa – import niemożliwy",
+                    "summary": "Użytkownik odmówił",
+                    "description": "Bez zgody import z Google nie jest możliwy. Żeby spróbować ponownie, trzeba rozpocząć nowe połączenie.",
                     "value": {
                       "status": "denied"
                     }
@@ -10725,7 +10858,7 @@
             }
           },
           "404": {
-            "description": "Połączenie nie istnieje albo wygasło.",
+            "description": "Połączenie albo kalendarz nie istnieje.",
             "content": {
               "application/json": {
                 "schema": {
@@ -10743,11 +10876,12 @@
                     }
                   },
                   "additionalProperties": true,
-                  "description": "Połączenie nie istnieje albo wygasło."
+                  "description": "Połączenie albo kalendarz nie istnieje."
                 },
                 "examples": {
                   "connection-not-found": {
-                    "summary": "Brak połączenia",
+                    "summary": "Nie ma takiego połączenia",
+                    "description": "Połączenie nie istnieje albo wygasło (połączenia żyją 15 minut). Rozpocznij import z Google od nowa.",
                     "value": {
                       "error": "connection-not-found"
                     }
@@ -10779,13 +10913,15 @@
                 },
                 "examples": {
                   "consent-already-given": {
-                    "summary": "Zgoda już zapisana",
+                    "summary": "Decyzja już zapisana",
+                    "description": "Użytkownik już się zgodził albo odmówił – drugi raz nie można. Przy odmowie trzeba rozpocząć nowe połączenie.",
                     "value": {
                       "error": "consent-already-given"
                     }
                   },
                   "use-google-consent": {
-                    "summary": "Zgoda tylko przez Google",
+                    "summary": "Zgodę daje się na stronie Google",
+                    "description": "To połączenie z prawdziwym kontem Google – zgody nie zapisuje się tym endpointem, tylko na stronie logowania Google (authUrl).",
                     "value": {
                       "error": "use-google-consent"
                     }
@@ -10843,10 +10979,12 @@
                 "examples": {
                   "connected": {
                     "summary": "Połączono z Google",
+                    "description": "Strona, którą użytkownik widzi w przeglądarce po zgodzie w Google. Karta zamyka się sama, a aplikacja przechodzi do wyboru kalendarza.",
                     "value": "<!doctype html><html lang=\"pl\">…<h1>Połączono z Google</h1>…</html>"
                   },
                   "denied": {
-                    "summary": "Brak zgody",
+                    "summary": "Użytkownik odmówił w Google",
+                    "description": "Strona po kliknięciu „Anuluj” na stronie Google. Import nie jest możliwy bez zgody.",
                     "value": "<!doctype html><html lang=\"pl\">…<h1>Brak zgody</h1>…</html>"
                   }
                 }
@@ -10864,6 +11002,7 @@
                 "examples": {
                   "expired": {
                     "summary": "Połączenie wygasło",
+                    "description": "Google wrócił z nieznanym albo przeterminowanym połączeniem (np. po ponad 15 minutach). Trzeba rozpocząć import od nowa w aplikacji.",
                     "value": "<!doctype html><html lang=\"pl\">…<h1>Połączenie wygasło</h1>…</html>"
                   }
                 }
@@ -10881,6 +11020,7 @@
                 "examples": {
                   "failed": {
                     "summary": "Nie udało się połączyć",
+                    "description": "Użytkownik się zgodził, ale Google nie wydał tokenu dostępu. Trzeba spróbować ponownie w aplikacji.",
                     "value": "<!doctype html><html lang=\"pl\">…<h1>Nie udało się połączyć</h1>…</html>"
                   }
                 }
@@ -10921,7 +11061,8 @@
                 },
                 "examples": {
                   "pending": {
-                    "summary": "Czeka na zgodę",
+                    "summary": "Czeka na zgodę użytkownika",
+                    "description": "Użytkownik jeszcze nie zalogował się w Google albo nie zdecydował. Aplikacja odpytuje ten adres co chwilę, aż status się zmieni.",
                     "value": {
                       "status": "pending",
                       "mode": "google"
@@ -10929,6 +11070,7 @@
                   },
                   "connected": {
                     "summary": "Połączono",
+                    "description": "Zgoda udzielona – można przejść do wyboru kalendarza.",
                     "value": {
                       "status": "connected",
                       "email": "student.kac.demo@gmail.com",
@@ -10940,7 +11082,7 @@
             }
           },
           "404": {
-            "description": "Połączenie nie istnieje albo wygasło.",
+            "description": "Połączenie albo kalendarz nie istnieje.",
             "content": {
               "application/json": {
                 "schema": {
@@ -10958,11 +11100,12 @@
                     }
                   },
                   "additionalProperties": true,
-                  "description": "Połączenie nie istnieje albo wygasło."
+                  "description": "Połączenie albo kalendarz nie istnieje."
                 },
                 "examples": {
                   "connection-not-found": {
-                    "summary": "Brak połączenia",
+                    "summary": "Nie ma takiego połączenia",
+                    "description": "Połączenie nie istnieje albo wygasło (połączenia żyją 15 minut). Rozpocznij import z Google od nowa.",
                     "value": {
                       "error": "connection-not-found"
                     }
@@ -11030,7 +11173,8 @@
                 },
                 "examples": {
                   "calendars": {
-                    "summary": "Kalendarze konta",
+                    "summary": "Kalendarze na koncie Google",
+                    "description": "Lista kalendarzy do wyboru. primary: true to główny kalendarz konta. id wybranego kalendarza wysyła się w następnym kroku (odczyt wydarzeń).",
                     "value": {
                       "email": "student.kac.demo@gmail.com",
                       "calendars": [
@@ -11052,7 +11196,7 @@
             }
           },
           "401": {
-            "description": "Google odrzucił token albo jest niedostępny.",
+            "description": "Google nie przyjął tokenu dostępu.",
             "content": {
               "application/json": {
                 "schema": {
@@ -11070,19 +11214,14 @@
                     }
                   },
                   "additionalProperties": true,
-                  "description": "Google odrzucił token albo jest niedostępny."
+                  "description": "Google nie przyjął tokenu dostępu."
                 },
                 "examples": {
                   "google-unauthorized": {
-                    "summary": "Token nieważny",
+                    "summary": "Google nie przyjął dostępu",
+                    "description": "Token dostępu wygasł albo użytkownik cofnął zgodę w ustawieniach Google. Rozpocznij nowe połączenie.",
                     "value": {
                       "error": "google-unauthorized"
-                    }
-                  },
-                  "google-unavailable": {
-                    "summary": "Google niedostępny",
-                    "value": {
-                      "error": "google-unavailable"
                     }
                   }
                 }
@@ -11112,7 +11251,8 @@
                 },
                 "examples": {
                   "access-denied": {
-                    "summary": "Brak zgody",
+                    "summary": "Użytkownik odmówił dostępu",
+                    "description": "Bez zgody nie można odczytać kalendarza. Żeby spróbować ponownie, rozpocznij nowe połączenie.",
                     "value": {
                       "error": "access-denied"
                     }
@@ -11122,7 +11262,7 @@
             }
           },
           "404": {
-            "description": "Połączenie nie istnieje albo wygasło.",
+            "description": "Połączenie albo kalendarz nie istnieje.",
             "content": {
               "application/json": {
                 "schema": {
@@ -11140,11 +11280,12 @@
                     }
                   },
                   "additionalProperties": true,
-                  "description": "Połączenie nie istnieje albo wygasło."
+                  "description": "Połączenie albo kalendarz nie istnieje."
                 },
                 "examples": {
                   "connection-not-found": {
-                    "summary": "Brak połączenia",
+                    "summary": "Nie ma takiego połączenia",
+                    "description": "Połączenie nie istnieje albo wygasło (połączenia żyją 15 minut). Rozpocznij import z Google od nowa.",
                     "value": {
                       "error": "connection-not-found"
                     }
@@ -11176,7 +11317,8 @@
                 },
                 "examples": {
                   "not-connected": {
-                    "summary": "Brak połączenia z kontem",
+                    "summary": "Konto nie jest jeszcze połączone",
+                    "description": "Użytkownik jeszcze nie dał zgody (status pending). Poczekaj na zgodę i spróbuj ponownie.",
                     "value": {
                       "error": "not-connected"
                     }
@@ -11186,7 +11328,7 @@
             }
           },
           "502": {
-            "description": "Google odrzucił token albo jest niedostępny.",
+            "description": "Google jest chwilowo niedostępny.",
             "content": {
               "application/json": {
                 "schema": {
@@ -11204,17 +11346,12 @@
                     }
                   },
                   "additionalProperties": true,
-                  "description": "Google odrzucił token albo jest niedostępny."
+                  "description": "Google jest chwilowo niedostępny."
                 },
                 "examples": {
-                  "google-unauthorized": {
-                    "summary": "Token nieważny",
-                    "value": {
-                      "error": "google-unauthorized"
-                    }
-                  },
                   "google-unavailable": {
-                    "summary": "Google niedostępny",
+                    "summary": "Google nie odpowiada",
+                    "description": "Serwery Google są chwilowo niedostępne. Spróbuj ponownie za chwilę – to nie jest błąd po stronie KAC.",
                     "value": {
                       "error": "google-unavailable"
                     }
@@ -11272,7 +11409,8 @@
               },
               "examples": {
                 "month": {
-                  "summary": "Listopad z kalendarza głównego",
+                  "summary": "Listopad z głównego kalendarza",
+                  "description": "Odczyt wydarzeń z kalendarza primary od 1 do 30 listopada (obie daty włącznie, zakres najwyżej rok). category mówi, jako co zapisać wydarzenia w KAC (Personal = osobiste). Kalendarz KAC się jeszcze nie zmienia.",
                   "value": {
                     "calendarId": "primary",
                     "from": "2026-11-01",
@@ -11308,8 +11446,8 @@
                 },
                 "examples": {
                   "read": {
-                    "summary": "Wydarzenia do kontroli",
-                    "description": "Wydarzenia całodniowe są pomijane i liczone w skippedAllDay. Zapis – wspólnym endpointem /import/sessions/{id}/confirm.",
+                    "summary": "Wydarzenia z Google do sprawdzenia",
+                    "description": "Odczytane wydarzenia trafiają do importu do sprawdzenia – nic nie jest jeszcze zapisane w kalendarzu KAC. Wydarzenia całodniowe (np. urodziny) są pomijane; skippedAllDay mówi, ile ich było. Zapis następuje przez zatwierdzenie importu: POST /import/sessions/{importSessionId}/confirm.",
                     "value": {
                       "importSessionId": "7e1d2c3b-4a59-4687-b6a5-9c8d7e6f5a40",
                       "expiresAt": "2026-11-10T16:15:00.000Z",
@@ -11350,7 +11488,7 @@
             }
           },
           "401": {
-            "description": "Google odrzucił token albo jest niedostępny.",
+            "description": "Google nie przyjął tokenu dostępu.",
             "content": {
               "application/json": {
                 "schema": {
@@ -11368,19 +11506,14 @@
                     }
                   },
                   "additionalProperties": true,
-                  "description": "Google odrzucił token albo jest niedostępny."
+                  "description": "Google nie przyjął tokenu dostępu."
                 },
                 "examples": {
                   "google-unauthorized": {
-                    "summary": "Token nieważny",
+                    "summary": "Google nie przyjął dostępu",
+                    "description": "Token dostępu wygasł albo użytkownik cofnął zgodę w ustawieniach Google. Rozpocznij nowe połączenie.",
                     "value": {
                       "error": "google-unauthorized"
-                    }
-                  },
-                  "google-unavailable": {
-                    "summary": "Google niedostępny",
-                    "value": {
-                      "error": "google-unavailable"
                     }
                   }
                 }
@@ -11410,7 +11543,8 @@
                 },
                 "examples": {
                   "access-denied": {
-                    "summary": "Brak zgody",
+                    "summary": "Użytkownik odmówił dostępu",
+                    "description": "Bez zgody nie można odczytać kalendarza. Żeby spróbować ponownie, rozpocznij nowe połączenie.",
                     "value": {
                       "error": "access-denied"
                     }
@@ -11420,7 +11554,7 @@
             }
           },
           "404": {
-            "description": "Połączenie nie istnieje albo wygasło.",
+            "description": "Połączenie albo kalendarz nie istnieje.",
             "content": {
               "application/json": {
                 "schema": {
@@ -11438,13 +11572,21 @@
                     }
                   },
                   "additionalProperties": true,
-                  "description": "Połączenie nie istnieje albo wygasło."
+                  "description": "Połączenie albo kalendarz nie istnieje."
                 },
                 "examples": {
                   "connection-not-found": {
-                    "summary": "Brak połączenia",
+                    "summary": "Nie ma takiego połączenia",
+                    "description": "Połączenie nie istnieje albo wygasło (połączenia żyją 15 minut). Rozpocznij import z Google od nowa.",
                     "value": {
                       "error": "connection-not-found"
+                    }
+                  },
+                  "calendar-not-found": {
+                    "summary": "Nie ma takiego kalendarza",
+                    "description": "Na koncie Google nie ma kalendarza o podanym id – wybierz kalendarz z listy (GET .../calendars).",
+                    "value": {
+                      "error": "calendar-not-found"
                     }
                   }
                 }
@@ -11474,13 +11616,15 @@
                 },
                 "examples": {
                   "not-connected": {
-                    "summary": "Brak połączenia z kontem",
+                    "summary": "Konto nie jest jeszcze połączone",
+                    "description": "Użytkownik jeszcze nie dał zgody (status pending). Poczekaj na zgodę i spróbuj ponownie.",
                     "value": {
                       "error": "not-connected"
                     }
                   },
                   "connection-used": {
                     "summary": "Import już wykonany",
+                    "description": "Import z Google jest jednorazowy: to połączenie już posłużyło do odczytu, a token został zapomniany. Żeby zaimportować jeszcze raz, rozpocznij nowe połączenie.",
                     "value": {
                       "error": "connection-used"
                     }
@@ -11512,16 +11656,51 @@
                 },
                 "examples": {
                   "invalid-range": {
-                    "summary": "Zakres dłuższy niż rok albo odwrócony",
+                    "summary": "Zły zakres dat",
+                    "description": "Data końca jest przed datą początku albo zakres jest dłuższy niż rok. Połączenie zostaje – popraw daty i spróbuj ponownie.",
                     "value": {
                       "error": "invalid-range"
                     }
                   },
                   "no-events": {
-                    "summary": "Brak wydarzeń",
+                    "summary": "Brak wydarzeń w zakresie",
+                    "description": "W wybranym kalendarzu i okresie nie ma wydarzeń do zaimportowania (jedno całodniowe pominięto – skippedAllDay). Połączenie zostaje: można zmienić zakres albo kalendarz.",
                     "value": {
                       "error": "no-events",
                       "skippedAllDay": 1
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Google jest chwilowo niedostępny.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  },
+                  "additionalProperties": true,
+                  "description": "Google jest chwilowo niedostępny."
+                },
+                "examples": {
+                  "google-unavailable": {
+                    "summary": "Google nie odpowiada",
+                    "description": "Serwery Google są chwilowo niedostępne. Spróbuj ponownie za chwilę – to nie jest błąd po stronie KAC.",
+                    "value": {
+                      "error": "google-unavailable"
                     }
                   }
                 }
@@ -11551,13 +11730,15 @@
                 },
                 "examples": {
                   "database_unavailable": {
-                    "summary": "Baza niedostępna",
+                    "summary": "Baza danych nie odpowiada",
+                    "description": "Błąd po stronie serwera, nie danych – spróbuj ponownie za chwilę. Nic nie zostało zmienione.",
                     "value": {
                       "error": "database_unavailable"
                     }
                   },
                   "database_not_configured": {
-                    "summary": "Brak DATABASE_URL",
+                    "summary": "Serwer uruchomiony bez bazy danych",
+                    "description": "API działa bez skonfigurowanej bazy (brak DATABASE_URL), więc nie da się założyć importu.",
                     "value": {
                       "error": "database_not_configured"
                     }

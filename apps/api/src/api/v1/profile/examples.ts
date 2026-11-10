@@ -35,33 +35,43 @@ export const workProfileExample = {
 };
 
 export const workProfileInputExamples: NamedExamples = {
-  weekly: { summary: 'Cel tygodniowy, praca elastyczna', description: 'Formularz odsyła profileVersion z ostatniego odczytu.', value: input },
+  weekly: {
+    summary: 'Student chce pracować 16 h tygodniowo',
+    description: 'Pełny zapis profilu: od 8 do 20 h tygodniowo (cel 16 h), maks. 8 h dziennie, zmiany po 4–8 h, 30 min dojazdu przed i po zajęciach, stawka 32,50 zł brutto. Dostępność: pn–pt 12:00–20:00, w środę woli popołudnie (waga 70 ze 100), a na czas sesji zimowej praca jest zablokowana. profileVersion to wersja z ostatniego odczytu profilu (GET) – chroni przed nadpisaniem zmian zrobionych w innym oknie.',
+    value: input,
+  },
   monthly: {
-    summary: 'Cel miesięczny bez stawki',
-    description: 'Cel 64 h na miesiąc to ok. 14,77 h tygodniowo (miesiąc = 52/12 tygodnia). Stawka null oznacza brak konfiguracji.',
+    summary: 'Cel miesięczny, bez podanej stawki',
+    description: 'Ten sam profil, ale cel liczony na miesiąc: 64 h miesięcznie. Generator grafiku przelicza go na tydzień (64 h ÷ 52/12 tygodnia ≈ 14,77 h). Stawka null znaczy „jeszcze nie podano” – wtedy grafik nie pokaże szacowanego wynagrodzenia (0 zł byłoby poprawną stawką, a null to jej brak).',
     value: { ...input, targetPeriod: 'month', targetHours: 64, hourlyRatePln: null, rateKind: null, preferredWorkWindows: [], blockedPeriods: [] },
   },
 };
 
 export const workProfileExamples: NamedExamples = {
-  profile: { summary: 'Aktywny profil pracy', value: workProfileExample },
+  profile: {
+    summary: 'Zapisany profil pracy',
+    description: 'Profil po zapisie. Oprócz wysłanych pól serwer dolicza: weeklyTargetHours / weeklyTargetMinutes (cel przeliczony na tydzień – z niego korzysta generator), targetMinutes (cel w minutach) i timeZone (strefa czasowa użytkownika). profileVersion zmienił się z pv-7 na pv-8 – przy kolejnym zapisie trzeba wysłać pv-8.',
+    value: workProfileExample,
+  },
 };
 
 export const profileConflictExamples: NamedExamples = {
   stale: {
-    summary: 'Nieaktualna wersja profilu',
-    description: 'Profil zmieniono w innym oknie. Odpowiedź zawiera aktualny profil z nową wersją.',
+    summary: 'Ktoś zmienił profil w międzyczasie',
+    description: 'Wysłany profileVersion jest nieaktualny – profil zmieniono np. w drugiej karcie (tu ktoś podniósł cel do 18 h). Nic nie zostało nadpisane. W polu profile serwer od razu zwraca aktualny profil: formularz może go pokazać albo nanieść swoje zmiany i wysłać je z nowym profileVersion (pv-9).',
     value: { error: 'profile_version_conflict', profile: { ...workProfileExample, profileVersion: 'pv-9', targetHours: 18, weeklyTargetHours: 18, targetMinutes: 1080, weeklyTargetMinutes: 1080 } },
   },
 };
 
 export const invalidProfileExamples: NamedExamples = {
   limits: {
-    summary: 'Minimum większe od maksimum',
+    summary: 'Minimum godzin większe od maksimum',
+    description: 'Np. minimum 25 h, a maksimum 20 h tygodniowo. W polu fields klucz to nazwa błędnego pola, a wartość to kod błędu – formularz może wyświetlić komunikat przy tym polu. Zapisany profil się nie zmienił.',
     value: { error: 'invalid_work_profile', fields: { minimumHours: 'min_greater_than_max' } },
   },
   fields: {
-    summary: 'Kilka błędnych pól',
+    summary: 'Kilka błędów naraz',
+    description: 'Serwer zwraca wszystkie błędy jednocześnie: czas dojazdu nie jest pełną liczbą minut (np. 12,5), pierwszy przedział dostępności (availability.0 – numeracja od zera) kończy się przed początkiem, a dzienny limit godzin wynosi 0. Zapisany profil się nie zmienił.',
     value: { error: 'invalid_work_profile', fields: { commuteBufferMinutes: 'not_whole_number', 'availability.0': 'end_before_start', maxHoursPerDay: 'must_be_positive' } },
   },
 };

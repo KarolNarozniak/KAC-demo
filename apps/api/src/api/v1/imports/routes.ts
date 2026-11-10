@@ -103,7 +103,7 @@ export async function importRoutes(app: FastifyInstance, options: ApiDependencie
   });
 
   app.post<{ Params: { id: string } }>('/import/sessions/:id/cancel', { schema: { ...cancelSchema,
-    tags: ['Imports'], summary: 'Cancel import session', description: 'Closes the pending import without changing the calendar.', operationId: 'cancelImportSession', response: { 200: ok('Sesja anulowana; kalendarz bez zmian.', { cancelled: { summary: 'Anulowano', value: { status: 'cancelled' } } }),
+    tags: ['Imports'], summary: 'Cancel import session', description: 'Closes the pending import without changing the calendar.', operationId: 'cancelImportSession', response: { 200: ok('Sesja anulowana; kalendarz bez zmian.', { cancelled: { summary: 'Import anulowany', description: 'Użytkownik zrezygnował z importu. Odczytane wiersze zostały odrzucone, a kalendarz się nie zmienił.', value: { status: 'cancelled' } } }),
       409: errorExamples('Sesja nie jest aktywna.', { import_session_not_active: 'Sesja nieaktywna' }), 503: unavailable() },
   } }, async (request, reply) => {
     if (!repository?.cancelImportSession) return reply.code(503).send({ error: 'database_not_configured' });

@@ -21,8 +21,8 @@ const objectResponse = { type: 'object', additionalProperties: true } as const;
 const unavailable = (codes: Record<string, string>) => errorExamples('Baza danych niedostępna albo nieskonfigurowana.', codes);
 const savedEvent = documented(objectResponse, 'Zapisane wydarzenie z identyfikatorem.', savedEventExamples);
 const invalidEvent = documented(objectResponse, 'Niepoprawne dane wydarzenia – błąd schematu albo walidacji dat.', {
-  invalid_event: { summary: 'Koniec nie jest po początku', value: { error: 'invalid_event' } },
-  validation: { summary: 'Błąd schematu (Fastify)', value: { statusCode: 400, code: 'FST_ERR_VALIDATION', error: 'Bad Request', message: 'body/category must be equal to one of the allowed values' } },
+  invalid_event: { summary: 'Błędny termin', description: 'Koniec wydarzenia nie jest później niż początek, data nie istnieje (np. 30 lutego) albo tytuł jest pusty. Nic nie zostało zapisane.', value: { error: 'invalid_event' } },
+  validation: { summary: 'Brakujące albo złe pole', description: 'Żądanie odrzucone przed sprawdzeniem terminu: brakuje wymaganego pola albo ma złą wartość. message wskazuje pole – tu category musi być jedną z: Class, Work, Personal.', value: { statusCode: 400, code: 'FST_ERR_VALIDATION', error: 'Bad Request', message: 'body/category must be equal to one of the allowed values' } },
 });
 
 export async function calendarRoutes(app: FastifyInstance, options: { repository: CalendarRepository | null }) {
