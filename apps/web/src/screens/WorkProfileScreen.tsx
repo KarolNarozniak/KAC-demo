@@ -1,5 +1,6 @@
 import type {BlockingEvent} from '../services/scheduleApi';
 import AvailabilityEditor from '../components/AvailabilityEditor';
+import PreferredWorkWindowsEditor from '../components/PreferredWorkWindowsEditor';
 // Profil pracy (S23KC2S1P2-15, S23KC2S1P2-181) z celem godzin (S23KC2S1P2-39, S23KC2S1P2-156).
 // Ekran jest osadzony w zakładce „Grafik”, nad generowaniem tygodnia. Stan formularza trzyma hook useWorkProfile.
 import React from 'react';
@@ -87,6 +88,8 @@ export default function WorkProfileScreen({ state, blockingEvents, disabled = fa
     </View>
 
     <AvailabilityEditor messages={Object.fromEntries(Object.keys(errors).filter(field=>field.startsWith('availability')).map(field=>[field,message(field)]))} blockingEvents={blockingEvents} value={draft.availability} saved={state.saved?.availability??[]} targetHours={state.saved?.weeklyTargetHours??null} disabled={locked} onChange={availability=>set({availability})}/>
+
+    <PreferredWorkWindowsEditor messages={Object.fromEntries(Object.keys(errors).filter(field=>field.startsWith('preferredWorkWindows')).map(field=>[field,message(field)]))} value={draft.preferredWorkWindows} disabled={locked} onChange={preferredWorkWindows=>set({preferredWorkWindows})}/>  
 
     {draft.mode === 'zmianowy' && <View style={styles.card}>
       <View style={[styles.row, { justifyContent: 'space-between', flexWrap: 'wrap', marginBottom: 8 }]}>
