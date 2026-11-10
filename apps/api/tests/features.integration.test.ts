@@ -26,7 +26,7 @@ test('atomic editing, collision decisions, concurrent writes, import rechecks an
   const app = buildApi(scoped);
   const sessions: string[] = [];
   const event: EventInput = { title: 'Test class', start: '2026-11-02T10:00', end: '2026-11-02T12:00', category: 'Class', mandatory: false, repeatWeekly: false, location: 'A' };
-  const post = (payload: EventInput) => app.inject({ method: 'POST', url: '/api/events', payload });
+  const post = (payload: EventInput) => app.inject({ method: 'POST', url: '/api/v1/calendar/events', payload });
   try {
     const first = await post(event); assert.equal(first.statusCode, 201);
     const id = first.json().id;
@@ -37,10 +37,10 @@ test('atomic editing, collision decisions, concurrent writes, import rechecks an
     assert.equal(saved.statusCode, 201);
     // PUT warns without changing either event; then updates the same ID atomically.
     const update = { ...event, end: '2026-11-02T13:00' };
-    const warned = await app.inject({ method: 'PUT', url: `/api/events/${id}`, payload: update });
+    const warned = await app.inject({ method: 'PUT', url: `/api/v1/calendar/events/${id}`, payload: update });
     assert.equal(warned.statusCode, 409);
     assert.equal((await scoped.getOverview())?.events.find(item => item.id === id)?.end, event.end);
-    const edited = await app.inject({ method: 'PUT', url: `/api/events/${id}`, payload: { ...update, collisionToken: warned.json().collisionToken } });
+    const edited = await app.inject({ method: 'PUT', url: `/api/v1/calendar/events/${id}`, payload: { ...update, collisionToken: warned.json().collisionToken } });
     assert.equal(edited.statusCode, 200); assert.equal(edited.json().id, id);
     assert.equal((await scoped.getOverview())?.events.length, 2);
     await assert.rejects(repository.updateEvent(id, event, 'other-owner', calendarId));
@@ -51,7 +51,7 @@ test('atomic editing, collision decisions, concurrent writes, import rechecks an
     const weekly = await post({ ...event, start: '2026-11-05T16:00', end: '2026-11-05T17:00', repeatWeekly: true });
     assert.equal(weekly.statusCode, 201);
     const weeklyId = weekly.json().id;
-    const weeklyUpdate = await app.inject({ method: 'PUT', url: `/api/events/${weeklyId}`, payload: { ...event, start: '2026-11-05T16:00', end: '2026-11-05T18:00', repeatWeekly: true } });
+    const weeklyUpdate = await app.inject({ method: 'PUT', url: `/api/v1/calendar/events/${weeklyId}`, payload: { ...event, start: '2026-11-05T16:00', end: '2026-11-05T18:00', repeatWeekly: true } });
     assert.equal(weeklyUpdate.statusCode, 200);
     const future = await post({ ...event, start: '2027-04-01T17:00', end: '2027-04-01T18:30' });
     assert.equal(future.statusCode, 409);
@@ -59,16 +59,16 @@ test('atomic editing, collision decisions, concurrent writes, import rechecks an
     const row = { id: 'r1', title: ' test   CLASS ', category: 'Class' as const, date: '2026-11-02', startTime: '10:00', endTime: '14:00' };
     const session = await scoped.createImportSession({ source: 'classes', format: 'PDF', rows: [row], preview: buildImportPreview([row]) });
     sessions.push(session.id);
-    const undecided = await app.inject({ method: 'POST', url: `/api/import/sessions/${session.id}/confirm`, payload: { rows: [row] } });
+    const undecided = await app.inject({ method: 'POST', url: `/api/v1/import/sessions/${session.id}/confirm`, payload: { rows: [row] } });
     assert.equal(undecided.statusCode, 422);
-    const imported = await app.inject({ method: 'POST', url: `/api/import/sessions/${session.id}/confirm`, payload: { rows: [{ ...row, duplicateDecision: 'replace', replacementId: id }] } });
+    const imported = await app.inject({ method: 'POST', url: `/api/v1/import/sessions/${session.id}/confirm`, payload: { rows: [{ ...row, duplicateDecision: 'replace', replacementId: id }] } });
     assert.equal(imported.statusCode, 201); assert.equal(imported.json().summary.replaced, 1);
     assert.equal((await scoped.getOverview())?.events.find(item => item.id === id)?.end, '2026-11-02T14:00');
     const cancelled = await scoped.createImportSession({ source: 'classes', format: 'PDF', rows: [row], preview: buildImportPreview([row]) });
     sessions.push(cancelled.id);
     const before = (await scoped.getOverview())?.events.length;
     assert.equal(await scoped.cancelImportSession(cancelled.id), true);
-    assert.equal((await app.inject({ method: 'POST', url: `/api/import/sessions/${cancelled.id}/confirm`, payload: { rows: [{ ...row, duplicateDecision: 'keepBoth' }] } })).statusCode, 409);
+    assert.equal((await app.inject({ method: 'POST', url: `/api/v1/import/sessions/${cancelled.id}/confirm`, payload: { rows: [{ ...row, duplicateDecision: 'keepBoth' }] } })).statusCode, 409);
     assert.equal((await scoped.getOverview())?.events.length, before);
     // A later weekly occurrence is a duplicate. Replacing it edits the series duration,
     // retaining the original anchor rather than moving the series to the imported date.
@@ -78,7 +78,7 @@ test('atomic editing, collision decisions, concurrent writes, import rechecks an
     assert.equal(recurringPreview[0]?.duplicateOfEvents[0]?.repeatWeekly, true);
     const recurringSession = await scoped.createImportSession({ source: 'classes', format: 'PDF', rows: [recurringRow], preview: recurringPreview });
     sessions.push(recurringSession.id);
-    const replacedSeries = await app.inject({ method: 'POST', url: `/api/import/sessions/${recurringSession.id}/confirm`, payload: { rows: [{ ...recurringRow, duplicateDecision: 'replace', replacementId: weeklyId }] } });
+    const replacedSeries = await app.inject({ method: 'POST', url: `/api/v1/import/sessions/${recurringSession.id}/confirm`, payload: { rows: [{ ...recurringRow, duplicateDecision: 'replace', replacementId: weeklyId }] } });
     assert.equal(replacedSeries.statusCode, 201);
     const seriesAfter = (await scoped.getOverview())?.events.find(item => item.id === weeklyId);
     assert.equal(seriesAfter?.start, '2026-11-05T16:00');
@@ -101,16 +101,16 @@ test('atomic editing, collision decisions, concurrent writes, import rechecks an
     const semester = parseWatTimetable(fixture);
     const fullRows = semester.rows.map(({ id, title, date, startTime, endTime, category, location }) => ({ id, title, date, startTime, endTime, category, location }));
     const sample = new URL('./fixtures/timetables/wat-plan-lato-2025-2026.pdf', import.meta.url);
-    const upload = await app.inject({ method: 'POST', url: '/api/import/classes/read', payload: { fileName: 'semester.pdf', dataBase64: readFileSync(sample).toString('base64') } });
+    const upload = await app.inject({ method: 'POST', url: '/api/v1/import/classes/read', payload: { fileName: 'semester.pdf', dataBase64: readFileSync(sample).toString('base64') } });
     assert.equal(upload.statusCode, 201); assert.equal(upload.json().rows.length, 166);
     const fullSessionId: string = upload.json().importSessionId;
     sessions.push(fullSessionId);
-    const importedAll = await app.inject({ method: 'POST', url: `/api/import/sessions/${fullSessionId}/confirm`, payload: { rows: fullRows } });
+    const importedAll = await app.inject({ method: 'POST', url: `/api/v1/import/sessions/${fullSessionId}/confirm`, payload: { rows: fullRows } });
     assert.equal(importedAll.statusCode, 201); assert.equal(importedAll.json().summary.added, 166);
     const repeat = await scoped.createImportSession({ source: 'classes', format: 'PDF', rows: fullRows, preview: buildImportPreview(fullRows) });
     sessions.push(repeat.id);
     const countBefore = (await scoped.getOverview())?.events.length;
-    const skipped = await app.inject({ method: 'POST', url: `/api/import/sessions/${repeat.id}/confirm`, payload: { rows: fullRows.map(row => ({ ...row, duplicateDecision: 'skip' })) } });
+    const skipped = await app.inject({ method: 'POST', url: `/api/v1/import/sessions/${repeat.id}/confirm`, payload: { rows: fullRows.map(row => ({ ...row, duplicateDecision: 'skip' })) } });
     assert.equal(skipped.statusCode, 201); assert.equal(skipped.json().summary.skipped, 166);
     assert.equal((await scoped.getOverview())?.events.length, countBefore);
   } finally {

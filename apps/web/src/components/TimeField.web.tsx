@@ -2,12 +2,12 @@ import React, { useId } from 'react';
 import { useTheme } from './ui';
 import type { TimeFieldProps } from './TimeField.types';
 
-export default function TimeField({ label, value, onChange, invalid = false }: TimeFieldProps) {
+export default function TimeField({ label, value, onChange, invalid = false, disabled = false }: TimeFieldProps) {
   const id = useId();
   const { palette, mode } = useTheme();
   return <div style={{ flex: 1, minWidth: 0, marginBottom: 12 }}>
     <label htmlFor={id} style={{ display: 'block', color: invalid ? palette.red : palette.muted, fontSize: 10, fontWeight: 800, letterSpacing: 1.1, marginBottom: 6 }}>{label}</label>
-    <input id={id} aria-invalid={invalid} type="time" required step={60} value={value} onClick={(event) => {
+    <input id={id} aria-invalid={invalid} type="time" disabled={disabled} required step={60} value={value} onClick={(event) => {
       try { event.currentTarget.showPicker?.(); } catch { /* The browser's time control remains available. */ }
     }} onChange={(event) => {
       if (event.currentTarget.value) onChange(event.currentTarget.value);

@@ -16,7 +16,7 @@ export const config = {
   port: parsePort(process.env.PORT || process.env.API_PORT, 4000),
   databaseUrl: process.env.DATABASE_URL?.trim() || '',
   databaseSsl: process.env.PGSSLMODE === 'require',
-  corsOrigins: (process.env.API_CORS_ORIGINS || 'http://localhost:8081,http://localhost:8080')
+  corsOrigins: (process.env.API_CORS_ORIGINS || 'http://localhost:8081,http://localhost:8080,http://localhost:3000')
     .split(',')
     .map((value) => value.trim())
     .filter(Boolean),
@@ -32,7 +32,7 @@ export const config = {
     ? {
       clientId: process.env.GOOGLE_CLIENT_ID.trim(),
       clientSecret: process.env.GOOGLE_CLIENT_SECRET.trim(),
-      redirectUri: process.env.GOOGLE_REDIRECT_URI?.trim() || 'http://localhost:4000/api/import/google/callback',
+      redirectUri: process.env.GOOGLE_REDIRECT_URI?.trim() || 'http://localhost:4000/api/v1/import/google/callback',
     }
     : null,
 };

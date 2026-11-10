@@ -291,7 +291,7 @@ test('API: błędy odczytu grafiku zwracają 422 lub 429 i nie tworzą sesji imp
   for (const [code, status] of [['scanned-pdf', 422], ['read-timeout', 422], ['reader-busy', 429]] as const) {
     const app = buildApi(repository, [], { scheduleReader: failing(code) });
     try {
-      const response = await app.inject({ method: 'POST', url: '/api/import/work-schedule/read', payload: { fileName: 'g.pdf', dataBase64: toBase64(pdfBytes()) } });
+      const response = await app.inject({ method: 'POST', url: '/api/v1/import/work-schedule/read', payload: { fileName: 'g.pdf', dataBase64: toBase64(pdfBytes()) } });
       assert.equal(response.statusCode, status);
       assert.equal(response.json().error, code);
     } finally { await app.close(); }
@@ -307,7 +307,7 @@ test('API: prawdziwy czytnik przekazuje nazwisko użytkownika i nie jest oznaczo
   const pdf = textPdf(['02.11.2026 Jan Kowalski 16:00-20:00', '02.11.2026 Anna Nowak 08:00-14:00']);
   const app = buildApi(repository, [], { scheduleReader: new LocalScheduleReader() });
   try {
-    const response = await app.inject({ method: 'POST', url: '/api/import/work-schedule/read', payload: { fileName: 'g.pdf', dataBase64: toBase64(pdf) } });
+    const response = await app.inject({ method: 'POST', url: '/api/v1/import/work-schedule/read', payload: { fileName: 'g.pdf', dataBase64: toBase64(pdf) } });
     assert.equal(response.statusCode, 201);
     const body = response.json();
     assert.equal(body.readerIsDemo, false);

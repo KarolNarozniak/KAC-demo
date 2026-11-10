@@ -1,0 +1,14 @@
+{
+  "version.label": {
+    "message": "Next",
+    "description": "The label for version current"
+  },
+  "sidebar.docs.category.api": {
+    "message": "API",
+    "description": "The label for category 'api' in sidebar 'docs'"
+  },
+  "sidebar.docs.category.reference": {
+    "message": "Reference",
+    "description": "The label for category 'reference' in sidebar 'docs'"
+  }
+}

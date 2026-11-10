@@ -57,7 +57,7 @@ export type ImportRowInput = {
 
 /** Sprawdza wiersze po poprawkach użytkownika. Nic nie zapisuje; przedłuża sesję importu, jeśli ją podano. */
 export async function previewImport(rows: ImportRowInput[], importSessionId?: string, signal?: AbortSignal): Promise<ImportPreviewRow[]> {
-  const response = await postJson('/api/import/preview', importSessionId ? { rows, importSessionId } : { rows }, signal);
+  const response = await postJson('/api/v1/import/preview', importSessionId ? { rows, importSessionId } : { rows }, signal);
   if (!response.ok) throw new Error(`API zwróciło status ${response.status}.`);
   return ((await response.json()) as { rows: ImportPreviewRow[] }).rows;
 }
@@ -70,7 +70,7 @@ export type ConfirmImportResult =
 
 /** Zatwierdza import: API jeszcze raz sprawdza wiersze i zapisuje zaakceptowane w kalendarzu (wszystkie albo żaden). */
 export async function confirmImport(sessionId: string, rows: ImportRowInput[]): Promise<ConfirmImportResult> {
-  const response = await postJson(`/api/import/sessions/${encodeURIComponent(sessionId)}/confirm`, { rows });
+  const response = await postJson(`/api/v1/import/sessions/${encodeURIComponent(sessionId)}/confirm`, { rows });
   if (response.status === 201) return { kind: 'saved', ...((await response.json()) as { saved: number; rejected: number; summary?: ImportSummary }) };
   const kind = response.status === 422 ? 'invalid-rows' : response.status === 410 ? 'expired' : response.status === 409 ? 'closed' : response.status === 404 ? 'not-found' : 'failed';
   const body = (await response.json().catch(() => ({}))) as { error?: string };
@@ -79,7 +79,7 @@ export async function confirmImport(sessionId: string, rows: ImportRowInput[]): 
 
 /** Anuluje import: sesja kończy się bez zmian w kalendarzu. */
 export async function cancelImport(sessionId: string): Promise<void> {
-  const response = await postJson(`/api/import/sessions/${encodeURIComponent(sessionId)}/cancel`, {});
+  const response = await postJson(`/api/v1/import/sessions/${encodeURIComponent(sessionId)}/cancel`, {});
   if (!response.ok) throw new Error('Nie udało się anulować sesji importu.');
 }
 
@@ -115,7 +115,7 @@ export type ScheduleReadResult =
 /** Wysyła plik z grafikiem do API: API sprawdza plik, odczytuje zmiany i zakłada sesję importu. */
 export async function readWorkSchedule(fileName: string, dataBase64: string): Promise<ScheduleReadResult> {
   // OCR zdjęcia na serwerze może trwać do 60 s, dlatego dłuższy limit niż dla pozostałych żądań.
-  const response = await postJson('/api/import/work-schedule/read', { fileName, dataBase64 }, AbortSignal.timeout(75000));
+  const response = await postJson('/api/v1/import/work-schedule/read', { fileName, dataBase64 }, AbortSignal.timeout(75000));
   if (response.status === 201) return { kind: 'read', ...((await response.json()) as Omit<Extract<ScheduleReadResult, { kind: 'read' }>, 'kind'>) };
   if (response.status === 422 || response.status === 429) return { kind: 'rejected', error: ((await response.json()) as { error: string }).error };
   if (response.status === 413) return { kind: 'rejected', error: 'file-too-large' };
@@ -171,7 +171,7 @@ const classReadErrors: Record<string, string> = {
   'read-timeout': 'Odczyt planu trwał zbyt długo. Wybierz mniejszy plik.',
 };
 export async function readClassSchedule(name: string, base64: string): Promise<ClassReadResult> {
-  const response = await postJson('/api/import/classes/read', { fileName: name, dataBase64: base64 }, AbortSignal.timeout(75000));
+  const response = await postJson('/api/v1/import/classes/read', { fileName: name, dataBase64: base64 }, AbortSignal.timeout(75000));
   const body = await response.json().catch(() => null);
   if (!response.ok) {
     const code = typeof body?.error === 'string' ? body.error : '';
