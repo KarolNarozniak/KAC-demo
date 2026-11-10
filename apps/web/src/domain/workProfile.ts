@@ -142,6 +142,11 @@ export function validateDraft(draft: ProfileDraft): Record<string, string> {
     if (!TIME.test(window.startTime) || (!TIME.test(window.endTime) && window.endTime !== '24:00')) errors[key] = 'invalid_time';
     else if (window.endTime === window.startTime) errors[key] = 'end_before_start';
   });
+    draft.preferredWorkWindows.forEach((window, index) => {
+    const key = `preferredWorkWindows.${index}`;
+    if (!TIME.test(window.startTime) || !TIME.test(window.endTime)) errors[key] = 'invalid_time';
+    else if (minutesOf(window.endTime) <= minutesOf(window.startTime)) errors[key] = 'end_before_start';
+  });
   draft.shiftTemplates.forEach((template, index) => {
     const key = `shiftTemplates.${index}`;
     if (!TIME.test(template.startTime) || !TIME.test(template.endTime)) errors[key] = 'invalid_time';
