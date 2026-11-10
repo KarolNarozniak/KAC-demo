@@ -53,12 +53,12 @@ async function call<T>(method: 'GET' | 'POST' | 'DELETE', path: string, body?: u
 
 const id = (connectionId: string) => encodeURIComponent(connectionId);
 
-export const startGoogleConnection = () => call<GoogleConnectionStart>('POST', '/api/import/google/connections', {});
+export const startGoogleConnection = () => call<GoogleConnectionStart>('POST', '/api/v1/import/google/connections', {});
 export const giveDemoConsent = (connectionId: string, allow: boolean) =>
-  call<{ status: GoogleConnectionStatus['status']; email: string | null }>('POST', `/api/import/google/connections/${id(connectionId)}/consent`, { allow });
-export const googleConnectionStatus = (connectionId: string) => call<GoogleConnectionStatus>('GET', `/api/import/google/connections/${id(connectionId)}`);
+  call<{ status: GoogleConnectionStatus['status']; email: string | null }>('POST', `/api/v1/import/google/connections/${id(connectionId)}/consent`, { allow });
+export const googleConnectionStatus = (connectionId: string) => call<GoogleConnectionStatus>('GET', `/api/v1/import/google/connections/${id(connectionId)}`);
 export const listGoogleCalendars = (connectionId: string) =>
-  call<{ email: string | null; calendars: GoogleCalendar[] }>('GET', `/api/import/google/connections/${id(connectionId)}/calendars`);
+  call<{ email: string | null; calendars: GoogleCalendar[] }>('GET', `/api/v1/import/google/connections/${id(connectionId)}/calendars`);
 export const readGoogleEvents = (connectionId: string, calendarId: string, from: string, to: string, category: ImportCategory) =>
-  call<GoogleReadResult>('POST', `/api/import/google/connections/${id(connectionId)}/read`, { calendarId, from, to, category });
-export const forgetGoogleConnection = (connectionId: string) => call<void>('DELETE', `/api/import/google/connections/${id(connectionId)}`).catch(() => undefined);
+  call<GoogleReadResult>('POST', `/api/v1/import/google/connections/${id(connectionId)}/read`, { calendarId, from, to, category });
+export const forgetGoogleConnection = (connectionId: string) => call<void>('DELETE', `/api/v1/import/google/connections/${id(connectionId)}`).catch(() => undefined);

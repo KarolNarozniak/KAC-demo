@@ -26,7 +26,7 @@ const classRow = { id: 'p1', title: 'Warsztaty baz danych', date: '2026-10-22', 
 test('podgląd sprawdza wiersze bez bazy danych i niczego nie zapisuje', async () => {
   const app = buildApi(null);
   try {
-    const response = await app.inject({ method: 'POST', url: '/api/import/preview', payload: { rows: [classRow, { ...classRow, id: 'p2', endTime: '12:00' }] } });
+    const response = await app.inject({ method: 'POST', url: '/api/v1/import/preview', payload: { rows: [classRow, { ...classRow, id: 'p2', endTime: '12:00' }] } });
     assert.equal(response.statusCode, 200);
     const [first, second] = response.json().rows;
     assert.equal(first.status, 'ok');
@@ -41,7 +41,7 @@ test('podgląd z identyfikatorem sesji przedłuża sesję', async () => {
   const { repository, calls } = fakeRepository();
   const app = buildApi(repository);
   try {
-    await app.inject({ method: 'POST', url: '/api/import/preview', payload: { rows: [classRow], importSessionId: 'IMP-TEST' } });
+    await app.inject({ method: 'POST', url: '/api/v1/import/preview', payload: { rows: [classRow], importSessionId: 'IMP-TEST' } });
     assert.deepEqual(calls.touched, ['IMP-TEST']);
   } finally {
     await app.close();
@@ -51,7 +51,7 @@ test('podgląd z identyfikatorem sesji przedłuża sesję', async () => {
 test('podgląd odrzuca niepoprawne żądanie (400)', async () => {
   const app = buildApi(null);
   try {
-    const response = await app.inject({ method: 'POST', url: '/api/import/preview', payload: { rows: [{ id: 'x', title: 'a'.repeat(500) }] } });
+    const response = await app.inject({ method: 'POST', url: '/api/v1/import/preview', payload: { rows: [{ id: 'x', title: 'a'.repeat(500) }] } });
     assert.equal(response.statusCode, 400);
   } finally {
     await app.close();
@@ -61,7 +61,7 @@ test('podgląd odrzuca niepoprawne żądanie (400)', async () => {
 test('utworzenie sesji zwraca identyfikator i podgląd (201)', async () => {
   const app = buildApi(fakeRepository().repository);
   try {
-    const response = await app.inject({ method: 'POST', url: '/api/import/sessions', payload: { source: 'classes', format: 'PDF', rows: [classRow] } });
+    const response = await app.inject({ method: 'POST', url: '/api/v1/import/sessions', payload: { source: 'classes', format: 'PDF', rows: [classRow] } });
     assert.equal(response.statusCode, 201);
     assert.equal(response.json().importSessionId, 'IMP-TEST');
     assert.equal(response.json().rows[0].confidence, 0.9);
@@ -73,7 +73,7 @@ test('utworzenie sesji zwraca identyfikator i podgląd (201)', async () => {
 test('bez bazy danych sesji nie da się utworzyć (503), więc ekran wraca do trybu lokalnego', async () => {
   const app = buildApi(null);
   try {
-    const response = await app.inject({ method: 'POST', url: '/api/import/sessions', payload: { source: 'classes', format: 'PDF', rows: [classRow] } });
+    const response = await app.inject({ method: 'POST', url: '/api/v1/import/sessions', payload: { source: 'classes', format: 'PDF', rows: [classRow] } });
     assert.equal(response.statusCode, 503);
   } finally {
     await app.close();
@@ -84,7 +84,7 @@ test('zatwierdzenie z błędnym wierszem jest odrzucane (422) i nic nie trafia d
   const { repository, calls } = fakeRepository();
   const app = buildApi(repository);
   try {
-    const response = await app.inject({ method: 'POST', url: '/api/import/sessions/IMP-TEST/confirm', payload: { rows: [classRow, { ...classRow, id: 'p2', title: '' }] } });
+    const response = await app.inject({ method: 'POST', url: '/api/v1/import/sessions/IMP-TEST/confirm', payload: { rows: [classRow, { ...classRow, id: 'p2', title: '' }] } });
     assert.equal(response.statusCode, 422);
     assert.equal(calls.confirmed.length, 0);
   } finally {
@@ -98,7 +98,7 @@ test('zatwierdzenie przekazuje do zapisu termin, kategorię i miejsce (201)', as
   const { repository, calls } = fakeRepository({ kind: 'ok', saved, summary });
   const app = buildApi(repository);
   try {
-    const response = await app.inject({ method: 'POST', url: '/api/import/sessions/IMP-TEST/confirm', payload: { rows: [classRow] } });
+    const response = await app.inject({ method: 'POST', url: '/api/v1/import/sessions/IMP-TEST/confirm', payload: { rows: [classRow] } });
     assert.equal(response.statusCode, 201);
     assert.deepEqual(response.json(), { saved: 1, rejected: 1, summary, events: saved });
     const row = calls.confirmed[0]?.[0];
@@ -114,7 +114,7 @@ test('wygasła sesja zwraca 410, zamknięta 409, nieznana 404', async () => {
   for (const [kind, status] of [['expired', 410], ['closed', 409], ['not-found', 404]] as const) {
     const app = buildApi(fakeRepository({ kind }).repository);
     try {
-      const response = await app.inject({ method: 'POST', url: '/api/import/sessions/IMP-TEST/confirm', payload: { rows: [classRow] } });
+      const response = await app.inject({ method: 'POST', url: '/api/v1/import/sessions/IMP-TEST/confirm', payload: { rows: [classRow] } });
       assert.equal(response.statusCode, status);
     } finally {
       await app.close();

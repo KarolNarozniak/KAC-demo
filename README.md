@@ -1,19 +1,28 @@
-# Aura Kalendar
+# KAC Platform
 
-First application slice: a responsive week calendar, today's view, and PostgreSQL-backed event creation. Bottom navigation contains **Dziś**, **Tydzień**, **Ustawienia**, **Asystent**. The cog tab contains calendar layout settings; assistant integration is reserved for a later increment.
+Kalendarz wydarzeń i tygodniowe planowanie pracy: Expo/React Native Web, modułowe Fastify API v1, PostgreSQL oraz dwujęzyczna dokumentacja Docusaurus.
+
+Pełna dokumentacja produktu, architektury, OpenAPI i procesu zmian znajduje się w [Docusaurus](http://localhost:3000) (PL/EN). Interaktywny kontrakt backendu jest dostępny w [Swagger UI](http://localhost:4000/api/v1/docs), a OpenAPI JSON pod `http://localhost:4000/api/v1/openapi.json`.
 
 ## Run locally
 
-Use Node.js 24 LTS (24.3+; `.nvmrc` selects 24) and PostgreSQL 16. Node 25 is not supported by the Expo 58 toolchain. Docker Compose is provided for PostgreSQL.
+Wymagane: Node.js 24 LTS (24.3+; `.nvmrc` selects 24), Docker i Docker Compose v2. Node 25 nie jest wspierany przez Expo 58. Pełne instrukcje są w [lokalnym quickstarcie](docs-site/docs/quickstart.md).
 
-1. Copy `.env.example` to `.env`, `apps/api/.env.example` to `apps/api/.env`, and `apps/web/.env.example` to `apps/web/.env`. Configure `DATABASE_URL` and `EXPO_PUBLIC_API_URL`.
-2. `npm ci`
-3. `npm run db:up` (or start your own PostgreSQL instance).
-4. `npm run db:migrate` then `npm run db:seed`. Fresh databases start with an empty calendar; seeding does not remove existing events.
-5. `npm run api:dev`
-6. In a second terminal: `npm run web:dev`.
+Pierwsze uruchomienie automatycznie przygotowuje zależności, `.env`, bazę, migracje, dane demonstracyjne i kontrakt OpenAPI.
 
-Open the Expo URL, normally `http://localhost:8081`. To use a phone, set `EXPO_PUBLIC_API_URL` to your computer's reachable API address and add the web origin to `API_CORS_ORIGINS`.
+Windows PowerShell:
+
+```powershell
+.\scripts\quickstart.ps1
+```
+
+Linux/macOS:
+
+```bash
+sh ./scripts/quickstart.sh
+```
+
+W razie potrzeby konfigurację można wykonać wcześniej przez `scripts/setup.ps1` lub `scripts/setup.sh`. Jedno polecenie uruchamia web (`http://localhost:8081`), API (`http://localhost:4000/api/v1`) i dokumentację (`http://localhost:3000`). `Ctrl+C` zatrzymuje serwisy, baza PostgreSQL zostaje uruchomiona.
 
 ## Expo / React upgrade
 
@@ -43,14 +52,14 @@ The dependency audit on 2026-10-22 decreased from **55 findings (1 critical, 37 
 - **Tydzień → Importuj** (work schedule, S23KC2S1P2-44) reads the real file: text PDFs through the same PDF worker, and JPG/PNG photos through local Tesseract.js OCR with a packaged **Polish** model (names with Polish characters). Sharp applies EXIF orientation, contrast normalisation and scaling, and table grid lines are erased before OCR (Tesseract otherwise skips bordered cells). Photos are additionally read through an adaptive-threshold variant (uneven light, shadows, photos of screens, slightly skewed grids); the variant giving more complete shifts wins; Tesseract auto-rotates slightly skewed photos. **Zrób zdjęcie** opens the camera directly (expo-image-picker on Android/iOS, including Expo Go; `capture` file input in mobile browsers). The parser accepts lists (date, name, hours in any column order), date groups, employee groups and weekly tables (header with dates, one row per employee). Days off (`wolne`, `urlop`, `L4`, `X`, `-`) are skipped; missing years come from the document or the nearest date. Missing fields give a partial read; rows below 70% confidence are labelled **SPRAWDŹ ODCZYT**. Scanned PDFs without text are rejected with a request for a photo. Image OCR shares the one-worker limit with class OCR (`reader-busy` → HTTP 429). `WORK_SCHEDULE_READER=demo` switches back to the sample schedule for demonstrations.
 - **Tydzień → Importuj plan** also accepts **ICS files** (S23KC2S1P2-8; USOS, Google Calendar, Outlook and Apple exports), detected by content. The parser handles folded lines, escaping, `TZID`/UTC/floating times (including Windows zone names), `DURATION`, `RRULE` (DAILY/WEEKLY/MONTHLY with INTERVAL, COUNT, UNTIL, BYDAY), `EXDATE`, moved or cancelled occurrences (`RECURRENCE-ID`) and cancelled events. Series are expanded to individual class events (open-ended series: one year, max. 1000 rows per import). All-day events, events without an end and unsupported rules are skipped and counted. Times are converted to the account timezone; a different file timezone is reported. ICS rows use the shared preview, duplicate decisions and atomic confirmation; collisions with existing events are flagged (7a).
 - Import previews highlight the fields that need correction (S23KC2S1P2-20) and report the import result as completed, failed or cancelled.
-- **Tydzień → Google** imports events once from Google Calendar (S23KC2S1P2-27): connect and consent (refusal ends the import), pick a calendar, date range and category, preview with duplicates/collisions, then import; the number of imported events is shown. With `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `GOOGLE_REDIRECT_URI` (default `http://localhost:4000/api/import/google/callback`, registered in Google Cloud Console) the API uses OAuth 2.0 with PKCE and the read-only `calendar.readonly` scope. The access token stays in API memory, is never sent to the app and is discarded after the events are read or after 15 minutes. Without these variables a sample Google account is used (same flow, saved to PostgreSQL). Imported events have source `Google`; later changes in Google are not synchronised.
+- **Tydzień → Google** imports events once from Google Calendar (S23KC2S1P2-27): connect and consent (refusal ends the import), pick a calendar, date range and category, preview with duplicates/collisions, then import; the number of imported events is shown. With `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `GOOGLE_REDIRECT_URI` (default `http://localhost:4000/api/v1/import/google/callback`, registered in Google Cloud Console) the API uses OAuth 2.0 with PKCE and the read-only `calendar.readonly` scope. The access token stays in API memory, is never sent to the app and is discarded after the events are read or after 15 minutes. Without these variables a sample Google account is used (same flow, saved to PostgreSQL). Imported events have source `Google`; later changes in Google are not synchronised.
 - Authentication remains a later task: the server-selected demo account and calendar remain in use. Planning and notifications are outside this increment.
 
 ## Checks and deployment
 
-`npm run typecheck`, `npm test`, `npm run build`. With PostgreSQL migrated and seeded, run `npm run test:api:db` to verify create/read/delete persistence, ownership checks and series cleanup through a fresh API instance. The integration test removes its own records.
+`npm run typecheck`, `npm test`, `npm run api:openapi:check`, `npm run docs:build`, `npm run build`. API changes must update the route JSON Schemas, exported OpenAPI file and both language versions of the Docusaurus documentation in the same change. See [API change standard](docs-site/docs/api-standard.md). With PostgreSQL migrated and seeded, run `npm run test:api:db` to verify persistence through a fresh API instance.
 
-The API and Expo web deployment scripts and existing GitHub Actions remain. Configure API `DATABASE_URL`, `PGSSLMODE=require` and `API_CORS_ORIGINS`; the web build embeds `EXPO_PUBLIC_API_URL`. Apply database migrations before deploying the updated API.
+The API, Expo web and docs builds are included in CI. Configure API `DATABASE_URL`, `PGSSLMODE=require` and `API_CORS_ORIGINS`; the web build embeds `EXPO_PUBLIC_API_URL`. Apply database migrations before deploying the updated API.
 
 ## Feature validation (S23KC2S1P2-43, -14, -38)
 
@@ -94,3 +103,20 @@ in `apps/web/.env`, then run `npm run start:dev --workspace @kac/web -- --lan`.
 The phone must reach that API address; `localhost` on a phone points to the phone.
 The native file picker accepts PNG/JPG/PDF. The work-schedule import can also take a photo
 with the camera. On-device OCR is not implemented. Use an SDK-compatible Expo client or development build.
+
+## Profil pracy i planowanie — spójna integracja
+
+W zakładce **Grafik** znajduje się formularz i planer z mastera: cele tygodniowe/miesięczne,
+limity, szablony i dostępność. Do tego samego formularza dodano stawkę PLN, brutto/netto oraz kopiowanie
+przedziałów. Cały szkic zapisuje się i anuluje wspólnie. Historia tygodnia pokazuje utrwalone stawki
+oraz kwoty, również starszych grafików. Ustawienia pozostają ekranem motywu i układu tygodnia.
+
+Nie ma drugiego aktywnego planera w Asystencie ani oddzielnego formularza stawek w Ustawieniach.
+API profilu to `/api/v1/work-profile`, a planowania `/api/v1/schedules`.
+Starsze adresy duplikujących przepływów zwracają 410 ze wskazaniem następcy; dane historyczne zachowano.
+
+- [Historia, porównanie i decyzje integracyjne](docs/history-comparison-and-integration.md).
+- [Kanoniczny OpenAPI](apps/api/openapi/openapi.json).
+- [Wymagania i UC-07/UC-08](docs/requirements/sprint-204-kozlowski.md).
+- Testy finansów i normalizacji: `node_modules/.bin/tsx --test apps/api/tests/pay.test.ts`.
+- Test całej integracji na izolowanym schemacie PostgreSQL: `node_modules/.bin/tsx --test apps/api/tests/planning.integration.test.ts`.
