@@ -9,11 +9,6 @@ import ScheduleScreen from './src/screens/ScheduleScreen';
 import { BlocksScreen } from './src/screens/BlocksScreen';
 import type { WeeklySchedule } from './src/services/scheduleApi';
 import ScreenTransition from './src/components/ScreenTransition';
-import PreferencesEditor from './src/components/PreferencesEditor';
-import RestSettings from './src/components/RestSettings';
-import { loadWeeklyHourLimits, saveMaxWeeklyHours } from './src/services/profileApi';
-import { Button, Field, ThemeProvider, ThemeToggle, useTheme, type ThemeMode } from './src/components/ui';
-const tabs = ['Dziś', 'Tydzień', 'Ustawienia', 'Asystent'] as const;
 import { Button, ThemeProvider, ThemeToggle, useTheme, type ThemeMode } from './src/components/ui';
 
 const tabs = ['Dziś', 'Tydzień', 'Grafik', 'Blokady', 'Ustawienia', 'Asystent'] as const;
@@ -73,22 +68,6 @@ function CalendarApp() {
   const [weekLayout, setWeekLayout] = useState<WeekLayout>('days-left');
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [storageError, setStorageError] = useState('');
-    const [maxHoursInput, setMaxHoursInput] = useState('');
-  const [limitError, setLimitError] = useState('');
-  const [limitNotice, setLimitNotice] = useState('');
-  const [limitSaving, setLimitSaving] = useState(false);
-  useEffect(() => {
-    loadWeeklyHourLimits().then((limits) => setMaxHoursInput(limits.maxGodzinTydzien?.toString() ?? '')).catch(() => {});
-  }, []);
-  const saveLimit = async () => {
-    const trimmed = maxHoursInput.trim();
-    const value = trimmed ? Number(trimmed.replace(',', '.')) : null;
-    if (trimmed && (!Number.isFinite(value) || value! <= 0)) { setLimitError('Wpisz poprawną liczbę godzin (większą od zera).'); setLimitNotice(''); return; }
-    setLimitSaving(true); setLimitError(''); setLimitNotice('');
-    try { await saveMaxWeeklyHours(value); setLimitNotice('Limit zapisany.'); }
-    catch (error) { setLimitError(error instanceof Error ? error.message : 'Nie udało się zapisać limitu.'); }
-    finally { setLimitSaving(false); }
-  };
   useEffect(() => {
     AsyncStorage.getItem('kac-week-layout').then((value) => {
       if (value === 'days-left' || value === 'days-top') setWeekLayout(value);
@@ -121,15 +100,6 @@ function CalendarApp() {
             {([{ id: 'days-left', label: 'Dni po lewej · godziny u góry' }, { id: 'days-top', label: 'Dni u góry · godziny po lewej' }] as const).map((option) => <Pressable key={option.id} accessibilityRole="radio" accessibilityState={{ checked: weekLayout === option.id, disabled: !settingsLoaded }} disabled={!settingsLoaded} onPress={() => void changeWeekLayout(option.id)} style={{ padding: 14, borderRadius: 8, borderWidth: 1, borderColor: weekLayout === option.id ? palette.blue : palette.line, backgroundColor: weekLayout === option.id ? palette.blueSoft : palette.surface }}><Text style={styles.body}>{weekLayout === option.id ? '◉' : '○'} {option.label}</Text></Pressable>)}
           </View>
           {!!storageError && <Text accessibilityRole="alert" style={styles.error}>{storageError}</Text>}
-                            <View style={{ marginTop: 24 }}>
-          <Text style={[styles.heading, { marginBottom: 12 }]}>Limit godzin pracy / tydzień</Text>
-          <Field label="MAKSYMALNA LICZBA GODZIN" keyboardType="decimal-pad" value={maxHoursInput} onChangeText={setMaxHoursInput} placeholder="np. 20" />
-          {!!limitError && <Text accessibilityRole="alert" style={styles.error}>{limitError}</Text>}
-          {!!limitNotice && <Text accessibilityLiveRegion="polite" style={styles.muted}>{limitNotice}</Text>}
-          <Button title={limitSaving ? 'Zapisywanie…' : 'Zapisz limit'} primary disabled={limitSaving} onPress={() => void saveLimit()} />
-          <PreferencesEditor />
-          <RestSettings />
-        </View>
         </ScrollView> : <View style={[styles.content,{padding:16}]}><Text style={styles.heading}>Asystent</Text><Text style={styles.subtitle}>Wkrótce</Text></View>
       );
     }} />
