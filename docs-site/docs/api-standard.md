@@ -37,6 +37,17 @@ description: Obowiązkowy proces projektowania, walidacji i dokumentowania każd
 - Usunięcie albo zmiana semantyki pola jest zmianą łamiącą. Dla takich zmian projektujemy `/api/v2`; v1 utrzymujemy bez cichego naruszania klientów.
 - Nie umieszczaj sekretów, tokenów, danych osobowych ani rzeczywistych danych w `example` OpenAPI.
 
+## Przykłady w Swagger UI
+
+Bez przykładów Swagger UI generuje wartości z typów (`"string"`, `0`, `{}`), a odpowiedzi bez opisu mają etykietę „Default Response”. Dlatego:
+
+- Każde body żądania i każda odpowiedź JSON ma co najmniej jeden nazwany przykład. Przykłady trzymamy w `apps/api/src/api/v1/<domena>/examples.ts`.
+- Przykłady dołączamy helperami z `apps/api/src/api/examples.ts`: `withExamples(schema, examples)` dla body, `documented(schema, opis, examples)` dla odpowiedzi i `errorExamples(opis, kody)` dla błędów `{ error }`. Błąd walidacji Fastify (400) opisuje `validationError(message)`.
+- Helpery dodają klucz `x-examples`, który `@fastify/swagger` zamienia na listę „Examples” w Swagger UI. Klucz jest zarejestrowany w Ajv w `buildApi()`, więc walidacja żądań pozostaje w trybie strict.
+- Helpery kopiują schemat – nie dopisuj przykładów do współdzielonych stałych schematów.
+- Wartości przykładów bierz z rzeczywistych odpowiedzi handlera (np. z testu albo `app.inject()`), a nie z wyobrażenia o odpowiedzi. Pokaż istotne warianty, np. pełny, częściowy i pusty grafik.
+- Test `apps/api/tests/openapi-examples.test.ts` waliduje każdy przykład względem jego schematu i odrzuca odpowiedzi bez opisu albo bez przykładu (poza endpointami `deprecated`).
+
 ## Wymagane bramki
 
 ```bash

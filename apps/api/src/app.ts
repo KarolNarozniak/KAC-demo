@@ -19,7 +19,8 @@ export type { ApiOptions, CalendarRepository } from './api/contracts.js';
 const API_PREFIX = '/api/v1';
 
 export function buildApi(repository: CalendarRepository | null, allowedOrigins: string[] = [], options: ApiOptions = {}) {
-  const app: FastifyInstance = Fastify({ logger: true });
+  // `x-examples` to przykłady dla Swagger UI (api/examples.ts); Ajv w trybie strict musi znać ten klucz.
+  const app: FastifyInstance = Fastify({ logger: true, ajv: { customOptions: { keywords: ['x-examples'] } } });
   const allowAnyOrigin = allowedOrigins.includes('*');
   const origins = new Set(allowedOrigins);
 
@@ -51,10 +52,9 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
       },
       servers: [{ url: process.env.OPENAPI_SERVER_URL?.trim() || 'http://localhost:4000', description: 'Current API host' }],
       tags: [
-        { name: 'Work profile', description: 'Versioned availability, hourly rates and pay snapshots.' },
         { name: 'System', description: 'Liveness and dependency readiness.' },
         { name: 'Calendar', description: 'Calendar overview and event lifecycle.' },
-        { name: 'Work profile', description: 'Work limits, hour target, commute, availability and shift templates used by planning.' },
+        { name: 'Work profile', description: 'Work limits, hour target, commute, versioned availability, hourly rate and shift templates used by planning.' },
         { name: 'Scheduling', description: 'Weekly planning, versions, validation and approval.' },
         { name: 'Imports', description: 'Reviewable imports from schedules, ICS and class files.' },
         { name: 'Google import', description: 'One-time, read-only Google Calendar import.' },

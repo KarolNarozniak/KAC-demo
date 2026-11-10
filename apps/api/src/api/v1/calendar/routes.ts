@@ -2,6 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import { CollisionError, EventNotFoundError, EventValidationError } from '../../../collisions.js';
 import type { EventInput } from '../../../database.js';
 import type { CalendarRepository } from '../../contracts.js';
+import { documented, errorExamples, withExamples } from '../../examples.js';
+import { collisionExamples, deletedEventExamples, eventInputExamples, overviewExamples, savedEventExamples } from './examples.js';
 
 const eventBody = { type: 'object', additionalProperties: false,
   required: ['title', 'start', 'end', 'category', 'location', 'mandatory', 'repeatWeekly'],
@@ -16,10 +18,16 @@ const eventBody = { type: 'object', additionalProperties: false,
 } as const;
 const eventIdParams = { type: 'object', required: ['id'], properties: { id: { type: 'string', minLength: 1, maxLength: 200 } } } as const;
 const objectResponse = { type: 'object', additionalProperties: true } as const;
+const unavailable = (codes: Record<string, string>) => errorExamples('Baza danych niedostępna albo nieskonfigurowana.', codes);
+const savedEvent = documented(objectResponse, 'Zapisane wydarzenie z identyfikatorem.', savedEventExamples);
+const invalidEvent = documented(objectResponse, 'Niepoprawne dane wydarzenia – błąd schematu albo walidacji dat.', {
+  invalid_event: { summary: 'Koniec nie jest po początku', value: { error: 'invalid_event' } },
+  validation: { summary: 'Błąd schematu (Fastify)', value: { statusCode: 400, code: 'FST_ERR_VALIDATION', error: 'Bad Request', message: 'body/category must be equal to one of the allowed values' } },
+});
 
 export async function calendarRoutes(app: FastifyInstance, options: { repository: CalendarRepository | null }) {
   const repository = options.repository;
-  app.get('/calendar/overview', { schema: { tags: ['Calendar'], summary: 'Get calendar overview', description: 'Returns the active calendar, profile timezone, categories and occurrences for the configured development account.', operationId: 'getCalendarOverview', response: { 200: objectResponse, 404: objectResponse, 503: objectResponse } } }, async (_request, reply) => {
+  app.get('/calendar/overview', { schema: { tags: ['Calendar'], summary: 'Get calendar overview', description: 'Returns the active calendar, profile timezone, categories and occurrences for the configured development account.', operationId: 'getCalendarOverview', response: { 200: documented(objectResponse, 'Aktywny kalendarz użytkownika.', overviewExamples), 404: errorExamples('Kalendarz nie istnieje.', { calendar_not_found: 'Brak kalendarza' }), 503: unavailable({ database_unavailable: 'Baza niedostępna', database_not_configured: 'Brak DATABASE_URL' }) } } }, async (_request, reply) => {
     if (!repository) return reply.code(503).send({ error: 'database_not_configured' });
     try {
       const overview = await repository.getOverview();
@@ -43,9 +51,13 @@ export async function calendarRoutes(app: FastifyInstance, options: { repository
           ? 'Creates an event after server-side validation and collision checking. Weekly events are saved as a series.'
           : 'Updates an event after server-side validation and collision checking. Updating a weekly event edits its series.',
         operationId: isCreate ? 'createCalendarEvent' : 'updateCalendarEvent',
-        body: eventBody,
+        body: withExamples(eventBody, eventInputExamples),
         ...(isCreate ? {} : { params: eventIdParams }),
-        response: { 200: objectResponse, 201: objectResponse, 400: objectResponse, 404: objectResponse, 409: objectResponse, 503: objectResponse },
+        response: {
+          ...(isCreate ? { 201: savedEvent } : { 200: savedEvent, 404: errorExamples('Wydarzenie nie istnieje.', { event_not_found: 'Brak wydarzenia' }) }),
+          400: invalidEvent, 409: documented(objectResponse, 'Kolizja z innymi wydarzeniami.', collisionExamples),
+          503: unavailable({ event_not_saved: 'Zapis nie powiódł się', database_not_configured: 'Brak DATABASE_URL' }),
+        },
       },
       handler: async (request, reply) => {
         const input = request.body;
@@ -72,7 +84,7 @@ export async function calendarRoutes(app: FastifyInstance, options: { repository
 
   app.delete<{ Params: { id: string } }>('/calendar/events/:id', { schema: {
     tags: ['Calendar'], summary: 'Delete calendar event', description: 'Deletes a one-off event or an entire weekly series after confirmation by the client.',
-    operationId: 'deleteCalendarEvent', params: eventIdParams, response: { 200: objectResponse, 404: objectResponse, 503: objectResponse },
+    operationId: 'deleteCalendarEvent', params: eventIdParams, response: { 200: documented(objectResponse, 'Identyfikatory usuniętych wydarzeń.', deletedEventExamples), 404: errorExamples('Wydarzenie nie istnieje.', { event_not_found: 'Brak wydarzenia' }), 503: unavailable({ event_not_deleted: 'Usunięcie nie powiodło się', database_not_configured: 'Brak DATABASE_URL' }) },
   } }, async (request, reply) => {
     if (!repository?.deleteEvent) return reply.code(503).send({ error: 'database_not_configured' });
     try {

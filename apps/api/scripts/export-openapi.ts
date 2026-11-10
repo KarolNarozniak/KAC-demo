@@ -14,7 +14,8 @@ try {
   if (checking) {
     let current = '';
     try { current = await readFile(outputPath, 'utf8'); } catch {}
-    if (current !== content) {
+    // Git na Windowsie (core.autocrlf) zapisuje plik z CRLF – porównujemy treść bez końców linii.
+    if (current.replace(/\r\n/g, '\n') !== content) {
       console.error('OpenAPI contract is out of date. Run `npm run api:openapi:export`, inspect the diff, and update the API reference/docs.');
       process.exitCode = 1;
     } else {

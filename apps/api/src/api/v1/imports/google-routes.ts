@@ -21,6 +21,8 @@ import { DEMO_GOOGLE_ACCOUNT, DemoGoogleCalendar } from '../../../import/google/
 import { googleEventsToRows } from '../../../import/google/mapping.js';
 import { authorizationUrl, createPkce, exchangeCode, GoogleCalendarApi, type FetchLike, type GoogleOAuthConfig } from '../../../import/google/oauth.js';
 import { GoogleApiError, type GoogleCalendarSource } from '../../../import/google/types.js';
+import { documented, withExamples } from '../../examples.js';
+import { googleCalendarsExamples, googleConnectionExamples, googleReadExamples, googleReadInputExamples } from './examples.js';
 
 export type GoogleImportOptions = {
   /** Konfiguracja klienta OAuth. Bez niej działa konto demonstracyjne. */
@@ -34,6 +36,10 @@ const idParams = { type: 'object', required: ['id'], properties: { id: { type: '
 const datePattern = '^\\d{4}-\\d{2}-\\d{2}$';
 const objectResponse = { type: 'object', additionalProperties: true } as const;
 const errorResponse = { type: 'object', required: ['error'], properties: { error: { type: 'string' }, details: { type: 'object', additionalProperties: true } }, additionalProperties: true } as const;
+const fail = (description: string, codes: Record<string, string>) =>
+  documented(errorResponse, description, Object.fromEntries(Object.entries(codes).map(([code, summary]) => [code, { summary, value: { error: code } }])));
+const notFound = () => fail('Połączenie nie istnieje albo wygasło.', { 'connection-not-found': 'Brak połączenia' });
+const googleFailure = () => fail('Google odrzucił token albo jest niedostępny.', { 'google-unauthorized': 'Token nieważny', 'google-unavailable': 'Google niedostępny' });
 
 const escapeHtml = (text: string) => text.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]!));
 const page = (title: string, message: string) => `<!doctype html><html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -57,7 +63,7 @@ export function registerGoogleImport(app: FastifyInstance, repository: CalendarR
   };
 
   // 1–2: początek połączenia z kontem Google.
-  app.post('/import/google/connections', { schema: { tags: ['Google import'], summary: 'Start one-time Google import', description: 'Starts OAuth PKCE or the local demo consent flow. No Google events are written until import-session confirmation.', operationId: 'startGoogleImport', response: { 201: objectResponse, 503: errorResponse } } }, async (_request, reply) => {
+  app.post('/import/google/connections', { schema: { tags: ['Google import'], summary: 'Start one-time Google import', description: 'Starts OAuth PKCE or the local demo consent flow. No Google events are written until import-session confirmation.', operationId: 'startGoogleImport', response: { 201: documented(objectResponse, 'Połączenie rozpoczęte.', googleConnectionExamples), 503: fail('Baza danych niedostępna.', { database_unavailable: 'Baza niedostępna' }) } } }, async (_request, reply) => {
     if (oauth) {
       const pkce = createPkce();
       const connection = connections.create('google', pkce.verifier);
@@ -69,7 +75,8 @@ export function registerGoogleImport(app: FastifyInstance, repository: CalendarR
 
   // 3 (tryb demo): użytkownik zezwala na odczyt wydarzeń albo odmawia (3a).
   app.post<{ Params: { id: string }; Body: { allow: boolean } }>('/import/google/connections/:id/consent', {
-    schema: { tags: ['Google import'], summary: 'Record demo consent decision', description: 'Records the demo consent decision. The OAuth flow records its decision at the callback endpoint.', operationId: 'consentToGoogleImport', params: idParams, body: { type: 'object', required: ['allow'], additionalProperties: false, properties: { allow: { type: 'boolean' } } }, response: { 200: objectResponse, 404: errorResponse, 409: errorResponse } },
+    schema: { tags: ['Google import'], summary: 'Record demo consent decision', description: 'Records the demo consent decision. The OAuth flow records its decision at the callback endpoint.', operationId: 'consentToGoogleImport', params: idParams, body: withExamples({ type: 'object', required: ['allow'], additionalProperties: false, properties: { allow: { type: 'boolean' } } }, { allow: { summary: 'Zgoda na odczyt', value: { allow: true } }, deny: { summary: 'Odmowa', value: { allow: false } } }), response: { 200: documented(objectResponse, 'Zapisana decyzja o zgodzie.', { allowed: { summary: 'Zgoda', value: { status: 'connected', email: 'student.kac.demo@gmail.com' } }, denied: { summary: 'Odmowa – import niemożliwy', value: { status: 'denied' } } }),
+      404: notFound(), 409: fail('Zgoda już zapisana albo połączenie w trybie OAuth.', { 'consent-already-given': 'Zgoda już zapisana', 'use-google-consent': 'Zgoda tylko przez Google' }) } },
   }, async (request, reply) => {
     const connection = connections.get(request.params.id);
     if (!connection) return reply.code(404).send({ error: 'connection-not-found' });
@@ -82,7 +89,11 @@ export function registerGoogleImport(app: FastifyInstance, repository: CalendarR
   });
 
   // 3 (tryb google): powrót ze strony zgody Google.
-  app.get<{ Querystring: { state?: string; code?: string; error?: string } }>('/import/google/callback', { schema: { tags: ['Google import'], summary: 'Complete Google OAuth callback', description: 'Google redirects here after consent. The endpoint completes PKCE exchange and renders a short status page.', operationId: 'googleOAuthCallback', querystring: { type: 'object', properties: { state: { type: 'string' }, code: { type: 'string' }, error: { type: 'string' } } }, response: { 200: { type: 'string' }, 400: { type: 'string' }, 502: { type: 'string' } } } }, async (request, reply) => {
+  app.get<{ Querystring: { state?: string; code?: string; error?: string } }>('/import/google/callback', { schema: { tags: ['Google import'], summary: 'Complete Google OAuth callback', description: 'Google redirects here after consent. The endpoint completes PKCE exchange and renders a short status page.', operationId: 'googleOAuthCallback', querystring: { type: 'object', properties: { state: { type: 'string' }, code: { type: 'string' }, error: { type: 'string' } } }, response: {
+    200: documented({ type: 'string' }, 'Strona HTML: połączono albo użytkownik odmówił zgody.', { connected: { summary: 'Połączono z Google', value: '<!doctype html><html lang="pl">…<h1>Połączono z Google</h1>…</html>' }, denied: { summary: 'Brak zgody', value: '<!doctype html><html lang="pl">…<h1>Brak zgody</h1>…</html>' } }),
+    400: documented({ type: 'string' }, 'Strona HTML: połączenie wygasło albo nieznany state.', { expired: { summary: 'Połączenie wygasło', value: '<!doctype html><html lang="pl">…<h1>Połączenie wygasło</h1>…</html>' } }),
+    502: documented({ type: 'string' }, 'Strona HTML: Google nie potwierdził połączenia.', { failed: { summary: 'Nie udało się połączyć', value: '<!doctype html><html lang="pl">…<h1>Nie udało się połączyć</h1>…</html>' } }),
+  } } }, async (request, reply) => {
     reply.type('text/html; charset=utf-8');
     const { state, code, error } = request.query;
     const connection = state ? connections.get(state) : null;
@@ -105,14 +116,14 @@ export function registerGoogleImport(app: FastifyInstance, repository: CalendarR
   });
 
   // Stan połączenia – aplikacja sprawdza go, czekając na zgodę w Google.
-  app.get<{ Params: { id: string } }>('/import/google/connections/:id', { schema: { tags: ['Google import'], summary: 'Get Google connection status', operationId: 'getGoogleConnection', params: idParams, response: { 200: objectResponse, 404: errorResponse } } }, async (request, reply) => {
+  app.get<{ Params: { id: string } }>('/import/google/connections/:id', { schema: { tags: ['Google import'], summary: 'Get Google connection status', operationId: 'getGoogleConnection', params: idParams, response: { 200: documented(objectResponse, 'Stan połączenia.', { pending: { summary: 'Czeka na zgodę', value: { status: 'pending', mode: 'google' } }, connected: { summary: 'Połączono', value: { status: 'connected', email: 'student.kac.demo@gmail.com', mode: 'demo' } } }), 404: notFound() } } }, async (request, reply) => {
     const connection = connections.get(request.params.id);
     if (!connection) return reply.code(404).send({ error: 'connection-not-found' });
     return { status: connection.status, email: connection.email, mode: connection.mode };
   });
 
   // 4: lista kalendarzy połączonego konta.
-  app.get<{ Params: { id: string } }>('/import/google/connections/:id/calendars', { schema: { tags: ['Google import'], summary: 'List Google calendars', operationId: 'listGoogleCalendars', params: idParams, response: { 200: objectResponse, 401: errorResponse, 403: errorResponse, 404: errorResponse, 409: errorResponse, 502: errorResponse } } }, async (request, reply) => {
+  app.get<{ Params: { id: string } }>('/import/google/connections/:id/calendars', { schema: { tags: ['Google import'], summary: 'List Google calendars', operationId: 'listGoogleCalendars', params: idParams, response: { 200: documented(objectResponse, 'Kalendarze połączonego konta.', googleCalendarsExamples), 401: googleFailure(), 403: fail('Użytkownik odmówił dostępu.', { 'access-denied': 'Brak zgody' }), 404: notFound(), 409: fail('Konto nie jest połączone.', { 'not-connected': 'Brak połączenia z kontem' }), 502: googleFailure() } } }, async (request, reply) => {
     const connection = connections.get(request.params.id);
     if (!connection) return reply.code(404).send({ error: 'connection-not-found' });
     if (connection.status === 'denied') return reply.code(403).send({ error: 'access-denied' });
@@ -131,12 +142,15 @@ export function registerGoogleImport(app: FastifyInstance, repository: CalendarR
     schema: {
       tags: ['Google import'], summary: 'Read events from a Google calendar', description: 'Reads a bounded date range and opens a review session; import confirmation uses the shared imports endpoint.', operationId: 'readGoogleCalendar',
       params: idParams,
-      body: { type: 'object', required: ['calendarId', 'from', 'to'], additionalProperties: false, properties: {
+      body: withExamples({ type: 'object', required: ['calendarId', 'from', 'to'], additionalProperties: false, properties: {
         calendarId: { type: 'string', minLength: 1, maxLength: 300 },
         from: { type: 'string', pattern: datePattern }, to: { type: 'string', pattern: datePattern },
         category: { type: 'string', enum: ['Class', 'Work', 'Personal'] },
-      } },
-      response: { 201: objectResponse, 401: errorResponse, 403: errorResponse, 404: errorResponse, 409: errorResponse, 422: errorResponse, 503: errorResponse },
+      } }, googleReadInputExamples),
+      response: { 201: documented(objectResponse, 'Sesja importu z wydarzeniami do kontroli.', googleReadExamples), 401: googleFailure(), 403: fail('Użytkownik odmówił dostępu.', { 'access-denied': 'Brak zgody' }), 404: notFound(),
+        409: fail('Konto nie jest połączone albo połączenie zostało już użyte.', { 'not-connected': 'Brak połączenia z kontem', 'connection-used': 'Import już wykonany' }),
+        422: documented(errorResponse, 'Błędny zakres dat albo brak wydarzeń w zakresie.', { 'invalid-range': { summary: 'Zakres dłuższy niż rok albo odwrócony', value: { error: 'invalid-range' } }, 'no-events': { summary: 'Brak wydarzeń', value: { error: 'no-events', skippedAllDay: 1 } } }),
+        503: fail('Baza danych niedostępna.', { database_unavailable: 'Baza niedostępna', database_not_configured: 'Brak DATABASE_URL' }) },
     },
   }, async (request, reply) => {
     if (!repository?.createImportSession || !repository.listEventsForImport) return reply.code(503).send({ error: 'database_not_configured' });
@@ -187,7 +201,7 @@ export function registerGoogleImport(app: FastifyInstance, repository: CalendarR
   });
 
   // Rezygnacja z połączenia (np. zamknięcie okna importu) – token jest od razu zapominany.
-  app.delete<{ Params: { id: string } }>('/import/google/connections/:id', { schema: { tags: ['Google import'], summary: 'Forget Google connection', description: 'Forgets the one-time connection and drops the in-memory access token.', operationId: 'forgetGoogleConnection', params: idParams, response: { 204: { type: 'null' } } } }, async (request, reply) => {
+  app.delete<{ Params: { id: string } }>('/import/google/connections/:id', { schema: { tags: ['Google import'], summary: 'Forget Google connection', description: 'Forgets the one-time connection and drops the in-memory access token.', operationId: 'forgetGoogleConnection', params: idParams, response: { 204: { type: 'null', description: 'Połączenie i token zapomniane (także gdy już nie istniało).' } } } }, async (request, reply) => {
     connections.delete(request.params.id);
     return reply.code(204).send();
   });

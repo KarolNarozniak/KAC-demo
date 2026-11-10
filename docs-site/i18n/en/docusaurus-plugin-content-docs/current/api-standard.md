@@ -37,6 +37,17 @@ description: Mandatory process for designing, validating and documenting every b
 - Removing or changing a field's meaning is a breaking change. Design `/api/v2` for such changes; preserve v1 behavior.
 - Never include secrets, tokens, personal information or real data in OpenAPI examples.
 
+## Examples in Swagger UI
+
+Without examples Swagger UI derives values from types (`"string"`, `0`, `{}`), and responses without a description are labelled "Default Response". Therefore:
+
+- Every request body and every JSON response has at least one named example. Examples live in `apps/api/src/api/v1/<domain>/examples.ts`.
+- Attach examples with the helpers in `apps/api/src/api/examples.ts`: `withExamples(schema, examples)` for bodies, `documented(schema, description, examples)` for responses and `errorExamples(description, codes)` for `{ error }` errors. Fastify validation errors (400) use `validationError(message)`.
+- The helpers add an `x-examples` key that `@fastify/swagger` turns into the "Examples" list in Swagger UI. The key is registered with Ajv in `buildApi()`, so request validation stays strict.
+- The helpers copy the schema – do not add examples to shared schema constants.
+- Take example values from real handler responses (for example a test or `app.inject()`), not from assumptions. Show the relevant variants, such as a full, partial and empty schedule.
+- `apps/api/tests/openapi-examples.test.ts` validates every example against its schema and rejects responses without a description or an example (except `deprecated` endpoints).
+
 ## Required gates
 
 ```bash

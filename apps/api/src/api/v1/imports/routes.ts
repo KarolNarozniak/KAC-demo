@@ -11,6 +11,9 @@ import { mapShiftsToRows, READ_STATUS_LABELS } from '../../../import/work-schedu
 import { ScheduleReadError } from '../../../import/work-schedule/local-reader.js';
 import type { AcceptedRow, ImportFormat, ImportSource } from '../../../import/session.js';
 import type { CalendarOverview } from '../../../database.js';
+import { documented, errorExamples, withExamples, type NamedExamples } from '../../examples.js';
+import { classReadExamples, confirmExamples, confirmInputExamples, confirmRejectedExamples, createSessionExamples, fileErrorExamples, previewExamples, previewInputExamples, readFileExamples,
+  sessionExamples, workScheduleReadExamples } from './examples.js';
 
 const importRowSchema = { type: 'object', required: ['id', 'title', 'date', 'startTime', 'endTime'], additionalProperties: false,
   properties: { id: { type: 'string', minLength: 1, maxLength: 64 }, title: { type: 'string', maxLength: 200 }, date: { type: 'string', maxLength: 10 },
@@ -20,6 +23,11 @@ const importRowSchema = { type: 'object', required: ['id', 'title', 'date', 'sta
 } as const;
 const rowsProperty = { type: 'array', maxItems: 1000, items: importRowSchema } as const;
 const sessionIdSchema = { type: 'string', minLength: 1, maxLength: 64 } as const;
+const ok = (description: string, examples: NamedExamples) => documented({ type: 'object', additionalProperties: true }, description, examples);
+const unavailable = () => errorExamples('Baza danych niedostępna albo nieskonfigurowana.', { database_unavailable: 'Baza niedostępna', database_not_configured: 'Brak DATABASE_URL' });
+const fileResponses = (created: NamedExamples) => ({ 201: ok('Odczytane wiersze, podgląd i sesja importu do kontroli.', created),
+  422: ok('Plik pusty, za duży, w nieobsługiwanym formacie, uszkodzony albo bez rozpoznanych danych.', fileErrorExamples),
+  429: errorExamples('Czytnik plików jest zajęty – spróbuj ponownie za chwilę.', { 'reader-busy': 'Czytnik zajęty' }), 503: unavailable() });
 const importPreviewSchema = { body: { type: 'object', required: ['rows'], additionalProperties: false, properties: { rows: rowsProperty, importSessionId: sessionIdSchema } } } as const;
 const createSessionSchema = { body: { type: 'object', required: ['source', 'format', 'rows'], additionalProperties: false, properties: {
   source: { type: 'string', enum: ['classes', 'work'] }, format: { type: 'string', enum: ['PDF', 'Zdjęcie', 'ICS/CSV'] }, rows: { ...rowsProperty, minItems: 1 },
@@ -30,14 +38,13 @@ const readScheduleSchema = { body: { type: 'object', required: ['fileName', 'dat
   fileName: { type: 'string', minLength: 1, maxLength: 255 }, dataBase64: { type: 'string', maxLength: readBodyLimit },
 } } } as const;
 const cancelSchema = { params: { type: 'object', required: ['id'], properties: { id: sessionIdSchema } } } as const;
-const objectResponse = { type: 'object', additionalProperties: true } as const;
 
 export async function importRoutes(app: FastifyInstance, options: ApiDependencies) {
   const { repository, scheduleReader } = options;
   const existingEventsFor = async (_rows: ImportRow[]): Promise<ExistingEvent[]> => repository?.listEventsForImport ? repository.listEventsForImport() : [];
 
-  app.post<{ Body: { rows: ImportRow[]; importSessionId?: string } }>('/import/preview', { schema: { ...importPreviewSchema,
-    tags: ['Imports'], summary: 'Preview and validate import rows', description: 'Checks imported rows against each other and the calendar. Does not write events.', operationId: 'previewImport', response: { 200: objectResponse, 503: objectResponse },
+  app.post<{ Body: { rows: ImportRow[]; importSessionId?: string } }>('/import/preview', { schema: { ...importPreviewSchema, body: withExamples(importPreviewSchema.body, previewInputExamples),
+    tags: ['Imports'], summary: 'Preview and validate import rows', description: 'Checks imported rows against each other and the calendar. Does not write events.', operationId: 'previewImport', response: { 200: ok('Wiersze ze statusem kontroli, duplikatami i oznaczeniem zmian nocnych.', previewExamples), 503: unavailable() },
   } }, async (request, reply) => {
     if (request.body.importSessionId && repository?.touchImportSession) {
       await repository.touchImportSession(request.body.importSessionId).catch((error) => request.log.warn({ err: error }, 'Could not extend import session'));
@@ -51,8 +58,8 @@ export async function importRoutes(app: FastifyInstance, options: ApiDependencie
     return { rows: buildImportPreview(request.body.rows, existing) };
   });
 
-  app.post<{ Body: { source: ImportSource; format: ImportFormat; rows: ImportRow[] } }>('/import/sessions', { schema: { ...createSessionSchema,
-    tags: ['Imports'], summary: 'Create import review session', description: 'Stores a proposed import and its initial validation. Calendar records are unchanged until confirmation.', operationId: 'createImportSession', response: { 201: objectResponse, 503: objectResponse },
+  app.post<{ Body: { source: ImportSource; format: ImportFormat; rows: ImportRow[] } }>('/import/sessions', { schema: { ...createSessionSchema, body: withExamples(createSessionSchema.body, createSessionExamples),
+    tags: ['Imports'], summary: 'Create import review session', description: 'Stores a proposed import and its initial validation. Calendar records are unchanged until confirmation.', operationId: 'createImportSession', response: { 201: ok('Sesja importu utworzona; kalendarz bez zmian.', sessionExamples), 503: unavailable() },
   } }, async (request, reply) => {
     if (!repository?.createImportSession) return reply.code(503).send({ error: 'database_not_configured' });
     try {
@@ -65,8 +72,11 @@ export async function importRoutes(app: FastifyInstance, options: ApiDependencie
     }
   });
 
-  app.post<{ Params: { id: string }; Body: { rows: ImportRow[] } }>('/import/sessions/:id/confirm', { schema: { ...confirmSchema,
-    tags: ['Imports'], summary: 'Confirm reviewed import rows', description: 'Revalidates the accepted rows and writes the whole accepted batch atomically. Duplicate decisions must be explicit.', operationId: 'confirmImportSession', response: { 201: objectResponse, 404: objectResponse, 409: objectResponse, 410: objectResponse, 422: objectResponse, 503: objectResponse },
+  app.post<{ Params: { id: string }; Body: { rows: ImportRow[] } }>('/import/sessions/:id/confirm', { schema: { ...confirmSchema, body: withExamples(confirmSchema.body, confirmInputExamples),
+    tags: ['Imports'], summary: 'Confirm reviewed import rows', description: 'Revalidates the accepted rows and writes the whole accepted batch atomically. Duplicate decisions must be explicit.', operationId: 'confirmImportSession', response: { 201: ok('Zapisane wydarzenia i podsumowanie (wszystkie albo żadne).', confirmExamples),
+      404: errorExamples('Sesja importu nie istnieje.', { import_session_not_found: 'Brak sesji' }), 409: errorExamples('Sesja jest już zamknięta.', { import_session_closed: 'Sesja zamknięta' }),
+      410: errorExamples('Sesja wygasła po 15 minutach bez akcji.', { import_session_expired: 'Sesja wygasła' }),
+      422: ok('Błędne wiersze, niepotwierdzona zmiana nocna, brak decyzji o duplikatach albo wiersze spoza sesji.', confirmRejectedExamples), 503: unavailable() },
   } }, async (request, reply) => {
     if (!repository?.confirmImportSession) return reply.code(503).send({ error: 'database_not_configured' });
     const preview = buildImportPreview(request.body.rows);
@@ -93,7 +103,8 @@ export async function importRoutes(app: FastifyInstance, options: ApiDependencie
   });
 
   app.post<{ Params: { id: string } }>('/import/sessions/:id/cancel', { schema: { ...cancelSchema,
-    tags: ['Imports'], summary: 'Cancel import session', description: 'Closes the pending import without changing the calendar.', operationId: 'cancelImportSession', response: { 200: objectResponse, 409: objectResponse, 503: objectResponse },
+    tags: ['Imports'], summary: 'Cancel import session', description: 'Closes the pending import without changing the calendar.', operationId: 'cancelImportSession', response: { 200: ok('Sesja anulowana; kalendarz bez zmian.', { cancelled: { summary: 'Anulowano', value: { status: 'cancelled' } } }),
+      409: errorExamples('Sesja nie jest aktywna.', { import_session_not_active: 'Sesja nieaktywna' }), 503: unavailable() },
   } }, async (request, reply) => {
     if (!repository?.cancelImportSession) return reply.code(503).send({ error: 'database_not_configured' });
     try {
@@ -105,8 +116,8 @@ export async function importRoutes(app: FastifyInstance, options: ApiDependencie
     }
   });
 
-  app.post<{ Body: { fileName: string; dataBase64: string } }>('/import/classes/read', { schema: { ...readScheduleSchema,
-    tags: ['Imports'], summary: 'Read a class timetable', description: 'Reads an ICS, text PDF or WAT timetable image, builds a review session and returns collision diagnostics. Does not modify the calendar.', operationId: 'readClassTimetable', response: { 201: objectResponse, 422: objectResponse, 429: objectResponse, 503: objectResponse },
+  app.post<{ Body: { fileName: string; dataBase64: string } }>('/import/classes/read', { schema: { ...readScheduleSchema, body: withExamples(readScheduleSchema.body, readFileExamples),
+    tags: ['Imports'], summary: 'Read a class timetable', description: 'Reads an ICS, text PDF or WAT timetable image, builds a review session and returns collision diagnostics. Does not modify the calendar.', operationId: 'readClassTimetable', response: fileResponses(classReadExamples),
   }, bodyLimit: readBodyLimit }, async (request, reply) => {
     if (!repository?.createImportSession || !repository.listEventsForImport) return reply.code(503).send({ error: 'database_not_configured' });
     if (looksLikeIcs(request.body.dataBase64)) {
@@ -157,8 +168,8 @@ export async function importRoutes(app: FastifyInstance, options: ApiDependencie
     }
   });
 
-  app.post<{ Body: { fileName: string; dataBase64: string } }>('/import/work-schedule/read', { schema: { ...readScheduleSchema,
-    tags: ['Imports'], summary: 'Read a work schedule', description: 'Uses the configured local PDF/image reader and creates a review session. Calendar changes require explicit confirmation.', operationId: 'readWorkSchedule', response: { 201: objectResponse, 422: objectResponse, 429: objectResponse, 503: objectResponse },
+  app.post<{ Body: { fileName: string; dataBase64: string } }>('/import/work-schedule/read', { schema: { ...readScheduleSchema, body: withExamples(readScheduleSchema.body, readFileExamples),
+    tags: ['Imports'], summary: 'Read a work schedule', description: 'Uses the configured local PDF/image reader and creates a review session. Calendar changes require explicit confirmation.', operationId: 'readWorkSchedule', response: fileResponses(workScheduleReadExamples),
   }, bodyLimit: readBodyLimit + 1024 }, async (request, reply) => {
     const file = checkScheduleFile(request.body.dataBase64);
     if (!file.ok) return reply.code(422).send({ error: file.reason });

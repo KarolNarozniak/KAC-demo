@@ -2,6 +2,8 @@
 // Fastify waliduje nimi żądania i odpowiedzi, a @fastify/swagger buduje z nich kontrakt OpenAPI.
 import { FIELD_ERRORS } from '../../../profile/types.js';
 import { PROFILE_LIMITS } from '../../../profile/rules.js';
+import { withExamples } from '../../examples.js';
+import { invalidProfileExamples, profileConflictExamples, workProfileExamples, workProfileInputExamples } from './examples.js';
 
 const time = { type: 'string', pattern: '^([01]\\d|2[0-3]):[0-5]\\d$', description: 'Czas lokalny HH:MM.' } as const;
 const id = { type: 'string', minLength: 1, maxLength: 100 } as const;
@@ -87,6 +89,7 @@ export const workProfileSchema = {
 
 const error = (codes: string[], description: string) => ({
   type: 'object', description, required: ['error'], properties: { error: { type: 'string', enum: codes } },
+  'x-examples': Object.fromEntries(codes.map((code) => [code, { summary: code, value: { error: code } }])),
 }) as const;
 
 export const invalidProfileSchema = {
@@ -124,7 +127,7 @@ export const getWorkProfileRoute = {
   summary: 'Read the work profile',
   description: 'Returns hour limits, the hour target with its period (week or month), commute time, availability, preferences, blocked periods, shift templates and the profile version used for optimistic locking. The user is resolved on the server.',
   operationId: 'getWorkProfile',
-  response: { 200: workProfileSchema, 404: notFound, 503: unavailable },
+  response: { 200: withExamples(workProfileSchema, workProfileExamples), 404: notFound, 503: unavailable },
 } as const;
 
 export const updateWorkProfileRoute = {
@@ -132,6 +135,9 @@ export const updateWorkProfileRoute = {
   summary: 'Update the work profile',
   description: 'Validates and atomically saves the whole work profile. Field errors are returned as 422 without changing stored data; a stale profileVersion returns 409 with the current profile. Changes affect future schedule generation only – approved schedules stay unchanged.',
   operationId: 'updateWorkProfile',
-  body: workProfileInputSchema,
-  response: { 200: workProfileSchema, 404: notFound, 409: profileConflictSchema, 422: invalidProfileSchema, 503: unavailable },
+  body: withExamples(workProfileInputSchema, workProfileInputExamples),
+  response: {
+    200: withExamples(workProfileSchema, workProfileExamples), 404: notFound,
+    409: withExamples(profileConflictSchema, profileConflictExamples), 422: withExamples(invalidProfileSchema, invalidProfileExamples), 503: unavailable,
+  },
 } as const;
