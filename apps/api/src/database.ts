@@ -2,9 +2,7 @@ import { requireCollisionDecision, validateTimedEvent, EventNotFoundError, type 
 import { Pool, type PoolClient } from 'pg';
 import { config } from './config.js';
 import { CATEGORY_IDS, type ExistingEvent } from './import/rules.js';
-import { validateWeeklyHourLimits, validateMinRestMinutes, ProfileVersionConflictError, type WeeklyHourLimits } from './profile/validation.js';
 import { planImport, type PlanAction } from './import/plan.js';
-import { listPreferences, replacePreferences, type PreferenceInterval, type PreferencesSnapshot } from './profile/repository.js';
 import {
   IMPORT_SESSION_TTL_MINUTES,
   SOURCE_LABELS,
@@ -580,111 +578,5 @@ export class PostgresCalendarRepository {
         location: event.miejsce ?? '',
       })),
     };
-  }
-
-  // --- Limit godzin pracy w tygodniu (user story: ustawienie limitu godzin) ---
-
-  private readonly numOrNull = (value: unknown): number | null => value === null || value === undefined ? null : Number(value);
-
-  async getWeeklyHourLimits(userId = config.demoUserId): Promise<WeeklyHourLimits> {
-    const result = await this.connectionPool.query(
-      `select min_godzin_tydzien, cel_godzin_tydzien, max_godzin_tydzien
-       from t_profile_pracy where id_uzytkownika = $1 and aktywny = true
-       order by created_at desc limit 1`, [userId]);
-    const row = result.rows[0];
-    return {
-      minGodzinTydzien: this.numOrNull(row?.min_godzin_tydzien),
-      celGodzinTydzien: this.numOrNull(row?.cel_godzin_tydzien),
-      maxGodzinTydzien: this.numOrNull(row?.max_godzin_tydzien),
-    };
-  }
-
-  async setMaxWeeklyWorkHours(maxGodzinTydzien: number | null, userId = config.demoUserId): Promise<WeeklyHourLimits> {
-    const client = await this.connectionPool.connect();
-    try {
-      await client.query('BEGIN');
-      const current = await client.query(
-        `select id_profilu, min_godzin_tydzien, cel_godzin_tydzien
-         from t_profile_pracy where id_uzytkownika = $1 and aktywny = true
-         order by created_at desc limit 1 for update`, [userId]);
-      const minGodzinTydzien = this.numOrNull(current.rows[0]?.min_godzin_tydzien);
-      const celGodzinTydzien = this.numOrNull(current.rows[0]?.cel_godzin_tydzien);
-      validateWeeklyHourLimits({ minGodzinTydzien, celGodzinTydzien, maxGodzinTydzien });
-      if (current.rows[0]) {
-        await client.query(
-          `update t_profile_pracy set max_godzin_tydzien = $2, updated_at = now() where id_profilu = $1`,
-          [current.rows[0].id_profilu, maxGodzinTydzien]);
-      } else {
-        await client.query(
-          `insert into t_profile_pracy (id_uzytkownika, max_godzin_tydzien) values ($1, $2)`,
-          [userId, maxGodzinTydzien]);
-      }
-      await client.query('COMMIT');
-      return { minGodzinTydzien, celGodzinTydzien, maxGodzinTydzien };
-    } catch (error) { await client.query('ROLLBACK'); throw error; }
-    finally { client.release(); }
-    
-  }
-  
-  async listWorkPreferences(userId = config.demoUserId): Promise<PreferencesSnapshot> {
-    return listPreferences(this.connectionPool, userId);
-  }
-
-  async replaceWorkPreferences(version: string, intervals: PreferenceInterval[], userId = config.demoUserId): Promise<PreferencesSnapshot> {
-    return replacePreferences(this.connectionPool, userId, version, intervals);
-  }
-
-  
-  async getMinRestMinutes(userId = config.demoUserId): Promise<{ version: string; minRestMinutes: number }> {
-    const result = await this.connectionPool.query(
-      `select updated_at, min_odpoczynku_min from t_profile_pracy where id_uzytkownika = $1 and aktywny = true order by created_at desc limit 1`, [userId]);
-    const row = result.rows[0];
-    // Brak jawnej konfiguracji → zero, zgodnie z domyślną wartością kolumny (model).
-    return { version: row ? row.updated_at.toISOString() : '', minRestMinutes: row ? Number(row.min_odpoczynku_min) : 0 };
-  }
-
-  async setMinRestMinutes(expectedVersion: string, minRestMinutes: number, userId = config.demoUserId): Promise<{ version: string; minRestMinutes: number }> {
-    validateMinRestMinutes(minRestMinutes);
-    const client = await this.connectionPool.connect();
-    try {
-      await client.query('BEGIN');
-      const current = await client.query(
-        `select id_profilu, updated_at from t_profile_pracy where id_uzytkownika = $1 and aktywny = true order by created_at desc limit 1 for update`, [userId]);
-      if (!current.rows[0]) {
-        const inserted = await client.query(`insert into t_profile_pracy (id_uzytkownika, min_odpoczynku_min) values ($1, $2) returning updated_at`, [userId, minRestMinutes]);
-        await client.query('COMMIT');
-        return { version: inserted.rows[0].updated_at.toISOString(), minRestMinutes };
-      }
-      if (current.rows[0].updated_at.toISOString() !== expectedVersion) throw new ProfileVersionConflictError();
-      const updated = await client.query(
-        `update t_profile_pracy set min_odpoczynku_min = $2, updated_at = now() where id_profilu = $1 returning updated_at`,
-        [current.rows[0].id_profilu, minRestMinutes]);
-      await client.query('COMMIT');
-      return { version: updated.rows[0].updated_at.toISOString(), minRestMinutes };
-    } catch (error) { await client.query('ROLLBACK'); throw error; }
-    finally { client.release(); }
-  }
-
-  async getAccountTimeZone(userId = config.demoUserId): Promise<string> {
-    const result = await this.connectionPool.query(`select strefa_czasowa from t_uzytkownicy where id_uzytkownika = $1`, [userId]);
-    return result.rows[0]?.strefa_czasowa ?? 'Europe/Warsaw';
-  }
-
-  /** Zmiany Praca w oknie ±14 dni wokół tygodnia — do sprawdzania odpoczynku na granicach tygodnia (scheduling/rest.ts). */
-  async getWorkShiftsNear(weekStart: Date, weekEnd: Date, userId = config.demoUserId): Promise<TimedEvent[]> {
-    const windowStart = new Date(weekStart.getTime() - 14 * 86400000);
-    const windowEnd = new Date(weekEnd.getTime() + 14 * 86400000);
-    const result = await this.connectionPool.query(
-      `select e.id_wydarzenia, e.powtarzaj_co_tydzien,
-              to_char(e.rozpoczecie at time zone u.strefa_czasowa, 'YYYY-MM-DD"T"HH24:MI') as local_start,
-              to_char(e.zakonczenie at time zone u.strefa_czasowa, 'YYYY-MM-DD"T"HH24:MI') as local_end
-       from t_wydarzenia e
-       join t_kategorie k on k.id_kategorii = e.id_kategorii
-       join t_kalendarze c on c.id_kalendarza = e.id_kalendarza
-       join t_uzytkownicy u on u.id_uzytkownika = c.id_uzytkownika
-       where u.id_uzytkownika = $1 and k.nazwa = 'Praca' and e.status = 'Aktywne'
-         and (e.powtarzaj_co_tydzien = true or (e.rozpoczecie < $3 and e.zakonczenie > $2))`,
-      [userId, windowStart.toISOString(), windowEnd.toISOString()]);
-    return result.rows.map((row) => ({ id: row.id_wydarzenia, start: row.local_start, end: row.local_end, repeatWeekly: row.powtarzaj_co_tydzien }));
   }
 }
