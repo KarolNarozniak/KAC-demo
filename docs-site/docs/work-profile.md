@@ -28,6 +28,27 @@ Każda zapisana zmiana zachowuje stawkę, brutto/netto i kwotę. Obliczenie wyko
 
 Przycisk **Historia wybranego tygodnia** pokazuje zapisane grafiki, również pochodzące z wcześniejszej implementacji. Widok historii jest tylko do odczytu i nie przelicza kwot aktualną stawką. Nowe propozycje powstają wyłącznie przez `/api/v1/schedules`. Wcześniejsze rekordy i wydarzenia pozostają w bazie.
 
+### Limity godzin
+
+Profil pracy ma dwa limity: `maximumHours` (tygodniowy) i `maxHoursPerDay` (dzienny). Generator nie przekracza ich przy proponowaniu zmian, a ręczna korekta lub akceptacja grafiku, która je narusza, jest odrzucana z kodem 422 `invalid_schedule`:
+
+| Kod | Kiedy | `details` |
+|---|---|---|
+| `maximum_hours` | suma zapisanych i proponowanych zmian w tygodniu > `maximumHours` | `maximumMinutes`, `totalMinutes` |
+| `daily_maximum_hours` | praca w jednym dniu > `maxHoursPerDay` | `date`, `maximumMinutes`, `totalMinutes` |
+| `existing_work_exceeds_maximum` | już zapisane zmiany same przekraczają `maximumHours` | `maximumMinutes`, `existingWorkMinutes` |
+
+Wartości w `details` są w minutach.
+
+### Odpoczynek między zmianami
+
+`minimumRestMinutes` to minimalna przerwa między dwiema zmianami pracy. Między zmianami wymagane jest `max(commuteBufferMinutes, minimumRestMinutes)` – wartości się nie sumują. Przed i po zajęciach obowiązuje tylko `commuteBufferMinutes`. Wartość można nadpisać dla jednej propozycji w `overrides.minimumRestMinutes`.
+
+| Kod | Kiedy | `details` |
+|---|---|---|
+| `shift_overlap_or_rest` | dwie proponowane zmiany nakładają się albo przerwa między nimi jest za krótka | puste; zmiany w `candidateIds` |
+| `commute_gap_too_short` | za krótka przerwa między zmianą a sąsiednim wydarzeniem | `requiredMinutes`, `actualMinutes`, `leftId`, `rightId`, `leftTitle`, `rightTitle` |
+
 ## Blokady i zgodność
 
 Zakładka **Blokady** zachowuje urlopy, sesje egzaminacyjne i dni wolne przez `/api/v1/blocks`. Odczyt i usunięcie są ograniczone do właściciela. API przyjmuje instants ISO z offsetem, a formularz zamienia lokalne wpisy na UTC. Blokady nie są kopiowane do edytowalnych blokad profilu. Tworzenie i usuwanie blokady blokuje kalendarze, aby nie ominąć walidacji akceptacji. Strukturę tabeli tworzy migracja `010_calendar_blocks.sql`.

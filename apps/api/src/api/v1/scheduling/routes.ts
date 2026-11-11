@@ -15,7 +15,7 @@ const schedulerOverridesSchema = {
   properties: {
     mode: { type: 'string', enum: ['elastyczny', 'zmianowy'] },
     minimumHours: { type: 'number', minimum: 0, maximum: 80 }, targetHours: { type: 'number', minimum: 0, maximum: 80 }, maximumHours: { type: 'number', minimum: 0, maximum: 80 },
-    commuteBufferMinutes: { type: 'integer', minimum: 0, maximum: 720 }, minimumRestMinutes: { type: 'integer', minimum: 0, maximum: 1440 },
+    commuteBufferMinutes: { type: 'integer', minimum: 0, maximum: 720 }, minimumRestMinutes: { type: 'integer', minimum: 0, maximum: 1440, description: 'Minimalna przerwa między dwiema zmianami pracy (min) tylko dla tej propozycji; nadpisuje wartość z profilu.' },
     minimumShiftMinutes: { type: 'integer', minimum: 120, maximum: 720 }, maximumSlotMinutes: { type: 'integer', minimum: 120, maximum: 720 },
     maxHoursPerDay: { type: 'number', exclusiveMinimum: 0, maximum: 24 }, workaholic: { type: 'boolean' },
     shiftTemplates: { type: 'array', maxItems: 12, items: { type: 'object', required: ['id', 'name', 'startTime', 'endTime', 'endsNextDay', 'daysOfWeek', 'active'], additionalProperties: false,

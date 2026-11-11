@@ -28,6 +28,27 @@ Each saved shift snapshots its rate, gross/net designation and amount. Calculati
 
 **Historia wybranego tygodnia** lists saved schedules, including records from the earlier implementation. History is read-only and never recalculates amounts using the current rate. New proposals use only `/api/v1/schedules`. Previous records and calendar events remain in the database.
 
+### Hour limits
+
+The work profile has two limits: `maximumHours` (weekly) and `maxHoursPerDay` (daily). The generator never exceeds them when proposing shifts, and a manual schedule edit or approval that violates them is rejected with 422 `invalid_schedule`:
+
+| Code | When | `details` |
+|---|---|---|
+| `maximum_hours` | saved + proposed shifts in the week > `maximumHours` | `maximumMinutes`, `totalMinutes` |
+| `daily_maximum_hours` | work on a single day > `maxHoursPerDay` | `date`, `maximumMinutes`, `totalMinutes` |
+| `existing_work_exceeds_maximum` | already saved shifts alone exceed `maximumHours` | `maximumMinutes`, `existingWorkMinutes` |
+
+All `details` values are in minutes.
+
+### Rest between shifts
+
+`minimumRestMinutes` is the minimum gap between two work shifts. Between shifts the required gap is `max(commuteBufferMinutes, minimumRestMinutes)` – the values are not added. Before and after classes only `commuteBufferMinutes` applies. The value can be overridden for a single proposal with `overrides.minimumRestMinutes`.
+
+| Code | When | `details` |
+|---|---|---|
+| `shift_overlap_or_rest` | two proposed shifts overlap or the gap between them is too short | empty; shifts in `candidateIds` |
+| `commute_gap_too_short` | the gap between a shift and a neighbouring event is too short | `requiredMinutes`, `actualMinutes`, `leftId`, `rightId`, `leftTitle`, `rightTitle` |
+
 ## Blocks and compatibility
 
 The **Blokady** tab retains vacations, exam sessions and days off through `/api/v1/blocks`. Reads/deletions are owner-scoped. The API requires ISO instants with offsets; the form converts local input to UTC. Calendar blocks are not copied into editable profile blocks. Creating/deleting blocks locks calendars to serialize against acceptance. Migration `010_calendar_blocks.sql` owns the table definition.

@@ -145,6 +145,31 @@ export const invalidScheduleExamples: NamedExamples = {
       ],
     },
   },
+  weeklyLimit: {
+    summary: 'Przekroczony limit godzin',
+    description: 'Nic nie zostało zapisane. maximum_hours – profil pozwala na 20 h tygodniowo (maximumHours: 20 → 1200 min), a zmiany dałyby 22 h (1320 min). daily_maximum_hours – we wtorek wyszłoby 10 h przy limicie 8 h (maxHoursPerDay: 8 → 480 min).',
+    value: {
+      error: 'invalid_schedule',
+      errors: [
+        { code: 'maximum_hours', severity: 'error', message: 'Łączny czas pracy przekracza maksymalny limit tygodniowy.', candidateIds: ['X1', 'X2', 'X3'], eventIds: [], details: { maximumMinutes: 1200, totalMinutes: 1320 } },
+        { code: 'daily_maximum_hours', severity: 'error', message: 'Limit pracy na dzień 2026-11-17 wynosi 480 minut.', candidateIds: ['X2', 'X3'], eventIds: [], details: { date: '2026-11-17', maximumMinutes: 480, totalMinutes: 600 } },
+      ],
+      warnings: [],
+    },
+  },
+  restViolation: {
+    summary: 'Za krótka przerwa między zmianami',
+    description: 'Nic nie zostało zapisane. Zmiany 08:00–12:00 i 13:00–17:00 w poniedziałek mają 60 min przerwy, a profil wymaga max(dojazd 30 min, odpoczynek 120 min) = 120 min. commute_gap_too_short pokazuje wymaganą i faktyczną przerwę; shift_overlap_or_rest wskazuje parę zmian, której to dotyczy.',
+    value: {
+      error: 'invalid_schedule',
+      errors: [
+        { code: 'commute_gap_too_short', severity: 'error', message: 'Za krótka przerwa między Zmiana pracy i Zmiana pracy: brakuje 60 min.', candidateIds: ['X1', 'X2'], eventIds: [],
+          details: { error: 'commute_gap_too_short', requiredMinutes: 120, actualMinutes: 60, leftId: 'X1', rightId: 'X2', leftTitle: 'Zmiana pracy', rightTitle: 'Zmiana pracy' } },
+        { code: 'shift_overlap_or_rest', severity: 'error', message: 'Zmiany nakładają się lub nie zachowują bufora i odpoczynku.', candidateIds: ['X1', 'X2'], eventIds: [], details: {} },
+      ],
+      warnings: [],
+    },
+  },
 };
 
 export const scheduleListExamples: NamedExamples = {
