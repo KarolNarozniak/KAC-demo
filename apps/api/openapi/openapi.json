@@ -3748,7 +3748,7 @@
                           {
                             "type": "object",
                             "title": "ScheduleViolation",
-                            "description": "Naruszenie albo ostrzeżenie grafiku, np. insufficient_free_time (wolny czas po odjęciu zajęć nie wystarcza na cel), optional_lecture_conflict, target_shortfall, maximum_hours.",
+                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. details: maximumMinutes, totalMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu przekracza maxHoursPerDay. details: date, maximumMinutes, totalMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: maximumMinutes, existingWorkMinutes.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe.\nWartości w details są w minutach.",
                             "required": [
                               "code",
                               "severity",
@@ -4417,7 +4417,7 @@
                           {
                             "type": "object",
                             "title": "ScheduleViolation",
-                            "description": "Naruszenie albo ostrzeżenie grafiku, np. insufficient_free_time (wolny czas po odjęciu zajęć nie wystarcza na cel), optional_lecture_conflict, target_shortfall, maximum_hours.",
+                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. details: maximumMinutes, totalMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu przekracza maxHoursPerDay. details: date, maximumMinutes, totalMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: maximumMinutes, existingWorkMinutes.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe.\nWartości w details są w minutach.",
                             "required": [
                               "code",
                               "severity",
@@ -4556,7 +4556,7 @@
                           {
                             "type": "object",
                             "title": "ScheduleViolation",
-                            "description": "Naruszenie albo ostrzeżenie grafiku, np. insufficient_free_time (wolny czas po odjęciu zajęć nie wystarcza na cel), optional_lecture_conflict, target_shortfall, maximum_hours.",
+                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. details: maximumMinutes, totalMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu przekracza maxHoursPerDay. details: date, maximumMinutes, totalMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: maximumMinutes, existingWorkMinutes.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe.\nWartości w details są w minutach.",
                             "required": [
                               "code",
                               "severity",
@@ -4653,6 +4653,46 @@
                           }
                         }
                       ]
+                    }
+                  },
+                  "weeklyLimit": {
+                    "summary": "Przekroczony limit godzin",
+                    "description": "Nic nie zostało zapisane. maximum_hours – profil pozwala na 20 h tygodniowo (maximumHours: 20 → 1200 min), a zmiany dałyby 22 h (1320 min). daily_maximum_hours – we wtorek wyszłoby 10 h przy limicie 8 h (maxHoursPerDay: 8 → 480 min).",
+                    "value": {
+                      "error": "invalid_schedule",
+                      "errors": [
+                        {
+                          "code": "maximum_hours",
+                          "severity": "error",
+                          "message": "Łączny czas pracy przekracza maksymalny limit tygodniowy.",
+                          "candidateIds": [
+                            "X1",
+                            "X2",
+                            "X3"
+                          ],
+                          "eventIds": [],
+                          "details": {
+                            "maximumMinutes": 1200,
+                            "totalMinutes": 1320
+                          }
+                        },
+                        {
+                          "code": "daily_maximum_hours",
+                          "severity": "error",
+                          "message": "Limit pracy na dzień 2026-11-17 wynosi 480 minut.",
+                          "candidateIds": [
+                            "X2",
+                            "X3"
+                          ],
+                          "eventIds": [],
+                          "details": {
+                            "date": "2026-11-17",
+                            "maximumMinutes": 480,
+                            "totalMinutes": 600
+                          }
+                        }
+                      ],
+                      "warnings": []
                     }
                   }
                 }
@@ -5002,7 +5042,7 @@
                           {
                             "type": "object",
                             "title": "ScheduleViolation",
-                            "description": "Naruszenie albo ostrzeżenie grafiku, np. insufficient_free_time (wolny czas po odjęciu zajęć nie wystarcza na cel), optional_lecture_conflict, target_shortfall, maximum_hours.",
+                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. details: maximumMinutes, totalMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu przekracza maxHoursPerDay. details: date, maximumMinutes, totalMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: maximumMinutes, existingWorkMinutes.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe.\nWartości w details są w minutach.",
                             "required": [
                               "code",
                               "severity",
@@ -5418,7 +5458,7 @@
                           {
                             "type": "object",
                             "title": "ScheduleViolation",
-                            "description": "Naruszenie albo ostrzeżenie grafiku, np. insufficient_free_time (wolny czas po odjęciu zajęć nie wystarcza na cel), optional_lecture_conflict, target_shortfall, maximum_hours.",
+                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. details: maximumMinutes, totalMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu przekracza maxHoursPerDay. details: date, maximumMinutes, totalMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: maximumMinutes, existingWorkMinutes.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe.\nWartości w details są w minutach.",
                             "required": [
                               "code",
                               "severity",
@@ -5557,7 +5597,7 @@
                           {
                             "type": "object",
                             "title": "ScheduleViolation",
-                            "description": "Naruszenie albo ostrzeżenie grafiku, np. insufficient_free_time (wolny czas po odjęciu zajęć nie wystarcza na cel), optional_lecture_conflict, target_shortfall, maximum_hours.",
+                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. details: maximumMinutes, totalMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu przekracza maxHoursPerDay. details: date, maximumMinutes, totalMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: maximumMinutes, existingWorkMinutes.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe.\nWartości w details są w minutach.",
                             "required": [
                               "code",
                               "severity",
@@ -5654,6 +5694,46 @@
                           }
                         }
                       ]
+                    }
+                  },
+                  "weeklyLimit": {
+                    "summary": "Przekroczony limit godzin",
+                    "description": "Nic nie zostało zapisane. maximum_hours – profil pozwala na 20 h tygodniowo (maximumHours: 20 → 1200 min), a zmiany dałyby 22 h (1320 min). daily_maximum_hours – we wtorek wyszłoby 10 h przy limicie 8 h (maxHoursPerDay: 8 → 480 min).",
+                    "value": {
+                      "error": "invalid_schedule",
+                      "errors": [
+                        {
+                          "code": "maximum_hours",
+                          "severity": "error",
+                          "message": "Łączny czas pracy przekracza maksymalny limit tygodniowy.",
+                          "candidateIds": [
+                            "X1",
+                            "X2",
+                            "X3"
+                          ],
+                          "eventIds": [],
+                          "details": {
+                            "maximumMinutes": 1200,
+                            "totalMinutes": 1320
+                          }
+                        },
+                        {
+                          "code": "daily_maximum_hours",
+                          "severity": "error",
+                          "message": "Limit pracy na dzień 2026-11-17 wynosi 480 minut.",
+                          "candidateIds": [
+                            "X2",
+                            "X3"
+                          ],
+                          "eventIds": [],
+                          "details": {
+                            "date": "2026-11-17",
+                            "maximumMinutes": 480,
+                            "totalMinutes": 600
+                          }
+                        }
+                      ],
+                      "warnings": []
                     }
                   }
                 }
@@ -6341,7 +6421,7 @@
                           {
                             "type": "object",
                             "title": "ScheduleViolation",
-                            "description": "Naruszenie albo ostrzeżenie grafiku, np. insufficient_free_time (wolny czas po odjęciu zajęć nie wystarcza na cel), optional_lecture_conflict, target_shortfall, maximum_hours.",
+                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. details: maximumMinutes, totalMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu przekracza maxHoursPerDay. details: date, maximumMinutes, totalMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: maximumMinutes, existingWorkMinutes.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe.\nWartości w details są w minutach.",
                             "required": [
                               "code",
                               "severity",
@@ -7129,7 +7209,7 @@
                           {
                             "type": "object",
                             "title": "ScheduleViolation",
-                            "description": "Naruszenie albo ostrzeżenie grafiku, np. insufficient_free_time (wolny czas po odjęciu zajęć nie wystarcza na cel), optional_lecture_conflict, target_shortfall, maximum_hours.",
+                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. details: maximumMinutes, totalMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu przekracza maxHoursPerDay. details: date, maximumMinutes, totalMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: maximumMinutes, existingWorkMinutes.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe.\nWartości w details są w minutach.",
                             "required": [
                               "code",
                               "severity",
@@ -8037,7 +8117,7 @@
                           {
                             "type": "object",
                             "title": "ScheduleViolation",
-                            "description": "Naruszenie albo ostrzeżenie grafiku, np. insufficient_free_time (wolny czas po odjęciu zajęć nie wystarcza na cel), optional_lecture_conflict, target_shortfall, maximum_hours.",
+                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. details: maximumMinutes, totalMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu przekracza maxHoursPerDay. details: date, maximumMinutes, totalMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: maximumMinutes, existingWorkMinutes.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe.\nWartości w details są w minutach.",
                             "required": [
                               "code",
                               "severity",
@@ -8452,7 +8532,7 @@
                           {
                             "type": "object",
                             "title": "ScheduleViolation",
-                            "description": "Naruszenie albo ostrzeżenie grafiku, np. insufficient_free_time (wolny czas po odjęciu zajęć nie wystarcza na cel), optional_lecture_conflict, target_shortfall, maximum_hours.",
+                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. details: maximumMinutes, totalMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu przekracza maxHoursPerDay. details: date, maximumMinutes, totalMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: maximumMinutes, existingWorkMinutes.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe.\nWartości w details są w minutach.",
                             "required": [
                               "code",
                               "severity",
@@ -8591,7 +8671,7 @@
                           {
                             "type": "object",
                             "title": "ScheduleViolation",
-                            "description": "Naruszenie albo ostrzeżenie grafiku, np. insufficient_free_time (wolny czas po odjęciu zajęć nie wystarcza na cel), optional_lecture_conflict, target_shortfall, maximum_hours.",
+                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. details: maximumMinutes, totalMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu przekracza maxHoursPerDay. details: date, maximumMinutes, totalMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: maximumMinutes, existingWorkMinutes.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe.\nWartości w details są w minutach.",
                             "required": [
                               "code",
                               "severity",
@@ -8688,6 +8768,46 @@
                           }
                         }
                       ]
+                    }
+                  },
+                  "weeklyLimit": {
+                    "summary": "Przekroczony limit godzin",
+                    "description": "Nic nie zostało zapisane. maximum_hours – profil pozwala na 20 h tygodniowo (maximumHours: 20 → 1200 min), a zmiany dałyby 22 h (1320 min). daily_maximum_hours – we wtorek wyszłoby 10 h przy limicie 8 h (maxHoursPerDay: 8 → 480 min).",
+                    "value": {
+                      "error": "invalid_schedule",
+                      "errors": [
+                        {
+                          "code": "maximum_hours",
+                          "severity": "error",
+                          "message": "Łączny czas pracy przekracza maksymalny limit tygodniowy.",
+                          "candidateIds": [
+                            "X1",
+                            "X2",
+                            "X3"
+                          ],
+                          "eventIds": [],
+                          "details": {
+                            "maximumMinutes": 1200,
+                            "totalMinutes": 1320
+                          }
+                        },
+                        {
+                          "code": "daily_maximum_hours",
+                          "severity": "error",
+                          "message": "Limit pracy na dzień 2026-11-17 wynosi 480 minut.",
+                          "candidateIds": [
+                            "X2",
+                            "X3"
+                          ],
+                          "eventIds": [],
+                          "details": {
+                            "date": "2026-11-17",
+                            "maximumMinutes": 480,
+                            "totalMinutes": 600
+                          }
+                        }
+                      ],
+                      "warnings": []
                     }
                   }
                 }

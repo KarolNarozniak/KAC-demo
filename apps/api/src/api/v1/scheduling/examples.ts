@@ -145,6 +145,18 @@ export const invalidScheduleExamples: NamedExamples = {
       ],
     },
   },
+  weeklyLimit: {
+    summary: 'Przekroczony limit godzin',
+    description: 'Nic nie zostało zapisane. maximum_hours – profil pozwala na 20 h tygodniowo (maximumHours: 20 → 1200 min), a zmiany dałyby 22 h (1320 min). daily_maximum_hours – we wtorek wyszłoby 10 h przy limicie 8 h (maxHoursPerDay: 8 → 480 min).',
+    value: {
+      error: 'invalid_schedule',
+      errors: [
+        { code: 'maximum_hours', severity: 'error', message: 'Łączny czas pracy przekracza maksymalny limit tygodniowy.', candidateIds: ['X1', 'X2', 'X3'], eventIds: [], details: { maximumMinutes: 1200, totalMinutes: 1320 } },
+        { code: 'daily_maximum_hours', severity: 'error', message: 'Limit pracy na dzień 2026-11-17 wynosi 480 minut.', candidateIds: ['X2', 'X3'], eventIds: [], details: { date: '2026-11-17', maximumMinutes: 480, totalMinutes: 600 } },
+      ],
+      warnings: [],
+    },
+  },
 };
 
 export const scheduleListExamples: NamedExamples = {
