@@ -120,3 +120,5 @@ Starsze adresy duplikujących przepływów zwracają 410 ze wskazaniem następcy
 - [Wymagania i UC-07/UC-08](docs/requirements/sprint-204-kozlowski.md).
 - Testy finansów i normalizacji: `node_modules/.bin/tsx --test apps/api/tests/pay.test.ts`.
 - Test całej integracji na izolowanym schemacie PostgreSQL: `node_modules/.bin/tsx --test apps/api/tests/planning.integration.test.ts`.
+
+.
