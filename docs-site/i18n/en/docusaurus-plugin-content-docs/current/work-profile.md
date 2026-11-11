@@ -40,6 +40,15 @@ The work profile has two limits: `maximumHours` (weekly) and `maxHoursPerDay` (d
 
 All `details` values are in minutes.
 
+### Rest between shifts
+
+`minimumRestMinutes` is the minimum gap between two work shifts. Between shifts the required gap is `max(commuteBufferMinutes, minimumRestMinutes)` – the values are not added. Before and after classes only `commuteBufferMinutes` applies. The value can be overridden for a single proposal with `overrides.minimumRestMinutes`.
+
+| Code | When | `details` |
+|---|---|---|
+| `shift_overlap_or_rest` | two proposed shifts overlap or the gap between them is too short | empty; shifts in `candidateIds` |
+| `commute_gap_too_short` | the gap between a shift and a neighbouring event is too short | `requiredMinutes`, `actualMinutes`, `leftId`, `rightId`, `leftTitle`, `rightTitle` |
+
 ## Blocks and compatibility
 
 The **Blokady** tab retains vacations, exam sessions and days off through `/api/v1/blocks`. Reads/deletions are owner-scoped. The API requires ISO instants with offsets; the form converts local input to UTC. Calendar blocks are not copied into editable profile blocks. Creating/deleting blocks locks calendars to serialize against acceptance. Migration `010_calendar_blocks.sql` owns the table definition.

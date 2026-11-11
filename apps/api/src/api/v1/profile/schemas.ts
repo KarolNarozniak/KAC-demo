@@ -41,7 +41,7 @@ const inputNumbers = {
   targetHours: number(`Docelowa liczba godzin w wybranym okresie, większa od zera (do ${PROFILE_LIMITS.weekHours} h na tydzień albo ${PROFILE_LIMITS.monthHours} h na miesiąc). Po przeliczeniu na tydzień musi mieścić się między minimum a maksimum.`),
   maximumHours: number(`Maksymalna liczba godzin pracy w tygodniu (większa od zera, do ${PROFILE_LIMITS.weekHours}).`),
   commuteBufferMinutes: number(`Czas dojazdu w minutach (0–${PROFILE_LIMITS.commuteMinutes}).`),
-  minimumRestMinutes: number(`Minimalny odpoczynek między zajęciami a pracą w minutach (0–${PROFILE_LIMITS.restMinutes}).`),
+  minimumRestMinutes: number(`Minimalna przerwa między dwiema zmianami pracy w minutach (0–${PROFILE_LIMITS.restMinutes}). Między zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes) – wartości się nie sumują. Przed i po zajęciach obowiązuje tylko commuteBufferMinutes. Naruszenie: shift_overlap_or_rest albo commute_gap_too_short.`),
   minimumShiftMinutes: number(`Minimalna długość zmiany w minutach (${PROFILE_LIMITS.shiftMinutesMin}–${PROFILE_LIMITS.shiftMinutesMax}).`),
   maximumSlotMinutes: number(`Maksymalna długość zmiany w minutach (${PROFILE_LIMITS.shiftMinutesMin}–${PROFILE_LIMITS.shiftMinutesMax}), nie mniejsza niż minimalna.`),
   maxHoursPerDay: number(`Maksymalna liczba godzin pracy w jednym dniu (większa od zera, do ${PROFILE_LIMITS.dayHours}).`),

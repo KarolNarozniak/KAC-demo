@@ -64,6 +64,8 @@ const genericViolationSchema = {
     '- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. details: maximumMinutes, totalMinutes.',
     '- daily_maximum_hours (error) – czas pracy w jednym dniu przekracza maxHoursPerDay. details: date, maximumMinutes, totalMinutes.',
     '- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: maximumMinutes, existingWorkMinutes.',
+    '- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: puste; zmiany wskazuje candidateIds.',
+    '- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.',
     '- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.',
     '- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.',
     '- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe.',
