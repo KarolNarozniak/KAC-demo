@@ -1,4 +1,4 @@
-import { apiBaseUrl } from './importApi';
+import { apiBaseUrl } from './importApi.ts';
 
 export type AssistantMessage = { id: string; role: 'user' | 'assistant' | 'tool'; content: Record<string, unknown>; createdAt: string };
 export type AssistantConversation = { id: string; title: string; modelDeployment: string; createdAt: string; updatedAt: string; expiresAt: string };
@@ -37,3 +37,26 @@ export const sendAssistantMessage = (id: string, content: string) => call<{ conv
 export const confirmAssistantAction = (id: string) => call<{ status: string; actionId?: string; eventId: string | null }>(`/api/v1/assistant/actions/${encodeURIComponent(id)}/confirm`, 'POST', {});
 export const cancelAssistantAction = (id: string) => call<{ status: string }>(`/api/v1/assistant/actions/${encodeURIComponent(id)}/cancel`, 'POST', {});
 export const deleteAssistantConversation = (id: string) => call<{ status: string }>(`/api/v1/assistant/conversations/${encodeURIComponent(id)}`, 'DELETE');
+
+export const dailySummaryPrompt = 'Podsumuj krótko wydarzenia na dziś, korzystając z kalendarza i zaufanej bieżącej daty oraz strefy czasu konta. Napisz po polsku 2–4 zdania: podaj najważniejsze wydarzenia z godzinami oraz dłuższe wolne okna. Jeśli kalendarz jest pusty, powiedz to wprost. Nie twórz ani nie zmieniaj wydarzeń i nie przygotowuj żadnych akcji.';
+
+export async function getDailySummary(dateKey: string, refresh = false) {
+  const title = `Dzień w skrócie ${dateKey}`;
+  const { conversations } = await listAssistantConversations();
+  let conversation = conversations.find((item) => item.title === title);
+  if (conversation && !refresh) {
+    const history = await listAssistantMessages(conversation.id);
+    let lastPrompt = -1;
+    history.messages.forEach((message, index) => {
+      if (message.role === 'user' && message.content.text === dailySummaryPrompt) lastPrompt = index;
+    });
+    if (lastPrompt >= 0) {
+      const saved = history.messages.slice(lastPrompt + 1).reverse().find((message) => message.role === 'assistant' && typeof message.content.text === 'string');
+      if (saved) return { conversationId: conversation.id, text: String(saved.content.text).trim() };
+    }
+  }
+  if (!conversation) conversation = await createAssistantConversation(title);
+  const response = await sendAssistantMessage(conversation.id, dailySummaryPrompt);
+  await Promise.allSettled(response.pendingActions.map((action) => cancelAssistantAction(action.id)));
+  return { conversationId: conversation.id, text: response.message.content.trim() };
+}

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import type { CalendarEvent, Category, Occurrence } from '../domain/model';
 import { addCalendarDays, localDateKey, occurrencesForRange, startOfWeek, validateEventInput } from '../domain/calendar';
@@ -10,6 +10,7 @@ import WeekGrid, { type WeekLayout } from '../components/WeekGrid';
 import type { WeeklySchedule } from '../services/scheduleApi';
 import type { DueNotification } from '../services/notificationsApi';
 import { resolveNotificationTarget } from '../domain/notifications';
+import { getAssistantConfig, getDailySummary } from '../services/assistantApi';
 import ClassScheduleImport from '../components/ClassScheduleImport';
 import WorkScheduleImport from '../components/WorkScheduleImport';
 import GoogleCalendarImport from '../components/GoogleCalendarImport';
@@ -20,6 +21,11 @@ type Props = { week: Date; setWeek: (value: Date) => void; todayOnly?: boolean; 
 export default function CalendarScreen({ week, setWeek, todayOnly = false, weekLayout, now, active, draftSchedule, notificationTarget, onNotificationResolved }: Props) {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dailySummary, setDailySummary] = useState<{ date: string; text: string } | null>(null);
+  const [dailySummaryLoading, setDailySummaryLoading] = useState(false);
+  const [dailySummaryError, setDailySummaryError] = useState('');
+  const summaryAttemptedDate = useRef('');
+  const summaryRequesting = useRef(false);
   const [loadError, setLoadError] = useState('');
   const [saving, setSaving] = useState(false);
   const [classImportOpen, setClassImportOpen] = useState(false);
@@ -41,6 +47,28 @@ export default function CalendarScreen({ week, setWeek, todayOnly = false, weekL
   const [selected, setSelected] = useState<Occurrence | null>(null); const [draft, setDraft] = useState<CalendarEvent | null>(null);
   const [error, setError] = useState(''); const [conflicts, setConflicts] = useState<EventCollision[]>([]); const [pending, setPending] = useState<CalendarEvent | null>(null);
   const monday = startOfWeek(todayOnly ? now : week); const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addCalendarDays(monday, i)), [monday.getTime()]);
+  const todayKey = localDateKey(now);
+  const requestDailySummary = useCallback(async (refresh = false) => {
+    if (summaryRequesting.current || (!refresh && summaryAttemptedDate.current === todayKey)) return;
+    summaryRequesting.current = true;
+    summaryAttemptedDate.current = todayKey;
+    setDailySummaryLoading(true); setDailySummaryError('');
+    try {
+      const config = await getAssistantConfig();
+      if (!config.enabled) throw new Error('Asystent AI jest niedostępny. Sprawdź konfigurację Azure AI i spróbuj ponownie.');
+      const result = await getDailySummary(todayKey, refresh);
+      setDailySummary({ date: todayKey, text: result.text });
+    } catch (error) {
+      setDailySummaryError(error instanceof Error ? error.message : 'Nie udało się przygotować podsumowania dnia.');
+    } finally {
+      summaryRequesting.current = false;
+      setDailySummaryLoading(false);
+    }
+  }, [todayKey]);
+  useEffect(() => {
+    if (!active || !todayOnly || loading || loadError || summaryAttemptedDate.current === todayKey) return;
+    void requestDailySummary();
+  }, [active, todayOnly, loading, loadError, todayKey, requestDailySummary]);
   const list = useMemo(() => occurrencesForRange(events, { start: monday, end: addCalendarDays(monday, 7) }), [events, monday.getTime()]);
   useEffect(() => {
     if (!active || loading || !notificationTarget) return;
@@ -135,10 +163,16 @@ export default function CalendarScreen({ week, setWeek, todayOnly = false, weekL
     {!!previewEvents.length && !todayOnly && <Text accessibilityLiveRegion="polite" style={[styles.muted, { paddingVertical: 5 }]}>Podgląd propozycji pracy: linie przerywane oznaczają zmiany niezatwierdzone.</Text>}
     {todayOnly ? <View style={{ flex: 1, minHeight: 0 }}>
       <View style={[styles.row, { justifyContent: 'space-between', paddingVertical: 8 }]}><Text style={styles.heading}>Dzień dobry!</Text><Button title="+" accessibilityLabel="Dodaj wydarzenie" primary onPress={() => newEvent(now)} /></View>
-      <View accessibilityLabel="Podsumowanie dnia od asystenta" style={{ backgroundColor: palette.blueSoft, borderRadius: 8, padding: 12, marginBottom: 14, minHeight: 88 }}>
-        <Text style={[styles.body, { fontWeight: '700' }]}>Twój dzień w skrócie</Text>
-        <Text style={styles.muted}>Tutaj pojawi się podsumowanie wydarzeń od asystenta.</Text>
-      </View>
+       <View accessibilityLabel="Podsumowanie dnia od asystenta" style={{ backgroundColor: palette.blueSoft, borderRadius: 8, padding: 12, marginBottom: 14, minHeight: 88 }}>
+         <View style={[styles.row, { justifyContent: 'space-between', alignItems: 'center' }]}>
+           <Text style={[styles.body, { fontWeight: '700' }]}>Twój dzień w skrócie</Text>
+           <Button title={dailySummaryLoading ? '...' : 'Odśwież'} disabled={dailySummaryLoading || !active} onPress={() => void requestDailySummary(true)} />
+         </View>
+         {dailySummaryLoading ? <Text accessibilityLiveRegion="polite" style={styles.muted}>Asystent analizuje dzisiejsze wydarzenia…</Text>
+           : dailySummaryError ? <Text accessibilityRole="alert" style={styles.error}>{dailySummaryError}</Text>
+           : dailySummary?.date === todayKey ? <Text accessibilityLiveRegion="polite" style={styles.body}>{dailySummary.text}</Text>
+           : <Text style={styles.muted}>Asystent przygotuje podsumowanie dzisiejszego kalendarza.</Text>}
+       </View>
       <WeekGrid active={active} days={[addCalendarDays(now, 0)]} events={upcoming} layout="days-top" now={now} startAtNow hideDayHeader onAdd={newEvent} onSelect={details} />
     </View> : <WeekGrid active={active} days={weekDays} events={gridEvents} layout={weekLayout} now={now} onAdd={newEvent} onSelect={details} />}
     <Modal visible={dialog !== null} transparent animationType="fade" onRequestClose={() => { if (!saving) close(); }}><View style={{ flex: 1, backgroundColor: palette.scrim, alignItems: 'center', justifyContent: 'center', padding: 16 }}><ScrollView style={{ backgroundColor: palette.surface, borderRadius: 18, width: '100%', maxWidth: 480, maxHeight: '92%' }} contentContainerStyle={{ padding: 21 }}>
