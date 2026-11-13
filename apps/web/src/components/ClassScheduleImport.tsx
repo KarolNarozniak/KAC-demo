@@ -39,6 +39,8 @@ export default function ClassScheduleImport({ visible, onClose, onImported }: {
   const [preview, setPreview] = useState<ImportPreviewRow[]>([]);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
+  const aiReadController = useRef<AbortController | null>(null);
+  const [aiReading, setAiReading] = useState(false);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState('');
   const [summary, setSummary] = useState<ImportSummary | null>(null);
@@ -66,7 +68,10 @@ export default function ClassScheduleImport({ visible, onClose, onImported }: {
     if (busyRef.current) return;
     busyRef.current = true; setBusy(true); setError('');
     try { await action(); }
-    catch (err) { setError(err instanceof Error ? err.message : 'Operacja nie powiodła się. Spróbuj ponownie.'); }
+    catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') setStatus('cancelled');
+      else setError(err instanceof Error ? err.message : 'Operacja nie powiodła się. Spróbuj ponownie.');
+    }
     finally { busyRef.current = false; setBusy(false); }
   };
   const choose = () => run(async () => {
@@ -74,11 +79,18 @@ export default function ClassScheduleImport({ visible, onClose, onImported }: {
     if (!file) return;
     setStatus('');
     const useAi = !/\.(ics|csv)$/i.test(file.name) && readerMode === 'ai';
-    const result = useAi ? await readAiClassSchedule(file.name, file.base64) : await readClassSchedule(file.name, file.base64);
+    let result: ClassReadResult;
+    if (useAi) {
+      const controller = new AbortController(); aiReadController.current = controller;
+      setAiReading(true);
+      try { result = await readAiClassSchedule(file.name, file.base64, controller.signal); }
+      finally { if (aiReadController.current === controller) aiReadController.current = null; setAiReading(false); }
+    } else result = await readClassSchedule(file.name, file.base64);
     setFileName(file.name); setSummary(null); setSession(result); setRows(result.rows);
     setSelected(new Set(result.rows.filter(row => !row.reviewRequired).map(row => row.id)));
     setPreview(result.preview); setPage(0);
   });
+  const cancelAiRead = () => aiReadController.current?.abort();
   const close = () => run(async () => {
     if (session) await cancelImport(session.importSessionId);
     setSession(null); setRows([]); setPreview([]); setSummary(null); setFileName(''); setStatus(''); onClose();
@@ -124,16 +136,17 @@ export default function ClassScheduleImport({ visible, onClose, onImported }: {
     <View style={{ flex: 1, backgroundColor: palette.scrim, alignItems: 'center', justifyContent: 'center', padding: 16 }}>
       <ScrollView style={{ backgroundColor: palette.surface, borderRadius: 18, width: '100%', maxWidth: 760, maxHeight: '92%' }} contentContainerStyle={{ padding: 20 }}>
         <Text style={styles.heading}>Importuj plan zajęć</Text>
-        <Text style={styles.subtitle}>Plik ICS (np. eksport z USOS, Google Calendar, Outlooka), PDF planu WAT z tekstem (do 10 stron) lub zrzut ekranu Miniatura WAT w PNG/JPG. Maks. 5 MB. Odczyt zdjęcia (OCR) może potrwać do minuty.</Text>
+        <Text style={styles.subtitle}>Plik ICS (np. eksport z USOS, Google Calendar, Outlooka), PDF planu WAT (do 10 stron) albo zrzut ekranu Miniatura WAT w PNG/JPG. Maks. 5 MB.</Text>
         {!session && <View style={[styles.row, { flexWrap: 'wrap', marginVertical: 8 }]}>
           <Text style={styles.label}>ODCZYT PDF / ZDJĘCIA</Text>
           <Button title={readerMode === 'ai' ? '☑ Azure AI Foundry' : '☐ Azure AI Foundry'} primary={readerMode === 'ai'} disabled={busy} onPress={() => setReaderMode('ai')} />
           <Button title={readerMode === 'local' ? '☑ Lokalny odczyt' : '☐ Lokalny odczyt'} primary={readerMode === 'local'} disabled={busy} onPress={() => setReaderMode('local')} />
           <Text style={styles.muted}>ICS jest zawsze odczytywany lokalnie. AI tworzy tylko podgląd — zapis wymaga osobnego zatwierdzenia.</Text>
+          {readerMode === 'ai' && <Text style={[styles.muted, { color: palette.amber }]}>Po wybraniu PDF, PNG lub JPG jego zawartość zostanie wysłana do Azure AI Foundry w celu odczytu. Oryginał nie jest zapisywany w bazie. W trakcie odczytu możesz przerwać żądanie.</Text>}
         </View>}
         {!!fileName && <Text style={styles.body}>{fileName}</Text>}
         {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
-        {busy && <Text accessibilityLiveRegion="polite" style={styles.body}>Przetwarzanie…</Text>}
+        {busy && <View style={styles.row}><Text accessibilityLiveRegion="polite" style={styles.body}>Przetwarzanie…</Text>{aiReading && <Button title="Anuluj odczyt AI" onPress={cancelAiRead} />}</View>}
         {summary && <Text accessibilityLiveRegion="polite" style={styles.body}>Import zakończony. Zaimportowano: {summary.added + summary.replaced} (dodano: {summary.added} · zastąpiono: {summary.replaced}) · Pominięto duplikaty: {summary.skipped} · Niewybrane: {summary.rejected}</Text>}
         {status === 'cancelled' && <Text accessibilityLiveRegion="polite" style={styles.body}>Import anulowany. Kalendarz pozostał bez zmian.</Text>}
         {status === 'failed' && !error && <Text accessibilityRole="alert" style={styles.error}>Import nieudany. Nic nie zapisano – popraw dane i zatwierdź ponownie.</Text>}

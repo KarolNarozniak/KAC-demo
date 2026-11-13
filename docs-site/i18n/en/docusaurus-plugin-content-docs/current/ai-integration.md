@@ -56,8 +56,9 @@ For a private endpoint, configure API App Service VNet Integration and private D
 ## Data and retention
 
 - Responses requests explicitly use `store: false`; conversation context is reconstructed from application tables.
+- Every assistant turn receives trusted server context: UTC time, the calendar owner's current local date/time and IANA time zone. It is not derived from user content.
 - PostgreSQL stores conversations, messages, usage metrics and action previews. Conversations expire after 30 days of inactivity; pending actions expire after 15 minutes. The worker removes expired history. Prompts, completions, tokens and file bytes are not written to application logs.
-- Original PDF/JPG/PNG bytes are validated and sent inline to the request. They are not stored in `t_importy`, a cache or Azure Files API. The database stores only normalized import rows, a short source excerpt and page number for review.
+- Original PDF/JPG/PNG bytes are validated and sent inline to the request. Before upload, the UI states that the file is sent to Azure AI; cancellation aborts the API request and upstream Responses request. Bytes are not stored in `t_importy`, a cache or Azure Files API. The database stores only normalized import rows, a short source excerpt and page number for review.
 - `store: false` disables persisted response state used for later Responses turns. It does not by itself guarantee that all safety/abuse-monitoring logs are disabled. Azure states customer prompts are not used to train models; exact service retention depends on feature and service policy. Choose a regional deployment when residency is required; do not assume the same for Global/Data Zone deployments.
 - Images are signature-checked, size/pixel limited and resized when needed. PDFs are limited to 5 MB and 10 pages; images to 20 MP. Failed calls do not automatically fall back to OCR/Document Intelligence.
 
@@ -67,7 +68,11 @@ For a private endpoint, configure API App Service VNet Integration and private D
 - **Tools:** `assistantTools` is a strict allow-list in `src/ai/tools.ts`: read calendar/profile and prepare create/update/delete previews. Arguments are validated again by the backend. The model never receives a confirmation tool.
 - **Knowledge:** no File Search, vector store or external RAG is configured for this MVP. Calendar/profile data comes from scope-bound tools; an uploaded file is only input to its current import.
 - **Memory:** PostgreSQL is the source of truth, scoped by `UserScope`. Context is limited to the last 24 ordered messages, and function calls/results are reconstructed as stateless Responses input items. `demoScope` represents the current development setup without login.
-- **Guardrails:** the model cannot mutate the calendar directly. Mutations create a TTL-bound `t_ai_akcje` proposal; a separate confirmation endpoint checks ownership, state, current conflicts and an idempotency key. Prompt Shields complement input limits, JSON Schema parsing, tool/round limits and server validation.
+- **Guardrails:** the model cannot mutate the calendar directly. Mutations create a TTL-bound `t_ai_akcje` proposal; a separate confirmation endpoint checks ownership, the full event snapshot, current conflicts and an idempotency key. Updates and deletes persist the action result in the same transaction as the calendar mutation; a retry after a lost response returns that result instead of applying the write again. A stale preview is failed and must be prepared again. Prompt Shields complement input limits, JSON Schema parsing, tool/round limits and server validation.
+
+## Cancelling file analysis
+
+Before sending, the UI states that a PDF/PNG/JPG is transmitted to Azure AI Foundry. The cancel control aborts the client request; the API forwards the abort signal to Responses and does not create a review session if extraction was interrupted. Even a successful extraction only creates a review session; calendar events require a separate confirmation.
 
 ## Manual deployment smoke tests
 
@@ -84,4 +89,4 @@ The script prints only row count, unresolved fields and usage; it does not print
 
 ## Sprint integration limits
 
-W02 adds a separate outbox worker. The current worker schedules reminder records in the database, and the frontend can display them in an active browser after permission is granted. Real push after the app is closed requires choosing a Web Push/Notification Hubs provider and configuring keys/subscriptions. Google import currently has only `calendar.readonly`; publishing changes requires adding a write OAuth scope and obtaining consent again. The worker leaves those deliveries explicitly blocked instead of claiming success.
+W02 adds a separate outbox worker. Reminders are scheduled in the database; optional Web Push requires VAPID configuration in the API/worker. Google import currently has only `calendar.readonly`; publishing changes requires adding a write OAuth scope and obtaining consent again. The Google consumer keeps its deliveries explicitly blocked until write scope is granted.

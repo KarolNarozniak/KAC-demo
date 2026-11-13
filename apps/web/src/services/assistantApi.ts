@@ -20,6 +20,10 @@ const aiErrorText: Record<string, string> = {
   azure_ai_not_configured: 'Azure AI Foundry nie jest skonfigurowane dla API.',
   ai_storage_not_configured: 'Baza rozmów AI nie jest skonfigurowana.',
   assistant_unavailable: 'Asystent jest chwilowo niedostępny. Wiadomość pozostała w historii, możesz spróbować ponownie.',
+  assistant_rate_limited: 'Azure AI ograniczył liczbę żądań. Poczekaj chwilę i spróbuj ponownie.',
+  assistant_timeout: 'Odpowiedź asystenta przekroczyła limit czasu. Możesz wysłać krótszą wiadomość i spróbować ponownie.',
+  ai_action_stale_preview: 'Wydarzenie zmieniło się od czasu przygotowania podglądu. Poproś o nową propozycję.',
+  action_not_found_or_expired: 'Ta propozycja wygasła lub nie istnieje. Poproś asystenta o przygotowanie nowej.',
   conversation_not_found_or_expired: 'Ta rozmowa wygasła lub nie istnieje. Rozpocznij nową rozmowę.',
   event_collision: 'Ta propozycja koliduje z wydarzeniem w kalendarzu. Sprawdź kalendarz i popraw propozycję.',
 };

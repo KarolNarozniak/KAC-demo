@@ -31,7 +31,7 @@ const timePattern = /^([01]\d|2[0-3]):[0-5]\d$/;
 export class AiService {
   constructor(private readonly foundry: FoundryResponsesProvider) {}
 
-  async extractSchedule(file: AiFile, source: Extract<ImportSource, 'classes' | 'work'>, userName: string): Promise<AiExtractResult> {
+  async extractSchedule(file: AiFile, source: Extract<ImportSource, 'classes' | 'work'>, userName: string, signal?: AbortSignal): Promise<AiExtractResult> {
     const input: ResponseInputItem[] = [{ type: 'message', role: 'user', content: [
       { type: 'input_text', text: importInstructions(source, userName) },
       ...(file.mimeType === 'application/pdf'
@@ -44,7 +44,7 @@ export class AiService {
       input,
       text: { format: { type: 'json_schema', name: 'kac_schedule_import', strict: true, schema: extractionSchema } },
       max_output_tokens: 8000,
-    });
+    }, { signal });
       let payload: { rows: ExtractedImportRow[] };
       try { payload = JSON.parse(response.output_text) as { rows: ExtractedImportRow[] }; }
       catch { throw new AiInvalidOutputError('invalid_ai_output_json'); }
@@ -79,15 +79,15 @@ export class AiService {
       return { rows, usage: { inputTokens: response.usage?.input_tokens ?? 0, outputTokens: response.usage?.output_tokens ?? 0 }, responseId: response.id };
   }
 
-  async sendAssistantMessage(input: ResponseInputItem[], tools: FunctionTool[]) {
+  async sendAssistantMessage(input: ResponseInputItem[], tools: FunctionTool[], trustedContext?: string, signal?: AbortSignal) {
     return this.foundry.respond({
       store: false,
       instructions: KAC_ASSISTANT_INSTRUCTIONS,
-      input,
+      input: trustedContext ? [{ role: 'developer', content: trustedContext }, ...input] : input,
       tools,
       parallel_tool_calls: false,
       max_output_tokens: 1200,
-    });
+    }, { signal });
   }
 }
 

@@ -10514,54 +10514,547 @@
         },
         "responses": {
           "201": {
-            "description": "Import session and editable preview; no calendar event is written.",
+            "description": "AI extraction result and review-only import session; this operation does not change the calendar.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "description": "Import session and editable preview; no calendar event is written.",
-                  "additionalProperties": true
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "required": [
+                        "source",
+                        "readerProvider",
+                        "importSessionId",
+                        "expiresAt",
+                        "fileType",
+                        "readStatus",
+                        "readStatusLabel",
+                        "readerIsDemo",
+                        "userName",
+                        "rows",
+                        "preview",
+                        "collisions",
+                        "filePageCount",
+                        "usage"
+                      ],
+                      "properties": {
+                        "source": {
+                          "enum": [
+                            "work"
+                          ]
+                        },
+                        "readerProvider": {
+                          "enum": [
+                            "azure-ai-foundry"
+                          ]
+                        },
+                        "importSessionId": {
+                          "type": "string"
+                        },
+                        "expiresAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "fileType": {
+                          "type": "string",
+                          "enum": [
+                            "PDF",
+                            "PNG",
+                            "JPG"
+                          ]
+                        },
+                        "readStatus": {
+                          "type": "string",
+                          "enum": [
+                            "all",
+                            "partial"
+                          ]
+                        },
+                        "readStatusLabel": {
+                          "type": "string"
+                        },
+                        "readerIsDemo": {
+                          "enum": [
+                            false
+                          ]
+                        },
+                        "userName": {
+                          "type": "string"
+                        },
+                        "rows": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": true,
+                            "required": [
+                              "id",
+                              "title",
+                              "date",
+                              "startTime",
+                              "endTime",
+                              "category"
+                            ],
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "date": {
+                                "type": "string"
+                              },
+                              "startTime": {
+                                "type": "string"
+                              },
+                              "endTime": {
+                                "type": "string"
+                              },
+                              "category": {
+                                "type": "string",
+                                "enum": [
+                                  "Class",
+                                  "Work"
+                                ]
+                              },
+                              "location": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "employee": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "confidence": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1
+                              },
+                              "sourcePage": {
+                                "type": "integer",
+                                "minimum": 1
+                              },
+                              "sourceSnippet": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "unresolvedFields": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "isOwn": {
+                                "type": "boolean"
+                              },
+                              "incomplete": {
+                                "type": "boolean"
+                              },
+                              "reviewRequired": {
+                                "type": "boolean"
+                              }
+                            }
+                          }
+                        },
+                        "preview": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": true,
+                            "required": [
+                              "id",
+                              "status"
+                            ],
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "ok",
+                                  "error"
+                                ]
+                              },
+                              "issues": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "start": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "end": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "sourcePage": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ]
+                              },
+                              "confidence": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              },
+                              "unresolvedFields": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "collisions": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "additionalProperties": true
+                            }
+                          }
+                        },
+                        "filePageCount": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "usage": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "inputTokens",
+                            "outputTokens"
+                          ],
+                          "properties": {
+                            "inputTokens": {
+                              "type": "integer"
+                            },
+                            "outputTokens": {
+                              "type": "integer"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "required": [
+                        "source",
+                        "readerProvider",
+                        "importSessionId",
+                        "expiresAt",
+                        "academicYear",
+                        "dateFrom",
+                        "dateTo",
+                        "rows",
+                        "preview",
+                        "collisions",
+                        "warnings",
+                        "filePageCount",
+                        "usage"
+                      ],
+                      "properties": {
+                        "source": {
+                          "enum": [
+                            "ai"
+                          ]
+                        },
+                        "readerProvider": {
+                          "enum": [
+                            "azure-ai-foundry"
+                          ]
+                        },
+                        "importSessionId": {
+                          "type": "string"
+                        },
+                        "expiresAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "academicYear": {
+                          "type": "string"
+                        },
+                        "dateFrom": {
+                          "type": "string"
+                        },
+                        "dateTo": {
+                          "type": "string"
+                        },
+                        "rows": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": true,
+                            "required": [
+                              "id",
+                              "title",
+                              "date",
+                              "startTime",
+                              "endTime",
+                              "category"
+                            ],
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "date": {
+                                "type": "string"
+                              },
+                              "startTime": {
+                                "type": "string"
+                              },
+                              "endTime": {
+                                "type": "string"
+                              },
+                              "category": {
+                                "type": "string",
+                                "enum": [
+                                  "Class",
+                                  "Work"
+                                ]
+                              },
+                              "location": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "employee": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "confidence": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1
+                              },
+                              "sourcePage": {
+                                "type": "integer",
+                                "minimum": 1
+                              },
+                              "sourceSnippet": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "unresolvedFields": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "isOwn": {
+                                "type": "boolean"
+                              },
+                              "incomplete": {
+                                "type": "boolean"
+                              },
+                              "reviewRequired": {
+                                "type": "boolean"
+                              }
+                            }
+                          }
+                        },
+                        "preview": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": true,
+                            "required": [
+                              "id",
+                              "status"
+                            ],
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "ok",
+                                  "error"
+                                ]
+                              },
+                              "issues": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "start": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "end": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "sourcePage": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ]
+                              },
+                              "confidence": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              },
+                              "unresolvedFields": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "collisions": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "additionalProperties": true
+                            }
+                          }
+                        },
+                        "warnings": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "filePageCount": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "usage": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "inputTokens",
+                            "outputTokens"
+                          ],
+                          "properties": {
+                            "inputTokens": {
+                              "type": "integer"
+                            },
+                            "outputTokens": {
+                              "type": "integer"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "description": "AI extraction result and review-only import session; this operation does not change the calendar."
                 },
                 "examples": {
-                  "classRows": {
+                  "classes": {
                     "summary": "Syntetyczny podgląd zajęć",
                     "description": "Wartości testowe schematu; nie są prawdziwym plikiem.",
                     "value": {
                       "source": "ai",
+                      "readerProvider": "azure-ai-foundry",
                       "importSessionId": "synthetic-session",
+                      "expiresAt": "2026-11-13T12:15:00Z",
+                      "academicYear": "Odczyt AI",
+                      "dateFrom": "2026-11-16",
+                      "dateTo": "2026-11-16",
                       "rows": [
                         {
+                          "id": "synthetic-row",
                           "title": "Matematyka",
                           "date": "2026-11-16",
                           "startTime": "10:00",
                           "endTime": "11:30",
                           "category": "Class",
+                          "location": "",
                           "sourcePage": 1,
-                          "confidence": 0.92
+                          "confidence": 0.92,
+                          "unresolvedFields": [],
+                          "reviewRequired": false
                         }
                       ],
-                      "preview": []
+                      "preview": [],
+                      "collisions": {},
+                      "warnings": [
+                        "Odczyt AI wymaga sprawdzenia przed zatwierdzeniem."
+                      ],
+                      "filePageCount": 1,
+                      "usage": {
+                        "inputTokens": 120,
+                        "outputTokens": 25
+                      }
                     }
                   },
-                  "workRows": {
+                  "work": {
                     "summary": "Syntetyczny podgląd zmiany pracy",
                     "description": "Wartości testowe schematu; nie są prawdziwym plikiem.",
                     "value": {
                       "source": "work",
+                      "readerProvider": "azure-ai-foundry",
                       "importSessionId": "synthetic-session",
+                      "expiresAt": "2026-11-13T12:15:00Z",
+                      "fileType": "PDF",
+                      "readStatus": "all",
+                      "readStatusLabel": "Odczytano wszystkie zmiany",
+                      "readerIsDemo": false,
+                      "userName": "Pracownik testowy",
                       "rows": [
                         {
+                          "id": "synthetic-row",
                           "title": "Praca",
                           "employee": "Pracownik testowy",
                           "date": "2026-11-16",
                           "startTime": "08:00",
                           "endTime": "16:00",
                           "category": "Work",
+                          "isOwn": true,
+                          "incomplete": false,
                           "sourcePage": 1,
-                          "confidence": 0.92
+                          "confidence": 0.92,
+                          "unresolvedFields": []
                         }
                       ],
-                      "preview": []
+                      "preview": [],
+                      "collisions": {},
+                      "filePageCount": 1,
+                      "usage": {
+                        "inputTokens": 120,
+                        "outputTokens": 25
+                      }
                     }
                   }
                 }
@@ -10704,12 +11197,12 @@
             }
           },
           "429": {
-            "description": "Lokalny parser PDF jest zajęty.",
+            "description": "Dostawca AI ograniczył żądania lub lokalny parser PDF jest zajęty.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Lokalny parser PDF jest zajęty.",
+                  "description": "Dostawca AI ograniczył żądania lub lokalny parser PDF jest zajęty.",
                   "required": [
                     "error"
                   ],
@@ -10718,7 +11211,8 @@
                     "error": {
                       "type": "string",
                       "enum": [
-                        "reader-busy"
+                        "reader-busy",
+                        "azure_ai_rate_limited"
                       ]
                     }
                   }
@@ -10729,6 +11223,12 @@
                     "description": "Serwer odczytuje teraz inny plik (OCR działa po jednym pliku naraz). Wyślij plik ponownie za kilka sekund.",
                     "value": {
                       "error": "reader-busy"
+                    }
+                  },
+                  "azure_ai_rate_limited": {
+                    "summary": "Azure AI ograniczył częstotliwość żądań; spróbuj później.",
+                    "value": {
+                      "error": "azure_ai_rate_limited"
                     }
                   }
                 }
@@ -10811,6 +11311,37 @@
                 }
               }
             }
+          },
+          "504": {
+            "description": "Odczyt AI przekroczył limit czasu.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Odczyt AI przekroczył limit czasu.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "azure_ai_timeout"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "azure_ai_timeout": {
+                    "summary": "Wybierz mniejszy fragment dokumentu i spróbuj ponownie.",
+                    "value": {
+                      "error": "azure_ai_timeout"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -10822,23 +11353,31 @@
         "tags": [
           "Assistant"
         ],
-        "description": "Returns whether the configured Foundry agent is available. Does not expose endpoint, agent, or credential details.",
+        "description": "Returns whether the configured Azure Responses deployment is available. Does not expose endpoint, deployment, or credential details.",
         "responses": {
           "200": {
-            "description": "Sukces: obiekt JSON opisany dla danej operacji.",
+            "description": "Możliwość korzystania z asystenta.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Sukces: obiekt JSON opisany dla danej operacji.",
-                  "additionalProperties": true
+                  "additionalProperties": false,
+                  "required": [
+                    "enabled"
+                  ],
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    }
+                  },
+                  "description": "Możliwość korzystania z asystenta."
                 },
                 "examples": {
-                  "success": {
-                    "summary": "Przykładowa odpowiedź",
-                    "description": "Syntetyczny kształt bazowy; szczegóły zależą od operacji.",
+                  "synthetic": {
+                    "summary": "Syntetyczna odpowiedź",
+                    "description": "Przykład zgodny z kontraktem; bez rzeczywistych danych użytkownika.",
                     "value": {
-                      "status": "ok"
+                      "enabled": true
                     }
                   }
                 }
@@ -10871,20 +11410,65 @@
         ],
         "responses": {
           "200": {
-            "description": "Sukces: obiekt JSON opisany dla danej operacji.",
+            "description": "Aktywne rozmowy bieżącego zakresu.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Sukces: obiekt JSON opisany dla danej operacji.",
-                  "additionalProperties": true
+                  "additionalProperties": false,
+                  "required": [
+                    "conversations"
+                  ],
+                  "properties": {
+                    "conversations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "title",
+                          "modelDeployment",
+                          "createdAt",
+                          "updatedAt",
+                          "expiresAt"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "modelDeployment": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "expiresAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "description": "Aktywne rozmowy bieżącego zakresu."
                 },
                 "examples": {
-                  "success": {
-                    "summary": "Przykładowa odpowiedź",
-                    "description": "Syntetyczny kształt bazowy; szczegóły zależą od operacji.",
+                  "synthetic": {
+                    "summary": "Syntetyczna odpowiedź",
+                    "description": "Przykład zgodny z kontraktem; bez rzeczywistych danych użytkownika.",
                     "value": {
-                      "status": "ok"
+                      "conversations": []
                     }
                   }
                 }
@@ -10892,17 +11476,20 @@
             }
           },
           "503": {
-            "description": "Błąd domenowy lub infrastrukturalny.",
+            "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Błąd domenowy lub infrastrukturalny.",
                   "required": [
                     "error"
                   ],
+                  "additionalProperties": true,
                   "properties": {
                     "error": {
+                      "type": "string"
+                    },
+                    "message": {
                       "type": "string"
                     },
                     "conflicts": {
@@ -10911,16 +11498,32 @@
                         "type": "object",
                         "additionalProperties": true
                       }
+                    },
+                    "collisionToken": {
+                      "type": "string"
+                    },
+                    "statusCode": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
                     }
                   },
-                  "additionalProperties": true
+                  "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika."
                 },
                 "examples": {
-                  "error": {
-                    "summary": "Błąd operacji",
-                    "description": "Kod `error` zależy od operacji.",
+                  "unavailable": {
+                    "summary": "Usługa niedostępna",
                     "value": {
-                      "error": "request_failed"
+                      "error": "assistant_unavailable"
+                    }
+                  },
+                  "stalePreview": {
+                    "summary": "Nieaktualny podgląd",
+                    "description": "Przygotuj nową propozycję przed ponownym zatwierdzeniem.",
+                    "value": {
+                      "error": "ai_action_stale_preview",
+                      "message": "Wydarzenie zmieniło się od czasu podglądu."
                     }
                   }
                 }
@@ -10964,20 +11567,47 @@
         },
         "responses": {
           "201": {
-            "description": "Sukces: obiekt JSON opisany dla danej operacji.",
+            "description": "Nowa rozmowa.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Sukces: obiekt JSON opisany dla danej operacji.",
-                  "additionalProperties": true
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "title",
+                    "createdAt",
+                    "expiresAt"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "description": "Nowa rozmowa."
                 },
                 "examples": {
-                  "success": {
-                    "summary": "Przykładowa odpowiedź",
-                    "description": "Syntetyczny kształt bazowy; szczegóły zależą od operacji.",
+                  "synthetic": {
+                    "summary": "Syntetyczna odpowiedź",
+                    "description": "Przykład zgodny z kontraktem; bez rzeczywistych danych użytkownika.",
                     "value": {
-                      "status": "ok"
+                      "id": "synthetic-conversation-id",
+                      "title": "Plan tygodnia",
+                      "createdAt": "2026-11-13T12:00:00Z",
+                      "expiresAt": "2026-12-13T12:00:00Z"
                     }
                   }
                 }
@@ -10985,17 +11615,20 @@
             }
           },
           "503": {
-            "description": "Błąd domenowy lub infrastrukturalny.",
+            "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Błąd domenowy lub infrastrukturalny.",
                   "required": [
                     "error"
                   ],
+                  "additionalProperties": true,
                   "properties": {
                     "error": {
+                      "type": "string"
+                    },
+                    "message": {
                       "type": "string"
                     },
                     "conflicts": {
@@ -11004,16 +11637,32 @@
                         "type": "object",
                         "additionalProperties": true
                       }
+                    },
+                    "collisionToken": {
+                      "type": "string"
+                    },
+                    "statusCode": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
                     }
                   },
-                  "additionalProperties": true
+                  "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika."
                 },
                 "examples": {
-                  "error": {
-                    "summary": "Błąd operacji",
-                    "description": "Kod `error` zależy od operacji.",
+                  "unavailable": {
+                    "summary": "Usługa niedostępna",
                     "value": {
-                      "error": "request_failed"
+                      "error": "assistant_unavailable"
+                    }
+                  },
+                  "stalePreview": {
+                    "summary": "Nieaktualny podgląd",
+                    "description": "Przygotuj nową propozycję przed ponownym zatwierdzeniem.",
+                    "value": {
+                      "error": "ai_action_stale_preview",
+                      "message": "Wydarzenie zmieniło się od czasu podglądu."
                     }
                   }
                 }
@@ -11045,20 +11694,411 @@
         ],
         "responses": {
           "200": {
-            "description": "Sukces: obiekt JSON opisany dla danej operacji.",
+            "description": "Zapisane wiadomości i oczekujące akcje.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Sukces: obiekt JSON opisany dla danej operacji.",
-                  "additionalProperties": true
+                  "additionalProperties": false,
+                  "required": [
+                    "messages",
+                    "pendingActions"
+                  ],
+                  "properties": {
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "role",
+                          "content",
+                          "createdAt"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          },
+                          "role": {
+                            "type": "string",
+                            "enum": [
+                              "user",
+                              "assistant",
+                              "tool"
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "content": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "text"
+                                ],
+                                "properties": {
+                                  "text": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "text",
+                                  "pendingActionIds"
+                                ],
+                                "properties": {
+                                  "text": {
+                                    "type": "string"
+                                  },
+                                  "pendingActionIds": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 100
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "toolCalls"
+                                ],
+                                "properties": {
+                                  "toolCalls": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "additionalProperties": false,
+                                      "required": [
+                                        "id",
+                                        "callId",
+                                        "name",
+                                        "arguments"
+                                      ],
+                                      "properties": {
+                                        "id": {
+                                          "type": "string"
+                                        },
+                                        "callId": {
+                                          "type": "string"
+                                        },
+                                        "name": {
+                                          "type": "string"
+                                        },
+                                        "arguments": {
+                                          "type": "string"
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "name",
+                                  "callId",
+                                  "result"
+                                ],
+                                "properties": {
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "callId": {
+                                    "type": "string"
+                                  },
+                                  "result": {
+                                    "type": "object",
+                                    "additionalProperties": true
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    "pendingActions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "conversationId",
+                          "kind",
+                          "payload",
+                          "status",
+                          "expiresAt"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          },
+                          "conversationId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "calendar_event_create",
+                              "calendar_event_update",
+                              "calendar_event_delete"
+                            ]
+                          },
+                          "payload": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "event"
+                                ],
+                                "properties": {
+                                  "event": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "title",
+                                      "start",
+                                      "end",
+                                      "category",
+                                      "location",
+                                      "mandatory",
+                                      "repeatWeekly"
+                                    ],
+                                    "properties": {
+                                      "title": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 200
+                                      },
+                                      "start": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                      },
+                                      "end": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                      },
+                                      "category": {
+                                        "type": "string",
+                                        "enum": [
+                                          "Class",
+                                          "Work",
+                                          "Personal"
+                                        ]
+                                      },
+                                      "location": {
+                                        "type": "string"
+                                      },
+                                      "mandatory": {
+                                        "type": "boolean"
+                                      },
+                                      "repeatWeekly": {
+                                        "type": "boolean"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "id",
+                                  "original",
+                                  "event"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 100
+                                  },
+                                  "original": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "title",
+                                      "start",
+                                      "end",
+                                      "category"
+                                    ],
+                                    "properties": {
+                                      "title": {
+                                        "type": "string"
+                                      },
+                                      "start": {
+                                        "type": "string"
+                                      },
+                                      "end": {
+                                        "type": "string"
+                                      },
+                                      "category": {
+                                        "type": "string"
+                                      },
+                                      "location": {
+                                        "type": "string"
+                                      },
+                                      "mandatory": {
+                                        "type": "boolean"
+                                      },
+                                      "repeatWeekly": {
+                                        "type": "boolean"
+                                      },
+                                      "eventVersion": {
+                                        "type": "integer",
+                                        "minimum": 1
+                                      }
+                                    }
+                                  },
+                                  "event": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "title",
+                                      "start",
+                                      "end",
+                                      "category",
+                                      "location",
+                                      "mandatory",
+                                      "repeatWeekly"
+                                    ],
+                                    "properties": {
+                                      "title": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 200
+                                      },
+                                      "start": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                      },
+                                      "end": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                      },
+                                      "category": {
+                                        "type": "string",
+                                        "enum": [
+                                          "Class",
+                                          "Work",
+                                          "Personal"
+                                        ]
+                                      },
+                                      "location": {
+                                        "type": "string"
+                                      },
+                                      "mandatory": {
+                                        "type": "boolean"
+                                      },
+                                      "repeatWeekly": {
+                                        "type": "boolean"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "id",
+                                  "original"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 100
+                                  },
+                                  "original": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "title",
+                                      "start",
+                                      "end",
+                                      "category"
+                                    ],
+                                    "properties": {
+                                      "title": {
+                                        "type": "string"
+                                      },
+                                      "start": {
+                                        "type": "string"
+                                      },
+                                      "end": {
+                                        "type": "string"
+                                      },
+                                      "category": {
+                                        "type": "string"
+                                      },
+                                      "location": {
+                                        "type": "string"
+                                      },
+                                      "mandatory": {
+                                        "type": "boolean"
+                                      },
+                                      "repeatWeekly": {
+                                        "type": "boolean"
+                                      },
+                                      "eventVersion": {
+                                        "type": "integer",
+                                        "minimum": 1
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending"
+                            ]
+                          },
+                          "expiresAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "eventId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "description": "Zapisane wiadomości i oczekujące akcje."
                 },
                 "examples": {
-                  "success": {
-                    "summary": "Przykładowa odpowiedź",
-                    "description": "Syntetyczny kształt bazowy; szczegóły zależą od operacji.",
+                  "synthetic": {
+                    "summary": "Syntetyczna odpowiedź",
+                    "description": "Przykład zgodny z kontraktem; bez rzeczywistych danych użytkownika.",
                     "value": {
-                      "status": "ok"
+                      "messages": [],
+                      "pendingActions": []
                     }
                   }
                 }
@@ -11066,17 +12106,20 @@
             }
           },
           "404": {
-            "description": "Błąd domenowy lub infrastrukturalny.",
+            "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Błąd domenowy lub infrastrukturalny.",
                   "required": [
                     "error"
                   ],
+                  "additionalProperties": true,
                   "properties": {
                     "error": {
+                      "type": "string"
+                    },
+                    "message": {
                       "type": "string"
                     },
                     "conflicts": {
@@ -11085,16 +12128,32 @@
                         "type": "object",
                         "additionalProperties": true
                       }
+                    },
+                    "collisionToken": {
+                      "type": "string"
+                    },
+                    "statusCode": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
                     }
                   },
-                  "additionalProperties": true
+                  "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika."
                 },
                 "examples": {
-                  "error": {
-                    "summary": "Błąd operacji",
-                    "description": "Kod `error` zależy od operacji.",
+                  "unavailable": {
+                    "summary": "Usługa niedostępna",
                     "value": {
-                      "error": "request_failed"
+                      "error": "assistant_unavailable"
+                    }
+                  },
+                  "stalePreview": {
+                    "summary": "Nieaktualny podgląd",
+                    "description": "Przygotuj nową propozycję przed ponownym zatwierdzeniem.",
+                    "value": {
+                      "error": "ai_action_stale_preview",
+                      "message": "Wydarzenie zmieniło się od czasu podglądu."
                     }
                   }
                 }
@@ -11102,17 +12161,20 @@
             }
           },
           "503": {
-            "description": "Błąd domenowy lub infrastrukturalny.",
+            "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Błąd domenowy lub infrastrukturalny.",
                   "required": [
                     "error"
                   ],
+                  "additionalProperties": true,
                   "properties": {
                     "error": {
+                      "type": "string"
+                    },
+                    "message": {
                       "type": "string"
                     },
                     "conflicts": {
@@ -11121,16 +12183,32 @@
                         "type": "object",
                         "additionalProperties": true
                       }
+                    },
+                    "collisionToken": {
+                      "type": "string"
+                    },
+                    "statusCode": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
                     }
                   },
-                  "additionalProperties": true
+                  "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika."
                 },
                 "examples": {
-                  "error": {
-                    "summary": "Błąd operacji",
-                    "description": "Kod `error` zależy od operacji.",
+                  "unavailable": {
+                    "summary": "Usługa niedostępna",
                     "value": {
-                      "error": "request_failed"
+                      "error": "assistant_unavailable"
+                    }
+                  },
+                  "stalePreview": {
+                    "summary": "Nieaktualny podgląd",
+                    "description": "Przygotuj nową propozycję przed ponownym zatwierdzeniem.",
+                    "value": {
+                      "error": "ai_action_stale_preview",
+                      "message": "Wydarzenie zmieniło się od czasu podglądu."
                     }
                   }
                 }
@@ -11190,20 +12268,337 @@
         ],
         "responses": {
           "200": {
-            "description": "Sukces: obiekt JSON opisany dla danej operacji.",
+            "description": "Odpowiedź asystenta i akcje wymagające potwierdzenia.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Sukces: obiekt JSON opisany dla danej operacji.",
-                  "additionalProperties": true
+                  "additionalProperties": false,
+                  "required": [
+                    "conversationId",
+                    "message",
+                    "pendingActions",
+                    "usage"
+                  ],
+                  "properties": {
+                    "conversationId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    },
+                    "message": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "role",
+                        "content"
+                      ],
+                      "properties": {
+                        "role": {
+                          "type": "string",
+                          "enum": [
+                            "assistant"
+                          ]
+                        },
+                        "content": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "pendingActions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "conversationId",
+                          "kind",
+                          "payload",
+                          "status",
+                          "expiresAt"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          },
+                          "conversationId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "calendar_event_create",
+                              "calendar_event_update",
+                              "calendar_event_delete"
+                            ]
+                          },
+                          "payload": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "event"
+                                ],
+                                "properties": {
+                                  "event": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "title",
+                                      "start",
+                                      "end",
+                                      "category",
+                                      "location",
+                                      "mandatory",
+                                      "repeatWeekly"
+                                    ],
+                                    "properties": {
+                                      "title": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 200
+                                      },
+                                      "start": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                      },
+                                      "end": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                      },
+                                      "category": {
+                                        "type": "string",
+                                        "enum": [
+                                          "Class",
+                                          "Work",
+                                          "Personal"
+                                        ]
+                                      },
+                                      "location": {
+                                        "type": "string"
+                                      },
+                                      "mandatory": {
+                                        "type": "boolean"
+                                      },
+                                      "repeatWeekly": {
+                                        "type": "boolean"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "id",
+                                  "original",
+                                  "event"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 100
+                                  },
+                                  "original": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "title",
+                                      "start",
+                                      "end",
+                                      "category"
+                                    ],
+                                    "properties": {
+                                      "title": {
+                                        "type": "string"
+                                      },
+                                      "start": {
+                                        "type": "string"
+                                      },
+                                      "end": {
+                                        "type": "string"
+                                      },
+                                      "category": {
+                                        "type": "string"
+                                      },
+                                      "location": {
+                                        "type": "string"
+                                      },
+                                      "mandatory": {
+                                        "type": "boolean"
+                                      },
+                                      "repeatWeekly": {
+                                        "type": "boolean"
+                                      },
+                                      "eventVersion": {
+                                        "type": "integer",
+                                        "minimum": 1
+                                      }
+                                    }
+                                  },
+                                  "event": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "title",
+                                      "start",
+                                      "end",
+                                      "category",
+                                      "location",
+                                      "mandatory",
+                                      "repeatWeekly"
+                                    ],
+                                    "properties": {
+                                      "title": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 200
+                                      },
+                                      "start": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                      },
+                                      "end": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                      },
+                                      "category": {
+                                        "type": "string",
+                                        "enum": [
+                                          "Class",
+                                          "Work",
+                                          "Personal"
+                                        ]
+                                      },
+                                      "location": {
+                                        "type": "string"
+                                      },
+                                      "mandatory": {
+                                        "type": "boolean"
+                                      },
+                                      "repeatWeekly": {
+                                        "type": "boolean"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "id",
+                                  "original"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 100
+                                  },
+                                  "original": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "title",
+                                      "start",
+                                      "end",
+                                      "category"
+                                    ],
+                                    "properties": {
+                                      "title": {
+                                        "type": "string"
+                                      },
+                                      "start": {
+                                        "type": "string"
+                                      },
+                                      "end": {
+                                        "type": "string"
+                                      },
+                                      "category": {
+                                        "type": "string"
+                                      },
+                                      "location": {
+                                        "type": "string"
+                                      },
+                                      "mandatory": {
+                                        "type": "boolean"
+                                      },
+                                      "repeatWeekly": {
+                                        "type": "boolean"
+                                      },
+                                      "eventVersion": {
+                                        "type": "integer",
+                                        "minimum": 1
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending"
+                            ]
+                          },
+                          "expiresAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "eventId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          }
+                        }
+                      }
+                    },
+                    "usage": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "inputTokens",
+                        "outputTokens"
+                      ],
+                      "properties": {
+                        "inputTokens": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "outputTokens": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      }
+                    }
+                  },
+                  "description": "Odpowiedź asystenta i akcje wymagające potwierdzenia."
                 },
                 "examples": {
-                  "success": {
-                    "summary": "Przykładowa odpowiedź",
-                    "description": "Syntetyczny kształt bazowy; szczegóły zależą od operacji.",
+                  "synthetic": {
+                    "summary": "Syntetyczna odpowiedź",
+                    "description": "Przykład zgodny z kontraktem; bez rzeczywistych danych użytkownika.",
                     "value": {
-                      "status": "ok"
+                      "conversationId": "synthetic-conversation-id",
+                      "message": {
+                        "role": "assistant",
+                        "content": "Mogę przygotować podgląd wydarzenia."
+                      },
+                      "pendingActions": [],
+                      "usage": {
+                        "inputTokens": 120,
+                        "outputTokens": 25
+                      }
                     }
                   }
                 }
@@ -11211,17 +12606,20 @@
             }
           },
           "400": {
-            "description": "Błąd domenowy lub infrastrukturalny.",
+            "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Błąd domenowy lub infrastrukturalny.",
                   "required": [
                     "error"
                   ],
+                  "additionalProperties": true,
                   "properties": {
                     "error": {
+                      "type": "string"
+                    },
+                    "message": {
                       "type": "string"
                     },
                     "conflicts": {
@@ -11230,16 +12628,32 @@
                         "type": "object",
                         "additionalProperties": true
                       }
+                    },
+                    "collisionToken": {
+                      "type": "string"
+                    },
+                    "statusCode": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
                     }
                   },
-                  "additionalProperties": true
+                  "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika."
                 },
                 "examples": {
-                  "error": {
-                    "summary": "Błąd operacji",
-                    "description": "Kod `error` zależy od operacji.",
+                  "unavailable": {
+                    "summary": "Usługa niedostępna",
                     "value": {
-                      "error": "request_failed"
+                      "error": "assistant_unavailable"
+                    }
+                  },
+                  "stalePreview": {
+                    "summary": "Nieaktualny podgląd",
+                    "description": "Przygotuj nową propozycję przed ponownym zatwierdzeniem.",
+                    "value": {
+                      "error": "ai_action_stale_preview",
+                      "message": "Wydarzenie zmieniło się od czasu podglądu."
                     }
                   }
                 }
@@ -11247,17 +12661,20 @@
             }
           },
           "404": {
-            "description": "Błąd domenowy lub infrastrukturalny.",
+            "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Błąd domenowy lub infrastrukturalny.",
                   "required": [
                     "error"
                   ],
+                  "additionalProperties": true,
                   "properties": {
                     "error": {
+                      "type": "string"
+                    },
+                    "message": {
                       "type": "string"
                     },
                     "conflicts": {
@@ -11266,16 +12683,32 @@
                         "type": "object",
                         "additionalProperties": true
                       }
+                    },
+                    "collisionToken": {
+                      "type": "string"
+                    },
+                    "statusCode": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
                     }
                   },
-                  "additionalProperties": true
+                  "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika."
                 },
                 "examples": {
-                  "error": {
-                    "summary": "Błąd operacji",
-                    "description": "Kod `error` zależy od operacji.",
+                  "unavailable": {
+                    "summary": "Usługa niedostępna",
                     "value": {
-                      "error": "request_failed"
+                      "error": "assistant_unavailable"
+                    }
+                  },
+                  "stalePreview": {
+                    "summary": "Nieaktualny podgląd",
+                    "description": "Przygotuj nową propozycję przed ponownym zatwierdzeniem.",
+                    "value": {
+                      "error": "ai_action_stale_preview",
+                      "message": "Wydarzenie zmieniło się od czasu podglądu."
                     }
                   }
                 }
@@ -11283,17 +12716,20 @@
             }
           },
           "409": {
-            "description": "Błąd domenowy lub infrastrukturalny.",
+            "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Błąd domenowy lub infrastrukturalny.",
                   "required": [
                     "error"
                   ],
+                  "additionalProperties": true,
                   "properties": {
                     "error": {
+                      "type": "string"
+                    },
+                    "message": {
                       "type": "string"
                     },
                     "conflicts": {
@@ -11302,16 +12738,87 @@
                         "type": "object",
                         "additionalProperties": true
                       }
+                    },
+                    "collisionToken": {
+                      "type": "string"
+                    },
+                    "statusCode": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
                     }
                   },
-                  "additionalProperties": true
+                  "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika."
                 },
                 "examples": {
-                  "error": {
-                    "summary": "Błąd operacji",
-                    "description": "Kod `error` zależy od operacji.",
+                  "unavailable": {
+                    "summary": "Usługa niedostępna",
                     "value": {
-                      "error": "request_failed"
+                      "error": "assistant_unavailable"
+                    }
+                  },
+                  "stalePreview": {
+                    "summary": "Nieaktualny podgląd",
+                    "description": "Przygotuj nową propozycję przed ponownym zatwierdzeniem.",
+                    "value": {
+                      "error": "ai_action_stale_preview",
+                      "message": "Wydarzenie zmieniło się od czasu podglądu."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "conflicts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    },
+                    "collisionToken": {
+                      "type": "string"
+                    },
+                    "statusCode": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika."
+                },
+                "examples": {
+                  "unavailable": {
+                    "summary": "Usługa niedostępna",
+                    "value": {
+                      "error": "assistant_unavailable"
+                    }
+                  },
+                  "stalePreview": {
+                    "summary": "Nieaktualny podgląd",
+                    "description": "Przygotuj nową propozycję przed ponownym zatwierdzeniem.",
+                    "value": {
+                      "error": "ai_action_stale_preview",
+                      "message": "Wydarzenie zmieniło się od czasu podglądu."
                     }
                   }
                 }
@@ -11319,17 +12826,20 @@
             }
           },
           "503": {
-            "description": "Błąd domenowy lub infrastrukturalny.",
+            "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Błąd domenowy lub infrastrukturalny.",
                   "required": [
                     "error"
                   ],
+                  "additionalProperties": true,
                   "properties": {
                     "error": {
+                      "type": "string"
+                    },
+                    "message": {
                       "type": "string"
                     },
                     "conflicts": {
@@ -11338,16 +12848,87 @@
                         "type": "object",
                         "additionalProperties": true
                       }
+                    },
+                    "collisionToken": {
+                      "type": "string"
+                    },
+                    "statusCode": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
                     }
                   },
-                  "additionalProperties": true
+                  "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika."
                 },
                 "examples": {
-                  "error": {
-                    "summary": "Błąd operacji",
-                    "description": "Kod `error` zależy od operacji.",
+                  "unavailable": {
+                    "summary": "Usługa niedostępna",
                     "value": {
-                      "error": "request_failed"
+                      "error": "assistant_unavailable"
+                    }
+                  },
+                  "stalePreview": {
+                    "summary": "Nieaktualny podgląd",
+                    "description": "Przygotuj nową propozycję przed ponownym zatwierdzeniem.",
+                    "value": {
+                      "error": "ai_action_stale_preview",
+                      "message": "Wydarzenie zmieniło się od czasu podglądu."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "conflicts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    },
+                    "collisionToken": {
+                      "type": "string"
+                    },
+                    "statusCode": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika."
+                },
+                "examples": {
+                  "unavailable": {
+                    "summary": "Usługa niedostępna",
+                    "value": {
+                      "error": "assistant_unavailable"
+                    }
+                  },
+                  "stalePreview": {
+                    "summary": "Nieaktualny podgląd",
+                    "description": "Przygotuj nową propozycję przed ponownym zatwierdzeniem.",
+                    "value": {
+                      "error": "ai_action_stale_preview",
+                      "message": "Wydarzenie zmieniło się od czasu podglądu."
                     }
                   }
                 }
@@ -11364,7 +12945,7 @@
         "tags": [
           "Assistant"
         ],
-        "description": "Revalidates a pending proposal and executes it once. The action id is the idempotency key for calendar event creation.",
+        "description": "Revalidates the complete event snapshot and executes the action idempotently. A stale snapshot is rejected and must be previewed again.",
         "parameters": [
           {
             "schema": {
@@ -11379,20 +12960,43 @@
         ],
         "responses": {
           "200": {
-            "description": "Sukces: obiekt JSON opisany dla danej operacji.",
+            "description": "Potwierdzenie zatwierdzonej akcji kalendarza.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Sukces: obiekt JSON opisany dla danej operacji.",
-                  "additionalProperties": true
+                  "additionalProperties": false,
+                  "required": [
+                    "status",
+                    "eventId"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "confirmed"
+                      ]
+                    },
+                    "actionId": {
+                      "type": "string"
+                    },
+                    "eventId": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    }
+                  },
+                  "description": "Potwierdzenie zatwierdzonej akcji kalendarza."
                 },
                 "examples": {
-                  "success": {
-                    "summary": "Przykładowa odpowiedź",
-                    "description": "Syntetyczny kształt bazowy; szczegóły zależą od operacji.",
+                  "synthetic": {
+                    "summary": "Syntetyczna odpowiedź",
+                    "description": "Przykład zgodny z kontraktem; bez rzeczywistych danych użytkownika.",
                     "value": {
-                      "status": "ok"
+                      "status": "confirmed",
+                      "actionId": "synthetic-action-id",
+                      "eventId": "synthetic-event-id"
                     }
                   }
                 }
@@ -11400,17 +13004,20 @@
             }
           },
           "404": {
-            "description": "Błąd domenowy lub infrastrukturalny.",
+            "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Błąd domenowy lub infrastrukturalny.",
                   "required": [
                     "error"
                   ],
+                  "additionalProperties": true,
                   "properties": {
                     "error": {
+                      "type": "string"
+                    },
+                    "message": {
                       "type": "string"
                     },
                     "conflicts": {
@@ -11419,16 +13026,32 @@
                         "type": "object",
                         "additionalProperties": true
                       }
+                    },
+                    "collisionToken": {
+                      "type": "string"
+                    },
+                    "statusCode": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
                     }
                   },
-                  "additionalProperties": true
+                  "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika."
                 },
                 "examples": {
-                  "error": {
-                    "summary": "Błąd operacji",
-                    "description": "Kod `error` zależy od operacji.",
+                  "unavailable": {
+                    "summary": "Usługa niedostępna",
                     "value": {
-                      "error": "request_failed"
+                      "error": "assistant_unavailable"
+                    }
+                  },
+                  "stalePreview": {
+                    "summary": "Nieaktualny podgląd",
+                    "description": "Przygotuj nową propozycję przed ponownym zatwierdzeniem.",
+                    "value": {
+                      "error": "ai_action_stale_preview",
+                      "message": "Wydarzenie zmieniło się od czasu podglądu."
                     }
                   }
                 }
@@ -11436,17 +13059,20 @@
             }
           },
           "409": {
-            "description": "Błąd domenowy lub infrastrukturalny.",
+            "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Błąd domenowy lub infrastrukturalny.",
                   "required": [
                     "error"
                   ],
+                  "additionalProperties": true,
                   "properties": {
                     "error": {
+                      "type": "string"
+                    },
+                    "message": {
                       "type": "string"
                     },
                     "conflicts": {
@@ -11455,16 +13081,32 @@
                         "type": "object",
                         "additionalProperties": true
                       }
+                    },
+                    "collisionToken": {
+                      "type": "string"
+                    },
+                    "statusCode": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
                     }
                   },
-                  "additionalProperties": true
+                  "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika."
                 },
                 "examples": {
-                  "error": {
-                    "summary": "Błąd operacji",
-                    "description": "Kod `error` zależy od operacji.",
+                  "unavailable": {
+                    "summary": "Usługa niedostępna",
                     "value": {
-                      "error": "request_failed"
+                      "error": "assistant_unavailable"
+                    }
+                  },
+                  "stalePreview": {
+                    "summary": "Nieaktualny podgląd",
+                    "description": "Przygotuj nową propozycję przed ponownym zatwierdzeniem.",
+                    "value": {
+                      "error": "ai_action_stale_preview",
+                      "message": "Wydarzenie zmieniło się od czasu podglądu."
                     }
                   }
                 }
@@ -11472,17 +13114,20 @@
             }
           },
           "422": {
-            "description": "Błąd domenowy lub infrastrukturalny.",
+            "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Błąd domenowy lub infrastrukturalny.",
                   "required": [
                     "error"
                   ],
+                  "additionalProperties": true,
                   "properties": {
                     "error": {
+                      "type": "string"
+                    },
+                    "message": {
                       "type": "string"
                     },
                     "conflicts": {
@@ -11491,16 +13136,32 @@
                         "type": "object",
                         "additionalProperties": true
                       }
+                    },
+                    "collisionToken": {
+                      "type": "string"
+                    },
+                    "statusCode": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
                     }
                   },
-                  "additionalProperties": true
+                  "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika."
                 },
                 "examples": {
-                  "error": {
-                    "summary": "Błąd operacji",
-                    "description": "Kod `error` zależy od operacji.",
+                  "unavailable": {
+                    "summary": "Usługa niedostępna",
                     "value": {
-                      "error": "request_failed"
+                      "error": "assistant_unavailable"
+                    }
+                  },
+                  "stalePreview": {
+                    "summary": "Nieaktualny podgląd",
+                    "description": "Przygotuj nową propozycję przed ponownym zatwierdzeniem.",
+                    "value": {
+                      "error": "ai_action_stale_preview",
+                      "message": "Wydarzenie zmieniło się od czasu podglądu."
                     }
                   }
                 }
@@ -11508,17 +13169,20 @@
             }
           },
           "503": {
-            "description": "Błąd domenowy lub infrastrukturalny.",
+            "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Błąd domenowy lub infrastrukturalny.",
                   "required": [
                     "error"
                   ],
+                  "additionalProperties": true,
                   "properties": {
                     "error": {
+                      "type": "string"
+                    },
+                    "message": {
                       "type": "string"
                     },
                     "conflicts": {
@@ -11527,16 +13191,32 @@
                         "type": "object",
                         "additionalProperties": true
                       }
+                    },
+                    "collisionToken": {
+                      "type": "string"
+                    },
+                    "statusCode": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
                     }
                   },
-                  "additionalProperties": true
+                  "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika."
                 },
                 "examples": {
-                  "error": {
-                    "summary": "Błąd operacji",
-                    "description": "Kod `error` zależy od operacji.",
+                  "unavailable": {
+                    "summary": "Usługa niedostępna",
                     "value": {
-                      "error": "request_failed"
+                      "error": "assistant_unavailable"
+                    }
+                  },
+                  "stalePreview": {
+                    "summary": "Nieaktualny podgląd",
+                    "description": "Przygotuj nową propozycję przed ponownym zatwierdzeniem.",
+                    "value": {
+                      "error": "ai_action_stale_preview",
+                      "message": "Wydarzenie zmieniło się od czasu podglądu."
                     }
                   }
                 }
@@ -11568,20 +13248,31 @@
         ],
         "responses": {
           "200": {
-            "description": "Sukces: obiekt JSON opisany dla danej operacji.",
+            "description": "Wynik końcowej operacji.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Sukces: obiekt JSON opisany dla danej operacji.",
-                  "additionalProperties": true
+                  "additionalProperties": false,
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "cancelled"
+                      ]
+                    }
+                  },
+                  "description": "Wynik końcowej operacji."
                 },
                 "examples": {
-                  "success": {
-                    "summary": "Przykładowa odpowiedź",
-                    "description": "Syntetyczny kształt bazowy; szczegóły zależą od operacji.",
+                  "synthetic": {
+                    "summary": "Syntetyczna odpowiedź",
+                    "description": "Przykład zgodny z kontraktem; bez rzeczywistych danych użytkownika.",
                     "value": {
-                      "status": "ok"
+                      "status": "cancelled"
                     }
                   }
                 }
@@ -11589,17 +13280,20 @@
             }
           },
           "404": {
-            "description": "Błąd domenowy lub infrastrukturalny.",
+            "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Błąd domenowy lub infrastrukturalny.",
                   "required": [
                     "error"
                   ],
+                  "additionalProperties": true,
                   "properties": {
                     "error": {
+                      "type": "string"
+                    },
+                    "message": {
                       "type": "string"
                     },
                     "conflicts": {
@@ -11608,16 +13302,32 @@
                         "type": "object",
                         "additionalProperties": true
                       }
+                    },
+                    "collisionToken": {
+                      "type": "string"
+                    },
+                    "statusCode": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
                     }
                   },
-                  "additionalProperties": true
+                  "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika."
                 },
                 "examples": {
-                  "error": {
-                    "summary": "Błąd operacji",
-                    "description": "Kod `error` zależy od operacji.",
+                  "unavailable": {
+                    "summary": "Usługa niedostępna",
                     "value": {
-                      "error": "request_failed"
+                      "error": "assistant_unavailable"
+                    }
+                  },
+                  "stalePreview": {
+                    "summary": "Nieaktualny podgląd",
+                    "description": "Przygotuj nową propozycję przed ponownym zatwierdzeniem.",
+                    "value": {
+                      "error": "ai_action_stale_preview",
+                      "message": "Wydarzenie zmieniło się od czasu podglądu."
                     }
                   }
                 }
@@ -11625,17 +13335,20 @@
             }
           },
           "409": {
-            "description": "Błąd domenowy lub infrastrukturalny.",
+            "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Błąd domenowy lub infrastrukturalny.",
                   "required": [
                     "error"
                   ],
+                  "additionalProperties": true,
                   "properties": {
                     "error": {
+                      "type": "string"
+                    },
+                    "message": {
                       "type": "string"
                     },
                     "conflicts": {
@@ -11644,16 +13357,32 @@
                         "type": "object",
                         "additionalProperties": true
                       }
+                    },
+                    "collisionToken": {
+                      "type": "string"
+                    },
+                    "statusCode": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
                     }
                   },
-                  "additionalProperties": true
+                  "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika."
                 },
                 "examples": {
-                  "error": {
-                    "summary": "Błąd operacji",
-                    "description": "Kod `error` zależy od operacji.",
+                  "unavailable": {
+                    "summary": "Usługa niedostępna",
                     "value": {
-                      "error": "request_failed"
+                      "error": "assistant_unavailable"
+                    }
+                  },
+                  "stalePreview": {
+                    "summary": "Nieaktualny podgląd",
+                    "description": "Przygotuj nową propozycję przed ponownym zatwierdzeniem.",
+                    "value": {
+                      "error": "ai_action_stale_preview",
+                      "message": "Wydarzenie zmieniło się od czasu podglądu."
                     }
                   }
                 }
@@ -11661,17 +13390,20 @@
             }
           },
           "503": {
-            "description": "Błąd domenowy lub infrastrukturalny.",
+            "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Błąd domenowy lub infrastrukturalny.",
                   "required": [
                     "error"
                   ],
+                  "additionalProperties": true,
                   "properties": {
                     "error": {
+                      "type": "string"
+                    },
+                    "message": {
                       "type": "string"
                     },
                     "conflicts": {
@@ -11680,16 +13412,32 @@
                         "type": "object",
                         "additionalProperties": true
                       }
+                    },
+                    "collisionToken": {
+                      "type": "string"
+                    },
+                    "statusCode": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
                     }
                   },
-                  "additionalProperties": true
+                  "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika."
                 },
                 "examples": {
-                  "error": {
-                    "summary": "Błąd operacji",
-                    "description": "Kod `error` zależy od operacji.",
+                  "unavailable": {
+                    "summary": "Usługa niedostępna",
                     "value": {
-                      "error": "request_failed"
+                      "error": "assistant_unavailable"
+                    }
+                  },
+                  "stalePreview": {
+                    "summary": "Nieaktualny podgląd",
+                    "description": "Przygotuj nową propozycję przed ponownym zatwierdzeniem.",
+                    "value": {
+                      "error": "ai_action_stale_preview",
+                      "message": "Wydarzenie zmieniło się od czasu podglądu."
                     }
                   }
                 }
@@ -11721,20 +13469,31 @@
         ],
         "responses": {
           "200": {
-            "description": "Sukces: obiekt JSON opisany dla danej operacji.",
+            "description": "Wynik końcowej operacji.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Sukces: obiekt JSON opisany dla danej operacji.",
-                  "additionalProperties": true
+                  "additionalProperties": false,
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "deleted"
+                      ]
+                    }
+                  },
+                  "description": "Wynik końcowej operacji."
                 },
                 "examples": {
-                  "success": {
-                    "summary": "Przykładowa odpowiedź",
-                    "description": "Syntetyczny kształt bazowy; szczegóły zależą od operacji.",
+                  "synthetic": {
+                    "summary": "Syntetyczna odpowiedź",
+                    "description": "Przykład zgodny z kontraktem; bez rzeczywistych danych użytkownika.",
                     "value": {
-                      "status": "ok"
+                      "status": "deleted"
                     }
                   }
                 }
@@ -11742,17 +13501,20 @@
             }
           },
           "404": {
-            "description": "Błąd domenowy lub infrastrukturalny.",
+            "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Błąd domenowy lub infrastrukturalny.",
                   "required": [
                     "error"
                   ],
+                  "additionalProperties": true,
                   "properties": {
                     "error": {
+                      "type": "string"
+                    },
+                    "message": {
                       "type": "string"
                     },
                     "conflicts": {
@@ -11761,16 +13523,32 @@
                         "type": "object",
                         "additionalProperties": true
                       }
+                    },
+                    "collisionToken": {
+                      "type": "string"
+                    },
+                    "statusCode": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
                     }
                   },
-                  "additionalProperties": true
+                  "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika."
                 },
                 "examples": {
-                  "error": {
-                    "summary": "Błąd operacji",
-                    "description": "Kod `error` zależy od operacji.",
+                  "unavailable": {
+                    "summary": "Usługa niedostępna",
                     "value": {
-                      "error": "request_failed"
+                      "error": "assistant_unavailable"
+                    }
+                  },
+                  "stalePreview": {
+                    "summary": "Nieaktualny podgląd",
+                    "description": "Przygotuj nową propozycję przed ponownym zatwierdzeniem.",
+                    "value": {
+                      "error": "ai_action_stale_preview",
+                      "message": "Wydarzenie zmieniło się od czasu podglądu."
                     }
                   }
                 }
@@ -11778,17 +13556,20 @@
             }
           },
           "503": {
-            "description": "Błąd domenowy lub infrastrukturalny.",
+            "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Błąd domenowy lub infrastrukturalny.",
                   "required": [
                     "error"
                   ],
+                  "additionalProperties": true,
                   "properties": {
                     "error": {
+                      "type": "string"
+                    },
+                    "message": {
                       "type": "string"
                     },
                     "conflicts": {
@@ -11797,16 +13578,32 @@
                         "type": "object",
                         "additionalProperties": true
                       }
+                    },
+                    "collisionToken": {
+                      "type": "string"
+                    },
+                    "statusCode": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
                     }
                   },
-                  "additionalProperties": true
+                  "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika."
                 },
                 "examples": {
-                  "error": {
-                    "summary": "Błąd operacji",
-                    "description": "Kod `error` zależy od operacji.",
+                  "unavailable": {
+                    "summary": "Usługa niedostępna",
                     "value": {
-                      "error": "request_failed"
+                      "error": "assistant_unavailable"
+                    }
+                  },
+                  "stalePreview": {
+                    "summary": "Nieaktualny podgląd",
+                    "description": "Przygotuj nową propozycję przed ponownym zatwierdzeniem.",
+                    "value": {
+                      "error": "ai_action_stale_preview",
+                      "message": "Wydarzenie zmieniło się od czasu podglądu."
                     }
                   }
                 }
@@ -11816,30 +13613,180 @@
         }
       }
     },
-    "/api/v1/notifications/settings": {
+    "/api/v1/notifications/push-config": {
       "get": {
-        "operationId": "getNotificationSettings",
-        "summary": "Read notification preferences",
+        "operationId": "getWebPushConfig",
+        "summary": "Read Web Push configuration",
         "tags": [
           "Notifications"
         ],
-        "description": "Returns in-app reminder and quiet-hours preferences for the current server-resolved scope.",
+        "description": "Returns the public application server key when Web Push is configured. The private key is never exposed.",
         "responses": {
           "200": {
-            "description": "Notification settings or queue result.",
+            "description": "Publiczny klucz VAPID do subskrypcji Web Push. Klucz prywatny nigdy nie jest zwracany.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Notification settings or queue result.",
+                  "additionalProperties": false,
+                  "required": [
+                    "enabled",
+                    "applicationServerKey"
+                  ],
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "applicationServerKey": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    }
+                  },
+                  "description": "Publiczny klucz VAPID do subskrypcji Web Push. Klucz prywatny nigdy nie jest zwracany."
+                },
+                "examples": {
+                  "disabled": {
+                    "summary": "Web Push nie jest skonfigurowany",
+                    "value": {
+                      "enabled": false,
+                      "applicationServerKey": null
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/notifications/subscriptions": {
+      "post": {
+        "operationId": "registerWebPushSubscription",
+        "summary": "Register a browser push subscription",
+        "tags": [
+          "Notifications"
+        ],
+        "description": "Stores the encrypted-delivery endpoint and keys within the current user/calendar scope. Endpoint values are never logged or returned.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "endpoint",
+                  "keys"
+                ],
+                "properties": {
+                  "endpoint": {
+                    "type": "string",
+                    "format": "uri",
+                    "maxLength": 2048
+                  },
+                  "keys": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "p256dh",
+                      "auth"
+                    ],
+                    "properties": {
+                      "p256dh": {
+                        "type": "string",
+                        "minLength": 16,
+                        "maxLength": 256
+                      },
+                      "auth": {
+                        "type": "string",
+                        "minLength": 8,
+                        "maxLength": 256
+                      }
+                    }
+                  },
+                  "expirationTime": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "minimum": 0
+                  }
+                }
+              },
+              "examples": {
+                "synthetic": {
+                  "summary": "Synthetic browser subscription",
+                  "description": "A reserved synthetic token on an allowed provider hostname; it is not a real subscription.",
+                  "value": {
+                    "endpoint": "https://fcm.googleapis.com/fcm/send/synthetic-reserved-endpoint",
+                    "keys": {
+                      "p256dh": "synthetic-public-key-000000000000",
+                      "auth": "synthetic-auth-key-0000"
+                    },
+                    "expirationTime": null
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Wynik zmiany subskrypcji Web Push.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "subscribed"
+                      ]
+                    }
+                  },
+                  "description": "Wynik zmiany subskrypcji Web Push."
+                },
+                "examples": {
+                  "result": {
+                    "summary": "Subskrypcja zapisana",
+                    "value": {
+                      "status": "subscribed"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Notification repository or scope error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Notification repository or scope error.",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
                   "additionalProperties": true
                 },
                 "examples": {
-                  "success": {
-                    "summary": "Powodzenie",
-                    "description": "Syntetyczny kształt bazowy odpowiedzi; pola zależą od operacji.",
+                  "error": {
+                    "summary": "Błąd powiadomień",
+                    "description": "Kod błędu zależy od operacji.",
                     "value": {
-                      "status": "ok"
+                      "error": "notification_store_unavailable"
                     }
                   }
                 }
@@ -11868,7 +13815,214 @@
                     "summary": "Błąd powiadomień",
                     "description": "Kod błędu zależy od operacji.",
                     "value": {
-                      "error": "notification_request_failed"
+                      "error": "notification_store_unavailable"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteWebPushSubscription",
+        "summary": "Remove a browser push subscription",
+        "tags": [
+          "Notifications"
+        ],
+        "description": "Deletes only the endpoint owned by the current user/calendar scope. Repeated removal is safe.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "endpoint"
+                ],
+                "properties": {
+                  "endpoint": {
+                    "type": "string",
+                    "format": "uri",
+                    "maxLength": 2048
+                  }
+                }
+              },
+              "examples": {
+                "synthetic": {
+                  "summary": "Synthetic endpoint",
+                  "value": {
+                    "endpoint": "https://fcm.googleapis.com/fcm/send/synthetic-reserved-endpoint"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Wynik zmiany subskrypcji Web Push.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "removed"
+                      ]
+                    }
+                  },
+                  "description": "Wynik zmiany subskrypcji Web Push."
+                },
+                "examples": {
+                  "result": {
+                    "summary": "Subskrypcja usunięta",
+                    "value": {
+                      "status": "removed"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Notification repository or scope error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Notification repository or scope error.",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": true
+                },
+                "examples": {
+                  "error": {
+                    "summary": "Błąd powiadomień",
+                    "description": "Kod błędu zależy od operacji.",
+                    "value": {
+                      "error": "notification_store_unavailable"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/notifications/settings": {
+      "get": {
+        "operationId": "getNotificationSettings",
+        "summary": "Read notification preferences",
+        "tags": [
+          "Notifications"
+        ],
+        "description": "Returns in-app reminder and quiet-hours preferences for the current server-resolved scope.",
+        "responses": {
+          "200": {
+            "description": "Preferencje i liczba zaplanowanych przypomnień dla bieżącego zakresu.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "enabled",
+                    "workRemindersEnabled",
+                    "eventChangesEnabled",
+                    "minutesBefore",
+                    "quietStart",
+                    "quietEnd",
+                    "pendingReminderCount"
+                  ],
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "workRemindersEnabled": {
+                      "type": "boolean"
+                    },
+                    "eventChangesEnabled": {
+                      "type": "boolean"
+                    },
+                    "minutesBefore": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 1440
+                    },
+                    "quietStart": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "quietEnd": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "pendingReminderCount": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "description": "Preferencje i liczba zaplanowanych przypomnień dla bieżącego zakresu."
+                },
+                "examples": {
+                  "settings": {
+                    "summary": "Ustawienia przypomnień",
+                    "value": {
+                      "enabled": true,
+                      "workRemindersEnabled": true,
+                      "eventChangesEnabled": true,
+                      "minutesBefore": 30,
+                      "quietStart": null,
+                      "quietEnd": null,
+                      "pendingReminderCount": 2
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Notification repository or scope error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Notification repository or scope error.",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": true
+                },
+                "examples": {
+                  "error": {
+                    "summary": "Błąd powiadomień",
+                    "description": "Kod błędu zależy od operacji.",
+                    "value": {
+                      "error": "notification_store_unavailable"
                     }
                   }
                 }
@@ -11905,7 +14059,7 @@
                   },
                   "minutesBefore": {
                     "type": "integer",
-                    "minimum": 0,
+                    "minimum": 1,
                     "maximum": 1440
                   }
                 }
@@ -11916,8 +14070,8 @@
                   "description": "Synthetic settings; no real user data.",
                   "value": {
                     "enabled": true,
-                    "workRemindersEnabled": false,
-                    "minutesBefore": 15
+                    "workRemindersEnabled": true,
+                    "minutesBefore": 30
                   }
                 }
               }
@@ -11926,20 +14080,66 @@
         },
         "responses": {
           "200": {
-            "description": "Notification settings or queue result.",
+            "description": "Preferencje i liczba zaplanowanych przypomnień dla bieżącego zakresu.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Notification settings or queue result.",
-                  "additionalProperties": true
+                  "additionalProperties": false,
+                  "required": [
+                    "enabled",
+                    "workRemindersEnabled",
+                    "eventChangesEnabled",
+                    "minutesBefore",
+                    "quietStart",
+                    "quietEnd",
+                    "pendingReminderCount"
+                  ],
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "workRemindersEnabled": {
+                      "type": "boolean"
+                    },
+                    "eventChangesEnabled": {
+                      "type": "boolean"
+                    },
+                    "minutesBefore": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 1440
+                    },
+                    "quietStart": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "quietEnd": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "pendingReminderCount": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "description": "Preferencje i liczba zaplanowanych przypomnień dla bieżącego zakresu."
                 },
                 "examples": {
-                  "success": {
-                    "summary": "Powodzenie",
-                    "description": "Syntetyczny kształt bazowy odpowiedzi; pola zależą od operacji.",
+                  "settings": {
+                    "summary": "Ustawienia przypomnień",
                     "value": {
-                      "status": "ok"
+                      "enabled": true,
+                      "workRemindersEnabled": true,
+                      "eventChangesEnabled": true,
+                      "minutesBefore": 30,
+                      "quietStart": null,
+                      "quietEnd": null,
+                      "pendingReminderCount": 2
                     }
                   }
                 }
@@ -11968,7 +14168,7 @@
                     "summary": "Błąd powiadomień",
                     "description": "Kod błędu zależy od operacji.",
                     "value": {
-                      "error": "notification_request_failed"
+                      "error": "notification_store_unavailable"
                     }
                   }
                 }
@@ -11997,7 +14197,7 @@
                     "summary": "Błąd powiadomień",
                     "description": "Kod błędu zależy od operacji.",
                     "value": {
-                      "error": "notification_request_failed"
+                      "error": "notification_store_unavailable"
                     }
                   }
                 }
@@ -12009,12 +14209,12 @@
     },
     "/api/v1/notifications/due": {
       "get": {
-        "operationId": "listDueNotifications",
-        "summary": "Read due in-app notifications",
+        "operationId": "claimDueNotifications",
+        "summary": "Claim due in-app notifications",
         "tags": [
           "Notifications"
         ],
-        "description": "Returns due reminder queue items for the active calendar, bounded to 100 entries.",
+        "description": "Claims due reminders for two minutes; the client must acknowledge each one only after displaying it. Unacknowledged claims are retried.",
         "parameters": [
           {
             "schema": {
@@ -12030,20 +14230,79 @@
         ],
         "responses": {
           "200": {
-            "description": "Notification settings or queue result.",
+            "description": "Lista przypomnień przejętych przez aktywnego klienta.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Notification settings or queue result.",
-                  "additionalProperties": true
+                  "additionalProperties": false,
+                  "required": [
+                    "notifications"
+                  ],
+                  "properties": {
+                    "notifications": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "eventId",
+                          "type",
+                          "message",
+                          "scheduledAt",
+                          "eventStart",
+                          "eventEnd",
+                          "title"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "eventId": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          },
+                          "scheduledAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "eventStart": {
+                            "type": "string"
+                          },
+                          "eventEnd": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "description": "Lista przypomnień przejętych przez aktywnego klienta."
                 },
                 "examples": {
-                  "success": {
-                    "summary": "Powodzenie",
-                    "description": "Syntetyczny kształt bazowy odpowiedzi; pola zależą od operacji.",
+                  "due": {
+                    "summary": "Oczekujące przypomnienie",
                     "value": {
-                      "status": "ok"
+                      "notifications": [
+                        {
+                          "id": "synthetic-notification",
+                          "eventId": "synthetic-event",
+                          "type": "Przypomnienie pracy",
+                          "message": "Przypomnienie: Zmiana, 2026-11-16 08:00–16:00",
+                          "scheduledAt": "2026-11-16T07:30:00Z",
+                          "eventStart": "2026-11-16T08:00",
+                          "eventEnd": "2026-11-16T16:00",
+                          "title": "Zmiana"
+                        }
+                      ]
                     }
                   }
                 }
@@ -12072,7 +14331,7 @@
                     "summary": "Błąd powiadomień",
                     "description": "Kod błędu zależy od operacji.",
                     "value": {
-                      "error": "notification_request_failed"
+                      "error": "notification_store_unavailable"
                     }
                   }
                 }
@@ -12089,7 +14348,7 @@
         "tags": [
           "Notifications"
         ],
-        "description": "Marks a due notification as delivered to the active client; this is not a read receipt.",
+        "description": "Marks a due notification as delivered after the active client successfully creates the browser notification; this is not a read receipt.",
         "parameters": [
           {
             "schema": {
@@ -12104,20 +14363,30 @@
         ],
         "responses": {
           "200": {
-            "description": "Notification settings or queue result.",
+            "description": "Potwierdzenie wyświetlenia powiadomienia przez klienta.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Notification settings or queue result.",
-                  "additionalProperties": true
+                  "additionalProperties": false,
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "delivered"
+                      ]
+                    }
+                  },
+                  "description": "Potwierdzenie wyświetlenia powiadomienia przez klienta."
                 },
                 "examples": {
-                  "success": {
-                    "summary": "Powodzenie",
-                    "description": "Syntetyczny kształt bazowy odpowiedzi; pola zależą od operacji.",
+                  "delivered": {
+                    "summary": "Przypomnienie wyświetlone",
                     "value": {
-                      "status": "ok"
+                      "status": "delivered"
                     }
                   }
                 }
@@ -12146,7 +14415,7 @@
                     "summary": "Błąd powiadomień",
                     "description": "Kod błędu zależy od operacji.",
                     "value": {
-                      "error": "notification_request_failed"
+                      "error": "notification_store_unavailable"
                     }
                   }
                 }
@@ -12175,7 +14444,7 @@
                     "summary": "Błąd powiadomień",
                     "description": "Kod błędu zależy od operacji.",
                     "value": {
-                      "error": "notification_request_failed"
+                      "error": "notification_store_unavailable"
                     }
                   }
                 }

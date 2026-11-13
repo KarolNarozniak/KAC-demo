@@ -29,6 +29,12 @@ export const config = {
   databaseSsl: process.env.PGSSLMODE === 'require',
   outboxPollIntervalMs: positiveInt(process.env.OUTBOX_POLL_INTERVAL_MS, 5_000, 60_000),
   outboxBatchSize: positiveInt(process.env.OUTBOX_BATCH_SIZE, 20, 200),
+  webPush: {
+    publicKey: process.env.WEB_PUSH_VAPID_PUBLIC_KEY?.trim() ?? '',
+    privateKey: process.env.WEB_PUSH_VAPID_PRIVATE_KEY?.trim() ?? '',
+    subject: process.env.WEB_PUSH_VAPID_SUBJECT?.trim() ?? '',
+    get enabled() { return Boolean(this.publicKey && this.privateKey && this.subject); },
+  },
   corsOrigins: (process.env.API_CORS_ORIGINS || 'http://localhost:8081,http://localhost:8080,http://localhost:3000')
     .split(',')
     .map((value) => value.trim())

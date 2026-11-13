@@ -87,7 +87,10 @@ export default function AssistantScreen({ active, onCalendarChange }: Props) {
       setMessages((current) => [...current, { id: `confirmed-${Date.now()}`, role: 'assistant',
         content: { text: 'Akcja została zatwierdzona i zapisana w kalendarzu.' }, createdAt: new Date().toISOString() }]);
       onCalendarChange();
-    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Nie udało się zatwierdzić akcji.'); }
+    } catch (reason) {
+      try { setPendingActions((await listAssistantMessages(conversationId)).pendingActions); } catch { /* keep the current action until refresh succeeds */ }
+      setError(reason instanceof Error ? reason.message : 'Nie udało się zatwierdzić akcji.');
+    }
     finally { setSending(false); }
   };
 

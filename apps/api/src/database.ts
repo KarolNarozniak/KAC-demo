@@ -4,6 +4,7 @@ import { config } from './config.js';
 import { CATEGORY_IDS, type ExistingEvent } from './import/rules.js';
 import { planImport, type PlanAction } from './import/plan.js';
 import { enqueueDomainEvent } from './events/outbox.js';
+import { AiActionStalePreviewError } from './ai/repository.js';
 import {
   IMPORT_SESSION_TTL_MINUTES,
   SOURCE_LABELS,
@@ -56,6 +57,7 @@ export type CalendarOverview = {
     start: string;
     end: string;
     category: string;
+    eventVersion?: number;
     color: string;
     mandatory: boolean;
     repeatWeekly?: boolean;
@@ -70,11 +72,13 @@ export class PostgresCalendarRepository {
     return this.saveEvent(input, undefined, userId, calendarId, aiActionId);
   }
 
-  async updateEvent(id: string, input: EventInput, userId = config.demoUserId, calendarId = config.demoCalendarId) {
-    return this.saveEvent(input, id, userId, calendarId);
+  async updateEvent(id: string, input: EventInput, userId = config.demoUserId, calendarId = config.demoCalendarId,
+    assistantAction?: { actionId: string; expected?: Record<string, unknown> }) {
+    return this.saveEvent(input, id, userId, calendarId, undefined, assistantAction);
   }
 
-  private async saveEvent(input: EventInput, eventId: string | undefined, userId: string, calendarId: string, aiActionId?: string) {
+  private async saveEvent(input: EventInput, eventId: string | undefined, userId: string, calendarId: string, aiActionId?: string,
+    assistantAction?: { actionId: string; expected?: Record<string, unknown> }) {
     const client = await this.connectionPool.connect();
     try {
       await client.query('BEGIN');
@@ -84,8 +88,13 @@ export class PostgresCalendarRepository {
       if (!owner.rowCount) throw new EventNotFoundError('calendar_not_found');
       const timezone: string = owner.rows[0].strefa_czasowa;
       validateTimedEvent(input, timezone);
+      if (assistantAction) {
+        const prior = await client.query(`select rezultat from t_ai_action_effects
+          where id_akcji = $1 and id_uzytkownika = $2 and id_kalendarza = $3`, [assistantAction.actionId, userId, calendarId]);
+        if (prior.rows[0]) { await client.query('COMMIT'); return prior.rows[0].rezultat as EventInput & { id: string }; }
+      }
       const records = await client.query(`select e.id_wydarzenia, e.id_serii, e.id_ai_akcji, e.event_version, e.tytul, e.powtarzaj_co_tydzien,
-        k.nazwa as kategoria,
+        e.miejsce, e.obowiazkowe, k.nazwa as kategoria,
         to_char(e.rozpoczecie at time zone $2, 'YYYY-MM-DD"T"HH24:MI') as start,
         to_char(e.zakonczenie at time zone $2, 'YYYY-MM-DD"T"HH24:MI') as end
         from t_wydarzenia e join t_kategorie k on k.id_kategorii = e.id_kategorii
@@ -99,6 +108,8 @@ export class PostgresCalendarRepository {
       }
       const current = records.rows.find(row => row.id_wydarzenia === eventId);
       if (eventId && !current) throw new EventNotFoundError('event_not_found');
+      if (assistantAction?.expected && current && !this.matchesAssistantSnapshot(current, assistantAction.expected))
+        throw new AiActionStalePreviewError('ai_action_stale_preview');
       const events: TimedEvent[] = records.rows.map(row => ({ id: row.id_wydarzenia, title: row.tytul, start: row.start, end: row.end,
         category: row.kategoria, repeatWeekly: row.powtarzaj_co_tydzien }));
       requireCollisionDecision(input, events, timezone, eventId);
@@ -132,30 +143,52 @@ export class PostgresCalendarRepository {
       });
       if (!input.repeatWeekly && seriesId) await client.query(`delete from t_serie where id_serii = $1
         and not exists (select 1 from t_wydarzenia where id_serii = $1)`, [seriesId]);
+      const { collisionToken: _, ...savedInput } = input;
+      const savedResult = { id: savedEventId, ...savedInput, title: input.title.trim() };
+      if (assistantAction) await client.query(`insert into t_ai_action_effects (id_akcji, id_uzytkownika, id_kalendarza, rezultat)
+        values ($1, $2, $3, $4::jsonb)`, [assistantAction.actionId, userId, calendarId, JSON.stringify(savedResult)]);
       await client.query('COMMIT');
-      const { collisionToken: _, ...saved } = input;
-      return { id: savedEventId, ...saved, title: input.title.trim() };
+      return savedResult;
     } catch (error) { await client.query('ROLLBACK'); throw error; }
     finally { client.release(); }
   }
 
-  async deleteEvent(eventId: string, userId = config.demoUserId, calendarId = config.demoCalendarId): Promise<string[] | null> {
+  private matchesAssistantSnapshot(current: Record<string, unknown>, expected: Record<string, unknown>) {
+    const actual: Record<string, unknown> = { title: current.tytul, start: current.start, end: current.end, category: current.kategoria,
+      location: current.miejsce ?? '', mandatory: current.obowiazkowe, repeatWeekly: current.powtarzaj_co_tydzien,
+      eventVersion: Number(current.event_version) };
+    return Object.entries(expected).every(([key, value]) => key in actual && actual[key] === value);
+  }
+
+  async deleteEvent(eventId: string, userId = config.demoUserId, calendarId = config.demoCalendarId,
+    assistantAction?: { actionId: string; expected?: Record<string, unknown> }): Promise<string[] | null> {
     const client = await this.connectionPool.connect();
     try {
       await client.query('BEGIN');
       const owner = await client.query(`select c.id_kalendarza, u.strefa_czasowa from t_kalendarze c
         join t_uzytkownicy u on u.id_uzytkownika = c.id_uzytkownika
-        where c.id_kalendarza = $1 and c.id_uzytkownika = $2 and c.aktywny = true for update of c`, [calendarId, userId]);
+      where c.id_kalendarza = $1 and c.id_uzytkownika = $2 and c.aktywny = true for update of c`, [calendarId, userId]);
       if (!owner.rowCount) { await client.query('ROLLBACK'); return null; }
-      const selected = await client.query(`select e.id_serii, e.powtarzaj_co_tydzien
+      if (assistantAction) {
+        const prior = await client.query(`select rezultat from t_ai_action_effects
+          where id_akcji = $1 and id_uzytkownika = $2 and id_kalendarza = $3`, [assistantAction.actionId, userId, calendarId]);
+        if (prior.rows[0]) { await client.query('COMMIT'); return (prior.rows[0].rezultat as { deletedIds: string[] }).deletedIds; }
+      }
+      const selected = await client.query(`select e.id_serii, e.powtarzaj_co_tydzien, e.event_version, e.tytul, e.obowiazkowe, e.miejsce,
+          to_char(e.rozpoczecie at time zone $4, 'YYYY-MM-DD"T"HH24:MI') as start,
+          to_char(e.zakonczenie at time zone $4, 'YYYY-MM-DD"T"HH24:MI') as end, k.nazwa as category
         from t_wydarzenia e join t_kalendarze c on c.id_kalendarza = e.id_kalendarza
+        join t_kategorie k on k.id_kategorii = e.id_kategorii
         where e.id_wydarzenia = $1 and c.id_kalendarza = $2 and c.id_uzytkownika = $3
-          and c.aktywny = true and e.status = 'Aktywne' for update of e`, [eventId, calendarId, userId]);
+          and c.aktywny = true and e.status = 'Aktywne' for update of e`, [eventId, calendarId, userId, owner.rows[0].strefa_czasowa]);
       if (!selected.rowCount) {
+        if (assistantAction?.expected) throw new AiActionStalePreviewError('ai_action_stale_preview');
         await client.query('COMMIT');
         return null;
       }
       const event = selected.rows[0];
+      if (assistantAction?.expected && !this.matchesAssistantSnapshot({ ...event, start: event.start, end: event.end, kategoria: event.category }, assistantAction.expected))
+        throw new AiActionStalePreviewError('ai_action_stale_preview');
       const removedEvents = event.powtarzaj_co_tydzien && event.id_serii
         ? await client.query(`select e.id_wydarzenia, e.event_version, e.tytul,
             to_char(e.rozpoczecie at time zone $3, 'YYYY-MM-DD"T"HH24:MI') as local_start,
@@ -173,12 +206,15 @@ export class PostgresCalendarRepository {
       const removed = event.powtarzaj_co_tydzien && event.id_serii
         ? await client.query(`delete from t_wydarzenia where id_serii = $1 and id_kalendarza = $2 returning id_wydarzenia`, [event.id_serii, calendarId])
         : await client.query(`delete from t_wydarzenia where id_wydarzenia = $1 and id_kalendarza = $2 returning id_wydarzenia`, [eventId, calendarId]);
+      const deletedIds = removed.rows.map((row) => String(row.id_wydarzenia));
+      if (assistantAction) await client.query(`insert into t_ai_action_effects (id_akcji, id_uzytkownika, id_kalendarza, rezultat)
+        values ($1, $2, $3, $4::jsonb)`, [assistantAction.actionId, userId, calendarId, JSON.stringify({ deletedIds })]);
       if (event.id_serii) {
         await client.query(`delete from t_serie s where s.id_serii = $1 and s.id_kalendarza = $2
           and not exists (select 1 from t_wydarzenia e where e.id_serii = s.id_serii)`, [event.id_serii, calendarId]);
       }
       await client.query('COMMIT');
-      return removed.rows.map((row) => row.id_wydarzenia as string);
+      return deletedIds;
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;
@@ -608,6 +644,7 @@ export class PostgresCalendarRepository {
     const eventResult = await this.connectionPool.query(
       `select e.id_wydarzenia, e.tytul, e.rozpoczecie, e.zakonczenie,
               e.obowiazkowe, e.powtarzaj_co_tydzien, e.miejsce,
+              e.event_version,
               to_char(e.rozpoczecie at time zone u.strefa_czasowa, 'YYYY-MM-DD"T"HH24:MI') as local_start,
               to_char(e.zakonczenie at time zone u.strefa_czasowa, 'YYYY-MM-DD"T"HH24:MI') as local_end, k.nazwa as kategoria, k.kolor_hex
        from t_wydarzenia e
@@ -636,6 +673,7 @@ export class PostgresCalendarRepository {
         start: event.local_start,
         end: event.local_end,
         category: event.kategoria,
+        eventVersion: Number(event.event_version),
         color: event.kolor_hex,
         mandatory: event.obowiazkowe,
         repeatWeekly: event.powtarzaj_co_tydzien,

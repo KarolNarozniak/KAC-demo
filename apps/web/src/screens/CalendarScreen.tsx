@@ -8,13 +8,16 @@ import DateField from '../components/DateField';
 import TimeField from '../components/TimeField';
 import WeekGrid, { type WeekLayout } from '../components/WeekGrid';
 import type { WeeklySchedule } from '../services/scheduleApi';
+import type { DueNotification } from '../services/notificationsApi';
+import { resolveNotificationTarget } from '../domain/notifications';
 import ClassScheduleImport from '../components/ClassScheduleImport';
 import WorkScheduleImport from '../components/WorkScheduleImport';
 import GoogleCalendarImport from '../components/GoogleCalendarImport';
 const categories: Category[] = ['Class', 'Work', 'Personal'];
 const labels: Record<Category, string> = { Class: 'Zajęcia', Work: 'Praca', Personal: 'Prywatne' };
-type Props = { week: Date; setWeek: (value: Date) => void; todayOnly?: boolean; weekLayout: WeekLayout; now: Date; active: boolean; draftSchedule?: WeeklySchedule | null };
-export default function CalendarScreen({ week, setWeek, todayOnly = false, weekLayout, now, active, draftSchedule }: Props) {
+type Props = { week: Date; setWeek: (value: Date) => void; todayOnly?: boolean; weekLayout: WeekLayout; now: Date; active: boolean; draftSchedule?: WeeklySchedule | null;
+  notificationTarget?: DueNotification | null; onNotificationResolved?: () => void };
+export default function CalendarScreen({ week, setWeek, todayOnly = false, weekLayout, now, active, draftSchedule, notificationTarget, onNotificationResolved }: Props) {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -39,6 +42,26 @@ export default function CalendarScreen({ week, setWeek, todayOnly = false, weekL
   const [error, setError] = useState(''); const [conflicts, setConflicts] = useState<EventCollision[]>([]); const [pending, setPending] = useState<CalendarEvent | null>(null);
   const monday = startOfWeek(todayOnly ? now : week); const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addCalendarDays(monday, i)), [monday.getTime()]);
   const list = useMemo(() => occurrencesForRange(events, { start: monday, end: addCalendarDays(monday, 7) }), [events, monday.getTime()]);
+  useEffect(() => {
+    if (!active || loading || !notificationTarget) return;
+    const resolution = resolveNotificationTarget(events, notificationTarget, { start: monday, end: addCalendarDays(monday, 7) });
+    if (resolution.kind === 'open') {
+      setSelected(resolution.occurrence); setDialog('details');
+    } else if (resolution.kind === 'navigate') {
+      const [year, month, day] = resolution.date.split('-').map(Number);
+      const targetWeek = startOfWeek(new Date(year, month - 1, day, 12));
+      if (targetWeek.getTime() !== monday.getTime()) {
+        setWeek(new Date(year, month - 1, day, 12));
+        return;
+      }
+      setNotice('To wystąpienie zmiany już się nie odbywa. Kalendarz został otwarty.');
+    } else {
+      setNotice(resolution.eventExists
+        ? 'To wystąpienie zmiany już się nie odbywa. Kalendarz został otwarty.'
+        : 'Ta zmiana została usunięta. Kalendarz został otwarty.');
+    }
+    onNotificationResolved?.();
+  }, [active, loading, notificationTarget, list, events, onNotificationResolved]);
   const previewEvents = useMemo(() => {
     if (!draftSchedule || draftSchedule.isApproved || draftSchedule.weekStart !== localDateKey(monday)) return [];
     return draftSchedule.shifts.map((shift) => ({ id: `preview-${shift.candidateId}`, title: 'Propozycja pracy', location: 'Nieopublikowana propozycja',

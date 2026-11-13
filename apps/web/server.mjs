@@ -30,7 +30,7 @@ createServer((request, response) => {
   response.writeHead(200, {
     'Content-Type': types[extname(target).toLowerCase()] || 'application/octet-stream',
     'Content-Length': info.size,
-    'Cache-Control': extname(target) === '.html' ? 'no-cache' : 'public, max-age=31536000, immutable',
+    'Cache-Control': extname(target) === '.html' || pathname === '/service-worker.js' ? 'no-cache' : 'public, max-age=31536000, immutable',
   });
   if (request.method === 'HEAD') response.end(); else createReadStream(target).pipe(response);
 }).listen(port, '0.0.0.0', () => console.log(`KAC static demo listening on 0.0.0.0:${port}`));

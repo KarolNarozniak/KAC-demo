@@ -56,8 +56,9 @@ Przy private endpoint wymagane są VNet Integration API App Service i poprawne p
 ## Dane i retencja
 
 - Responses API requesty jawnie ustawiają `store: false`; kontekst rozmowy jest odtwarzany z tabel aplikacji.
+- Każda tura asystenta otrzymuje zaufany kontekst serwera: bieżący czas UTC, datę/czas w strefie IANA właściciela kalendarza oraz nazwę tej strefy. Nie jest on wyliczany z treści użytkownika.
 - Rozmowy, wiadomości, metryki tokenów i podglądy akcji przechowuje PostgreSQL. Rozmowy wygasają po 30 dniach nieaktywności; podgląd akcji po 15 minutach. Worker usuwa wygasłą historię. Nie logujemy promptów, odpowiedzi, tokenów ani bajtów dokumentu.
-- Oryginalny PDF/JPG/PNG jest walidowany i przekazywany inline do requestu. Bajty nie trafiają do `t_importy`, cache ani Azure Files API. Baza przechowuje wyłącznie znormalizowane wiersze importu, krótki fragment źródłowy i numer strony do korekty.
+- Oryginalny PDF/JPG/PNG jest walidowany i przekazywany inline do requestu. Interfejs informuje przed wysłaniem o przekazaniu pliku do Azure AI; anulowanie przerywa request do API i upstream Responses. Bajty nie trafiają do `t_importy`, cache ani Azure Files API. Baza przechowuje wyłącznie znormalizowane wiersze importu, krótki fragment źródłowy i numer strony do korekty.
 - `store: false` wyłącza trwały stan odpowiedzi używany do kolejnych Responses turns. Nie jest samo w sobie gwarancją wyłączenia wszystkich logów bezpieczeństwa/abuse monitoring. Azure deklaruje brak trenowania modeli na danych klienta; szczegóły retencji zależą od funkcji i polityki usługi. Dla wymogu rezydencji wybierz deployment regionalny, nie zakładaj tego samego dla globalnego/Data Zone.
 - W obrazie najpierw sprawdzamy format, rozmiar, piksele i zmniejszamy duże dane URI. PDF ma limit 5 MB i 10 stron; obrazy limit 20 MP. Nieudane wywołanie nie przełącza się automatycznie na OCR/Document Intelligence.
 
@@ -67,7 +68,11 @@ Przy private endpoint wymagane są VNet Integration API App Service i poprawne p
 - **Tools:** `assistantTools` jest ścisłą allow-listą w `src/ai/tools.ts`: odczyt kalendarza/profilu i przygotowanie podglądu utworzenia, zmiany lub usunięcia wydarzenia. Argumenty są sprawdzane ponownie w backendzie. Model nigdy nie ma narzędzia `confirm`.
 - **Knowledge:** nie konfigurujemy File Search, vector store ani zewnętrznego RAG w MVP. Kalendarz/profil są pobierane przez scope-owane narzędzia, a plik jest wejściem tylko bieżącego importu.
 - **Memory:** źródłem pamięci jest PostgreSQL z `UserScope`. Historie są ograniczane do ostatnich 24 wiadomości w kontekście i zapisywane z monotoniczną kolejnością; wywołania narzędzi są odtwarzane jako stateless Responses input items. `demoScope` odpowiada obecnemu środowisku bez logowania.
-- **Guardrails:** model nie może modyfikować kalendarza. Zmiana tworzy `t_ai_akcje` z TTL, a niezależny endpoint potwierdzenia weryfikuje właściciela, stan, aktualne kolizje i idempotency key. Rolę Prompt Shields uzupełniają limity wejścia, parsowanie JSON Schema, limit narzędzi/cykli i walidacja serwerowa.
+- **Guardrails:** model nie może modyfikować kalendarza. Zmiana tworzy `t_ai_akcje` z TTL, a niezależny endpoint potwierdzenia weryfikuje właściciela, pełny snapshot wydarzenia, kolizje i idempotency key. Aktualizacje i usunięcia zapisują wynik akcji w tej samej transakcji co zmianę kalendarza; ponowienie po utracie odpowiedzi odczytuje ten wynik zamiast ponownie zapisywać. Nieaktualny podgląd przechodzi do stanu `failed` i wymaga nowej propozycji. Rolę Prompt Shields uzupełniają limity wejścia, parsowanie JSON Schema, limit narzędzi/cykli i walidacja serwerowa.
+
+## Anulowanie odczytu pliku
+
+Przed wysłaniem interfejs informuje, że PDF/PNG/JPG zostanie przekazany do Azure AI Foundry. Podczas odczytu przycisk anulowania zamyka klientowski request; API przekazuje sygnał przerwania do Responses API i nie tworzy sesji podglądu, jeśli odczyt został przerwany. Nawet przy udanym odczycie wydarzenia powstają dopiero po osobnym potwierdzeniu sesji.
 
 ## Testy manualne z deploymentem
 
@@ -84,4 +89,4 @@ Skrypt wypisuje jedynie liczbę wierszy, unresolved fields i usage; nie drukuje 
 
 ## Ograniczenia wdrożeniowe sprintu
 
-W02 uruchamia osobny outbox worker. Obecnie worker planuje rekordy przypomnień w bazie, a frontend może wyświetlać je w aktywnej przeglądarce po uzyskaniu zgody. Pełne push po zamknięciu aplikacji wymaga wyboru dostawcy Web Push/Notification Hubs i skonfigurowania kluczy/abonamentów. Google importer ma dziś scope tylko `calendar.readonly`; publikacja zmian wymaga rozszerzenia OAuth do zapisu i ponownej zgody. Worker pozostawia te dostawy jawnie zablokowane zamiast udawać sukces.
+W02 uruchamia osobny outbox worker. Przypomnienia są planowane w bazie, a opcjonalny Web Push wymaga ustawienia VAPID w API/workerze. Google importer ma dziś scope tylko `calendar.readonly`; publikacja zmian wymaga rozszerzenia OAuth do zapisu i ponownej zgody. Konsument Google pozostawia dostawy jawnie zablokowane do czasu uzyskania scope zapisu.

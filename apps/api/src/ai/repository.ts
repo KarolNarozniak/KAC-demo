@@ -9,6 +9,7 @@ export type AiPendingAction = { id: string; conversationId: string; kind: string
 export class AiConversationNotFoundError extends Error {}
 export class AiActionNotFoundError extends Error {}
 export class AiActionConflictError extends Error {}
+export class AiActionStalePreviewError extends AiActionConflictError {}
 
 export class AiRepository {
   constructor(private readonly pool: Pool) {}
@@ -154,6 +155,11 @@ export class AiRepository {
 
   async releaseAction(scope: UserScope, actionId: string, errorCode: string) {
     await this.pool.query(`update t_ai_akcje set status = 'pending', blad_kod = $4, updated_at = now()
+      where id_akcji = $1 and id_uzytkownika = $2 and id_kalendarza = $3 and status = 'processing'`, [actionId, scope.userId, scope.calendarId, errorCode]);
+  }
+
+  async failAction(scope: UserScope, actionId: string, errorCode: string) {
+    await this.pool.query(`update t_ai_akcje set status = 'failed', blad_kod = $4, completed_at = now(), updated_at = now()
       where id_akcji = $1 and id_uzytkownika = $2 and id_kalendarza = $3 and status = 'processing'`, [actionId, scope.userId, scope.calendarId, errorCode]);
   }
 

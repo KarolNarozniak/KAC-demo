@@ -12,7 +12,7 @@ export type FoundryConnectionConfig = {
 };
 export type FoundryResponsesConfig = Omit<FoundryConnectionConfig, 'agentName'> & { modelDeployment: string };
 export type FoundryResponsesRequest = Omit<ResponseCreateParamsNonStreaming, 'model'>;
-export type FoundryResponsesProvider = { respond(options: FoundryResponsesRequest): Promise<OpenAIResponse> };
+export type FoundryResponsesProvider = { respond(options: FoundryResponsesRequest, requestOptions?: { signal?: AbortSignal }): Promise<OpenAIResponse> };
 
 export class FoundryResponsesClient implements FoundryResponsesProvider {
   private readonly client: OpenAI;
@@ -28,8 +28,8 @@ export class FoundryResponsesClient implements FoundryResponsesProvider {
     this.client = project.getOpenAIClient({ timeout: settings.timeoutMs, maxRetries: 0 });
   }
 
-  respond(options: FoundryResponsesRequest) {
-    return this.client.responses.create({ ...options, model: this.settings.modelDeployment, store: false });
+  respond(options: FoundryResponsesRequest, requestOptions?: { signal?: AbortSignal }) {
+    return this.client.responses.create({ ...options, model: this.settings.modelDeployment, store: false }, requestOptions);
   }
 }
 

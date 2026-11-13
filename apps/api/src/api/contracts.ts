@@ -13,11 +13,11 @@ import type { AiRepository } from '../ai/repository.js';
 export type AiServiceContract = Pick<AiService, 'extractSchedule' | 'sendAssistantMessage'>;
 export type AiRepositoryContract = Pick<AiRepository,
   'createConversation' | 'getConversation' | 'listConversations' | 'appendMessage' | 'listMessages' | 'listPendingActions' |
-  'closeConversation' | 'logUsage' | 'createAction' | 'getAction' | 'claimAction' | 'completeAction' | 'releaseAction' | 'cancelAction' | 'cancelPendingActions'>;
+  'closeConversation' | 'logUsage' | 'createAction' | 'getAction' | 'claimAction' | 'completeAction' | 'releaseAction' | 'failAction' | 'cancelAction' | 'cancelPendingActions'>;
 
 export type CalendarRepository = {
-  deleteEvent?: (eventId: string, userId?: string, calendarId?: string) => Promise<string[] | null>;
-  updateEvent?: (id: string, input: EventInput, userId?: string, calendarId?: string) => Promise<EventInput & { id: string }>;
+  deleteEvent?: (eventId: string, userId?: string, calendarId?: string, assistantAction?: { actionId: string; expected?: Record<string, unknown> }) => Promise<string[] | null>;
+  updateEvent?: (id: string, input: EventInput, userId?: string, calendarId?: string, assistantAction?: { actionId: string; expected?: Record<string, unknown> }) => Promise<EventInput & { id: string }>;
   createEvent?: (input: EventInput, userId?: string, calendarId?: string, aiActionId?: string) => Promise<EventInput & { id: string }>;
   checkConnection: () => Promise<void>;
   getOverview: (userId?: string, calendarId?: string) => Promise<CalendarOverview | null>;

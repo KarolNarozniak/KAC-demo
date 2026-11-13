@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
-import { addLocalDays, localDateTimeString, localInstant } from '../scheduling/time.js';
+import { parseEventTime, reminderText, reminderTime } from '../notifications/schedule.js';
 
 type OutboxDelivery = {
   id_delivery: string; id_outbox: string; consumer: 'notifications' | 'google'; attempts: number;
@@ -94,48 +94,26 @@ export class PostgresEventOutboxWorker {
     const payload = item.payload ?? {};
     const after = payload.after as EventDetails | undefined;
     const timeZone = typeof payload.timeZone === 'string' ? payload.timeZone : 'Europe/Warsaw';
-    await client.query(`update t_powiadomienia set status = 'Anulowane'
-      where event_ref = $1 and status = 'Zaplanowane'`, [item.id_agregatu]);
-    if (item.typ_zdarzenia === 'calendar_event.deleted' || !after || after.category !== 'Work' || !after.start) return;
+    await client.query(`update t_powiadomienia set status = 'Anulowane', lease_until = null
+      where event_ref = $1 and status in ('Zaplanowane', 'Dostarczanie')`, [item.id_agregatu]);
+    if (item.typ_zdarzenia === 'calendar_event.deleted' || !after || after.category !== 'Work' || !after.start || !after.end) return;
 
     const settings = await client.query(`select min_przed, cisza_od::text as cisza_od, cisza_do::text as cisza_do
       from t_ustaw_powiadomien where id_uzytkownika = $1 and wlaczone and przypomnienia_wlaczone
       order by updated_at desc limit 1`, [item.id_uzytkownika]);
     if (!settings.rowCount) return;
-    const start = this.parseEventTime(after.start, timeZone);
-    const minutesBefore = Math.min(24 * 60, Math.max(0, Number(settings.rows[0].min_przed)));
-    const sendAt = this.moveOutOfQuietHours(new Date(start.getTime() - minutesBefore * 60_000), start, timeZone,
+    const start = parseEventTime(after.start, timeZone);
+    const end = parseEventTime(after.end, timeZone);
+    const now = new Date();
+    const sendAt = reminderTime(start, Number(settings.rows[0].min_przed), timeZone, now,
       settings.rows[0].cisza_od, settings.rows[0].cisza_do);
-    if (sendAt <= new Date()) return;
-    const startText = localDateTimeString(start, timeZone).slice(0, 16).replace('T', ' ');
+    if (!sendAt) return;
     const eventTitle = String(after.title ?? 'Zmiana pracy').slice(0, 180);
     const idempotencyKey = `work-reminder:${item.id_agregatu}:${item.wersja_agregatu}:${sendAt.toISOString()}`;
     await client.query(`insert into t_powiadomienia
       (id_uzytkownika, id_wydarzenia, typ, tresc, planowana_data, status, idempotency_key, event_ref)
       values ($1, $2, 'Przypomnienie pracy', $3, $4, 'Zaplanowane', $5, $6)
       on conflict (idempotency_key) where idempotency_key is not null do nothing`,
-    [item.id_uzytkownika, item.id_agregatu, `Przypomnienie: ${eventTitle}, ${startText}`, sendAt.toISOString(), idempotencyKey, item.id_agregatu]);
-  }
-
-  private parseEventTime(value: string, timeZone: string): Date {
-    if (/Z$|[+-]\d{2}:\d{2}$/.test(value)) return new Date(value);
-    const [date, time] = value.split('T');
-    const parsed = localInstant(date!, time!, timeZone);
-    if (!parsed) throw new Error('invalid_outbox_event_time');
-    return parsed;
-  }
-
-  private moveOutOfQuietHours(sendAt: Date, eventStart: Date, timeZone: string, quietStart?: string | null, quietEnd?: string | null): Date {
-    if (!quietStart || !quietEnd) return sendAt;
-    const local = localDateTimeString(sendAt, timeZone);
-    const date = local.slice(0, 10), time = local.slice(11, 16);
-    const toMinute = (value: string) => Number(value.slice(0, 2)) * 60 + Number(value.slice(3, 5));
-    const currentMinute = toMinute(time), startMinute = toMinute(quietStart), endMinute = toMinute(quietEnd);
-    const quiet = startMinute < endMinute ? currentMinute >= startMinute && currentMinute < endMinute : currentMinute >= startMinute || currentMinute < endMinute;
-    if (!quiet) return sendAt;
-    const endDate = startMinute > endMinute && currentMinute >= startMinute ? addLocalDays(date, 1) : date;
-    const quietEndInstant = localInstant(endDate, quietEnd.slice(0, 5), timeZone);
-    if (!quietEndInstant) return eventStart;
-    return quietEndInstant < eventStart ? quietEndInstant : eventStart;
+     [item.id_uzytkownika, item.id_agregatu, reminderText(eventTitle, start, end, timeZone), sendAt.toISOString(), idempotencyKey, item.id_agregatu]);
   }
 }

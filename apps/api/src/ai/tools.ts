@@ -56,6 +56,12 @@ const validEventArguments = (value: Record<string, unknown>, includeId: boolean)
     typeof value.mandatory === 'boolean' && typeof value.repeatWeekly === 'boolean';
 };
 
+const eventSnapshot = (event: { title: string; start: string; end: string; category: string; location?: string; mandatory?: boolean; repeatWeekly?: boolean; eventVersion?: number }) => ({
+  title: event.title, start: event.start, end: event.end, category: event.category, location: event.location ?? '',
+  mandatory: event.mandatory ?? false, repeatWeekly: event.repeatWeekly ?? false,
+  ...(typeof event.eventVersion === 'number' ? { eventVersion: event.eventVersion } : {}),
+});
+
 export async function executeAssistantTool(name: string, rawArguments: string, context: AssistantToolContext): Promise<Record<string, unknown>> {
   let args: Record<string, unknown>;
   try {
@@ -94,7 +100,7 @@ export async function executeAssistantTool(name: string, rawArguments: string, c
       const overview = await context.calendar.getOverview(context.scope.userId, context.scope.calendarId);
       const event = overview?.events.find((item) => item.id === id);
       if (!event) return { error: 'event_not_found' };
-      payload = { id, original: { title: event.title, start: event.start, end: event.end, category: event.category } };
+      payload = { id, original: eventSnapshot(event) };
     } else {
       if (!validEventArguments(args, kind === 'calendar_event_update')) return { error: 'invalid_tool_arguments' };
       const event = { title: args.title, start: args.start, end: args.end, category: args.category, location: args.location,
@@ -103,7 +109,7 @@ export async function executeAssistantTool(name: string, rawArguments: string, c
         const overview = await context.calendar.getOverview(context.scope.userId, context.scope.calendarId);
         const current = overview?.events.find((item) => item.id === args.id);
         if (!current) return { error: 'event_not_found' };
-        payload = { id: args.id, original: { title: current.title, start: current.start, end: current.end, category: current.category }, event };
+        payload = { id: args.id, original: eventSnapshot(current), event };
       } else payload = { event };
     }
     const action = await context.ai.createAction(context.scope, context.conversationId, kind, payload, context.actionTtlMinutes);
