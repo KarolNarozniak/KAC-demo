@@ -4,6 +4,7 @@ import { ProfileError } from '../profile/availability.js';
 import type { Pool } from 'pg';
 import { config } from '../config.js';
 import { localDateTimeString } from './time.js';
+import { enqueueDomainEvent } from '../events/outbox.js';
 import type { PlanningContext, ScheduleGenerationResult } from './types.js';
 
 export class ScheduleNotFoundError extends Error {}
@@ -176,6 +177,12 @@ export class PostgresScheduleRepository {
         where generator_version <> 'work-profile-v1' and id_kalendarza = $1 and tydzien_od = $2::date and approved_at is not null and id_grafiku <> $3 for update`,
       [calendarId, weekStart, row.id_grafiku]);
       for (const previous of previousApproved.rows) {
+        const previousEvents = await client.query(`select e.id_wydarzenia, e.event_version, e.tytul, e.rozpoczecie, e.zakonczenie
+          from t_wydarzenia e where e.zrodlo = 'Plan pracy' and e.id_wydarzenia = any(
+            select id_wydarzenia from t_zmiany_pracy where id_grafiku = $1 and id_wydarzenia is not null) for update`, [previous.id_grafiku]);
+        for (const previousEvent of previousEvents.rows) await enqueueDomainEvent(client, { userId: profile.id_uzytkownika, calendarId },
+          'calendar_event', String(previousEvent.id_wydarzenia), 'calendar_event.deleted', { origin: 'schedule_replaced', timeZone: context.profile.timeZone,
+            before: { title: previousEvent.tytul, start: previousEvent.rozpoczecie, end: previousEvent.zakonczenie, version: previousEvent.event_version } });
         await client.query(`delete from t_wydarzenia where zrodlo = 'Plan pracy' and id_wydarzenia = any(
           select id_wydarzenia from t_zmiany_pracy where id_grafiku = $1 and id_wydarzenia is not null)`, [previous.id_grafiku]);
         await client.query(`update t_zmiany_pracy set status = 'Zastąpiona' where id_grafiku = $1`, [previous.id_grafiku]);
@@ -187,7 +194,11 @@ export class PostgresScheduleRepository {
         const event = await client.query(`insert into t_wydarzenia
           (id_kalendarza, id_kategorii, tytul, rozpoczecie, zakonczenie, obowiazkowe, powtarzaj_co_tydzien, zrodlo, status, miejsce)
           values ($1, (select id_kategorii from t_kategorie where nazwa = 'Praca' limit 1), 'Zmiana pracy',
-            $2, $3, false, false, 'Plan pracy', 'Aktywne', '') returning id_wydarzenia`, [calendarId, shift.rozpoczecie, shift.zakonczenie]);
+            $2, $3, false, false, 'Plan pracy', 'Aktywne', '') returning id_wydarzenia, event_version`, [calendarId, shift.rozpoczecie, shift.zakonczenie]);
+        await enqueueDomainEvent(client, { userId: profile.id_uzytkownika, calendarId }, 'calendar_event', String(event.rows[0].id_wydarzenia), 'calendar_event.created', {
+          origin: 'schedule_approved', timeZone: context.profile.timeZone,
+          after: { title: 'Zmiana pracy', start: shift.rozpoczecie, end: shift.zakonczenie, category: 'Work' },
+        });
         await client.query(`update t_zmiany_pracy set id_wydarzenia = $2, status = 'Zatwierdzona' where id_zmiany = $1`, [shift.id_zmiany, event.rows[0].id_wydarzenia]);
       }
       await client.query(`update t_grafiki set approved_at = now(), status = 'accepted' where id_grafiku = $1`, [row.id_grafiku]);

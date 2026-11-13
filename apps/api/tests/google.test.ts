@@ -37,7 +37,7 @@ test('mapowanie wydarzeń Google: strefa użytkownika, całodniowe pominięte, o
 test('połączenie wygasa po 15 minutach i po imporcie zapomina token', () => {
   let now = 0;
   const store = new GoogleConnections(() => now);
-  const connection = store.create('demo', null);
+  const connection = store.create('demo', null, 'U1', 'K1');
   store.update(connection.id, { status: 'connected', accessToken: 'secret' });
   store.markUsed(connection.id);
   assert.equal(store.get(connection.id)?.accessToken, null);

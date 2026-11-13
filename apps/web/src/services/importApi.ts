@@ -33,6 +33,9 @@ export type ImportPreviewRow = {
   end: string | null;
   location: string | null;
   confidence: number | null;
+  sourcePage: number | null;
+  sourceSnippet: string | null;
+  unresolvedFields: string[];
   overnight: boolean;
   duplicateOfEvents: { id: string; title: string; start: string; repeatWeekly?: boolean }[];
   duplicateOfRows: string[];
@@ -49,6 +52,9 @@ export type ImportRowInput = {
   category: ImportCategory;
   location?: string;
   confidence?: number;
+  sourcePage?: number;
+  sourceSnippet?: string;
+  unresolvedFields?: string[];
   employee?: string;
   overnightConfirmed?: boolean;
   duplicateDecision?: DuplicateDecision;
@@ -95,6 +101,9 @@ export type ScheduleRow = {
   employee?: string;
   isOwn: boolean;
   incomplete: boolean;
+  sourcePage?: number;
+  sourceSnippet?: string;
+  unresolvedFields?: string[];
 };
 
 export type ScheduleReadResult =
@@ -105,6 +114,7 @@ export type ScheduleReadResult =
       readStatus: 'all' | 'partial';
       readStatusLabel: string;
       readerIsDemo: boolean;
+      readerProvider?: 'local' | 'azure-ai-foundry';
       userName: string;
       rows: ScheduleRow[];
       preview: ImportPreviewRow[];
@@ -122,6 +132,53 @@ export async function readWorkSchedule(fileName: string, dataBase64: string): Pr
   return { kind: 'unavailable' };
 }
 
+const aiReadErrors: Record<string, string> = {
+  azure_ai_not_configured: 'Azure AI Foundry nie jest skonfigurowane. Sprawdź endpoint projektu, deployment modelu i logowanie API.',
+  azure_ai_rate_limited: 'Azure AI ograniczył liczbę żądań. Poczekaj chwilę i spróbuj ponownie.',
+  azure_ai_timeout: 'Odczyt AI przekroczył limit czasu. Wybierz mniejszy fragment i spróbuj ponownie.',
+  database_not_configured: 'Serwer nie ma skonfigurowanej bazy danych. Plik nie został zapisany.',
+  'file-too-large': 'Plik może mieć maksymalnie 5 MB.',
+  'too-many-pages': 'PDF przekracza skonfigurowany limit stron. Podziel dokument na mniejsze części.',
+  'image-too-large': 'Obraz ma zbyt dużą rozdzielczość. Zmniejsz go przed importem.',
+  'ai-payload-too-large': 'Nie można bezpiecznie zmieścić obrazu w limicie Azure AI. Zapisz mniejszą lub bardziej skompresowaną kopię.',
+  'unsupported-format': 'AI obsługuje tylko PDF, PNG i JPG/JPEG.',
+  'corrupted-file': 'Plik jest uszkodzony lub niekompletny.',
+  'encrypted-pdf': 'PDF zabezpieczony hasłem nie jest obsługiwany.',
+  'unreadable-pdf': 'Nie udało się sprawdzić PDF. Wybierz inny plik.',
+  'unreadable-image': 'Nie udało się odczytać obrazu. Wybierz wyraźniejszy PNG/JPG.',
+  nothing_recognized: 'Nie znaleziono żadnych zmian. Sprawdź czytelność i układ dokumentu.',
+  invalid_ai_output: 'AI zwróciło dane w nieprawidłowym formacie. Nic nie zapisano.',
+  azure_ai_request_failed: 'Nie udało się połączyć z Azure AI Foundry. Sprawdź rolę i deployment modelu.',
+};
+
+async function readAiFile(fileName: string, dataBase64: string, source: 'classes' | 'work', signal?: AbortSignal) {
+  const timeout = AbortSignal.timeout(120000);
+  const requestSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
+  let response: Response;
+  try { response = await postJson('/api/v1/import/ai/read', { fileName, dataBase64, source }, requestSignal); }
+  catch (error) {
+    if (signal?.aborted) throw error;
+    if (timeout.aborted) throw new Error(aiReadErrors.azure_ai_timeout);
+    throw error;
+  }
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const code = typeof body.error === 'string' ? body.error : '';
+    const fallback = response.status === 503 ? aiReadErrors.azure_ai_not_configured : `Odczyt AI nie powiódł się (HTTP ${response.status}).`;
+    throw new Error(aiReadErrors[code] ?? fallback);
+  }
+  return body as Record<string, unknown>;
+}
+
+export async function readAiClassSchedule(fileName: string, dataBase64: string, signal?: AbortSignal): Promise<ClassReadResult> {
+  return await readAiFile(fileName, dataBase64, 'classes', signal) as unknown as ClassReadResult;
+}
+
+export async function readAiWorkSchedule(fileName: string, dataBase64: string, signal?: AbortSignal): Promise<ScheduleReadResult> {
+  const result = await readAiFile(fileName, dataBase64, 'work', signal);
+  return { kind: 'read', ...result, readerProvider: 'azure-ai-foundry' } as unknown as Extract<ScheduleReadResult, { kind: 'read' }>;
+}
+
 /** Wydarzenie z kalendarza, z którym koliduje importowany wiersz (informacja, nie blokuje importu). */
 export type ImportCollision = { id: string; title: string; category: string; mandatory: boolean; start: string; end: string };
 
@@ -133,7 +190,7 @@ export type ClassReadResult = { importSessionId: string; academicYear: string; d
   /** Kolizje z wydarzeniami już zapisanymi w kalendarzu, według identyfikatora wiersza. */
   collisions?: Record<string, ImportCollision[]>;
   // Tylko dla pliku ICS (historyjka S23KC2S1P2-8):
-  source?: 'ics'; calendarName?: string | null; eventCount?: number;
+  source?: 'ics' | 'ai'; readerProvider?: 'local' | 'azure-ai-foundry'; calendarName?: string | null; eventCount?: number;
   skipped?: { count: number; reasons: Partial<Record<'all-day' | 'missing-time' | 'invalid-date' | 'unsupported-repeat', number>> } };
 
 /** Pola formularza, które wymagają poprawy (historyjka S23KC2S1P2-20: system wskazuje pola). */

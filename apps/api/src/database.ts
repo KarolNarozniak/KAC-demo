@@ -3,6 +3,8 @@ import { Pool, type PoolClient } from 'pg';
 import { config } from './config.js';
 import { CATEGORY_IDS, type ExistingEvent } from './import/rules.js';
 import { planImport, type PlanAction } from './import/plan.js';
+import { enqueueDomainEvent } from './events/outbox.js';
+import { AiActionStalePreviewError } from './ai/repository.js';
 import {
   IMPORT_SESSION_TTL_MINUTES,
   SOURCE_LABELS,
@@ -55,6 +57,7 @@ export type CalendarOverview = {
     start: string;
     end: string;
     category: string;
+    eventVersion?: number;
     color: string;
     mandatory: boolean;
     repeatWeekly?: boolean;
@@ -65,15 +68,17 @@ export type CalendarOverview = {
 export class PostgresCalendarRepository {
   constructor(private readonly connectionPool: Pool) {}
 
-  async createEvent(input: EventInput, userId = config.demoUserId, calendarId = config.demoCalendarId) {
-    return this.saveEvent(input, undefined, userId, calendarId);
+  async createEvent(input: EventInput, userId = config.demoUserId, calendarId = config.demoCalendarId, aiActionId?: string) {
+    return this.saveEvent(input, undefined, userId, calendarId, aiActionId);
   }
 
-  async updateEvent(id: string, input: EventInput, userId = config.demoUserId, calendarId = config.demoCalendarId) {
-    return this.saveEvent(input, id, userId, calendarId);
+  async updateEvent(id: string, input: EventInput, userId = config.demoUserId, calendarId = config.demoCalendarId,
+    assistantAction?: { actionId: string; expected?: Record<string, unknown> }) {
+    return this.saveEvent(input, id, userId, calendarId, undefined, assistantAction);
   }
 
-  private async saveEvent(input: EventInput, eventId: string | undefined, userId: string, calendarId: string) {
+  private async saveEvent(input: EventInput, eventId: string | undefined, userId: string, calendarId: string, aiActionId?: string,
+    assistantAction?: { actionId: string; expected?: Record<string, unknown> }) {
     const client = await this.connectionPool.connect();
     try {
       await client.query('BEGIN');
@@ -83,14 +88,28 @@ export class PostgresCalendarRepository {
       if (!owner.rowCount) throw new EventNotFoundError('calendar_not_found');
       const timezone: string = owner.rows[0].strefa_czasowa;
       validateTimedEvent(input, timezone);
-      const records = await client.query(`select e.id_wydarzenia, e.id_serii, e.tytul, e.powtarzaj_co_tydzien,
-        k.nazwa as kategoria,
+      if (assistantAction) {
+        const prior = await client.query(`select rezultat from t_ai_action_effects
+          where id_akcji = $1 and id_uzytkownika = $2 and id_kalendarza = $3`, [assistantAction.actionId, userId, calendarId]);
+        if (prior.rows[0]) { await client.query('COMMIT'); return prior.rows[0].rezultat as EventInput & { id: string }; }
+      }
+      const records = await client.query(`select e.id_wydarzenia, e.id_serii, e.id_ai_akcji, e.event_version, e.tytul, e.powtarzaj_co_tydzien,
+        e.miejsce, e.obowiazkowe, k.nazwa as kategoria,
         to_char(e.rozpoczecie at time zone $2, 'YYYY-MM-DD"T"HH24:MI') as start,
         to_char(e.zakonczenie at time zone $2, 'YYYY-MM-DD"T"HH24:MI') as end
         from t_wydarzenia e join t_kategorie k on k.id_kategorii = e.id_kategorii
         where e.id_kalendarza = $1 and e.status = 'Aktywne'`, [calendarId, timezone]);
+      if (aiActionId) {
+        const alreadyCreated = records.rows.find((row) => row.id_ai_akcji === aiActionId);
+        if (alreadyCreated) {
+          await client.query('COMMIT');
+          return { id: alreadyCreated.id_wydarzenia, ...input, title: alreadyCreated.tytul };
+        }
+      }
       const current = records.rows.find(row => row.id_wydarzenia === eventId);
       if (eventId && !current) throw new EventNotFoundError('event_not_found');
+      if (assistantAction?.expected && current && !this.matchesAssistantSnapshot(current, assistantAction.expected))
+        throw new AiActionStalePreviewError('ai_action_stale_preview');
       const events: TimedEvent[] = records.rows.map(row => ({ id: row.id_wydarzenia, title: row.tytul, start: row.start, end: row.end,
         category: row.kategoria, repeatWeekly: row.powtarzaj_co_tydzien }));
       requireCollisionDecision(input, events, timezone, eventId);
@@ -110,46 +129,92 @@ export class PostgresCalendarRepository {
         ? await client.query(`update t_wydarzenia set
             id_kategorii = (select id_kategorii from t_kategorie where nazwa = $2), id_serii = $3, tytul = $4,
             rozpoczecie = $5::timestamp at time zone $10, zakonczenie = $6::timestamp at time zone $10,
-            obowiazkowe = $7, powtarzaj_co_tydzien = $8, miejsce = $9, updated_at = now()
-            where id_kalendarza = $1 and id_wydarzenia = $11 returning id_wydarzenia`, [...values, eventId])
+             obowiazkowe = $7, powtarzaj_co_tydzien = $8, miejsce = $9, event_version = event_version + 1, updated_at = now()
+             where id_kalendarza = $1 and id_wydarzenia = $11 returning id_wydarzenia, event_version`, [...values, eventId])
         : await client.query(`insert into t_wydarzenia
-            (id_kalendarza, id_kategorii, id_serii, tytul, rozpoczecie, zakonczenie, obowiazkowe, powtarzaj_co_tydzien, miejsce)
+            (id_kalendarza, id_kategorii, id_serii, tytul, rozpoczecie, zakonczenie, obowiazkowe, powtarzaj_co_tydzien, miejsce, id_ai_akcji)
             values ($1, (select id_kategorii from t_kategorie where nazwa = $2), $3, $4,
-            $5::timestamp at time zone $10, $6::timestamp at time zone $10, $7, $8, $9) returning id_wydarzenia`, values);
+            $5::timestamp at time zone $10, $6::timestamp at time zone $10, $7, $8, $9, $11) returning id_wydarzenia, event_version`, [...values, aiActionId ?? null]);
+      const savedEventId = String(result.rows[0].id_wydarzenia);
+      await enqueueDomainEvent(client, { userId, calendarId }, 'calendar_event', savedEventId, eventId ? 'calendar_event.updated' : 'calendar_event.created', {
+        origin: aiActionId ? 'assistant' : 'calendar', timeZone: timezone, eventVersion: result.rows[0].event_version,
+        before: current ? { title: current.tytul, start: current.start, end: current.end, category: current.kategoria } : null,
+        after: { title: input.title.trim(), start: input.start, end: input.end, category: input.category, location: input.location ?? '' },
+      });
       if (!input.repeatWeekly && seriesId) await client.query(`delete from t_serie where id_serii = $1
         and not exists (select 1 from t_wydarzenia where id_serii = $1)`, [seriesId]);
+      const { collisionToken: _, ...savedInput } = input;
+      const savedResult = { id: savedEventId, ...savedInput, title: input.title.trim() };
+      if (assistantAction) await client.query(`insert into t_ai_action_effects (id_akcji, id_uzytkownika, id_kalendarza, rezultat)
+        values ($1, $2, $3, $4::jsonb)`, [assistantAction.actionId, userId, calendarId, JSON.stringify(savedResult)]);
       await client.query('COMMIT');
-      const { collisionToken: _, ...saved } = input;
-      return { id: result.rows[0].id_wydarzenia, ...saved, title: input.title.trim() };
+      return savedResult;
     } catch (error) { await client.query('ROLLBACK'); throw error; }
     finally { client.release(); }
   }
 
-  async deleteEvent(eventId: string, userId = config.demoUserId, calendarId = config.demoCalendarId): Promise<string[] | null> {
+  private matchesAssistantSnapshot(current: Record<string, unknown>, expected: Record<string, unknown>) {
+    const actual: Record<string, unknown> = { title: current.tytul, start: current.start, end: current.end, category: current.kategoria,
+      location: current.miejsce ?? '', mandatory: current.obowiazkowe, repeatWeekly: current.powtarzaj_co_tydzien,
+      eventVersion: Number(current.event_version) };
+    return Object.entries(expected).every(([key, value]) => key in actual && actual[key] === value);
+  }
+
+  async deleteEvent(eventId: string, userId = config.demoUserId, calendarId = config.demoCalendarId,
+    assistantAction?: { actionId: string; expected?: Record<string, unknown> }): Promise<string[] | null> {
     const client = await this.connectionPool.connect();
     try {
       await client.query('BEGIN');
-      const owner = await client.query(`select id_kalendarza from t_kalendarze
-        where id_kalendarza = $1 and id_uzytkownika = $2 and aktywny = true for update`, [calendarId, userId]);
+      const owner = await client.query(`select c.id_kalendarza, u.strefa_czasowa from t_kalendarze c
+        join t_uzytkownicy u on u.id_uzytkownika = c.id_uzytkownika
+      where c.id_kalendarza = $1 and c.id_uzytkownika = $2 and c.aktywny = true for update of c`, [calendarId, userId]);
       if (!owner.rowCount) { await client.query('ROLLBACK'); return null; }
-      const selected = await client.query(`select e.id_serii, e.powtarzaj_co_tydzien
+      if (assistantAction) {
+        const prior = await client.query(`select rezultat from t_ai_action_effects
+          where id_akcji = $1 and id_uzytkownika = $2 and id_kalendarza = $3`, [assistantAction.actionId, userId, calendarId]);
+        if (prior.rows[0]) { await client.query('COMMIT'); return (prior.rows[0].rezultat as { deletedIds: string[] }).deletedIds; }
+      }
+      const selected = await client.query(`select e.id_serii, e.powtarzaj_co_tydzien, e.event_version, e.tytul, e.obowiazkowe, e.miejsce,
+          to_char(e.rozpoczecie at time zone $4, 'YYYY-MM-DD"T"HH24:MI') as start,
+          to_char(e.zakonczenie at time zone $4, 'YYYY-MM-DD"T"HH24:MI') as end, k.nazwa as category
         from t_wydarzenia e join t_kalendarze c on c.id_kalendarza = e.id_kalendarza
+        join t_kategorie k on k.id_kategorii = e.id_kategorii
         where e.id_wydarzenia = $1 and c.id_kalendarza = $2 and c.id_uzytkownika = $3
-          and c.aktywny = true and e.status = 'Aktywne' for update of e`, [eventId, calendarId, userId]);
+          and c.aktywny = true and e.status = 'Aktywne' for update of e`, [eventId, calendarId, userId, owner.rows[0].strefa_czasowa]);
       if (!selected.rowCount) {
+        if (assistantAction?.expected) throw new AiActionStalePreviewError('ai_action_stale_preview');
         await client.query('COMMIT');
         return null;
       }
       const event = selected.rows[0];
+      if (assistantAction?.expected && !this.matchesAssistantSnapshot({ ...event, start: event.start, end: event.end, kategoria: event.category }, assistantAction.expected))
+        throw new AiActionStalePreviewError('ai_action_stale_preview');
+      const removedEvents = event.powtarzaj_co_tydzien && event.id_serii
+        ? await client.query(`select e.id_wydarzenia, e.event_version, e.tytul,
+            to_char(e.rozpoczecie at time zone $3, 'YYYY-MM-DD"T"HH24:MI') as local_start,
+            to_char(e.zakonczenie at time zone $3, 'YYYY-MM-DD"T"HH24:MI') as local_end, k.nazwa as kategoria
+            from t_wydarzenia e join t_kategorie k on k.id_kategorii = e.id_kategorii
+            where e.id_serii = $1 and e.id_kalendarza = $2 for update of e`, [event.id_serii, calendarId, owner.rows[0].strefa_czasowa])
+        : await client.query(`select e.id_wydarzenia, e.event_version, e.tytul,
+            to_char(e.rozpoczecie at time zone $3, 'YYYY-MM-DD"T"HH24:MI') as local_start,
+            to_char(e.zakonczenie at time zone $3, 'YYYY-MM-DD"T"HH24:MI') as local_end, k.nazwa as kategoria
+            from t_wydarzenia e join t_kategorie k on k.id_kategorii = e.id_kategorii
+            where e.id_wydarzenia = $1 and e.id_kalendarza = $2 for update of e`, [eventId, calendarId, owner.rows[0].strefa_czasowa]);
+      for (const removedEvent of removedEvents.rows) await enqueueDomainEvent(client, { userId, calendarId }, 'calendar_event',
+        String(removedEvent.id_wydarzenia), 'calendar_event.deleted', { origin: 'calendar', timeZone: owner.rows[0].strefa_czasowa,
+          before: { title: removedEvent.tytul, start: removedEvent.local_start, end: removedEvent.local_end, category: removedEvent.kategoria, version: removedEvent.event_version } });
       const removed = event.powtarzaj_co_tydzien && event.id_serii
         ? await client.query(`delete from t_wydarzenia where id_serii = $1 and id_kalendarza = $2 returning id_wydarzenia`, [event.id_serii, calendarId])
         : await client.query(`delete from t_wydarzenia where id_wydarzenia = $1 and id_kalendarza = $2 returning id_wydarzenia`, [eventId, calendarId]);
+      const deletedIds = removed.rows.map((row) => String(row.id_wydarzenia));
+      if (assistantAction) await client.query(`insert into t_ai_action_effects (id_akcji, id_uzytkownika, id_kalendarza, rezultat)
+        values ($1, $2, $3, $4::jsonb)`, [assistantAction.actionId, userId, calendarId, JSON.stringify({ deletedIds })]);
       if (event.id_serii) {
         await client.query(`delete from t_serie s where s.id_serii = $1 and s.id_kalendarza = $2
           and not exists (select 1 from t_wydarzenia e where e.id_serii = s.id_serii)`, [event.id_serii, calendarId]);
       }
       await client.query('COMMIT');
-      return removed.rows.map((row) => row.id_wydarzenia as string);
+      return deletedIds;
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;
@@ -271,6 +336,12 @@ export class PostgresCalendarRepository {
       `, [eventId, calendarId]);
       if (!targetEvent.rowCount) throw new Error('event_not_found');
       const { id_serii, rozpoczecie } = targetEvent.rows[0];
+      const priorEvents = await client.query(`select e.id_wydarzenia, e.event_version, e.tytul,
+        to_char(e.rozpoczecie at time zone $3, 'YYYY-MM-DD"T"HH24:MI') as local_start,
+        to_char(e.zakonczenie at time zone $3, 'YYYY-MM-DD"T"HH24:MI') as local_end, k.nazwa as kategoria
+        from t_wydarzenia e join t_kategorie k on k.id_kategorii = e.id_kategorii
+        where e.id_kalendarza = $1 and (($2::text is not null and e.id_serii = $2) or ($2::text is null and e.id_wydarzenia = $4))
+          and e.rozpoczecie >= $5 for update of e`, [calendarId, id_serii, timezone, eventId, rozpoczecie]);
 
       const category = { Class: 'Zajęcia', Work: 'Praca', Personal: 'Prywatne' }[input.category];
 
@@ -283,8 +354,9 @@ export class PostgresCalendarRepository {
               id_kategorii = (select id_kategorii from t_kategorie where nazwa = $4),
               miejsce = $5,
               obowiazkowe = $7,
-              powtarzaj_co_tydzien = $8
+              powtarzaj_co_tydzien = $8, event_version = event_version + 1, updated_at = now()
           where id_serii = $9 and id_kalendarza = $10 and rozpoczecie >= $11
+          returning id_wydarzenia, event_version, rozpoczecie, zakonczenie
         `, [
           input.title.trim(),
           input.start,
@@ -303,9 +375,23 @@ export class PostgresCalendarRepository {
           update t_wydarzenia
           set tytul = $1, rozpoczecie = $2::timestamp at time zone $6, zakonczenie = $3::timestamp at time zone $6,
               id_kategorii = (select id_kategorii from t_kategorie where nazwa = $4),
-              miejsce = $5, obowiazkowe = $7, powtarzaj_co_tydzien = $8
+              miejsce = $5, obowiazkowe = $7, powtarzaj_co_tydzien = $8, event_version = event_version + 1, updated_at = now()
           where id_wydarzenia = $9 and id_kalendarza = $10
+          returning id_wydarzenia, event_version, rozpoczecie, zakonczenie
         `, [input.title.trim(), input.start, input.end, category, input.location, input.mandatory, input.repeatWeekly, eventId, timezone, calendarId]);
+      }
+
+      const updatedEvents = await client.query(`select e.id_wydarzenia, e.event_version, e.rozpoczecie, e.zakonczenie
+        from t_wydarzenia e where e.id_kalendarza = $1 and (($2::text is not null and e.id_serii = $2) or ($2::text is null and e.id_wydarzenia = $3))
+          and e.rozpoczecie >= $4 order by e.rozpoczecie`, [calendarId, id_serii, eventId, rozpoczecie]);
+      const previousById = new Map(priorEvents.rows.map((event) => [event.id_wydarzenia as string, event]));
+      for (const updated of updatedEvents.rows) {
+        const previous = previousById.get(updated.id_wydarzenia);
+        await enqueueDomainEvent(client, { userId, calendarId }, 'calendar_event', String(updated.id_wydarzenia), 'calendar_event.updated', {
+          origin: 'calendar_series', timeZone: timezone, eventVersion: updated.event_version,
+          before: previous ? { title: previous.tytul, start: previous.local_start, end: previous.local_end, category: previous.kategoria, version: previous.event_version } : null,
+          after: { title: input.title.trim(), start: updated.rozpoczecie.toISOString(), end: updated.zakonczenie.toISOString(), category: input.category, location: input.location ?? '' },
+        });
       }
 
       await client.query('COMMIT');
@@ -335,8 +421,8 @@ export class PostgresCalendarRepository {
         const valid = preview?.status === 'ok';
         await client.query(
           `insert into t_pozycje_importu
-             (id_pozycji, id_importu, tytul_odczyt, rozpoczecie, zakonczenie, id_kategorii, pewnosc, status_kontroli)
-           values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+             (id_pozycji, id_importu, tytul_odczyt, rozpoczecie, zakonczenie, id_kategorii, pewnosc, status_kontroli, source_page, source_snippet, unresolved_fields)
+           values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)`,
           [
             positionId(id, row.id),
             id,
@@ -346,6 +432,9 @@ export class PostgresCalendarRepository {
             CATEGORY_IDS[row.category ?? 'Personal'],
             row.confidence ?? null,
             valid ? 'Do kontroli' : 'Błąd odczytu',
+            row.sourcePage ?? null,
+            row.sourceSnippet?.slice(0, 160) ?? null,
+            JSON.stringify(row.unresolvedFields ?? []),
           ],
         );
       }
@@ -463,11 +552,17 @@ export class PostgresCalendarRepository {
           const inserted = await client.query(
             `insert into t_wydarzenia (id_kalendarza, id_kategorii, tytul, rozpoczecie, zakonczenie, zrodlo, opis, miejsce)
              values ($1, $2, $3, $4, $5, $8, $6, $7)
-             returning id_wydarzenia`,
+             returning id_wydarzenia, event_version`,
             [calendarId, CATEGORY_IDS[row.category], row.title, row.start, row.end, description, row.location ?? '',
               current.zrodlo === SOURCE_LABELS.google ? 'Google' : 'Import'],
           );
-          eventId = inserted.rows[0].id_wydarzenia;
+          const createdId = String(inserted.rows[0].id_wydarzenia);
+          eventId = createdId;
+          await enqueueDomainEvent(client, { userId, calendarId }, 'calendar_event', createdId, 'calendar_event.created', {
+            origin: current.zrodlo === SOURCE_LABELS.google ? 'google_import' : 'file_import', timeZone: owner.rows[0].strefa_czasowa,
+            eventVersion: inserted.rows[0].event_version,
+            after: { title: row.title, start: row.start.toISOString(), end: row.end.toISOString(), category: row.category, location: row.location ?? '' },
+          });
         } else if (action.kind === 'replace') {
           const updated = await client.query(
             `update t_wydarzenia
@@ -476,14 +571,19 @@ export class PostgresCalendarRepository {
                  zakonczenie = case when powtarzaj_co_tydzien then
                    ((rozpoczecie at time zone $9) + (($5::timestamptz at time zone $9) - ($4::timestamptz at time zone $9))) at time zone $9
                    else $5::timestamptz end,
-                 id_kategorii = $6, opis = $7, miejsce = $8, updated_at = now()
+                 id_kategorii = $6, opis = $7, miejsce = $8, event_version = event_version + 1, updated_at = now()
              where id_wydarzenia = $1 and id_kalendarza = $2
-             returning id_wydarzenia`,
+             returning id_wydarzenia, event_version`,
             [action.eventId, calendarId, row.title, row.start, row.end, CATEGORY_IDS[row.category], description, row.location ?? '',
               owner.rows[0].strefa_czasowa],
           );
           eventId = updated.rows[0]?.id_wydarzenia ?? null;
           if (!eventId) throw new Error(`Event ${action.eventId} to replace was not found in calendar ${calendarId}`);
+          await enqueueDomainEvent(client, { userId, calendarId }, 'calendar_event', eventId, 'calendar_event.updated', {
+            origin: current.zrodlo === SOURCE_LABELS.google ? 'google_import' : 'file_import', timeZone: owner.rows[0].strefa_czasowa,
+            eventVersion: updated.rows[0].event_version,
+            after: { title: row.title, start: row.start.toISOString(), end: row.end.toISOString(), category: row.category, location: row.location ?? '' },
+          });
         }
         const status = action.kind === 'insert' ? 'Zatwierdzona' : action.kind === 'replace' ? 'Zastąpiła' : 'Pominięta (duplikat)';
         await client.query(
@@ -544,6 +644,7 @@ export class PostgresCalendarRepository {
     const eventResult = await this.connectionPool.query(
       `select e.id_wydarzenia, e.tytul, e.rozpoczecie, e.zakonczenie,
               e.obowiazkowe, e.powtarzaj_co_tydzien, e.miejsce,
+              e.event_version,
               to_char(e.rozpoczecie at time zone u.strefa_czasowa, 'YYYY-MM-DD"T"HH24:MI') as local_start,
               to_char(e.zakonczenie at time zone u.strefa_czasowa, 'YYYY-MM-DD"T"HH24:MI') as local_end, k.nazwa as kategoria, k.kolor_hex
        from t_wydarzenia e
@@ -572,6 +673,7 @@ export class PostgresCalendarRepository {
         start: event.local_start,
         end: event.local_end,
         category: event.kategoria,
+        eventVersion: Number(event.event_version),
         color: event.kolor_hex,
         mandatory: event.obowiazkowe,
         repeatWeekly: event.powtarzaj_co_tydzien,

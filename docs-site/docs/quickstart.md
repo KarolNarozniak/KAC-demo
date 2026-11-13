@@ -41,7 +41,7 @@ scripts\quickstart.ps1
 sh ./scripts/quickstart.sh
 ```
 
-Skrypt weryfikuje bazę, wykonuje brakujące migracje, buduje dokumentację PL/EN i uruchamia API, Expo oraz statyczny serwer Docusaurus. Obie wersje dokumentacji są dostępne z jednego adresu: polska pod `http://localhost:3000`, angielska pod `http://localhost:3000/en/`. `Ctrl+C` zatrzymuje serwisy aplikacji; baza PostgreSQL pozostaje uruchomiona.
+Skrypt weryfikuje bazę, wykonuje brakujące migracje, buduje dokumentację PL/EN i uruchamia API, Expo, worker outbox oraz statyczny serwer Docusaurus. Obie wersje dokumentacji są dostępne z jednego adresu: polska pod `http://localhost:3000`, angielska pod `http://localhost:3000/en/`. `Ctrl+C` zatrzymuje procesy aplikacji; baza PostgreSQL pozostaje uruchomiona.
 
 Alternatywnie po konfiguracji można użyć `npm run dev:all` na Windows, Linux i macOS. Przy pracy nad dokumentacją `npm run docs:dev` uruchamia hot reload dla polskiego locale, a `npm run docs:dev:en` serwuje wersję angielską na `http://localhost:3001`.
 
@@ -77,6 +77,7 @@ Skrypty jednopoleceniowe używają tych samych poleceń i dodatkowo sprawdzają 
 
 - API liveness: `GET http://localhost:4000/api/v1/health/live`.
 - API readiness i połączenie z bazą: `GET http://localhost:4000/api/v1/health/ready`.
+- Worker outbox uruchamia się automatycznie; do pracy tylko nad workerem użyj `npm run worker:dev --workspace @kac/api`.
 - Swagger UI: `http://localhost:4000/api/v1/docs`.
 - Dokumentacja API: `http://localhost:3000/docs/api-reference`.
 - Migracje można sprawdzić poleceniem `npm run db:check` i zastosować przez `npm run db:migrate`.

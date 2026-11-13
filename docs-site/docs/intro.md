@@ -41,6 +41,7 @@ Quickstart przygotuje lokalną bazę, wykona migracje, wygeneruje kontrakt OpenA
 - [Architektura i granice modułów](./architecture.md)
 - [Standard zmian API i wymagania dla pull requestów](./api-standard.md)
 - [Opis kontraktu i eksplorator endpointów](./api-reference.md)
+- [Integracja Azure AI Foundry](./ai-integration.md)
 - [Lokalny quickstart i konfiguracja](./quickstart.md)
 
 Kontrakt API jest wersjonowany w repozytorium w `apps/api/openapi/openapi.json`, generowany ze schematów tras Fastify i renderowany w Docusaurus. Swagger UI na serwerze API służy do interaktywnego wykonywania żądań w środowisku developerskim.

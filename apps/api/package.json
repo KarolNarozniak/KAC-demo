@@ -6,32 +6,44 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
+    "worker:dev": "tsx watch src/worker.ts",
+    "worker": "node dist/worker.js",
     "start": "node dist/server.js",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "openapi:export": "tsx scripts/export-openapi.ts",
     "openapi:check": "tsx scripts/export-openapi.ts --check",
-    "test": "tsx --test tests/api.test.ts tests/import-rules.test.ts tests/import-session.test.ts tests/work-schedule.test.ts tests/work-schedule-api.test.ts tests/work-schedule-reader.test.ts tests/ics.test.ts tests/google.test.ts tests/classes.test.ts tests/collisions.test.ts tests/ocr.test.ts tests/scheduling.test.ts tests/scheduling-api.test.ts tests/work-profile.test.ts tests/class-constraints.test.ts tests/pay.test.ts tests/work-profile-scheduling.test.ts tests/blocks-api.test.ts tests/openapi-examples.test.ts",
-    "test:db": "tsx --test --test-concurrency=1 tests/postgres.integration.test.ts tests/import.integration.test.ts tests/work-schedule.integration.test.ts tests/features.integration.test.ts tests/imports-ics-google.integration.test.ts tests/scheduling.integration.test.ts tests/work-profile.integration.test.ts tests/class-constraints.integration.test.ts tests/planning.integration.test.ts",
+    "ai:smoke": "tsx scripts/smoke-foundry.ts",
+    "ai:inspect": "tsx scripts/inspect-foundry-agent.ts",
+    "ai:smoke:responses": "tsx scripts/smoke-foundry-direct.ts",
+    "ai:smoke:api": "tsx scripts/smoke-ai-import-api.ts",
+    "ai:smoke:assistant": "tsx scripts/smoke-ai-assistant-api.ts",
+    "test": "tsx --test tests/api.test.ts tests/import-rules.test.ts tests/import-session.test.ts tests/work-schedule.test.ts tests/work-schedule-api.test.ts tests/work-schedule-reader.test.ts tests/ics.test.ts tests/google.test.ts tests/classes.test.ts tests/collisions.test.ts tests/ocr.test.ts tests/scheduling.test.ts tests/scheduling-api.test.ts tests/work-profile.test.ts tests/class-constraints.test.ts tests/pay.test.ts tests/work-profile-scheduling.test.ts tests/blocks-api.test.ts tests/openapi-examples.test.ts tests/ai.test.ts tests/ai-import-api.test.ts tests/assistant-api.test.ts tests/notifications.test.ts tests/user-scope.test.ts",
+    "test:db": "tsx --test --test-concurrency=1 tests/postgres.integration.test.ts tests/import.integration.test.ts tests/work-schedule.integration.test.ts tests/features.integration.test.ts tests/imports-ics-google.integration.test.ts tests/scheduling.integration.test.ts tests/work-profile.integration.test.ts tests/class-constraints.integration.test.ts tests/planning.integration.test.ts tests/outbox.integration.test.ts tests/ai-database.integration.test.ts",
     "package:deploy": "node scripts/package-deploy.mjs"
   },
   "dependencies": {
+    "@azure/ai-projects": "^2.11.0",
+    "@azure/identity": "^4.14.1",
     "@fastify/cors": "^10.0.2",
     "@fastify/swagger": "^9.9.3",
     "@fastify/swagger-ui": "^6.1.3",
     "@tesseract.js-data/eng": "^1.0.0",
     "@tesseract.js-data/pol": "^1.0.0",
+    "ajv": "^8.17.1",
     "dotenv": "^16.4.7",
     "fastify": "^5.2.1",
+    "openai": "^7.56.0",
     "pdfjs-dist": "^6.4.299",
     "pg": "^8.13.1",
     "sharp": "^0.35.5",
     "tesseract.js": "^7.0.0",
-    "ajv": "^8.17.1"
+    "web-push": "^4.0.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
     "@types/pg": "^8.11.10",
+    "@types/web-push": "^3.6.4",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   }

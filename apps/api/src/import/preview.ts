@@ -12,6 +12,9 @@ export type PreviewRow = {
   end: string | null;
   location: string | null;
   confidence: number | null;
+  sourcePage: number | null;
+  sourceSnippet: string | null;
+  unresolvedFields: string[];
   /** Zmiana nocna: koniec przypada następnego dnia i wymaga potwierdzenia. */
   overnight: boolean;
   /** Duplikaty w kalendarzu. */
@@ -29,8 +32,11 @@ export function buildImportPreview(rows: ImportRow[], existing: ExistingEvent[] 
   return resolved.map(({ row, result }) => {
     const location = row.location?.trim() || null;
     const confidence = row.confidence ?? null;
+    const sourcePage = row.sourcePage ?? null;
+    const sourceSnippet = row.sourceSnippet?.slice(0, 160) ?? null;
+    const unresolvedFields = row.unresolvedFields ?? [];
     if (!result.ok) {
-      return { id: row.id, status: 'error', issues: result.issues, start: null, end: null, location, confidence, overnight: false, duplicateOfEvents: [], duplicateOfRows: [] };
+      return { id: row.id, status: 'error', issues: result.issues, start: null, end: null, location, confidence, sourcePage, sourceSnippet, unresolvedFields, overnight: false, duplicateOfEvents: [], duplicateOfRows: [] };
     }
     const info = duplicates.get(row.id);
     return {
@@ -41,6 +47,9 @@ export function buildImportPreview(rows: ImportRow[], existing: ExistingEvent[] 
       end: result.end.toISOString(),
       location,
       confidence,
+      sourcePage,
+      sourceSnippet,
+      unresolvedFields,
       overnight: result.overnight,
       duplicateOfEvents: (info?.existingIds ?? []).flatMap((id) => {
         const event = existingById.get(id);

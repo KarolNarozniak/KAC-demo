@@ -17,10 +17,15 @@ flowchart LR
   Api --> Scheduling[Scheduling module]
   Api --> Imports[Import modules]
   Api --> Google[One-time Google read]
+  Api --> AI[Responses API / tools]
+  Outbox[Outbox worker] --> Pg
+  Outbox --> Reminders[Reminder queue]
+  Outbox --> GoogleQueue[Google publication queue]
   Calendar --> Pg[(PostgreSQL)]
   Profile --> Pg
   Scheduling --> Pg
   Imports --> Pg
+  AI --> Pg
   Api --> OpenAPI[OpenAPI contract]
   OpenAPI --> Swagger[Swagger UI]
   OpenAPI --> Docs[Docusaurus PL / EN]
@@ -36,6 +41,9 @@ All HTTP resources belong to one API domain and the shared `/api/v1` version. Ro
 - `src/api/scope.ts` resolves the request user on the server. Until login exists it is the demo user from configuration.
 - `src/api/v1/imports/routes.ts` handles import previews, sessions, file readers and class schedules.
 - `src/api/v1/imports/google-routes.ts` implements one-time Google import as a data-source adapter.
+- `src/api/v1/imports/ai-routes.ts` handles image/PDF imports through the Responses API.
+- `src/api/v1/assistant/routes.ts` handles conversations, local history, the tool registry and confirmation-gated actions.
+- `src/events/outbox.ts` records domain events in the same transaction as calendar changes; `src/events/outbox-worker.ts` dispatches reminder and Google publication deliveries.
 - `src/api/v1/health/routes.ts` contains liveness and readiness probes.
 - `src/api/contracts.ts` defines repository dependencies passed to route modules.
 
@@ -61,3 +69,5 @@ Route modules receive dependencies through Fastify plugin options. They do not o
 - Event times are interpreted in the user's profile timezone.
 - A user has at most one active work profile (unique database index). A monthly target is converted to a weekly one (month = 52/12 weeks) and that value is used by the generator. Profile changes affect only future generated schedules.
 - Calendar conflicts and schedule versions are resolved by the backend, not only by the UI.
+- The worker is a separate process; run it on App Service as a Continuous WebJob or a dedicated worker app. `SKIP LOCKED`, leases and idempotency keys prevent duplicate processing.
+- The current Google consumer is deliberately blocked because OAuth has only `calendar.readonly`. Reminders enter the database queue and are delivered to an active browser; background push requires a separate provider.

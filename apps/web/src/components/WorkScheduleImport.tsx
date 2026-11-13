@@ -5,7 +5,7 @@
 // wybór własnych zmian, potwierdzenie zmian nocnych i decyzje dla duplikatów → zapis → podsumowanie.
 // Okno otwiera przycisk „Importuj” w zakładce Tydzień.
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { Button, Field, useTheme } from './ui';
 import DateField from './DateField';
@@ -15,6 +15,7 @@ import {
   confirmImport,
   invalidFields,
   previewImport,
+  readAiWorkSchedule,
   readWorkSchedule,
   type DuplicateDecision,
   type ImportIssue,
@@ -62,12 +63,13 @@ const formatInstant = (iso: string) =>
   new Date(iso).toLocaleString('pl-PL', { timeZone: 'Europe/Warsaw', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 type PickedFile = { name: string; size: number; base64: string };
-type Session = { id: string; readStatusLabel: string; readerIsDemo: boolean; userName: string };
+type Session = { id: string; readStatusLabel: string; readerIsDemo: boolean; readerProvider?: 'local' | 'azure-ai-foundry'; userName: string };
 type Phase = 'idle' | 'reading' | 'preview' | 'saving' | 'saveFailed';
 
 export default function WorkScheduleImport({ visible, onClose, onImported }: Props) {
   const { palette, styles } = useTheme();
   const [file, setFile] = useState<PickedFile | null>(null);
+  const [readerMode, setReaderMode] = useState<'ai' | 'local'>('ai');
   const [phase, setPhase] = useState<Phase>('idle');
   const [session, setSession] = useState<Session | null>(null);
   const [rows, setRows] = useState<ScheduleRow[]>([]);
@@ -79,6 +81,8 @@ export default function WorkScheduleImport({ visible, onClose, onImported }: Pro
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [summary, setSummary] = useState<ImportSummary | null>(null);
+  const aiReadController = useRef<AbortController | null>(null);
+  const closeDuringAiRead = useRef(false);
 
   const reset = () => {
     setPhase('idle'); setSession(null); setRows([]); setSelected({}); setOvernightOk({}); setDecisions({}); setReplacementIds({}); setPreview({});
@@ -87,6 +91,7 @@ export default function WorkScheduleImport({ visible, onClose, onImported }: Pro
   const toInput = (row: ScheduleRow): ImportRowInput => ({
     id: row.id, title: row.title, date: row.date, startTime: row.startTime, endTime: row.endTime,
     category: 'Work', location: row.location, confidence: row.confidence, employee: row.employee,
+    sourcePage: row.sourcePage, sourceSnippet: row.sourceSnippet, unresolvedFields: row.unresolvedFields,
   });
 
   // Po każdej poprawce ponownie sprawdzamy wiersze w API (z opóźnieniem, żeby nie wysyłać przy każdej zmianie).
@@ -117,20 +122,33 @@ export default function WorkScheduleImport({ visible, onClose, onImported }: Pro
   const startImport = async () => {
     if (!file) return;
     setError(''); setNotice(''); setSummary(null); setPhase('reading');
+    const controller = readerMode === 'ai' ? new AbortController() : null;
+    aiReadController.current = controller;
     try {
-      const result = await readWorkSchedule(file.name, file.base64);
+      const result = readerMode === 'ai' ? await readAiWorkSchedule(file.name, file.base64, controller!.signal) : await readWorkSchedule(file.name, file.base64);
       if (result.kind === 'rejected') { reset(); setError(fileErrorText[result.error] ?? `Nie udało się odczytać pliku (${result.error}).`); return; }
       if (result.kind === 'unavailable') { reset(); setError('Nie udało się połączyć z kalendarzem. Sprawdź połączenie i spróbuj ponownie.'); return; }
-      setSession({ id: result.importSessionId, readStatusLabel: result.readStatusLabel, readerIsDemo: result.readerIsDemo, userName: result.userName });
+      setSession({ id: result.importSessionId, readStatusLabel: result.readStatusLabel, readerIsDemo: result.readerIsDemo, readerProvider: result.readerProvider, userName: result.userName });
       setRows(result.rows);
       // Domyślnie zaznaczamy tylko zmiany użytkownika – zmiany innych pracowników trzeba wybrać świadomie.
       setSelected(Object.fromEntries(result.rows.map((row) => [row.id, row.isOwn])));
       setPreview(Object.fromEntries(result.preview.map((item) => [item.id, item])));
       setPhase('preview');
-    } catch {
-      reset(); setError('Nie udało się połączyć z kalendarzem. Plik nie został odczytany, spróbuj ponownie.');
+    } catch (readError) {
+      if (readError instanceof Error && readError.name === 'AbortError') {
+        setPhase('idle');
+        if (!closeDuringAiRead.current) setNotice('Odczyt AI anulowany. Kalendarz pozostał bez zmian.');
+        closeDuringAiRead.current = false;
+        return;
+      }
+      reset(); setError(readError instanceof TypeError ? 'Nie udało się połączyć z kalendarzem. Plik nie został odczytany, spróbuj ponownie.'
+        : readError instanceof Error ? readError.message : 'Nie udało się odczytać pliku. Kalendarz pozostał bez zmian.');
+    } finally {
+      if (aiReadController.current === controller) aiReadController.current = null;
     }
   };
+
+  const cancelAiRead = () => aiReadController.current?.abort();
 
   const update = (id: string, key: 'title' | 'date' | 'startTime' | 'endTime' | 'location', value: string) =>
     setRows((current) => current.map((row) => (row.id === id ? { ...row, [key]: value } : row)));
@@ -188,6 +206,7 @@ export default function WorkScheduleImport({ visible, onClose, onImported }: Pro
 
   const close = async () => {
     if (phase === 'saving') return;
+    if (phase === 'reading') { closeDuringAiRead.current = true; aiReadController.current?.abort(); }
     if (session) await cancelImport(session.id).catch(() => undefined);
     reset(); setFile(null); setError(''); setNotice(''); setSummary(null);
     onClose();
@@ -227,6 +246,7 @@ export default function WorkScheduleImport({ visible, onClose, onImported }: Pro
           {row.confidence !== undefined && <Text style={styles.muted}>Pewność odczytu: {Math.round(row.confidence * 100)}%</Text>}
           {row.confidence !== undefined && row.confidence < LOW_CONFIDENCE && pill('SPRAWDŹ ODCZYT', palette.amber)}
         </View>
+        {!!row.sourceSnippet && <Text style={styles.muted}>Źródło (str. {row.sourcePage ?? '?'}): „{row.sourceSnippet}”</Text>}
 
         {item?.status === 'error' && (
           <View style={[styles.row, { flexWrap: 'wrap', marginTop: 6 }]}>
@@ -282,18 +302,28 @@ export default function WorkScheduleImport({ visible, onClose, onImported }: Pro
             <Text style={[styles.heading, { flex: 1 }]}>Importuj grafik pracy</Text>
             <Button title="Zamknij" accessibilityLabel="Zamknij import" disabled={phase === 'saving'} onPress={() => void close()} />
           </View>
-          <Text style={styles.subtitle}>Zdjęcie JPG/PNG albo plik PDF, maks. 5 MB. Na telefonie możesz od razu zrobić zdjęcie grafiku.</Text>
+          <Text style={styles.subtitle}>Zdjęcie JPG/PNG albo plik PDF, maks. 5 MB i 10 stron. Na telefonie możesz od razu zrobić zdjęcie grafiku.</Text>
           <Text style={[styles.muted, { marginTop: 6 }]}>Najlepiej odczytywany jest grafik w formie listy lub tabeli: data, imię i nazwisko, godziny (np. 16:00-20:00). Zdjęcie rób prosto i bez cieni. Każdą odczytaną zmianę sprawdzisz przed zapisem.</Text>
 
           {phase === 'idle' && (
-            <View style={[styles.row, { flexWrap: 'wrap', marginTop: 14 }]}>
+            <View style={{ marginTop: 14 }}>
+            <View style={[styles.row, { flexWrap: 'wrap' }]}>
+              <Text style={styles.label}>ODCZYT PDF / ZDJĘCIA</Text>
+              {choice(readerMode === 'ai' ? '☑ Azure AI Foundry' : '☐ Azure AI Foundry', readerMode === 'ai', () => setReaderMode('ai'))}
+              {choice(readerMode === 'local' ? '☑ Lokalny odczyt' : '☐ Lokalny odczyt', readerMode === 'local', () => setReaderMode('local'))}
+            </View>
+            <Text style={[styles.muted, { marginTop: 5, color: readerMode === 'ai' ? palette.amber : palette.muted }]}>{readerMode === 'ai'
+              ? 'Po kliknięciu „Wczytaj grafik” cały plik zostanie wysłany do Azure AI Foundry w celu odczytu. Oryginał nie jest zapisywany w bazie; żądanie można anulować podczas odczytu.'
+              : 'Lokalny odczyt odbywa się na serwerze API. Potwierdzenie zmian pozostaje wymagane.'}</Text>
+            <View style={[styles.row, { flexWrap: 'wrap', marginTop: 10 }]}>
               <Button title="Zrób zdjęcie" onPress={() => void chooseFile('camera')} />
               <Button title={file ? 'Zmień plik' : 'Wybierz zdjęcie lub plik'} onPress={() => void chooseFile('file')} />
               {file && <Text style={styles.body}>{file.name} · {(file.size / 1024).toFixed(0)} KB</Text>}
               {file && <Button title="Wczytaj grafik" primary onPress={() => void startImport()} />}
             </View>
+            </View>
           )}
-          {phase === 'reading' && <Text accessibilityLiveRegion="polite" style={[styles.body, { marginTop: 14 }]}>Sprawdzanie pliku i odczyt grafiku…</Text>}
+          {phase === 'reading' && <View style={[styles.row, { marginTop: 14 }]}><Text accessibilityLiveRegion="polite" style={styles.body}>Sprawdzanie pliku i odczyt grafiku…</Text>{aiReadController.current && <Button title="Anuluj odczyt AI" onPress={cancelAiRead} />}</View>}
 
           {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
           {!!notice && <Text style={[styles.body, { marginTop: 11 }]}>{notice}</Text>}
@@ -311,7 +341,8 @@ export default function WorkScheduleImport({ visible, onClose, onImported }: Pro
                 {pill(session.readStatusLabel.toUpperCase(), session.readStatusLabel === 'Odczytano wszystkie zmiany' ? palette.green : palette.amber)}
                 <Text style={styles.muted}>Zaznaczono {chosen.length} z {rows.length} zmian · Twoje zmiany ({session.userName || 'użytkownik'}) są zaznaczone domyślnie.</Text>
               </View>
-              {session.readerIsDemo && (
+                {session.readerProvider === 'azure-ai-foundry' && <Text style={styles.muted}>Odczyt wykonany przez Azure AI Foundry. Sprawdź nazwiska, strony źródłowe i każdą godzinę przed zapisem.</Text>}
+                {session.readerIsDemo && (
                 <View style={[styles.row, { flexWrap: 'wrap', marginTop: 8 }]}>
                   {pill('ODCZYT DEMONSTRACYJNY', palette.muted)}
                   <Text style={styles.muted}>Serwer działa w trybie demonstracyjnym (WORK_SCHEDULE_READER=demo): plik został sprawdzony, ale poniżej jest przykładowy grafik zamiast treści pliku.</Text>

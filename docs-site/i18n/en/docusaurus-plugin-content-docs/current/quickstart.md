@@ -39,7 +39,7 @@ The setup script checks prerequisites, creates local `.env` files from the examp
 sh ./scripts/quickstart.sh
 ```
 
-The script checks the database, applies pending migrations, builds the PL/EN documentation and starts the API, Expo and static Docusaurus server. Both language versions share one origin: Polish at `http://localhost:3000` and English at `http://localhost:3000/en/`. `Ctrl+C` stops application services; PostgreSQL remains running.
+The script checks the database, applies pending migrations, builds the PL/EN documentation and starts the API, Expo, outbox worker and static Docusaurus server. Both language versions share one origin: Polish at `http://localhost:3000` and English at `http://localhost:3000/en/`. `Ctrl+C` stops application processes; PostgreSQL remains running.
 
 Alternatively, after setup, run `npm run dev:all` on Windows, Linux or macOS. While editing docs, `npm run docs:dev` provides hot reload for Polish, and `npm run docs:dev:en` serves English at `http://localhost:3001`.
 
@@ -73,6 +73,7 @@ The one-command scripts use the same services and also check database readiness.
 
 - API liveness: `GET http://localhost:4000/api/v1/health/live`.
 - API readiness and database connectivity: `GET http://localhost:4000/api/v1/health/ready`.
+- The outbox worker starts automatically; use `npm run worker:dev --workspace @kac/api` to work on it alone.
 - Swagger UI: `http://localhost:4000/api/v1/docs`.
 - API documentation: `http://localhost:3000/docs/api-reference`.
 - Check migrations with `npm run db:check`; apply them with `npm run db:migrate`.

@@ -8,6 +8,8 @@ export type ConnectionStatus = 'pending' | 'connected' | 'denied' | 'error' | 'u
 
 export type GoogleConnection = {
   id: string;
+  userId: string;
+  calendarId: string;
   mode: 'google' | 'demo';
   status: ConnectionStatus;
   email: string | null;
@@ -24,35 +26,38 @@ export class GoogleConnections {
 
   constructor(private readonly now: () => number = Date.now) {}
 
-  create(mode: 'google' | 'demo', codeVerifier: string | null): GoogleConnection {
+  create(mode: 'google' | 'demo', codeVerifier: string | null, userId: string, calendarId: string): GoogleConnection {
     this.prune();
     if (this.items.size >= MAX_CONNECTIONS) {
       const oldest = [...this.items.values()].sort((a, b) => a.createdAt - b.createdAt)[0];
       if (oldest) this.items.delete(oldest.id);
     }
-    const connection: GoogleConnection = { id: randomUUID(), mode, status: 'pending', email: null, accessToken: null, codeVerifier, createdAt: this.now() };
+    const connection: GoogleConnection = { id: randomUUID(), userId, calendarId, mode, status: 'pending', email: null, accessToken: null, codeVerifier, createdAt: this.now() };
     this.items.set(connection.id, connection);
     return connection;
   }
 
-  get(id: string): GoogleConnection | null {
+  get(id: string, userId?: string, calendarId?: string): GoogleConnection | null {
     this.prune();
-    return this.items.get(id) ?? null;
+    const connection = this.items.get(id);
+    if (!connection || (userId && connection.userId !== userId) || (calendarId && connection.calendarId !== calendarId)) return null;
+    return connection;
   }
 
-  update(id: string, change: Partial<Omit<GoogleConnection, 'id' | 'mode' | 'createdAt'>>): GoogleConnection | null {
-    const connection = this.get(id);
+  update(id: string, change: Partial<Omit<GoogleConnection, 'id' | 'mode' | 'createdAt' | 'userId' | 'calendarId'>>, userId?: string, calendarId?: string): GoogleConnection | null {
+    const connection = this.get(id, userId, calendarId);
     if (!connection) return null;
     Object.assign(connection, change);
     return connection;
   }
 
   /** Jednorazowość: po odczycie wydarzeń token jest zapominany. */
-  markUsed(id: string) {
-    this.update(id, { status: 'used', accessToken: null, codeVerifier: null });
+  markUsed(id: string, userId?: string, calendarId?: string) {
+    this.update(id, { status: 'used', accessToken: null, codeVerifier: null }, userId, calendarId);
   }
 
-  delete(id: string): boolean {
+  delete(id: string, userId?: string, calendarId?: string): boolean {
+    if (!this.get(id, userId, calendarId)) return false;
     return this.items.delete(id);
   }
 

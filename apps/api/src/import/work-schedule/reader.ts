@@ -19,6 +19,9 @@ export type RawShift = {
   location?: string;
   /** Pewność odczytu od 0 do 1. */
   confidence: number;
+  sourcePage?: number;
+  sourceSnippet?: string;
+  unresolvedFields?: string[];
 };
 
 export type ScheduleFile = { name: string; type: ScheduleFileType; bytes: Buffer };

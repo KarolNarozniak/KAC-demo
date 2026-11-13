@@ -16,6 +16,7 @@
     "web:dev": "npm run web --workspace @kac/web",
     "web:start": "npm run start --workspace @kac/web",
     "api:dev": "npm run dev --workspace @kac/api",
+    "worker:dev": "npm run worker:dev --workspace @kac/api",
     "api:start": "npm run start --workspace @kac/api",
     "build:web": "npm run build:web --workspace @kac/web",
     "build:api": "npm run build --workspace @kac/api",
@@ -42,7 +43,7 @@
     "docs:dev:en": "npm run docs:generate-api && npm run dev:en --workspace @kac/docs",
     "docs:build": "npm run api:openapi:check && npm run generate-api --workspace @kac/docs && npm run build --workspace @kac/docs",
     "docs:check": "npm run api:openapi:check && npm run docs:build",
-    "dev:services": "concurrently --kill-others -n API,WEB,DOCS -c blue,green,magenta \"npm run api:dev\" \"npm run web:dev\" \"npm run serve --workspace @kac/docs\"",
+    "dev:services": "concurrently --kill-others -n API,WEB,WORKER,DOCS -c blue,green,yellow,magenta \"npm run api:dev\" \"npm run web:dev\" \"npm run worker:dev\" \"npm run serve --workspace @kac/docs\"",
     "dev:all": "node scripts/dev-all.mjs"
   },
   "devDependencies": {
