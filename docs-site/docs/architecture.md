@@ -17,10 +17,15 @@ flowchart LR
   Api --> Scheduling[Moduł planowania]
   Api --> Imports[Moduły importu]
   Api --> Google[Jednorazowy odczyt Google]
+  Api --> AI[Responses API / narzędzia]
+  Outbox[Worker outbox] --> Pg
+  Outbox --> Reminders[Kolejka przypomnień]
+  Outbox --> GoogleQueue[Kolejka publikacji Google]
   Calendar --> Pg[(PostgreSQL)]
   Profile --> Pg
   Scheduling --> Pg
   Imports --> Pg
+  AI --> Pg
   Api --> OpenAPI[Kontrakt OpenAPI]
   OpenAPI --> Swagger[Swagger UI]
   OpenAPI --> Docs[Docusaurus PL / EN]
@@ -36,6 +41,9 @@ Wszystkie zasoby HTTP należą do jednej domeny API i wspólnej wersji `/api/v1`
 - `src/api/scope.ts` ustala użytkownika żądania po stronie serwera. Do czasu logowania jest to użytkownik demonstracyjny z konfiguracji.
 - `src/api/v1/imports/routes.ts` obsługuje podgląd importu, sesje oraz odczyt plików i planów zajęć.
 - `src/api/v1/imports/google-routes.ts` implementuje jednorazowy import Google jako adapter źródła danych.
+- `src/api/v1/imports/ai-routes.ts` obsługuje import zdjęć/PDF przez model Responses API.
+- `src/api/v1/assistant/routes.ts` obsługuje rozmowy, lokalną historię, rejestr narzędzi i akcje wymagające potwierdzenia.
+- `src/events/outbox.ts` zapisuje zdarzenia domenowe w tej samej transakcji co zmianę kalendarza; `src/events/outbox-worker.ts` obsługuje niezależne dostawy przypomnień i publikacji Google.
 - `src/api/v1/health/routes.ts` zawiera sondy liveness i readiness.
 - `src/api/contracts.ts` zawiera kontrakty zależności repozytoriów przekazywanych trasom.
 
@@ -61,3 +69,5 @@ Moduł tras otrzymuje zależności przez opcje Fastify. Nie otwiera własnego po
 - Czas wydarzeń jest interpretowany w strefie czasowej profilu użytkownika.
 - Użytkownik ma najwyżej jeden aktywny profil pracy (unikalny indeks w bazie). Cel miesięczny jest przeliczany na tydzień (miesiąc = 52/12 tygodnia) i ta wartość trafia do generatora. Zmiana profilu wpływa tylko na kolejne generowane grafiki.
 - Konflikty kalendarza oraz wersje grafiku są rozstrzygane w backendzie, nie tylko w UI.
+- Worker jest osobnym procesem; w App Service uruchom go jako Continuous WebJob albo oddzielną usługę worker. `SKIP LOCKED`, lease i idempotency keys chronią przed równoległym wykonaniem.
+- W obecnej konfiguracji consumer Google jest jawnie blokowany: OAuth ma tylko `calendar.readonly`. Przypomnienia trafiają do kolejki bazy i są dostarczane aktywnej przeglądarce; push po zamknięciu aplikacji wymaga osobnego providera.

@@ -40,6 +40,7 @@ The quickstart prepares the local database, applies migrations, exports OpenAPI 
 - [Architecture and module boundaries](./architecture.md)
 - [API change standard and pull request requirements](./api-standard.md)
 - [API contract and endpoint explorer](./api-reference.md)
+- [Azure AI Foundry integration](./ai-integration.md)
 - [Local quickstart and configuration](./quickstart.md)
 
 The API contract is versioned at `apps/api/openapi/openapi.json`, generated from Fastify route schemas and rendered in Docusaurus. The API-hosted Swagger UI is for interactive development requests.

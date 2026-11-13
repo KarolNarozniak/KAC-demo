@@ -36,3 +36,31 @@ export async function readPdfPages(bytes: Buffer): Promise<PdfPage[]> {
     });
   } finally { activeReaders--; }
 }
+
+/** Reads page count only, without extracting text or persisting the document. */
+export async function countPdfPages(bytes: Buffer, maximumPages = 10): Promise<number> {
+  if (activeReaders >= 2) throw new PdfReadError('reader-busy');
+  activeReaders++;
+  try {
+    return await new Promise<number>((resolve, reject) => {
+      const worker = new Worker(new URL('./pdf-page-count-worker.mjs', import.meta.url), {
+        workerData: { bytes, maximumPages }, execArgv: [], resourceLimits: { maxOldGenerationSizeMb: 128, maxYoungGenerationSizeMb: 32 },
+      });
+      let settled = false;
+      const finish = (error?: Error, pageCount?: number) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        void worker.terminate();
+        if (error) reject(error); else resolve(pageCount!);
+      };
+      const timer = setTimeout(() => finish(new PdfReadError('read-timeout')), 15_000);
+      worker.once('message', (message: { pageCount?: number; error?: string }) => {
+        if (message.pageCount !== undefined) finish(undefined, message.pageCount);
+        else finish(new PdfReadError(message.error ?? 'unreadable-pdf'));
+      });
+      worker.once('error', () => finish(new PdfReadError('unreadable-pdf')));
+      worker.once('exit', () => finish(new PdfReadError('unreadable-pdf')));
+    });
+  } finally { activeReaders--; }
+}

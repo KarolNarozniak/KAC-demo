@@ -6,10 +6,14 @@ import { DemoScheduleReader } from './import/work-schedule/reader.js';
 import { PostgresScheduleRepository } from './scheduling/repository.js';
 import { PostgresWorkProfileRepository } from './profile/repository.js';
 import { demoScope } from './api/scope.js';
+import { AiRepository } from './ai/repository.js';
+import { PostgresNotificationRepository } from './notifications/repository.js';
 
 const repository = pool ? new PostgresCalendarRepository(pool) : null;
 const scheduleRepository = pool ? new PostgresScheduleRepository(pool) : undefined;
 const workProfileRepository = pool ? new PostgresWorkProfileRepository(pool) : undefined;
+const aiRepository = pool ? new AiRepository(pool) : undefined;
+const notificationRepository = pool ? new PostgresNotificationRepository(pool) : undefined;
 // Odczyt grafiku pracy (S23KC2S1P2-44): domyślnie prawdziwy (PDF + lokalny OCR), WORK_SCHEDULE_READER=demo włącza przykładowe dane.
 // WORK_SCHEDULE_DEBUG=1 wypisuje w terminalu API odczytany tekst (tylko do diagnozy na własnym komputerze).
 const printText = (source: string, lines: { text: string; confidence: number }[]) =>
@@ -18,7 +22,7 @@ const scheduleReader = config.workScheduleReader === 'demo'
   ? new DemoScheduleReader()
   : new LocalScheduleReader(process.env.WORK_SCHEDULE_DEBUG === '1' ? { onText: printText } : {});
 // Użytkownika żądania ustala serwer (S23KC2S1P2-185). Do czasu logowania to użytkownik demonstracyjny z konfiguracji.
-const app = buildApi(repository, config.corsOrigins, { scheduleReader, scheduleRepository, workProfileRepository, userScope: demoScope, google: { oauth: config.google } });
+const app = buildApi(repository, config.corsOrigins, { scheduleReader, scheduleRepository, workProfileRepository, aiRepository, notificationRepository, userScope: demoScope, google: { oauth: config.google } });
 
 try {
   await app.listen({ host: '0.0.0.0', port: config.port });

@@ -7,6 +7,8 @@ import type { WeekLayout } from './src/components/WeekGrid';
 import CalendarScreen from './src/screens/CalendarScreen';
 import ScheduleScreen from './src/screens/ScheduleScreen';
 import { BlocksScreen } from './src/screens/BlocksScreen';
+import AssistantScreen from './src/screens/AssistantScreen';
+import { claimDueNotifications, getNotificationSettings, updateNotificationSettings, type NotificationSettings } from './src/services/notificationsApi';
 import type { WeeklySchedule } from './src/services/scheduleApi';
 import ScreenTransition from './src/components/ScreenTransition';
 import { Button, ThemeProvider, ThemeToggle, useTheme, type ThemeMode } from './src/components/ui';
@@ -33,6 +35,39 @@ function CalendarApp() {
   const [tab, setTab] = useState<typeof tabs[number]>('Dziś');
   const [week, setWeek] = useState(new Date());
   const [schedulePreview, setSchedulePreview] = useState<WeeklySchedule | null>(null);
+  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings | null>(null);
+  const [notificationError, setNotificationError] = useState('');
+
+  useEffect(() => {
+    let alive = true;
+    void getNotificationSettings().then((settings) => { if (alive) setNotificationSettings(settings); }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!notificationSettings?.enabled || typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    let alive = true;
+    const checkDue = async () => {
+      try {
+        const due = await claimDueNotifications();
+        if (!alive) return;
+        for (const item of due) new Notification(item.title || 'Przypomnienie KAC', { body: item.message, tag: item.id });
+      } catch { /* Notification delivery must not interrupt calendar use. */ }
+    };
+    void checkDue();
+    const timer = setInterval(() => void checkDue(), 30_000);
+    return () => { alive = false; clearInterval(timer); };
+  }, [notificationSettings]);
+
+  const enableNotifications = async () => {
+    if (typeof Notification === 'undefined') { setNotificationError('Ta przeglądarka nie obsługuje powiadomień systemowych.'); return; }
+    try {
+      const permission = Notification.permission === 'default' ? await Notification.requestPermission() : Notification.permission;
+      const settings = await updateNotificationSettings({ enabled: permission === 'granted', workRemindersEnabled: true, minutesBefore: notificationSettings?.minutesBefore ?? 30 });
+      setNotificationSettings(settings);
+      setNotificationError(permission === 'granted' ? '' : 'Powiadomienia są zablokowane w ustawieniach przeglądarki.');
+    } catch (error) { setNotificationError(error instanceof Error ? error.message : 'Nie udało się zapisać ustawień powiadomień.'); }
+  };
 
   // S23KC2S1P2-15, 3a: wyjście z zakładki „Grafik” z niezapisanymi zmianami profilu wymaga decyzji.
   const [unsavedProfile, setUnsavedProfile] = useState(false);
@@ -93,14 +128,21 @@ function CalendarApp() {
         route === 'Dziś' || route === 'Tydzień' ? <CalendarScreen active={active} now={now} weekLayout={weekLayout} todayOnly={route === 'Dziś'} week={week} setWeek={setWeek} draftSchedule={schedulePreview} /> :
         route === 'Grafik' ? <ScheduleScreen active={active} now={now} week={week} setWeek={setWeek} onPreview={setSchedulePreview} onApproved={() => setTab('Tydzień')} onUnsavedChange={onUnsavedChange} discardSignal={discardSignal} /> :
         route === 'Blokady' ? <BlocksScreen /> :
+        route === 'Asystent' ? <AssistantScreen active={active} onCalendarChange={() => setTab('Tydzień')} /> :
         route === 'Ustawienia' ? <ScrollView style={{ flex: 1, minHeight: 0 }} contentContainerStyle={[styles.content, { padding: 16, paddingBottom: 32 }]} keyboardShouldPersistTaps="handled">
           <View style={[styles.row, { justifyContent: 'space-between', marginBottom: 20 }]}><Text style={styles.heading}>Motyw</Text><ThemeToggle /></View>
            <Text style={[styles.heading, { marginBottom: 12 }]}>Układ tygodnia</Text>
           <View accessibilityRole="radiogroup" style={{ gap: 8 }}>
             {([{ id: 'days-left', label: 'Dni po lewej · godziny u góry' }, { id: 'days-top', label: 'Dni u góry · godziny po lewej' }] as const).map((option) => <Pressable key={option.id} accessibilityRole="radio" accessibilityState={{ checked: weekLayout === option.id, disabled: !settingsLoaded }} disabled={!settingsLoaded} onPress={() => void changeWeekLayout(option.id)} style={{ padding: 14, borderRadius: 8, borderWidth: 1, borderColor: weekLayout === option.id ? palette.blue : palette.line, backgroundColor: weekLayout === option.id ? palette.blueSoft : palette.surface }}><Text style={styles.body}>{weekLayout === option.id ? '◉' : '○'} {option.label}</Text></Pressable>)}
-          </View>
+           </View>
+           <View style={[styles.card, { marginTop: 20 }]}>
+             <Text style={styles.heading}>Przypomnienia o zmianie pracy</Text>
+             <Text style={[styles.muted, { marginVertical: 8 }]}>Wymaga zgody na powiadomienia tej przeglądarki. Serwer planuje tylko zatwierdzone zmiany.</Text>
+             <Button title={notificationSettings?.enabled ? 'Powiadomienia włączone' : 'Włącz powiadomienia'} primary={!notificationSettings?.enabled} disabled={!notificationSettings} onPress={() => void enableNotifications()} />
+             {!!notificationError && <Text accessibilityRole="alert" style={styles.error}>{notificationError}</Text>}
+           </View>
           {!!storageError && <Text accessibilityRole="alert" style={styles.error}>{storageError}</Text>}
-        </ScrollView> : <View style={[styles.content,{padding:16}]}><Text style={styles.heading}>Asystent</Text><Text style={styles.subtitle}>Wkrótce</Text></View>
+         </ScrollView> : <View style={[styles.content,{padding:16}]}><Text style={styles.heading}>Niedostępna sekcja</Text></View>
       );
     }} />
 

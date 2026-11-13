@@ -26,6 +26,11 @@ export interface ImportRow {
   location?: string;
   /** Poziom pewności odczytu od 0 do 1 (np. 1 dla pliku ICS, mniej dla zdjęcia). */
   confidence?: number;
+  /** Strona dokumentu, z której odczytano rekord; pomaga użytkownikowi zweryfikować wynik AI. */
+  sourcePage?: number;
+  /** Krótki fragment źródłowy do korekty. Nie przechowujemy oryginalnej strony ani bajtów pliku. */
+  sourceSnippet?: string;
+  unresolvedFields?: string[];
   /** Pracownik, którego dotyczy zmiana (grafik może obejmować wiele osób). */
   employee?: string;
   /** Użytkownik potwierdził, że zmiana nocna kończy się następnego dnia. */

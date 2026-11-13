@@ -9,6 +9,7 @@ import { approvedScheduleExamples, generateScheduleExamples, invalidScheduleExam
   scheduleListExamples, updatedScheduleExamples, updateScheduleExamples } from './examples.js';
 import { ScheduleAlreadyApprovedError, ScheduleVersionConflictError, type ScheduleRepository } from '../../../scheduling/repository.js';
 import type { CandidateShift, ManualShiftInput, PlannerOverrides, PlanningContext, ScheduleGenerationResult } from '../../../scheduling/types.js';
+import type { ScopeResolver } from '../../scope.js';
 
 const schedulerOverridesSchema = {
   type: 'object', additionalProperties: false,
@@ -26,7 +27,8 @@ const schedulerOverridesSchema = {
 } as const;
 const weekStartSchema = { type: 'string', format: 'date', pattern: '^\\d{4}-\\d{2}-\\d{2}$' } as const;
 const idSchema = { type: 'string', minLength: 1, maxLength: 100 } as const;
-const objectResponse = { type: 'object', additionalProperties: true } as const;
+const objectResponse = { type: 'object', description: 'Schedule result with lifecycle/feasibility state, metrics, shifts and structured violations.', additionalProperties: true,
+  'x-examples': { success: { summary: 'Wynik harmonogramu', description: 'Syntetyczny kształt bazowy; szczegóły zależą od operacji.', value: { status: 'ok' } } } } as const;
 /** Odpowiedź błędu z wybranymi przykładami ze scheduling/examples.ts. */
 const failure = (code: keyof typeof errors, description: string, keys?: string[]) => {
   const all: NamedExamples = errors[code];
@@ -57,12 +59,12 @@ const versionSchema = { params: { type: 'object', required: ['weekStart'], prope
 const listSchema = { querystring: { type: 'object', required: ['from', 'to'], additionalProperties: false, properties: {
   from: { type: 'string', format: 'date' }, to: { type: 'string', format: 'date' }, limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 }, offset: { type: 'integer', minimum: 0, default: 0 },
 } } } as const;
-export async function schedulingRoutes(app: FastifyInstance, options: { repository?: ScheduleRepository }) {
+export async function schedulingRoutes(app: FastifyInstance, options: { repository?: ScheduleRepository; scope: ScopeResolver }) {
   const scheduleRepository = options.repository;
-  const planningContextFor = async (weekStart: string): Promise<PlanningContext | null> => {
-    const context = await scheduleRepository?.getPlanningContext();
+  const planningContextFor = async (weekStart: string, owner: ReturnType<ScopeResolver>): Promise<PlanningContext | null> => {
+    const context = await scheduleRepository?.getPlanningContext(owner.userId, owner.calendarId);
     if (!context) return null;
-    const publishedIds = await scheduleRepository!.getApprovedShiftEventIds(weekStart, context.profile.calendarId);
+    const publishedIds = await scheduleRepository!.getApprovedShiftEventIds(weekStart, owner.calendarId);
     if (!publishedIds.length) return context;
     const ids = new Set(publishedIds);
     return { ...context, events: context.events.filter((event) => !ids.has(event.id)) };
@@ -96,7 +98,8 @@ export async function schedulingRoutes(app: FastifyInstance, options: { reposito
     if (!scheduleRepository) return reply.code(503).send({ error: 'scheduling_not_configured' });
     if (!validWeekStart(request.body.weekStart)) return reply.code(400).send({ error: 'invalid_week_start' });
     try {
-      const context = await planningContextFor(request.body.weekStart);
+      const owner = options.scope(request);
+      const context = await planningContextFor(request.body.weekStart, owner);
       if (!context) return reply.code(404).send({ error: 'work_profile_not_found' });
       if (request.body.profileVersion !== context.profile.profileVersion) return reply.code(409).send({ error: 'profile_version_conflict', profileVersion: context.profile.profileVersion });
       const missing = [context.availability.length ? null : 'availability', context.profile.targetHours > 0 ? null : 'target'].filter(Boolean);
@@ -125,7 +128,8 @@ export async function schedulingRoutes(app: FastifyInstance, options: { reposito
     if (!scheduleRepository) return reply.code(503).send({ error: 'scheduling_not_configured' });
     if (!validWeekStart(request.params.weekStart)) return reply.code(400).send({ error: 'invalid_week_start' });
     try {
-      const [context, latest] = await Promise.all([planningContextFor(request.params.weekStart), scheduleRepository.getLatestSchedule(request.params.weekStart)]);
+      const owner = options.scope(request);
+      const [context, latest] = await Promise.all([planningContextFor(request.params.weekStart, owner), scheduleRepository.getLatestSchedule(request.params.weekStart, owner.calendarId)]);
       if (!context) return reply.code(404).send({ error: 'work_profile_not_found' });
       if (!latest) return reply.code(404).send({ error: 'schedule_not_found' });
       if (latest.version !== request.body.expectedVersion) return reply.code(409).send({ error: 'schedule_version_conflict', currentVersion: latest.version });
@@ -136,7 +140,7 @@ export async function schedulingRoutes(app: FastifyInstance, options: { reposito
         maximumHours: latest.maximumMinutes / 60, maxHoursPerDay: Number(latest.parameters.maxHoursPerDay ?? context.profile.maxHoursPerDay),
       });
       if (validation.errors.length) return reply.code(422).send({ error: 'invalid_schedule', errors: validation.errors, warnings: validation.warnings });
-      const schedule = await scheduleRepository.approveSchedule(request.params.weekStart, request.body.expectedVersion);
+      const schedule = await scheduleRepository.approveSchedule(request.params.weekStart, request.body.expectedVersion, owner.calendarId);
       return schedule ? withClassContext(schedule, context) : reply.code(404).send({ error: 'schedule_not_found' });
     } catch (error) {
       if(error instanceof ProfileError){if(error.code==='invalid_schedule')return reply.code(422).send({error:error.code,...error.details as object});return reply.code(error.status).send({error:error.code,details:error.details});}
@@ -158,7 +162,7 @@ export async function schedulingRoutes(app: FastifyInstance, options: { reposito
   } }, async (request, reply) => {
     if (!scheduleRepository) return reply.code(503).send({ error: 'scheduling_not_configured' });
     if (!validWeekStart(request.params.weekStart)) return reply.code(400).send({ error: 'invalid_week_start' });
-    try { return { rejected: true, schedule: await scheduleRepository.rejectSchedule(request.params.weekStart, request.body.expectedVersion) }; }
+    try { return { rejected: true, schedule: await scheduleRepository.rejectSchedule(request.params.weekStart, request.body.expectedVersion, options.scope(request).calendarId) }; }
     catch (error) {
       if(error instanceof ProfileError){if(error.code==='invalid_schedule')return reply.code(422).send({error:error.code,...error.details as object});return reply.code(error.status).send({error:error.code,details:error.details});}
       if (error instanceof ScheduleVersionConflictError) return reply.code(409).send({ error: 'schedule_version_conflict', currentVersion: error.actualVersion });
@@ -173,7 +177,7 @@ export async function schedulingRoutes(app: FastifyInstance, options: { reposito
   } }, async (request, reply) => {
     if (!scheduleRepository) return reply.code(503).send({ error: 'scheduling_not_configured' });
     if (request.query.from > request.query.to) return reply.code(400).send({ error: 'invalid_date_range' });
-    try { return await scheduleRepository.listSchedules({ from: request.query.from, to: request.query.to, limit: request.query.limit ?? 20, offset: request.query.offset ?? 0 }); }
+    try { return await scheduleRepository.listSchedules({ from: request.query.from, to: request.query.to, limit: request.query.limit ?? 20, offset: request.query.offset ?? 0 }, options.scope(request).calendarId); }
     catch (error) {
       if(error instanceof ProfileError){if(error.code==='invalid_schedule')return reply.code(422).send({error:error.code,...error.details as object});return reply.code(error.status).send({error:error.code,details:error.details});} request.log.error({ err: error }, 'Schedule list failed'); return reply.code(503).send({ error: 'schedule_list_failed' }); }
   });
@@ -181,9 +185,9 @@ export async function schedulingRoutes(app: FastifyInstance, options: { reposito
   app.get<{ Params: { id: string } }>('/schedules/id/:id', { schema: { tags: ['Scheduling'], summary: 'Get a schedule version by ID', operationId: 'getScheduleById', params: { type: 'object', required: ['id'], properties: { id: idSchema } }, response: { 200: scheduleBody('Wersja grafiku.', scheduleExamples), 404: failure(404, 'Brak grafiku.', ['schedule_not_found']), 503: failure(503, 'Repozytorium nieskonfigurowane.', ['scheduling_not_configured']) } } }, async (request, reply) => {
     if (!scheduleRepository) return reply.code(503).send({ error: 'scheduling_not_configured' });
     try {
-      const schedule = await scheduleRepository.getScheduleById(request.params.id);
+      const schedule = await scheduleRepository.getScheduleById(request.params.id, options.scope(request).calendarId);
       if (!schedule) return reply.code(404).send({ error: 'schedule_not_found' });
-      const context = await planningContextFor(schedule.weekStart);
+      const context = await planningContextFor(schedule.weekStart, options.scope(request));
       return context ? withClassContext(schedule, context) : schedule;
     } catch (error) { request.log.error({ err: error }, 'Schedule lookup failed'); return reply.code(503).send({ error: 'schedule_lookup_failed' }); }
   });
@@ -192,7 +196,8 @@ export async function schedulingRoutes(app: FastifyInstance, options: { reposito
     if (!scheduleRepository) return reply.code(503).send({ error: 'scheduling_not_configured' });
     if (!validWeekStart(request.params.weekStart)) return reply.code(400).send({ error: 'invalid_week_start' });
     try {
-      const [schedule, context] = await Promise.all([scheduleRepository.getLatestSchedule(request.params.weekStart), planningContextFor(request.params.weekStart)]);
+      const owner = options.scope(request);
+      const [schedule, context] = await Promise.all([scheduleRepository.getLatestSchedule(request.params.weekStart, owner.calendarId), planningContextFor(request.params.weekStart, owner)]);
       if (!schedule) return reply.code(404).send({ error: 'schedule_not_found' });
       return context ? withClassContext(schedule, context) : schedule;
     } catch (error) {
@@ -209,7 +214,8 @@ export async function schedulingRoutes(app: FastifyInstance, options: { reposito
     const { weekStart } = request.params;
     if (!validWeekStart(weekStart)) return reply.code(400).send({ error: 'invalid_week_start' });
     try {
-      const [context, latest] = await Promise.all([planningContextFor(weekStart), scheduleRepository.getLatestSchedule(weekStart)]);
+      const owner = options.scope(request);
+      const [context, latest] = await Promise.all([planningContextFor(weekStart, owner), scheduleRepository.getLatestSchedule(weekStart, owner.calendarId)]);
       if (!context) return reply.code(404).send({ error: 'work_profile_not_found' });
       if (!latest) return reply.code(404).send({ error: 'schedule_not_found' });
       if (latest.parameters.profileVersion !== context.profile.profileVersion) return reply.code(409).send({ error: 'profile_version_conflict', profileVersion: context.profile.profileVersion });

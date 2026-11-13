@@ -13,6 +13,13 @@ import type { ApiOptions, CalendarRepository } from './api/contracts.js';
 import { registerGoogleImport } from './api/v1/imports/google-routes.js';
 import { DemoScheduleReader } from './import/work-schedule/reader.js';
 import { blockRoutes } from './api/v1/blocks/routes.js';
+import { aiImportRoutes } from './api/v1/imports/ai-routes.js';
+import { assistantRoutes } from './api/v1/assistant/routes.js';
+import { notificationRoutes } from './api/v1/notifications/routes.js';
+import { AiRepository } from './ai/repository.js';
+import { AiService } from './ai/service.js';
+import { FoundryResponsesClient } from './ai/foundry.js';
+import { config } from './config.js';
 
 export type { ApiOptions, CalendarRepository } from './api/contracts.js';
 
@@ -59,6 +66,9 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
         { name: 'Imports', description: 'Reviewable imports from schedules, ICS and class files.' },
         { name: 'Google import', description: 'One-time, read-only Google Calendar import.' },
         { name: 'Blocks', description: 'Vacation, exam sessions and days off blocks.' },
+        { name: 'AI imports', description: 'AI document extraction into the existing review/confirmation pipeline.' },
+        { name: 'Assistant', description: 'Application-scoped conversations and confirmation-gated calendar actions.' },
+        { name: 'Notifications', description: 'In-app notification preferences and due reminder queue.' },
       ],
       externalDocs: { description: 'KAC bilingual developer documentation', url: process.env.DOCUSAURUS_URL ?? 'http://localhost:3000' },
     },
@@ -73,15 +83,21 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
   app.get(`${API_PREFIX}/openapi.json`, { schema: { hide: true } }, async () => app.swagger());
 
   const scheduleReader = options.scheduleReader ?? new DemoScheduleReader();
+  const aiService = options.aiService ?? (config.azureAi.projectEndpoint && config.azureAi.modelDeployment
+    ? new AiService(new FoundryResponsesClient(config.azureAi))
+    : undefined);
   app.register(async (v1) => {
     registerWorkProfile(v1,options.workProfileRepository,options.userScope??demoScope);
     await healthRoutes(v1, { repository });
-    await calendarRoutes(v1, { repository });
+    await calendarRoutes(v1, { repository, scope: options.userScope ?? demoScope });
     await profileRoutes(v1, { repository: options.workProfileRepository, scope: options.userScope });
-    await schedulingRoutes(v1, { repository: options.scheduleRepository });
-    await importRoutes(v1, { repository, scheduleRepository: options.scheduleRepository, scheduleReader, google: options.google });
+    await schedulingRoutes(v1, { repository: options.scheduleRepository, scope: options.userScope ?? demoScope });
+    await importRoutes(v1, { repository, scheduleRepository: options.scheduleRepository, scheduleReader, google: options.google, scope: options.userScope ?? demoScope });
+    await aiImportRoutes(v1, { repository, aiService, aiRepository: options.aiRepository, scope: options.userScope ?? demoScope });
+    await assistantRoutes(v1, { repository, workProfileRepository: options.workProfileRepository, aiService, aiRepository: options.aiRepository, scope: options.userScope ?? demoScope });
+    await notificationRoutes(v1, { repository: options.notificationRepository, scope: options.userScope ?? demoScope });
     await blockRoutes(v1,{repository,scope:options.userScope});
-    registerGoogleImport(v1, repository, options.google);
+    registerGoogleImport(v1, repository, options.google ?? {}, options.userScope ?? demoScope);
   }, { prefix: API_PREFIX });
 
   return app;

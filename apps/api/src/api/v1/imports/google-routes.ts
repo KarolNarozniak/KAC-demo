@@ -13,6 +13,7 @@
 
 import type { FastifyInstance } from 'fastify';
 import type { CalendarRepository } from '../../contracts.js';
+import type { ScopeResolver } from '../../scope.js';
 import { importCollisions } from '../../../import/collisions-preview.js';
 import { buildImportPreview } from '../../../import/preview.js';
 import { DEFAULT_TIME_ZONE, toInstant, type ImportCategory } from '../../../import/rules.js';
@@ -34,8 +35,10 @@ export type GoogleImportOptions = {
 const MAX_RANGE_DAYS = 366;
 const idParams = { type: 'object', required: ['id'], properties: { id: { type: 'string', minLength: 1, maxLength: 64 } } } as const;
 const datePattern = '^\\d{4}-\\d{2}-\\d{2}$';
-const objectResponse = { type: 'object', additionalProperties: true } as const;
-const errorResponse = { type: 'object', required: ['error'], properties: { error: { type: 'string' }, details: { type: 'object', additionalProperties: true } }, additionalProperties: true } as const;
+const objectResponse = { type: 'object', description: 'Google import result. Calendar changes require shared import-session confirmation.', additionalProperties: true,
+  'x-examples': { success: { summary: 'Wynik operacji Google', description: 'Syntetyczny kształt bazowy; szczegóły zależą od operacji.', value: { status: 'ok' } } } } as const;
+const errorResponse = { type: 'object', description: 'Google connection, authorization or provider error.', required: ['error'], properties: { error: { type: 'string' }, details: { type: 'object', additionalProperties: true } }, additionalProperties: true,
+  'x-examples': { error: { summary: 'Błąd integracji Google', description: 'Kod błędu zależy od operacji.', value: { error: 'google_request_failed' } } } } as const;
 // Wyjaśnienia kodów błędów importu z Google pokazywane w przykładach Swagger UI.
 const googleErrors: Record<string, [string, string]> = {
   'connection-not-found': ['Nie ma takiego połączenia', 'Połączenie nie istnieje albo wygasło (połączenia żyją 15 minut). Rozpocznij import z Google od nowa.'],
@@ -64,14 +67,14 @@ const page = (title: string, message: string) => `<!doctype html><html lang="pl"
 <title>${escapeHtml(title)}</title><style>body{font-family:system-ui,sans-serif;background:#0B111B;color:#F2F5FC;display:grid;place-items:center;min-height:100vh;margin:0;padding:16px}main{max-width:420px;text-align:center}</style></head>
 <body><main><h1>${escapeHtml(title)}</h1><p>${escapeHtml(message)}</p><p>Możesz zamknąć tę kartę i wrócić do aplikacji KAC.</p></main><script>setTimeout(()=>window.close(),1500)</script></body></html>`;
 
-export function registerGoogleImport(app: FastifyInstance, repository: CalendarRepository | null, options: GoogleImportOptions = {}) {
+export function registerGoogleImport(app: FastifyInstance, repository: CalendarRepository | null, options: GoogleImportOptions, scope: ScopeResolver) {
   const connections = options.connections ?? new GoogleConnections();
   const oauth = options.oauth ?? null;
   const fetchImpl: FetchLike = options.fetch ?? ((url, init) => fetch(url, init));
   const source: GoogleCalendarSource = oauth ? new GoogleCalendarApi(fetchImpl) : new DemoGoogleCalendar();
 
-  const userZone = async () => {
-    const overview = await repository?.getOverview().catch(() => null);
+  const userZone = async (userId: string, calendarId: string) => {
+    const overview = await repository?.getOverview(userId, calendarId).catch(() => null);
     return { overview, zone: overview?.user.timezone ?? DEFAULT_TIME_ZONE };
   };
 
@@ -82,12 +85,13 @@ export function registerGoogleImport(app: FastifyInstance, repository: CalendarR
 
   // 1–2: początek połączenia z kontem Google.
   app.post('/import/google/connections', { schema: { tags: ['Google import'], summary: 'Start one-time Google import', description: 'Starts OAuth PKCE or the local demo consent flow. No Google events are written until import-session confirmation.', operationId: 'startGoogleImport', response: { 201: documented(objectResponse, 'Połączenie rozpoczęte.', googleConnectionExamples), 503: fail('Baza danych niedostępna.', ['database_unavailable']) } } }, async (_request, reply) => {
+    const owner = scope(_request);
     if (oauth) {
       const pkce = createPkce();
-      const connection = connections.create('google', pkce.verifier);
+      const connection = connections.create('google', pkce.verifier, owner.userId, owner.calendarId);
       return reply.code(201).send({ connectionId: connection.id, mode: 'google', authUrl: authorizationUrl(oauth, connection.id, pkce.challenge) });
     }
-    const connection = connections.create('demo', null);
+    const connection = connections.create('demo', null, owner.userId, owner.calendarId);
     return reply.code(201).send({ connectionId: connection.id, mode: 'demo', demoAccount: DEMO_GOOGLE_ACCOUNT });
   });
 
@@ -96,13 +100,14 @@ export function registerGoogleImport(app: FastifyInstance, repository: CalendarR
     schema: { tags: ['Google import'], summary: 'Record demo consent decision', description: 'Records the demo consent decision. The OAuth flow records its decision at the callback endpoint.', operationId: 'consentToGoogleImport', params: idParams, body: withExamples({ type: 'object', required: ['allow'], additionalProperties: false, properties: { allow: { type: 'boolean' } } }, { allow: { summary: 'Zgoda na odczyt kalendarza', description: 'Tylko dla konta demonstracyjnego: użytkownik kliknął „Zezwól”. Przy prawdziwym koncie Google zgodę daje się na stronie Google.', value: { allow: true } }, deny: { summary: 'Odmowa', description: 'Użytkownik kliknął „Odmów” – import zostanie przerwany.', value: { allow: false } } }), response: { 200: documented(objectResponse, 'Zapisana decyzja o zgodzie.', { allowed: { summary: 'Użytkownik się zgodził', description: 'Konto jest połączone – można pobrać listę kalendarzy (GET .../calendars).', value: { status: 'connected', email: 'student.kac.demo@gmail.com' } }, denied: { summary: 'Użytkownik odmówił', description: 'Bez zgody import z Google nie jest możliwy. Żeby spróbować ponownie, trzeba rozpocząć nowe połączenie.', value: { status: 'denied' } } }),
       404: notFound(), 409: fail('Zgoda już zapisana albo połączenie w trybie OAuth.', ['consent-already-given', 'use-google-consent']) } },
   }, async (request, reply) => {
-    const connection = connections.get(request.params.id);
+    const owner = scope(request);
+    const connection = connections.get(request.params.id, owner.userId, owner.calendarId);
     if (!connection) return reply.code(404).send({ error: 'connection-not-found' });
     if (connection.mode !== 'demo') return reply.code(409).send({ error: 'use-google-consent' });
     if (connection.status !== 'pending') return reply.code(409).send({ error: 'consent-already-given' });
     const updated = connections.update(connection.id, request.body.allow
       ? { status: 'connected', email: DEMO_GOOGLE_ACCOUNT, accessToken: 'demo' }
-      : { status: 'denied' });
+      : { status: 'denied' }, owner.userId, owner.calendarId);
     return { status: updated!.status, email: updated!.email };
   });
 
@@ -114,35 +119,38 @@ export function registerGoogleImport(app: FastifyInstance, repository: CalendarR
   } } }, async (request, reply) => {
     reply.type('text/html; charset=utf-8');
     const { state, code, error } = request.query;
-    const connection = state ? connections.get(state) : null;
+    const owner = scope(request);
+    const connection = state ? connections.get(state, owner.userId, owner.calendarId) : null;
     if (!connection || connection.mode !== 'google' || connection.status !== 'pending') {
       return reply.code(400).send(page('Połączenie wygasło', 'Rozpocznij import z Google Calendar ponownie w aplikacji.'));
     }
     if (error || !code) {
-      connections.update(connection.id, { status: 'denied', codeVerifier: null });
+      connections.update(connection.id, { status: 'denied', codeVerifier: null }, owner.userId, owner.calendarId);
       return reply.send(page('Brak zgody', 'Bez zgody na odczyt wydarzeń import z Google Calendar nie jest możliwy.'));
     }
     try {
       const token = await exchangeCode(oauth!, code, connection.codeVerifier ?? '', fetchImpl);
-      connections.update(connection.id, { status: 'connected', accessToken: token.accessToken, email: token.email, codeVerifier: null });
+      connections.update(connection.id, { status: 'connected', accessToken: token.accessToken, email: token.email, codeVerifier: null }, owner.userId, owner.calendarId);
       return reply.send(page('Połączono z Google', `Konto ${token.email ?? ''} jest połączone na czas importu.`));
     } catch (err) {
       request.log.warn({ err }, 'Google token exchange failed');
-      connections.update(connection.id, { status: 'error', codeVerifier: null });
+      connections.update(connection.id, { status: 'error', codeVerifier: null }, owner.userId, owner.calendarId);
       return reply.code(502).send(page('Nie udało się połączyć', 'Google nie potwierdził połączenia. Spróbuj ponownie w aplikacji.'));
     }
   });
 
   // Stan połączenia – aplikacja sprawdza go, czekając na zgodę w Google.
   app.get<{ Params: { id: string } }>('/import/google/connections/:id', { schema: { tags: ['Google import'], summary: 'Get Google connection status', operationId: 'getGoogleConnection', params: idParams, response: { 200: documented(objectResponse, 'Stan połączenia.', { pending: { summary: 'Czeka na zgodę użytkownika', description: 'Użytkownik jeszcze nie zalogował się w Google albo nie zdecydował. Aplikacja odpytuje ten adres co chwilę, aż status się zmieni.', value: { status: 'pending', mode: 'google' } }, connected: { summary: 'Połączono', description: 'Zgoda udzielona – można przejść do wyboru kalendarza.', value: { status: 'connected', email: 'student.kac.demo@gmail.com', mode: 'demo' } } }), 404: notFound() } } }, async (request, reply) => {
-    const connection = connections.get(request.params.id);
+    const owner = scope(request);
+    const connection = connections.get(request.params.id, owner.userId, owner.calendarId);
     if (!connection) return reply.code(404).send({ error: 'connection-not-found' });
     return { status: connection.status, email: connection.email, mode: connection.mode };
   });
 
   // 4: lista kalendarzy połączonego konta.
   app.get<{ Params: { id: string } }>('/import/google/connections/:id/calendars', { schema: { tags: ['Google import'], summary: 'List Google calendars', operationId: 'listGoogleCalendars', params: idParams, response: { 200: documented(objectResponse, 'Kalendarze połączonego konta.', googleCalendarsExamples), 401: unauthorized(), 403: fail('Użytkownik odmówił dostępu.', ['access-denied']), 404: notFound(), 409: fail('Konto nie jest połączone.', ['not-connected']), 502: unavailable() } } }, async (request, reply) => {
-    const connection = connections.get(request.params.id);
+    const owner = scope(request);
+    const connection = connections.get(request.params.id, owner.userId, owner.calendarId);
     if (!connection) return reply.code(404).send({ error: 'connection-not-found' });
     if (connection.status === 'denied') return reply.code(403).send({ error: 'access-denied' });
     if (connection.status !== 'connected' || !connection.accessToken) return reply.code(409).send({ error: 'not-connected' });
@@ -172,12 +180,13 @@ export function registerGoogleImport(app: FastifyInstance, repository: CalendarR
     },
   }, async (request, reply) => {
     if (!repository?.createImportSession || !repository.listEventsForImport) return reply.code(503).send({ error: 'database_not_configured' });
-    const connection = connections.get(request.params.id);
+    const owner = scope(request);
+    const connection = connections.get(request.params.id, owner.userId, owner.calendarId);
     if (!connection) return reply.code(404).send({ error: 'connection-not-found' });
     if (connection.status === 'denied') return reply.code(403).send({ error: 'access-denied' });
     if (connection.status !== 'connected' || !connection.accessToken) return reply.code(409).send({ error: connection.status === 'used' ? 'connection-used' : 'not-connected' });
 
-    const { overview, zone } = await userZone();
+    const { overview, zone } = await userZone(owner.userId, owner.calendarId);
     const { calendarId, from, to } = request.body;
     const start = toInstant(from, '00:00', zone);
     const endDay = new Date(Date.parse(`${to}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
@@ -200,10 +209,10 @@ export function registerGoogleImport(app: FastifyInstance, repository: CalendarR
 
     try {
       const calendars = await source.listCalendars(connection.accessToken).catch(() => []);
-      const preview = buildImportPreview(rows, await repository.listEventsForImport());
-      const session = await repository.createImportSession({ source: 'google', format: 'Google', rows, preview });
+      const preview = buildImportPreview(rows, await repository.listEventsForImport(owner.calendarId, owner.userId));
+      const session = await repository.createImportSession({ source: 'google', format: 'Google', rows, preview }, owner.userId);
       // Jednorazowość: wydarzenia są już w sesji importu, token Google nie jest dalej potrzebny.
-      connections.markUsed(connection.id);
+      connections.markUsed(connection.id, owner.userId, owner.calendarId);
       return reply.code(201).send({
         importSessionId: session.id,
         expiresAt: session.expiresAt.toISOString(),
@@ -220,7 +229,8 @@ export function registerGoogleImport(app: FastifyInstance, repository: CalendarR
 
   // Rezygnacja z połączenia (np. zamknięcie okna importu) – token jest od razu zapominany.
   app.delete<{ Params: { id: string } }>('/import/google/connections/:id', { schema: { tags: ['Google import'], summary: 'Forget Google connection', description: 'Forgets the one-time connection and drops the in-memory access token.', operationId: 'forgetGoogleConnection', params: idParams, response: { 204: { type: 'null', description: 'Połączenie i token zapomniane (także gdy już nie istniało).' } } } }, async (request, reply) => {
-    connections.delete(request.params.id);
+    const owner = scope(request);
+    connections.delete(request.params.id, owner.userId, owner.calendarId);
     return reply.code(204).send();
   });
 }

@@ -19,6 +19,7 @@ const importRowSchema = { type: 'object', required: ['id', 'title', 'date', 'sta
   properties: { id: { type: 'string', minLength: 1, maxLength: 64 }, title: { type: 'string', maxLength: 200 }, date: { type: 'string', maxLength: 10 },
     startTime: { type: 'string', maxLength: 5 }, endTime: { type: 'string', maxLength: 5 }, endDate: { type: 'string', maxLength: 10 },
     category: { type: 'string', enum: ['Class', 'Work', 'Personal'] }, location: { type: 'string', maxLength: 200 }, confidence: { type: 'number', minimum: 0, maximum: 1 },
+    sourcePage: { type: 'integer', minimum: 1 }, sourceSnippet: { type: 'string', maxLength: 160 }, unresolvedFields: { type: 'array', maxItems: 20, items: { type: 'string', maxLength: 80 } },
     employee: { type: 'string', maxLength: 200 }, overnightConfirmed: { type: 'boolean' }, duplicateDecision: { type: 'string', enum: ['skip', 'replace', 'keepBoth'] }, replacementId: { type: 'string', minLength: 1, maxLength: 200 } },
 } as const;
 const rowsProperty = { type: 'array', maxItems: 1000, items: importRowSchema } as const;
@@ -40,17 +41,19 @@ const readScheduleSchema = { body: { type: 'object', required: ['fileName', 'dat
 const cancelSchema = { params: { type: 'object', required: ['id'], properties: { id: sessionIdSchema } } } as const;
 
 export async function importRoutes(app: FastifyInstance, options: ApiDependencies) {
-  const { repository, scheduleReader } = options;
-  const existingEventsFor = async (_rows: ImportRow[]): Promise<ExistingEvent[]> => repository?.listEventsForImport ? repository.listEventsForImport() : [];
+  const { repository, scheduleReader, scope } = options;
+  const existingEventsFor = async (owner: ReturnType<typeof scope>): Promise<ExistingEvent[]> =>
+    repository?.listEventsForImport ? repository.listEventsForImport(owner.calendarId, owner.userId) : [];
 
   app.post<{ Body: { rows: ImportRow[]; importSessionId?: string } }>('/import/preview', { schema: { ...importPreviewSchema, body: withExamples(importPreviewSchema.body, previewInputExamples),
     tags: ['Imports'], summary: 'Preview and validate import rows', description: 'Checks imported rows against each other and the calendar. Does not write events.', operationId: 'previewImport', response: { 200: ok('Wiersze ze statusem kontroli, duplikatami i oznaczeniem zmian nocnych.', previewExamples), 503: unavailable() },
   } }, async (request, reply) => {
+    const owner = scope(request);
     if (request.body.importSessionId && repository?.touchImportSession) {
-      await repository.touchImportSession(request.body.importSessionId).catch((error) => request.log.warn({ err: error }, 'Could not extend import session'));
+      await repository.touchImportSession(request.body.importSessionId, owner.userId).catch((error) => request.log.warn({ err: error }, 'Could not extend import session'));
     }
     let existing: ExistingEvent[] = [];
-    try { existing = await existingEventsFor(request.body.rows); }
+    try { existing = await existingEventsFor(owner); }
     catch (error) {
       request.log.warn({ err: error }, 'Import preview could not read calendar events');
       return reply.code(503).send({ error: 'database_unavailable' });
@@ -63,8 +66,9 @@ export async function importRoutes(app: FastifyInstance, options: ApiDependencie
   } }, async (request, reply) => {
     if (!repository?.createImportSession) return reply.code(503).send({ error: 'database_not_configured' });
     try {
-      const preview = buildImportPreview(request.body.rows, await existingEventsFor(request.body.rows));
-      const session = await repository.createImportSession({ ...request.body, preview });
+      const owner = scope(request);
+      const preview = buildImportPreview(request.body.rows, await existingEventsFor(owner));
+      const session = await repository.createImportSession({ ...request.body, preview }, owner.userId);
       return reply.code(201).send({ importSessionId: session.id, expiresAt: session.expiresAt.toISOString(), rows: preview });
     } catch (error) {
       request.log.error({ err: error }, 'Could not create import session');
@@ -88,7 +92,8 @@ export async function importRoutes(app: FastifyInstance, options: ApiDependencie
       ? [{ id: row.id, title: resolved.title, start: resolved.start, end: resolved.end, category: row.category ?? 'Personal', location: row.location?.trim() || null, duplicateDecision: row.duplicateDecision, replacementId: row.replacementId }]
       : []);
     try {
-      const result = await repository.confirmImportSession(request.params.id, accepted);
+      const owner = scope(request);
+      const result = await repository.confirmImportSession(request.params.id, accepted, owner.userId, owner.calendarId);
       if (result.kind === 'not-found') return reply.code(404).send({ error: 'import_session_not_found' });
       if (result.kind === 'closed') return reply.code(409).send({ error: 'import_session_closed' });
       if (result.kind === 'expired') return reply.code(410).send({ error: 'import_session_expired' });
@@ -108,7 +113,8 @@ export async function importRoutes(app: FastifyInstance, options: ApiDependencie
   } }, async (request, reply) => {
     if (!repository?.cancelImportSession) return reply.code(503).send({ error: 'database_not_configured' });
     try {
-      const cancelled = await repository.cancelImportSession(request.params.id);
+      const owner = scope(request);
+      const cancelled = await repository.cancelImportSession(request.params.id, owner.userId);
       return cancelled ? { status: 'cancelled' } : reply.code(409).send({ error: 'import_session_not_active' });
     } catch (error) {
       request.log.error({ err: error }, 'Could not cancel import session');
@@ -120,11 +126,12 @@ export async function importRoutes(app: FastifyInstance, options: ApiDependencie
     tags: ['Imports'], summary: 'Read a class timetable', description: 'Reads an ICS, text PDF or WAT timetable image, builds a review session and returns collision diagnostics. Does not modify the calendar.', operationId: 'readClassTimetable', response: fileResponses(classReadExamples),
   }, bodyLimit: readBodyLimit }, async (request, reply) => {
     if (!repository?.createImportSession || !repository.listEventsForImport) return reply.code(503).send({ error: 'database_not_configured' });
+    const owner = scope(request);
     if (looksLikeIcs(request.body.dataBase64)) {
       const ics = decodeIcsFile(request.body.dataBase64, MAX_SCHEDULE_FILE_BYTES);
       if (!ics.ok) return reply.code(422).send({ error: ics.reason });
       let overview: CalendarOverview | null;
-      try { overview = await repository.getOverview(); }
+      try { overview = await repository.getOverview(owner.userId, owner.calendarId); }
       catch (error) {
         request.log.error({ err: error }, 'ICS import could not read calendar');
         return reply.code(503).send({ error: 'database_unavailable' });
@@ -135,8 +142,8 @@ export async function importRoutes(app: FastifyInstance, options: ApiDependencie
       catch (error) { return reply.code(422).send({ error: error instanceof IcsError ? error.message : 'corrupted-file' }); }
       if (parsed.rows.length === 0) return reply.code(422).send({ error: parsed.eventCount === 0 ? 'empty-calendar' : 'no-importable-events', skipped: parsed.skipped });
       try {
-        const preview = buildImportPreview(parsed.rows, await repository.listEventsForImport());
-        const session = await repository.createImportSession({ source: 'classes', format: 'ICS/CSV', rows: parsed.rows, preview });
+        const preview = buildImportPreview(parsed.rows, await repository.listEventsForImport(owner.calendarId, owner.userId));
+        const session = await repository.createImportSession({ source: 'classes', format: 'ICS/CSV', rows: parsed.rows, preview }, owner.userId);
         return reply.code(201).send({ source: 'ics', rows: parsed.rows.map((row) => ({ ...row, reviewRequired: false, sourcePage: 1 })), preview,
           importSessionId: session.id, expiresAt: session.expiresAt.toISOString(), academicYear: parsed.calendarName ?? 'Plik ICS',
           calendarName: parsed.calendarName, dateFrom: parsed.dateFrom, dateTo: parsed.dateTo, eventCount: parsed.eventCount,
@@ -157,9 +164,9 @@ export async function importRoutes(app: FastifyInstance, options: ApiDependencie
       return reply.code(code === 'reader-busy' ? 429 : 422).send({ error: code });
     }
     try {
-      const preview = buildImportPreview(timetable.rows, await repository.listEventsForImport());
-      const session = await repository.createImportSession({ source: 'classes', format: file.type === 'PDF' ? 'PDF' : 'Zdjęcie', rows: timetable.rows, preview });
-      const overview = await repository.getOverview().catch(() => null);
+      const preview = buildImportPreview(timetable.rows, await repository.listEventsForImport(owner.calendarId, owner.userId));
+      const session = await repository.createImportSession({ source: 'classes', format: file.type === 'PDF' ? 'PDF' : 'Zdjęcie', rows: timetable.rows, preview }, owner.userId);
+      const overview = await repository.getOverview(owner.userId, owner.calendarId).catch(() => null);
       return reply.code(201).send({ ...timetable, preview, importSessionId: session.id, expiresAt: session.expiresAt.toISOString(),
         collisions: importCollisions(timetable.rows, overview?.events ?? [], overview?.user.timezone ?? 'Europe/Warsaw') });
     } catch (error) {
@@ -175,7 +182,8 @@ export async function importRoutes(app: FastifyInstance, options: ApiDependencie
     if (!file.ok) return reply.code(422).send({ error: file.reason });
     if (!repository?.createImportSession) return reply.code(503).send({ error: 'database_not_configured' });
     let userName = '';
-    try { userName = repository.getImportUserName ? await repository.getImportUserName() : ''; }
+    const owner = scope(request);
+    try { userName = repository.getImportUserName ? await repository.getImportUserName(owner.userId) : ''; }
     catch (error) {
       request.log.error({ err: error }, 'Could not read import user');
       return reply.code(503).send({ error: 'database_unavailable' });
@@ -190,8 +198,8 @@ export async function importRoutes(app: FastifyInstance, options: ApiDependencie
     try {
       const { readStatus, rows } = mapShiftsToRows(shifts, userName);
       if (readStatus === 'none') return reply.code(422).send({ error: 'nothing_recognized', readStatusLabel: READ_STATUS_LABELS.none });
-      const preview = buildImportPreview(rows, await existingEventsFor(rows));
-      const session = await repository.createImportSession({ source: 'work', format: file.type === 'PDF' ? 'PDF' : 'Zdjęcie', rows, preview });
+      const preview = buildImportPreview(rows, await existingEventsFor(owner));
+      const session = await repository.createImportSession({ source: 'work', format: file.type === 'PDF' ? 'PDF' : 'Zdjęcie', rows, preview }, owner.userId);
       return reply.code(201).send({ importSessionId: session.id, expiresAt: session.expiresAt.toISOString(), fileType: file.type,
         readStatus, readStatusLabel: READ_STATUS_LABELS[readStatus], readerIsDemo: !scheduleReader.real, userName, rows, preview });
     } catch (error) {

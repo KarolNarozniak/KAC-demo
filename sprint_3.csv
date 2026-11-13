@@ -1,0 +1,242 @@
+Podsumowanie,Klucz zgłoszenia,Id. zgłoszenia,Nadrzędny id.,Typ zgłoszenia,Status,Klucz projektu,Nazwa projektu,Typ projektu,Lider projektu,Opis projektu,Adres URL projektu,Priorytet,Rozwiązanie,Osoba przypisana,Osoba zgłaszająca,Twórca,Utworzono,Zaktualizowano,Ostatnio wyświetlane,Rozwiązane,Odnośne wersje,Wersja naprawy,Komponenty,Termin,Etykiety,Etykiety,Opis,Środowisko,Obserwatorzy,Rejestruj pracę,Rejestruj pracę,Pierwotne oszacowanie,Pozostałe oszacowanie,Czas poświęcony,Stosunek pracy,Σ Pierwotne oszacowanie,Σ Pozostałe oszacowanie,Σ Czas poświęcony,Poziom zabezpieczeń,Wewnętrzne łącze zgłoszenia (Blocks),Zewnętrzne łącze do zgłoszenia (Blocks),Zewnętrzne łącze do zgłoszenia (Blocks),Zewnętrzne łącze do zgłoszenia (Blocks),Zewnętrzne łącze do zgłoszenia (Blocks),Zewnętrzne łącze do zgłoszenia (Blocks),Zewnętrzne łącze do zgłoszenia (Blocks),Wewnętrzne łącze zgłoszenia (Relates),Wewnętrzne łącze zgłoszenia (Relates),Wewnętrzne łącze zgłoszenia (Relates),Wewnętrzne łącze zgłoszenia (Relates),Wewnętrzne łącze zgłoszenia (Relates),Wewnętrzne łącze zgłoszenia (Relates),Zewnętrzne łącze do zgłoszenia (Relates),Zewnętrzne łącze do zgłoszenia (Relates),Zewnętrzne łącze do zgłoszenia (Relates),Zewnętrzne łącze do zgłoszenia (Relates),Zewnętrzne łącze do zgłoszenia (Relates),Zewnętrzne łącze do zgłoszenia (Relates),Zewnętrzne łącze do zgłoszenia (Relates),Zewnętrzne łącze do zgłoszenia (Relates),Zewnętrzne łącze do zgłoszenia (Relates),Zewnętrzne łącze do zgłoszenia (Relates),Załącznik,Pole własne (Docelowy koniec),Pole własne (Docelowy start),Pole własne (Kolor epiki),Pole własne (Nazwa epiki),Pole własne (Oznaczono flagą),Pole własne (Pierwotne punkty historyjki),Pole własne (Punkty historyjki),Pole własne (Ranking),Sprint,Pole własne (Status epiki),Pole własne (Zespół),Pole własne (Łącze epiki),Pole własne (Łącze nadrzędne),Komentarz
+Testy i dokumentacja — Infrastruktura agenta Azure OpenAI,S23KC2S1P2-261,19548,19536,Podzadanie,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56609@student.wat.edu.pl,u56597@student.wat.edu.pl,u56597@student.wat.edu.pl,12 lis 2026 21:08 ,13 lis 2026 13:26 ,13 lis 2026 13:30 ,,,,,,ai-mvp,epic-7-ai,"*Testy i dokumentacja — Infrastruktura agenta Azure OpenAI.* Pokryć obce ID, błędne argumenty, instrukcje w źródłach, anulowanie, wygasły podgląd, timeout, 429 i wznowienie cyklu narzędzi z atrapą Responses API. Sprawdzić brak sekretów w frontendzie i logach. Opisać konfigurację endpoint/deployment, rolę Managed Identity, alternatywę lokalną, limity, rzeczywistą retencję Azure oraz ograniczenie demoScope w PL/EN. Zapisać wynik odrębnego testu rzeczywistego deploymentu; nie wymagać płatnych wywołań w CI.",,u56597@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,1.0,"0|i018n1:",Sprint 3 - logowanie i AI,,,,,
+API — Kontrakt modułu Asystent,S23KC2S1P2-260,19547,19536,Podzadanie,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56609@student.wat.edu.pl,u56597@student.wat.edu.pl,u56597@student.wat.edu.pl,12 lis 2026 21:08 ,13 lis 2026 13:26 ,13 lis 2026 13:30 ,,,,,,ai-mvp,epic-7-ai,"*API — Kontrakt modułu Asystent.* Dodać wersjonowane trasy rozmowy i decyzji o akcji, komplet schematów, operationId i mapowanie błędów. Wynik: testy kontraktu, aktualny OpenAPI i referencja.",,u56597@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,1.0,"0|i018mt:",Sprint 3 - logowanie i AI,,,,,
+BE/DB — Rozmowy i zatwierdzanie akcji,S23KC2S1P2-259,19546,19536,Podzadanie,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56609@student.wat.edu.pl,u56597@student.wat.edu.pl,u56597@student.wat.edu.pl,12 lis 2026 21:08 ,13 lis 2026 13:26 ,13 lis 2026 13:26 ,,,,,,ai-mvp,epic-7-ai,"*BE/DB — Rozmowy i zatwierdzanie akcji.* Zaprojektować migrację i repozytorium rozmów, wiadomości i akcji. Zapewnić właściciela, ważność podglądu, stan wykonania i idempotencję odporną na ponowienia. Wynik: testy współbieżnego zatwierdzania i utraty odpowiedzi po zapisie.",,u56597@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,3.0,"0|i018ml:",Sprint 3 - logowanie i AI,,,,,
+BE — Integracja Azure OpenAI Responses API i rejestr narzędzi,S23KC2S1P2-258,19544,19536,Podzadanie,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56609@student.wat.edu.pl,u56597@student.wat.edu.pl,u56597@student.wat.edu.pl,12 lis 2026 21:08 ,13 lis 2026 13:26 ,13 lis 2026 13:26 ,,,,,,ai-mvp,epic-7-ai,"*BE — Integracja Azure OpenAI Responses API i rejestr narzędzi.* Zainstalować {{openai}} oraz {{@azure/identity}} dla uwierzytelnienia Entra/Managed Identity. Skonfigurować endpoint Azure {{/openai/v1/}}, nazwę deploymentu i tryb uwierzytelnienia wyłącznie w backendzie. Wybrać dostępne wdrożenie obsługujące tekst/obrazy/PDF, function calling i JSON Schema; zapisać model, wersję, region i wyniki próby tekst/narzędzie/PNG/PDF. Zaimplementować {{responses.create}}, cykl function call → walidowana operacja → function call output, kontekst przy {{store:false}}, limity czasu/kroków i obsługę 429, timeout oraz błędów usługi bez nieskończonych ponowień. Nie powtarzać zapisów narzędzi podczas ponawiania wywołań modelu. Zakazać narzędzi spoza rejestru. Wynik: jeden adapter współdzielony przez wszystkie historyjki, atrapa w CI i udokumentowana próba na Azure; bez Agent Service i Document Intelligence.",,u56597@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,3.0,"0|i018m5:",Sprint 3 - logowanie i AI,,,,,
+[W02] Transakcyjny rejestr zmian i trwałe wykonywanie prac asynchronicznych,S23KC2S1P2-285,19583,,Zadanie,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56609@student.wat.edu.pl,u56597@student.wat.edu.pl,u56597@student.wat.edu.pl,12 lis 2026 21:44 ,13 lis 2026 13:25 ,13 lis 2026 13:26 ,,,,,,epiki-5-6-plan,,"* *Rezultat i moduły:* *nowe* {{apps/api/src/events/}} i współdzielony outbox/worker oraz migracja. Transakcje {{database.ts}} ({{saveEvent}}, {{updateSeriesFrom}}, {{deleteEvent}}, {{confirmImportSession}}), {{scheduling/repository.ts}} ({{approveSchedule}}, zastępowanie grafiku) i przyszłe G05 zapisują zdarzenie zawierające owner, typ, logiczne ID, wersję, przyczynę/origin, datę i potrzebne before/after. Konsumenci niezależnie planują Google i powiadomienia.
+* *Zależności:* W01. Format można rozpocząć niezależnie od decyzji o push i prawdziwej publikacji. Zapis domenowy nie może zależeć od dostępności sieci.
+* *Odbiór / weryfikacja:* rollback nie zostawia outboxa; commit przetrwa restart i trafi do konsumenta; wielu workerów nie przejmuje jednocześnie tej samej pracy; powtórzona dostawa jest bezpieczna; po usunięciu zachowane minimum danych potrzebne do Google delete. Testy PostgreSQL, sztuczny zegar, przerwanie po commit oraz przed/po zewnętrznym wywołaniu. At-least-once z idempotencją, bez obietnicy dokładnie jednej fizycznej dostawy push.",,u56597@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,,,S23KC2S1P2-17,S23KC2S1P2-35,S23KC2S1P2-13,S23KC2S1P2-24,S23KC2S1P2-36,S23KC2S1P2-42,S23KC2S1P2-48,S23KC2S1P2-23,S23KC2S1P2-47,S23KC2S1P2-18,,,,,,,,,"0|i018ut:",,,,,,
+[W01] Ustalenie zakresu użytkownika i własności zasobów integracji,S23KC2S1P2-283,19581,,Zadanie,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56609@student.wat.edu.pl,u56597@student.wat.edu.pl,u56597@student.wat.edu.pl,12 lis 2026 21:44 ,13 lis 2026 13:25 ,13 lis 2026 13:26 ,,,,,,epiki-5-6-plan,,"* *Rezultat i moduły:* kontrakt przekazywania {{UserScope}} z {{api/scope.ts}} do nowych modułów integracji/powiadomień i do wspólnych operacji. OAuth state powiązany z właścicielem i jednorazową sesją; kalendarze, urządzenia, akcje i joby mają owner. Demo jest jawne, a nie automatyczną substytucją realnego połączenia.
+* *Zależności:* demonstracyjny kontrakt można przygotować teraz; produkcyjne uruchomienie dla wielu osób wymaga logowania spoza tego planu.
+* *Odbiór / weryfikacja:* użytkownik B nie odczyta ani nie odłączy integracji A, nie zatwierdzi obcego callbacka i nie zarejestruje subskrypcji na cudze dane. Testy repozytorium i {{app.inject()}} z dwoma zakresami. Nie wystarcza trudny do odgadnięcia connectionId.",,u56597@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,,,S23KC2S1P2-12,S23KC2S1P2-17,S23KC2S1P2-41,S23KC2S1P2-35,S23KC2S1P2-47,S23KC2S1P2-48,S23KC2S1P2-23,S23KC2S1P2-30,S23KC2S1P2-13,S23KC2S1P2-24,,,,,,,,,"0|i018ud:",,,,,,
+Testy i dokumentacja — Import zdjęć/PDF przez Azure OpenAI,S23KC2S1P2-269,19557,19538,Podzadanie,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56609@student.wat.edu.pl,u56597@student.wat.edu.pl,u56597@student.wat.edu.pl,12 lis 2026 21:09 ,13 lis 2026 13:24 ,13 lis 2026 13:26 ,,,,,,ai-mvp,epic-7-ai,"*Testy i dokumentacja — Import zdjęć/PDF przez Azure OpenAI.* Przygotować syntetyczne pliki różnych układów, testy mapowania JPG/PNG na {{input_image}} i PDF na {{input_file}}, zgodności odpowiedzi z JSON Schema oraz braku zapisu dla błędnego wyniku/timeout/429. W CI używać atrapy Responses API; odrębnie porównać wynik prawdziwego deploymentu na PNG i PDF. Opisać formaty, limity, retencję, błędy i potrzebę korekty w PL/EN, bez deklarowania Document Intelligence jako zależności; zregenerować OpenAPI i referencję.",,u56597@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,1.0,"0|i018p1:",Sprint 3 - logowanie i AI,,,,,
+FE — Import AI i przegląd źródła,S23KC2S1P2-268,19556,19538,Podzadanie,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56609@student.wat.edu.pl,u56597@student.wat.edu.pl,u56597@student.wat.edu.pl,12 lis 2026 21:09 ,13 lis 2026 13:24 ,13 lis 2026 13:26 ,,,,,,ai-mvp,epic-7-ai,"*FE — Import AI i przegląd źródła.* Dodać tryb w istniejących komponentach importu, stan przetwarzania, wybór osoby/wierszy, wskazanie niepewnych pól i strony źródłowej. Poinformować o wysłaniu treści do AI i udostępnić anulowanie.",,u56597@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,1.0,"0|i018ot:",Sprint 3 - logowanie i AI,,,,,
+BE/DB/API — Integracja z sesjami importu,S23KC2S1P2-267,19555,19538,Podzadanie,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56609@student.wat.edu.pl,u56597@student.wat.edu.pl,u56597@student.wat.edu.pl,12 lis 2026 21:09 ,13 lis 2026 13:24 ,13 lis 2026 13:26 ,,,,,,ai-mvp,epic-7-ai,"*BE/DB/API — Integracja z sesjami importu.* Dodać wersjonowaną trasę AI, rozszerzyć konieczne metadane źródła i wpiąć wynik w obecne podglądy/confirm/cancel. Zachować właściciela, ważność, reguły duplikatów i atomowość.",,u56597@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,1.0,"0|i018ol:",Sprint 3 - logowanie i AI,,,,,
+BE — Bezpośredni odczyt obrazu/PDF w Azure OpenAI,S23KC2S1P2-266,19554,19538,Podzadanie,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56609@student.wat.edu.pl,u56597@student.wat.edu.pl,u56597@student.wat.edu.pl,12 lis 2026 21:09 ,13 lis 2026 13:24 ,13 lis 2026 13:26 ,,,,,,ai-mvp,epic-7-ai,"*BE — Bezpośredni odczyt obrazu/PDF w Azure OpenAI.* Wykorzystać adapter {{openai}} Responses API z AI-00: JPG/PNG przekazać jako {{input_image}}, PDF jako {{input_file}} z danymi pliku; nie pobierać dowolnych URL i nie dodawać Azure Document Intelligence ani obowiązkowego OCR. Przed wywołaniem wykorzystać obecne sprawdzanie sygnatur, integralności i limitu 5 MB; dodać limity stron PDF, rozdzielczości obrazu, czasu i wielkości wyniku. Odpowiedź wymusić schematem JSON, zwalidować po stronie backendu i znormalizować do ImportRow. Oznaczać brakujące/niejednoznaczne pola oraz stronę/fragment źródła; nie uznawać samooceny modelu za gwarancję poprawności. Przy nieobsługiwanym wejściu zwrócić kontrolowany błąd bez automatycznego przełączania dostawcy. Dotychczasowe czytniki zachować w ich osobnych trybach.",,u56597@student.wat.edu.pl,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2.0,"0|i018od:",Sprint 3 - logowanie i AI,,,,,
+Import wydarzeń ze zdjęć i dokumentów PDF z wykorzystaniem AI,S23KC2S1P2-253,19538,,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,High,,u56609@student.wat.edu.pl,u56597@student.wat.edu.pl,u56597@student.wat.edu.pl,12 lis 2026 21:07 ,12 lis 2026 22:53 ,13 lis 2026 13:24 ,,,,,,ai-mvp,epic-7-ai,"*Jako* student
+
+*chcę* odczytać wydarzenia ze zdjęcia, zrzutu ekranu lub dokumentu PDF o różnym układzie,
+
+*aby* zaimportować terminy bez ręcznego przepisywania ich do kalendarza.
+
+h3. 1. Scenariusz
+# Użytkownik w widoku „Tydzień” wybiera import planu lub grafiku i opcję „Rozpoznaj z AI”.
+# Użytkownik wskazuje plik JPG/JPEG, PNG lub PDF, maksymalnie 5 MB.
+   2a. Dla nieobsługiwanego, pustego, uszkodzonego albo zbyt dużego pliku system wyświetla konkretny błąd przed analizą przez model.
+# System przekazuje zweryfikowany obraz jako {{input_image}} lub PDF jako {{input_file}} bezpośrednio do Azure OpenAI Responses API, przez adapter AI-00. Nie wymaga pośredniego OCR ani Document Intelligence. Informuje o przetwarzaniu; dane nie trafiają jeszcze do kalendarza.
+   3a. Jeśli dokument przekracza ustalony limit stron, rozdzielczości lub czasu, system prosi o mniejszy fragment i kończy bez zapisu. Limity muszą być jawne w konfiguracji i UI.
+   3b. Jeśli daty, rok, oznaczenie pracownika lub godziny są niejednoznaczne, system prosi o doprecyzowanie albo oznacza pozycje do poprawy. Nie przedstawia zgadywanych danych jako potwierdzonych.
+   3c. Jeśli nic nie rozpoznano, system pokazuje komunikat i umożliwia wybór lepszego pliku.
+# System tworzy sesję importu i pokazuje istniejący podgląd wierszy wraz z fragmentem/stroną źródła, z którego pochodzą.
+   4a. Dla grafiku wielu osób użytkownik wybiera swoją osobę lub wiersze przed zatwierdzeniem.
+   4b. Niepoprawne dane wymagają poprawy; samo wysokie deklarowane przez model przekonanie nie zastępuje walidacji.
+# Użytkownik poprawia wiersze, wybiera pozycje i rozstrzyga duplikaty.
+   5a. Zmiany nocne wymagające potwierdzenia są obsługiwane przez obecny mechanizm importu.
+# Użytkownik zatwierdza. Backend ponownie sprawdza dane i zapisuje zaakceptowane pozycje atomowo.
+   6a. Przy anulowaniu lub wygaśnięciu sesji nie powstają wydarzenia.
+   6b. Przy błędzie zapisu nie ma częściowo zaimportowanego zestawu; użytkownik otrzymuje informację o wyniku i możliwości ponowienia.
+# System pokazuje liczbę dodanych, zastąpionych i pominiętych pozycji i odświeża kalendarz.
+
+h3. 2. Ograniczenia typu pre i post
+
+*Preconditions:* dostępny kalendarz i istniejący mechanizm sesji importu; plik należy do obsługiwanych formatów; AI jest skonfigurowane. Użytkownik przed wysłaniem widzi informację o analizie treści przez Azure OpenAI.
+
+*Postconditions:* tylko zatwierdzone, poprawne pozycje trafiają do kalendarza; anulowanie, błąd odczytu i wygaśnięcie sesji go nie zmieniają. Nie jest obiecany odczyt każdego układu ani pobieranie załączników z zewnętrznych usług. Wklejanie plaintextu jest osobnym AI-03, również w zakresie podstawowym, na tym samym adapterze Azure OpenAI.
+
+h3. 3. Potrzeby informacyjne
+
+Typ, rozmiar i zawartość pliku; numer strony lub wskazanie fragmentu źródła; daty, godziny, tytuły, miejsce i kategoria wydarzeń; osoba w grafiku; pozycje wymagające poprawy; istniejące wydarzenia i duplikaty; ważność sesji i wynik zatwierdzenia. Oryginał jest używany tylko w określonym cyklu przetwarzania/podglądu; retencję i usuwanie plików należy jawnie określić, bez bezterminowego składowania domyślnie.
+
+h3. 4. Obiekty biznesowe i ich atrybuty
+
+Istniejące *Import (tImporty)* i *Pozycja importu (tPozycjeImportu)* odpowiadają za sesję, status, ważność i wiersze do sprawdzenia. *Wydarzenie (tWydarzenia)* powstaje dopiero przy potwierdzeniu. Proponowane *Źródło odczytu AI*: format, nazwa, strona/fragment i identyfikator pozycji; metadane te mają ułatwić porównanie rozpoznania z dokumentem. Nie tworzy się drugiego mechanizmu zatwierdzania importu.
+
+*Powiązane przypadki użycia / RequisitePro:* import planu zajęć i grafiku pracy; identyfikatory do uzupełnienia.
+
+h3. Uszczegółowienie — kryteria akceptacji
+* *KA1. Dane:* poprawny JPG/PNG/PDF w limicie; *Gdy:* użytkownik uruchamia AI; *Wtedy:* rozpoznane terminy pojawiają się w sesji podglądu, bez zapisu wydarzeń.
+* *KA2. Dane:* plik poza obsługiwanym zakresem; *Gdy:* jest przesyłany; *Wtedy:* system podaje przyczynę odrzucenia i nie uruchamia kosztownej analizy niedozwolonego pliku.
+* *KA3. Dane:* nieczytelny rok, godzina lub kilka osób; *Gdy:* system przygotowuje wynik; *Wtedy:* wymaga doprecyzowania/wyboru zamiast automatycznego importu zgadywanych terminów.
+* *KA4. Dane:* pozycje z duplikatami i zmianą nocną; *Gdy:* użytkownik przegląda import; *Wtedy:* działają istniejące decyzje duplikatów, poprawianie danych i wymagane potwierdzenie zmiany nocnej.
+* *KA5. Dane:* poprawiony podgląd; *Gdy:* użytkownik zatwierdza; *Wtedy:* zatwierdzone pozycje są ponownie walidowane i zapisane wszystkie albo żadna.
+* *KA6. Dane:* anulowana/wygasła sesja albo timeout odczytu; *Gdy:* próba się kończy; *Wtedy:* kalendarz pozostaje bez zmian i użytkownik zna dalszy krok.
+* *KA7. Dane:* uzgodniony zestaw syntetycznych dokumentów z tabelą oraz opisem listowym, obejmujący PDF tekstowy i obrazy; *Gdy:* przeprowadzana jest weryfikacja; *Wtedy:* zapisuje się wyniki rozpoznania, braki i korekty; nie deklaruje się skuteczności dla dowolnego dokumentu na podstawie jednego przykładu.
+
+*Usługi API:* proponowane {{POST /api/v1/import/ai/read}}; istniejące {{POST /api/v1/import/preview}}, {{POST /api/v1/import/sessions/{id}/confirm}}, {{POST /api/v1/import/sessions/{id}/cancel}}. Zachować działanie obecnych czytników.
+
+*Definicja ukończenia:* działający przepływ wyboru pliku, AI, podglądu, korekty i atomowego zatwierdzenia; fixture'y syntetyczne, testy limitów, niejednoznaczności, anulowania i rollback. Testy automatyczne używają atrapy modelu; osobna kontrola rzeczywistego rozpoznania na uzgodnionym zestawie. OpenAPI, dokumentacja PL/EN i wymagane kontrole API/build aktualne. Zmiana zrecenzowana i scalona do mastera.
+
+*Wycena:* 8 SP.",,u56597@student.wat.edu.pl,";12 lis 2026 22:00 ;u56597@student.wat.edu.pl;60",,,57600,60,,,57600,60,,S23KC2S1P2-251,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,5.0,"0|i00z6z:",Sprint 3 - logowanie i AI,,,S23KC2S1P2-148,,
+przypomnienie o zmianie w pracy,S23KC2S1P2-48,17954,,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,Medium,,u56609@student.wat.edu.pl,u56609@student.wat.edu.pl,u56609@student.wat.edu.pl,07 paź 2026 22:09 ,12 lis 2026 22:51 ,13 lis 2026 13:24 ,,,,,,,,"*1.6. Przypomnienie o zmianie w pracy*
+
+*Epik:* EPIC 6 — Otrzymywanie powiadomień o planie
+*Zgłoszenie:* S23KC2S1P2-48
+
+*Historyjka użytkownika:*
+*Jako* pracujący student
+*Chcę* otrzymywać przypomnienie przed rozpoczęciem zmiany w pracy
+*Aby* odpowiednio przygotować się i dotrzeć na czas.
+
+*1. Scenariusz*
+ # Użytkownik otwiera ustawienia powiadomień.
+ # System wyświetla aktualne ustawienia przypomnień o zmianach w pracy.
+ # Użytkownik włącza przypomnienia, określa liczbę minut przed rozpoczęciem zmiany i wybiera „Zapisz”.
+ # System sprawdza poprawność ustawień i uprawnienia do powiadomień, zapisuje ustawienia oraz wyznacza terminy przypomnień dla zatwierdzonych, nadchodzących zmian.
+ # Po nadejściu terminu przypomnienia system wyświetla powiadomienie zawierające datę oraz godzinę rozpoczęcia i zakończenia zmiany.
+ # Użytkownik wybiera powiadomienie.
+ # System otwiera szczegóły wskazanej zmiany w kalendarzu.
+
+Krok 5 jest uruchamiany upływem czasu i nie wymaga dodatkowego działania użytkownika.
+
+*Scenariusze alternatywne:*
+
+*3a. Wyłączenie przypomnień:* użytkownik wyłącza przypomnienia i zapisuje ustawienia. System anuluje oczekujące przypomnienia o zmianach w pracy. Scenariusz kończy się.
+
+*3b. Anulowanie edycji:* użytkownik wybiera „Anuluj”. System zachowuje dotychczasowe ustawienia i terminy przypomnień.
+
+*4a. Niepoprawny czas wyprzedzenia:* system wskazuje błąd i nie zapisuje ustawień. Użytkownik poprawia wartość — powrót do kroku 3.
+
+*4b. Brak uprawnień do powiadomień:* system informuje o konieczności udzielenia zgody. Użytkownik przyznaje uprawnienie, a system kontynuuje krok 4. W przypadku odmowy system informuje, że przypomnienia nie mogą być wyświetlane.
+
+*4c. Brak nadchodzących, zatwierdzonych zmian:* system zapisuje ustawienia i informuje o braku zmian wymagających przypomnienia. Po dodaniu lub zatwierdzeniu takiej zmiany wyznacza termin powiadomienia.
+
+*4d. Termin przypomnienia już minął:* jeśli zmiana jeszcze się nie rozpoczęła, system wyświetla przypomnienie niezwłocznie. Jeśli zmiana już się rozpoczęła, nie planuje dla niej przypomnienia.
+
+*5a. Zmiana terminu pracy przed powiadomieniem:* użytkownik zmienia termin pracy i zapisuje wydarzenie. System anuluje poprzednie przypomnienie i wyznacza nowe zgodnie z aktualnym terminem.
+
+*5b. Usunięcie zmiany przed powiadomieniem:* użytkownik usuwa zmianę. System anuluje powiązane przypomnienie.
+
+*7a. Zmiana została usunięta po wyświetleniu powiadomienia:* system informuje, że wydarzenie już nie istnieje, i otwiera kalendarz.
+
+*2. Ograniczenia typu pre i post*
+
+*Preconditions — warunki wstępne:*
+ * Student ma dostęp do własnego kalendarza i ustawień powiadomień.
+
+ * Wyświetlenie przypomnienia wymaga uprawnienia do powiadomień oraz istnienia zatwierdzonej zmiany, która jeszcze się nie rozpoczęła.
+
+*Postconditions — warunki końcowe:*
+ * Poprawnie zapisane ustawienia przypomnień pozostają dostępne po ponownym otwarciu aplikacji.
+
+ * Dla zmian spełniających warunki system wyznacza terminy przypomnień zgodnie z ustawionym wyprzedzeniem.
+
+ * Powiadomienie zawiera aktualną datę oraz godzinę rozpoczęcia i zakończenia zmiany.
+
+ * Wybranie powiadomienia otwiera szczegóły powiązanej zmiany, o ile nadal istnieje.
+
+ * Zmiana terminu pracy aktualizuje oczekujące przypomnienie, a usunięcie zmiany je anuluje.
+
+ * Wyłączenie przypomnień anuluje oczekujące powiadomienia o zmianach w pracy.
+
+ * Anulowanie edycji ustawień nie zmienia dotychczasowej konfiguracji.
+
+ * Obsługa przypomnień nie modyfikuje grafiku pracy.
+
+*3. Potrzeby informacyjne*
+ * Informacja, czy przypomnienia są aktywne i czy aplikacja ma uprawnienie do ich wyświetlania.
+
+ * Informacja o ustawionym wyprzedzeniu, pozwalająca ocenić, czy student ma wystarczająco dużo czasu na przygotowanie i dojazd.
+
+ * Informacja o terminie nadchodzącej zmiany, pozwalająca rozpoznać obowiązek, którego dotyczy przypomnienie.
+
+ * Możliwość przejścia z powiadomienia do szczegółów zmiany w celu sprawdzenia aktualnego planu.
+
+ * Potwierdzenie, że zmiana ustawień lub terminu pracy została uwzględniona w przypomnieniach.
+
+ * Informacja o braku możliwości wyświetlenia powiadomień oraz działaniu potrzebnym do ich uruchomienia.
+
+*Dopuszczalne wartości informacji:*
+ * *Ustawienie przypomnień:* „Włączone” albo „Wyłączone”.
+
+ * *Uprawnienie do powiadomień:* „Nieustalone”, „Przyznane” albo „Odmówione”.
+
+ * *Decyzja w formularzu:* „Zapisz” albo „Anuluj”.
+
+ * *Wynik walidacji ustawień:* „Dane poprawne” albo „Dane wymagają poprawy”.
+
+ * *Stan pojedynczego przypomnienia:* „Zaplanowane”, „Wyświetlone” albo „Anulowane”.
+
+Czas wyprzedzenia jest dodatnią liczbą całkowitą wyrażoną w minutach, a nie typem enumeratywnym. Przykładowe poprawne wartości to 15, 30 i 60 minut.
+
+*Reguły wyznaczania przypomnienia:*
+
+!image-2026-10-09-15-14-53-397.png|width=657,height=340!
+
+Dla zmiany rozpoczynającej się o 14:00 i wyprzedzenia 30 minut przypomnienie przypada na 13:30.
+ * Przypomnienia dotyczą wyłącznie zatwierdzonych, nadchodzących zmian w kategorii „Praca”.
+
+ * System uwzględnia pełną datę i godzinę, również gdy przypomnienie przypada poprzedniego dnia.
+
+ * Dla jednej zmiany może istnieć najwyżej jedno aktywne, oczekujące przypomnienie.
+
+ * Aktualizacja terminu zastępuje poprzednie oczekujące przypomnienie.
+
+ * Wyświetlenie powiadomienia nie oznacza, że użytkownik je przeczytał lub potwierdził obecność w pracy.
+
+*Powiązane przypadki użycia (RequisitePro, macierz UC-US):* UC14 – Odbierz powiadomienie o zmianie lub konflikcie
+Wymaganie w RequisitePro: US42",,u56609@student.wat.edu.pl,,,,,,,,,,,,,,,,,,S23KC2S1P2-283,S23KC2S1P2-285,S23KC2S1P2-294,S23KC2S1P2-295,S23KC2S1P2-296,S23KC2S1P2-298,,,,,,,,,,,"09 paź 2026 15:14 ;u56609@student.wat.edu.pl;image-2026-10-09-15-14-53-397.png;https://jira.wat.edu.pl/secure/attachment/12008/image-2026-10-09-15-14-53-397.png",,,,,,,1.0,"0|i00z6c:",Sprint 3 - logowanie i AI,,,S23KC2S1P2-6,,
+Przygotowanie infrastruktury agenta AI i wykonywania narzędzi,S23KC2S1P2-251,19536,,Historyjka,Do zrobienia,S23KC2S1P2,26KC2S1_ KAC,software,andrzej.stasiak@wat.edu.pl,"WCY23_KC2S1 - P2
+Grupa studencka: WCY23KC2S1",,High,,u56609@student.wat.edu.pl,u56597@student.wat.edu.pl,u56597@student.wat.edu.pl,12 lis 2026 21:07 ,12 lis 2026 21:59 ,13 lis 2026 13:26 ,,,,,,ai-mvp,epic-7-ai,"*Cel:* przygotowanie wspólnej integracji z Azure OpenAI przez Responses API i SDK {{openai}}, umożliwiającej rozmowę, obsługę wejść tekst/obraz/PDF oraz kontrolowane wywoływanie funkcji aplikacji. Zadanie techniczne jest zależnością historyjek użytkownika; samo nie zapewnia jeszcze wszystkich operacji biznesowych.
+
+h3. 1. Scenariusz
+# Aplikacja rozpoczyna lub wznawia rozmowę należącą do bieżącego użytkownika.
+   1a. Jeśli rozmowa nie istnieje lub nie należy do użytkownika, system nie udostępnia jej treści.
+# System przyjmuje wiadomość i dodaje do kontekstu aktualną datę, strefę czasową oraz opis dozwolonych narzędzi.
+# Model przygotowuje odpowiedź albo żądanie wywołania narzędzia.
+   3a. Jeśli narzędzie nie istnieje lub argumenty są niezgodne ze schematem, system nie wykonuje go i zwraca kontrolowany błąd.
+# Backend sprawdza zakres użytkownika, argumenty oraz dopuszczalność operacji.
+   4a. Operacja odczytu może zostać wykonana bez osobnego zatwierdzenia.
+   4b. Operacja zapisu tworzy podgląd oczekujący na zatwierdzenie; sam model nie może zatwierdzić go za użytkownika.
+# Użytkownik zatwierdza albo anuluje podgląd. Backend ponownie sprawdza dane i wykonuje zatwierdzoną operację najwyżej raz dla danego identyfikatora akcji.
+   5a. Jeśli podgląd wygasł lub dane uległy zmianie, system wymaga nowego podglądu.
+# Wynik narzędzia wraca do rozmowy; interfejs otrzymuje jednoznaczny status.
+   6a. Przy timeout, wyczerpaniu limitu lub błędzie dostawcy system kończy próbę w kontrolowany sposób. Nie wykonuje niezatwierdzonego zapisu.
+   6b. Jeśli zapis mógł się zakończyć przed utratą odpowiedzi, ponowienie odczytuje wynik tej samej akcji, zamiast tworzyć kolejny zapis.
+
+h3. 2. Ograniczenia typu pre i post
+
+*Preconditions:* dostęp do zasobu Azure OpenAI, uprawnienia i quota w wybranym regionie oraz wdrożenie modelu spełniającego wymagania wejść i narzędzi; dostępny backend; serwer potrafi określić bieżący zakres użytkownika. Sekret dostawcy dostępny wyłącznie na backendzie.
+
+*Postconditions:* rozmowa i akcje są przypisane do właściciela; wykonano wyłącznie dozwolone operacje; zapis ma wynik powiązany z zatwierdzonym podglądem; awaria AI nie blokuje tradycyjnego kalendarza i importu.
+
+h3. 3. Potrzeby informacyjne
+* Identyfikator rozmowy, wiadomości i żądania.
+* Zakres użytkownika, data odniesienia i strefa czasowa.
+* Nazwy narzędzi, schematy argumentów, klasyfikacja odczyt/zapis.
+* Dane podglądu, termin ważności, identyfikator akcji i wynik wykonania.
+* Konfigurowalne limity wiadomości, czasu żądania i liczby wywołań narzędzi.
+* Metadane diagnostyczne: czas, status i zużycie udostępnione przez dostawcę; bez sekretów i domyślnego logowania pełnej treści prywatnych dokumentów.
+
+h3. 4. Obiekty biznesowe i ich atrybuty
+
+Proponowane *Rozmowa AI*: ID, właściciel, data utworzenia, data aktualizacji. *Wiadomość AI*: ID, ID rozmowy, rola, treść, czas. *Akcja AI*: ID, ID rozmowy, nazwa narzędzia, zwalidowane argumenty, status, identyfikator podglądu, ważność, wynik i klucz idempotencji. Referencje do wydarzeń i importów wskazują istniejące obiekty domenowe, zamiast kopiować ich model.
+
+*Powiązane przypadki użycia / RequisitePro:* do uzupełnienia po nadaniu identyfikatorów; nie przypisywać fikcyjnych numerów.
+
+h3. Uszczegółowienie — kryteria akceptacji
+* *KA1. Dane:* dostępne narzędzie i poprawne argumenty; *Gdy:* model żąda jego wykonania; *Wtedy:* backend sprawdza schemat oraz właściciela i wywołuje właściwą operację domenową.
+* *KA2. Dane:* model wskazuje nieznane narzędzie, niepoprawne argumenty lub obce ID; *Gdy:* agent obsługuje żądanie; *Wtedy:* operacja jest odrzucona bez skutków ubocznych.
+* *KA3. Dane:* podgląd zapisu oczekuje na decyzję; *Gdy:* brak zatwierdzenia, anulowano go albo model deklaruje zgodę w swojej odpowiedzi; *Wtedy:* dane biznesowe nie zostają zmienione.
+* *KA4. Dane:* zatwierdzona akcja została wykonana; *Gdy:* klient ponawia to samo żądanie; *Wtedy:* otrzymuje wynik tej samej akcji bez powtórzenia zapisu.
+* *KA5. Dane:* nieaktualny lub wygasły podgląd; *Gdy:* użytkownik go zatwierdza; *Wtedy:* system odmawia wykonania i pozwala przygotować nowy.
+* *KA6. Dane:* dostawca nie odpowiada albo przekroczono limit; *Gdy:* wykonywana jest rozmowa; *Wtedy:* klient otrzymuje komunikat po polsku, próba ma limit czasu i nie blokuje zwykłych funkcji aplikacji.
+* *KA7. Dane:* dokument zawiera instrukcję zmiany narzędzi lub danych innego użytkownika; *Gdy:* trafia do kontekstu modelu; *Wtedy:* backend nie przyznaje mu dodatkowych uprawnień.
+* *KA8. Dane:* skonfigurowany deployment Azure OpenAI; *Gdy:* przeprowadzana jest próba uruchomieniowa; *Wtedy:* potwierdzone są tekst, function calling, rozpoznanie PNG/PDF i wynik zgodny z JSON Schema; nazwa modelu, wersja i region są zapisane w dokumentacji. Brak obsługi któregoś wejścia blokuje odbiór integracji, zamiast skutkować cichym podłączeniem innej usługi.
+
+*Usługi API — proponowane:* {{POST /api/v1/assistant/conversations}}, {{GET /api/v1/assistant/conversations/{id}}}, {{POST /api/v1/assistant/conversations/{id}/messages}}, {{POST /api/v1/assistant/actions/{id}/confirm}}, {{POST /api/v1/assistant/actions/{id}/cancel}}.
+
+*Definicja ukończenia:* walidacja i błędy objęte testami jednostkowymi i {{app.inject()}}; testy izolacji właściciela i idempotencji na PostgreSQL; klient dostawcy zastępowalny atrapą w testach. Schematy Fastify, operationId, tagi, opisy i odpowiedzi obecne w kontrakcie; eksport OpenAPI i referencja PL/EN zregenerowane. Wykonano {{npm run api:openapi:check}}, {{npm test}}, {{npm run docs:build}}, {{npm run build}}; ewentualne niezwiązane awarie środowiska opisano oddzielnie. Zmiana zrecenzowana i scalona do mastera.
+
+*Wycena:* 8 SP.",,u56597@student.wat.edu.pl,";12 lis 2026 21:58 ;u56597@student.wat.edu.pl;60",";12 lis 2026 21:59 ;u56597@student.wat.edu.pl;60",,57600,120,,,57600,120,,,S23KC2S1P2-253,S23KC2S1P2-252,S23KC2S1P2-254,S23KC2S1P2-257,S23KC2S1P2-255,S23KC2S1P2-256,,,,,,,,,,,,,,,,,,,,,,,,8.0,"0|i00z6w:",Sprint 3 - logowanie i AI,,,S23KC2S1P2-148,,

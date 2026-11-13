@@ -4,7 +4,7 @@ import { Button, Field, useTheme } from './ui';
 import DateField from './DateField';
 import TimeField from './TimeField';
 import { pickPdf } from '../services/pickPdf';
-import { cancelImport, confirmImport, invalidFields, previewImport, readClassSchedule,
+import { cancelImport, confirmImport, invalidFields, previewImport, readClassSchedule, readAiClassSchedule,
   type ClassReadResult, type ClassRow, type DuplicateDecision, type ImportIssue, type ImportPreviewRow, type ImportRowInput, type ImportSummary } from '../services/importApi';
 
 // Import planu zajęć z pliku: PDF/zdjęcie (historyjka S23KC2S1P2-38) oraz ICS (S23KC2S1P2-8),
@@ -26,6 +26,7 @@ const PAGE_SIZE = 10;
 const stamp = (iso: string) => new Date(iso).toLocaleString('pl-PL', { timeZone: 'Europe/Warsaw' });
 const rowInput = (row: ClassRow): ImportRowInput => ({ id: row.id, title: row.title, date: row.date,
   startTime: row.startTime, endTime: row.endTime, ...(row.endDate ? { endDate: row.endDate } : {}), category: 'Class', location: row.location,
+  sourcePage: row.sourcePage, sourceSnippet: row.sourceSnippet, unresolvedFields: row.unresolvedFields,
   duplicateDecision: row.duplicateDecision, replacementId: row.replacementId });
 
 export default function ClassScheduleImport({ visible, onClose, onImported }: {
@@ -44,6 +45,7 @@ export default function ClassScheduleImport({ visible, onClose, onImported }: {
   // Status importu (S23KC2S1P2-20): zakończony, nieudany albo anulowany.
   const [status, setStatus] = useState<'' | 'failed' | 'cancelled'>('');
   const [fileName, setFileName] = useState('');
+  const [readerMode, setReaderMode] = useState<'ai' | 'local'>('ai');
   const [page, setPage] = useState(0);
   const [retry, setRetry] = useState(0);
   const chosen = rows.filter(row => selected.has(row.id));
@@ -71,7 +73,8 @@ export default function ClassScheduleImport({ visible, onClose, onImported }: {
     const file = await pickPdf();
     if (!file) return;
     setStatus('');
-    const result = await readClassSchedule(file.name, file.base64);
+    const useAi = !/\.(ics|csv)$/i.test(file.name) && readerMode === 'ai';
+    const result = useAi ? await readAiClassSchedule(file.name, file.base64) : await readClassSchedule(file.name, file.base64);
     setFileName(file.name); setSummary(null); setSession(result); setRows(result.rows);
     setSelected(new Set(result.rows.filter(row => !row.reviewRequired).map(row => row.id)));
     setPreview(result.preview); setPage(0);
@@ -122,6 +125,12 @@ export default function ClassScheduleImport({ visible, onClose, onImported }: {
       <ScrollView style={{ backgroundColor: palette.surface, borderRadius: 18, width: '100%', maxWidth: 760, maxHeight: '92%' }} contentContainerStyle={{ padding: 20 }}>
         <Text style={styles.heading}>Importuj plan zajęć</Text>
         <Text style={styles.subtitle}>Plik ICS (np. eksport z USOS, Google Calendar, Outlooka), PDF planu WAT z tekstem (do 10 stron) lub zrzut ekranu Miniatura WAT w PNG/JPG. Maks. 5 MB. Odczyt zdjęcia (OCR) może potrwać do minuty.</Text>
+        {!session && <View style={[styles.row, { flexWrap: 'wrap', marginVertical: 8 }]}>
+          <Text style={styles.label}>ODCZYT PDF / ZDJĘCIA</Text>
+          <Button title={readerMode === 'ai' ? '☑ Azure AI Foundry' : '☐ Azure AI Foundry'} primary={readerMode === 'ai'} disabled={busy} onPress={() => setReaderMode('ai')} />
+          <Button title={readerMode === 'local' ? '☑ Lokalny odczyt' : '☐ Lokalny odczyt'} primary={readerMode === 'local'} disabled={busy} onPress={() => setReaderMode('local')} />
+          <Text style={styles.muted}>ICS jest zawsze odczytywany lokalnie. AI tworzy tylko podgląd — zapis wymaga osobnego zatwierdzenia.</Text>
+        </View>}
         {!!fileName && <Text style={styles.body}>{fileName}</Text>}
         {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
         {busy && <Text accessibilityLiveRegion="polite" style={styles.body}>Przetwarzanie…</Text>}
@@ -135,7 +144,7 @@ export default function ClassScheduleImport({ visible, onClose, onImported }: {
             <Text style={styles.body}>{session.calendarName ?? 'Plik ICS'} · {session.dateFrom} – {session.dateTo}</Text>
             <Text style={styles.muted}>Wydarzenia w pliku: {session.eventCount ?? rows.length} · wystąpienia do importu: {rows.length}{session.skipped?.count
               ? ` · pominięte: ${session.skipped.count} (${Object.entries(session.skipped.reasons).map(([reason, count]) => `${skipText[reason] ?? reason}: ${count}`).join(', ')})` : ''}</Text>
-          </> : <Text style={styles.body}>Rok {session.academicYear} · {session.dateFrom} – {session.dateTo}</Text>}
+          </> : <Text style={styles.body}>{session.source === 'ai' ? 'Odczyt Azure AI · ' : 'Rok '}{session.source === 'ai' ? `${session.rows.length} wierszy` : `${session.academicYear} · ${session.dateFrom} – ${session.dateTo}`}</Text>}
           {Object.keys(session.collisions ?? {}).length > 0 && <Text style={styles.muted}>Część zajęć koliduje z wydarzeniami w kalendarzu – są oznaczone poniżej. Możesz je zaimportować mimo to albo odznaczyć.</Text>}
           <Text style={styles.muted}>Wybrano {chosen.length} z {rows.length} zajęć. Zapisujemy konkretne daty z planu. Sprawdź dane przed zatwierdzeniem. Niepewne wiersze wybierz dopiero po sprawdzeniu.</Text>
           <Text style={styles.muted}>Duplikat oznacza ten sam tytuł (bez różnic w wielkości liter i odstępach) oraz początek. Koniec może się różnić — „Zastąp” pozwala poprawić czas trwania.</Text>
@@ -150,7 +159,8 @@ export default function ClassScheduleImport({ visible, onClose, onImported }: {
                 ...(item?.duplicateOfRows ?? []).map(id => ({ id: `row:${id}`, label: `Wiersz ${rows.findIndex(other => other.id === id) + 1} tego importu` }))];
               return <View key={row.id} style={{ borderTopWidth: 1, borderColor: palette.line, paddingVertical: 12 }}>
                 <Button title={`${selected.has(row.id) ? '☑' : '☐'} Zajęcia ${rows.indexOf(row) + 1}${session.source === 'ics' ? '' : ` · strona ${row.sourcePage}`}`} disabled={busy} onPress={() => toggle(row.id)} />
-                {row.reviewRequired && <Text style={styles.error}>Odczyt niepewny — sprawdź i uzupełnij dane.</Text>}
+                {row.reviewRequired && <Text style={styles.error}>Odczyt niepewny — sprawdź i uzupełnij dane{row.unresolvedFields?.length ? ` (${row.unresolvedFields.join(', ')})` : ''}.</Text>}
+                {!!row.sourceSnippet && <Text style={styles.muted}>Źródło (str. {row.sourcePage ?? '?'}): „{row.sourceSnippet}”</Text>}
                 {item?.status === 'error' && <Text style={styles.error}>Popraw zaznaczone pola: {item.issues.map(issue => issueText[issue]).join(', ')}.</Text>}
                 {!!row.repeat && <Text style={styles.muted}>Powtarzanie w pliku: {row.repeat}</Text>}
                 {collisions.length > 0 && <Text style={[styles.muted, { color: palette.amber }]}>KOLIZJA z: {collisions.map(other => `${other.title}${other.mandatory ? ' (obowiązkowe)' : ''} ${shortStamp(other.start)}–${shortStamp(other.end).slice(-5)}`).join('; ')}</Text>}
