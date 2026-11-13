@@ -1,5 +1,7 @@
 # KAC Platform
 
+Lokalny start z Azure AI (Windows/PowerShell): zaloguj Azure CLI poleceniem `az login`, wybierz subskrypcję przez `az account set --subscription <subscription-id>` i sprawdź dostęp do tokenu poleceniem `az account get-access-token --resource https://ai.azure.com --query expiresOn --output tsv`. W `.env.ai.local` albo `.env` ustaw `AZURE_AI_PROJECT_ENDPOINT`, `AZURE_AI_MODEL_DEPLOYMENT=gpt-5-mini` i `AZURE_AI_AUTH_MODE=azure-cli`. API samo pobiera i odświeża token przez `AzureCliCredential`; nie wklejaj tokenu do pliku środowiskowego. Uruchom całość poleceniem PowerShell `& ./scripts/quickstart.ps1` (Linux/macOS: `sh ./scripts/quickstart.sh`); aplikacja web będzie pod `http://localhost:8081`, API pod `http://localhost:4000/api/v1`, Swagger UI pod `http://localhost:4000/api/v1/docs`, a dokumentacja PL/EN pod `http://localhost:3000`.
+
 Kalendarz wydarzeń i tygodniowe planowanie pracy: Expo/React Native Web, modułowe Fastify API v1, PostgreSQL oraz dwujęzyczna dokumentacja Docusaurus.
 
 Pełna dokumentacja produktu, architektury, OpenAPI i procesu zmian znajduje się w [Docusaurus](http://localhost:3000) (PL/EN). Interaktywny kontrakt backendu jest dostępny w [Swagger UI](http://localhost:4000/api/v1/docs), a OpenAPI JSON pod `http://localhost:4000/api/v1/openapi.json`.
