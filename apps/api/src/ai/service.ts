@@ -82,8 +82,8 @@ export class AiService {
   async sendAssistantMessage(input: ResponseInputItem[], tools: FunctionTool[], trustedContext?: string, signal?: AbortSignal) {
     return this.foundry.respond({
       store: false,
-      instructions: KAC_ASSISTANT_INSTRUCTIONS,
-      input: trustedContext ? [{ role: 'developer', content: trustedContext }, ...input] : input,
+      instructions: trustedContext ? `${KAC_ASSISTANT_INSTRUCTIONS}\n\n${trustedContext}` : KAC_ASSISTANT_INSTRUCTIONS,
+      input,
       tools,
       parallel_tool_calls: false,
       max_output_tokens: 1200,

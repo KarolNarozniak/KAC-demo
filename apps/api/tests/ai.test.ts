@@ -5,6 +5,7 @@ import { AiInvalidOutputError, AiService } from '../src/ai/service.js';
 import type { FoundryResponsesProvider } from '../src/ai/foundry.js';
 import { executeAssistantTool, assistantTools, type AssistantToolContext } from '../src/ai/tools.js';
 import { trustedTimeContext } from '../src/ai/context.js';
+import { safeAiProviderDiagnostics } from '../src/ai/provider-errors.js';
 
 const response = (output: string) => ({ id: 'resp-test', output_text: output, usage: { input_tokens: 10, output_tokens: 15 } }) as unknown as OpenAIResponse;
 const provider = (output: string, capture?: (options: Record<string, unknown>, requestOptions?: { signal?: AbortSignal }) => void) => ({
@@ -98,6 +99,13 @@ test('assistant time context contains a server-derived local time, UTC timestamp
   assert.match(context, /2026-11-16T09:00:00.000Z/);
 });
 
+test('provider diagnostics keep status and request ID but never include error text', () => {
+  const error = Object.assign(new Error('secret prompt and token'), { status: 400, code: 'invalid_parameter', requestID: 'req_safe-123' });
+  const diagnostics = safeAiProviderDiagnostics(error);
+  assert.deepEqual(diagnostics, { errorName: 'Error', providerStatus: 400, providerCode: 'invalid_parameter', providerRequestId: 'req_safe-123' });
+  assert.equal(JSON.stringify(diagnostics).includes('secret'), false);
+});
+
 test('AI import service forwards cancellation to the Responses request', async () => {
   let requestSignal: AbortSignal | undefined;
   const service = new AiService(provider('not-json', (_options, requestOptions) => { requestSignal = requestOptions?.signal; }) as unknown as FoundryResponsesProvider);
@@ -133,7 +141,7 @@ test('assistant refuses foreign event identifiers before preparing an update', a
   assert.equal(createdActions, 1);
 });
 
-test('assistant Responses calls send trusted time context separately from persisted conversation history', async () => {
+test('assistant Responses puts trusted time context in instructions, not persisted conversation input', async () => {
   let captured: Record<string, unknown> | undefined;
   let requestSignal: AbortSignal | undefined;
   const instance = provider('answer', (options) => { captured = options; });
@@ -142,6 +150,7 @@ test('assistant Responses calls send trusted time context separately from persis
   const abortController = new AbortController();
   await service.sendAssistantMessage([{ role: 'user', content: 'What time is it?' }], [], 'trusted server time context', abortController.signal);
   assert.equal(captured?.store, false);
-  assert.deepEqual((captured?.input as unknown[])[0], { role: 'developer', content: 'trusted server time context' });
+  assert.match(String(captured?.instructions), /trusted server time context/);
+  assert.deepEqual((captured?.input as unknown[])[0], { role: 'user', content: 'What time is it?' });
   assert.equal(requestSignal, abortController.signal);
 });

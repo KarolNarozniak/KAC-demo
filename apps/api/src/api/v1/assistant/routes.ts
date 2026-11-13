@@ -6,7 +6,7 @@ import type { ApiDependencies } from '../../contracts.js';
 import { AiActionConflictError, AiActionNotFoundError, AiActionStalePreviewError, AiConversationNotFoundError } from '../../../ai/repository.js';
 import { assistantTools, executeAssistantTool } from '../../../ai/tools.js';
 import { trustedTimeContext } from '../../../ai/context.js';
-import { classifyAiProviderFailure } from '../../../ai/provider-errors.js';
+import { classifyAiProviderFailure, safeAiProviderDiagnostics } from '../../../ai/provider-errors.js';
 import type { EventInput } from '../../../database.js';
 import type { AiMessage } from '../../../ai/repository.js';
 import { documented, withExamples } from '../../examples.js';
@@ -186,7 +186,7 @@ export async function assistantRoutes(app: FastifyInstance, options: Pick<ApiDep
     } catch (error) {
       if (request.raw.aborted) return;
       if (error instanceof AiConversationNotFoundError) return reply.code(404).send({ error: 'conversation_not_found_or_expired' });
-      request.log.error({ errorName: error instanceof Error ? error.name : 'unknown' }, 'Azure assistant turn failed');
+      request.log.error(safeAiProviderDiagnostics(error), 'Azure assistant turn failed');
       const failure = classifyAiProviderFailure(error);
       const errorCode = failure.code === 'rate_limited' ? 'assistant_rate_limited' : failure.code === 'timed_out' ? 'assistant_timeout' : 'assistant_unavailable';
       await aiRepository.logUsage(owner, 'assistant_chat', config.azureAi.modelDeployment, 0, 0, 0, 'error', errorCode).catch(() => undefined);

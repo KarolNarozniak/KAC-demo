@@ -9,7 +9,7 @@ import type { ImportRow } from '../../../import/rules.js';
 import { config } from '../../../config.js';
 import { AiInvalidOutputError } from '../../../ai/service.js';
 import { documented, errorExamples, withExamples } from '../../examples.js';
-import { classifyAiProviderFailure } from '../../../ai/provider-errors.js';
+import { classifyAiProviderFailure, safeAiProviderDiagnostics } from '../../../ai/provider-errors.js';
 
 const maximumBodyBytes = Math.ceil(MAX_SCHEDULE_FILE_BYTES * 1.4) + 4096;
 const aiReadSchema = { body: withExamples({ type: 'object', required: ['fileName', 'dataBase64', 'source'], additionalProperties: false,
@@ -140,7 +140,7 @@ export async function aiImportRoutes(app: FastifyInstance, options: Pick<ApiDepe
       const providerFailure = classifyAiProviderFailure(error);
       const providerErrorCode = providerFailure.code === 'rate_limited' ? 'azure_ai_rate_limited' : providerFailure.code === 'timed_out' ? 'azure_ai_timeout' : code;
       await aiRepository?.logUsage(scope, operation, 'foundry-agent', usage.inputTokens, usage.outputTokens, Date.now() - startedAt, 'error', providerErrorCode).catch(() => undefined);
-      request.log.error({ code: providerErrorCode, name: error instanceof Error ? error.name : 'unknown' }, 'Azure AI import failed');
+      request.log.error({ ...safeAiProviderDiagnostics(error), code: providerErrorCode }, 'Azure AI import failed');
       if (code === 'invalid_ai_output') return reply.code(502).send({ error: code });
       return reply.code(providerFailure.status).send({ error: providerErrorCode });
     }
