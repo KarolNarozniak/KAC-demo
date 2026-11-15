@@ -114,3 +114,15 @@ After a lost response, confirm **the same proposal** again. Existing action iden
 An empty day displays a fixed message without calling the assistant API or Azure. Detection includes today's weekly occurrences and events crossing midnight. The summary refreshes automatically when today's events change; there is no Refresh button. Unchanged data reuses the result within the current app session. The application displays “Dzień dobry!” from 05:00 through 17:59 and “Dobry wieczór!” otherwise, using the device's local time. The model is instructed to omit the date and an additional greeting.
 
 Internal conversations titled “Dzień w skrócie YYYY-MM-DD” remain available to the card but are hidden from the Assistant conversation list.
+
+## Chat, streaming and personalization
+
+Chat immediately displays the user's message and a typing indicator. It uses `POST /api/v1/assistant/conversations/{id}/messages?stream=true`, returning `application/x-ndjson`. Each line is an event: `accepted` confirms persisted user input, `delta` appends text, `reset` clears provisional text before another tool round, and `done` returns the persisted answer and pending proposals. `error` terminates an unsuccessful turn. Disconnecting aborts the upstream request. Without `stream`, the endpoint retains its JSON response. A stream ending without `done` is not successful.
+
+Empty or incomplete model responses produce `assistant_incomplete_response` (502 before streaming starts, an `error` event afterwards), rather than a stored summary. The 4000-token output budget includes model reasoning; diagnostics record the incomplete reason without conversation text.
+
+Confirmation keeps the user in chat. **Zatwierdź wszystko** executes proposals sequentially and stops on the first error or collision. Successful actions leave the list; remaining actions retain their identifiers for retry. Batch confirmation is not an atomic transaction across all proposals.
+
+Settings → Personalizacja agenta stores an address form (up to 60 characters) and a neutral, friendly or formal tone. Preferences are stored on the device and sent with subsequent messages as optional `preferences: { addressAs, tone }`; API tone values are `neutral`, `friendly`, and `formal`. Style preferences cannot change permissions or confirmation requirements.
+
+Regenerating the Today card creates a fresh hidden internal conversation, preventing reuse of stale calendar tool results from an earlier summary. Unchanged calendar data uses the current app session's cache.

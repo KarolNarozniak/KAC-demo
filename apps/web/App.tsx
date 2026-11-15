@@ -10,6 +10,7 @@ import { BlocksScreen } from './src/screens/BlocksScreen';
 import AssistantScreen from './src/screens/AssistantScreen';
 import { acknowledgeNotification, claimDueNotifications, getNotificationSettings, getWebPushConfig, registerWebPushSubscription, removeWebPushSubscription, updateNotificationSettings, type DueNotification, type NotificationSettings } from './src/services/notificationsApi';
 import type { WeeklySchedule } from './src/services/scheduleApi';
+import { configureAssistantPreferences, defaultAssistantPreferences, normalizeAssistantPreferences, type AssistantPreferences } from './src/domain/assistantPreferences';
 import ScreenTransition from './src/components/ScreenTransition';
 import { Button, ThemeProvider, ThemeToggle, useTheme, type ThemeMode } from './src/components/ui';
 
@@ -34,6 +35,28 @@ function CalendarApp() {
   const { palette, styles } = useTheme();
   const [tab, setTab] = useState<typeof tabs[number]>('Dziś');
   const [week, setWeek] = useState(new Date());
+  const [agentPreferences, setAgentPreferences] = useState<AssistantPreferences>({ ...defaultAssistantPreferences });
+  const [agentPreferencesLoaded, setAgentPreferencesLoaded] = useState(false);
+  const [agentPreferencesSaving, setAgentPreferencesSaving] = useState(false);
+  const [agentPreferencesNotice, setAgentPreferencesNotice] = useState('');
+  useEffect(() => {
+    void AsyncStorage.getItem('kac-assistant-preferences').then((saved) => {
+      const value = normalizeAssistantPreferences(saved ? JSON.parse(saved) : defaultAssistantPreferences);
+      setAgentPreferences(value); configureAssistantPreferences(value);
+    }).catch(() => setAgentPreferencesNotice('Nie udało się wczytać personalizacji agenta.'))
+      .finally(() => setAgentPreferencesLoaded(true));
+  }, []);
+  const saveAgentPreferences = async () => {
+    setAgentPreferencesSaving(true); setAgentPreferencesNotice('');
+    try {
+      const value = normalizeAssistantPreferences(agentPreferences);
+      await AsyncStorage.setItem('kac-assistant-preferences', JSON.stringify(value));
+      configureAssistantPreferences(value); setAgentPreferences(value);
+      setAgentPreferencesNotice('Personalizacja zapisana. Zastosuje się do kolejnych odpowiedzi.');
+    } catch { setAgentPreferencesNotice('Nie udało się zapisać personalizacji. Spróbuj ponownie.'); }
+    finally { setAgentPreferencesSaving(false); }
+  };
+  const [calendarRevision, setCalendarRevision] = useState(0);
   const [schedulePreview, setSchedulePreview] = useState<WeeklySchedule | null>(null);
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings | null>(null);
   const [notificationError, setNotificationError] = useState('');
@@ -225,16 +248,32 @@ function CalendarApp() {
     <ScreenTransition screenIndex={tabs.indexOf(tab)} renderScreen={(index, active) => {
       const route = tabs[index];
       return (
-        route === 'Dziś' || route === 'Tydzień' ? <CalendarScreen active={active} now={now} weekLayout={weekLayout} todayOnly={route === 'Dziś'} week={week} setWeek={setWeek} draftSchedule={schedulePreview}
+        route === 'Dziś' || route === 'Tydzień' ? <CalendarScreen refreshVersion={calendarRevision} active={active} now={now} weekLayout={weekLayout} todayOnly={route === 'Dziś'} week={week} setWeek={setWeek} draftSchedule={schedulePreview}
           notificationTarget={route === 'Tydzień' ? notificationTarget : null} onNotificationResolved={() => setNotificationTarget(null)} /> :
         route === 'Grafik' ? <ScheduleScreen active={active} now={now} week={week} setWeek={setWeek} onPreview={setSchedulePreview} onApproved={() => setTab('Tydzień')} onUnsavedChange={onUnsavedChange} discardSignal={discardSignal} /> :
         route === 'Blokady' ? <BlocksScreen /> :
-        route === 'Asystent' ? <AssistantScreen active={active} onCalendarChange={() => setTab('Tydzień')} /> :
+        route === 'Asystent' ? <AssistantScreen active={active} onCalendarChange={() => setCalendarRevision((value) => value + 1)} /> :
         route === 'Ustawienia' ? <ScrollView style={{ flex: 1, minHeight: 0 }} contentContainerStyle={[styles.content, { padding: 16, paddingBottom: 32 }]} keyboardShouldPersistTaps="handled">
           <View style={[styles.row, { justifyContent: 'space-between', marginBottom: 20 }]}><Text style={styles.heading}>Motyw</Text><ThemeToggle /></View>
            <Text style={[styles.heading, { marginBottom: 12 }]}>Układ tygodnia</Text>
           <View accessibilityRole="radiogroup" style={{ gap: 8 }}>
             {([{ id: 'days-left', label: 'Dni po lewej · godziny u góry' }, { id: 'days-top', label: 'Dni u góry · godziny po lewej' }] as const).map((option) => <Pressable key={option.id} accessibilityRole="radio" accessibilityState={{ checked: weekLayout === option.id, disabled: !settingsLoaded }} disabled={!settingsLoaded} onPress={() => void changeWeekLayout(option.id)} style={{ padding: 14, borderRadius: 8, borderWidth: 1, borderColor: weekLayout === option.id ? palette.blue : palette.line, backgroundColor: weekLayout === option.id ? palette.blueSoft : palette.surface }}><Text style={styles.body}>{weekLayout === option.id ? '◉' : '○'} {option.label}</Text></Pressable>)}
+           </View>
+           <View style={[styles.card, { marginTop: 20 }]}>
+             <Text style={styles.heading}>Personalizacja agenta</Text>
+             <Text style={[styles.label, { marginTop: 12 }]}>Jak mam się do Ciebie zwracać?</Text>
+             <TextInput accessibilityLabel="Forma zwracania się przez agenta" value={agentPreferences.addressAs} placeholder="np. Aniu, Panie Adamie" maxLength={60} editable={agentPreferencesLoaded && !agentPreferencesSaving}
+               onChangeText={(addressAs) => { setAgentPreferencesNotice(''); setAgentPreferences((current) => ({ ...current, addressAs })); }} style={styles.input} />
+             <Text style={[styles.label, { marginTop: 12 }]}>Ton wypowiedzi</Text>
+             <View accessibilityRole="radiogroup" style={[styles.row, { flexWrap: 'wrap' }]}>
+               {([{ tone: 'neutral', label: 'Rzeczowy' }, { tone: 'friendly', label: 'Przyjazny' }, { tone: 'formal', label: 'Formalny' }] as const).map(({ tone, label }) =>
+                 <Pressable key={tone} accessibilityRole="radio" accessibilityState={{ checked: agentPreferences.tone === tone }} disabled={!agentPreferencesLoaded || agentPreferencesSaving}
+                   onPress={() => { setAgentPreferencesNotice(''); setAgentPreferences((current) => ({ ...current, tone })); }} style={{ padding: 10, borderRadius: 8, backgroundColor: agentPreferences.tone === tone ? palette.blueSoft : palette.surfaceAlt }}>
+                   <Text style={styles.body}>{agentPreferences.tone === tone ? '◉' : '○'} {label}</Text>
+                 </Pressable>)}
+             </View>
+             <Button title={agentPreferencesSaving ? 'Zapisywanie…' : 'Zapisz personalizację'} primary disabled={!agentPreferencesLoaded || agentPreferencesSaving} onPress={() => void saveAgentPreferences()} />
+             {!!agentPreferencesNotice && <Text accessibilityLiveRegion="polite" style={styles.muted}>{agentPreferencesNotice}</Text>}
            </View>
            <View style={[styles.card, { marginTop: 20 }]}>
              <Text style={styles.heading}>Przypomnienia o zmianie pracy</Text>

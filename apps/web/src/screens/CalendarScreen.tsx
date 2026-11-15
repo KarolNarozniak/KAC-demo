@@ -17,9 +17,9 @@ import WorkScheduleImport from '../components/WorkScheduleImport';
 import GoogleCalendarImport from '../components/GoogleCalendarImport';
 const categories: Category[] = ['Class', 'Work', 'Personal'];
 const labels: Record<Category, string> = { Class: 'Zajęcia', Work: 'Praca', Personal: 'Prywatne' };
-type Props = { week: Date; setWeek: (value: Date) => void; todayOnly?: boolean; weekLayout: WeekLayout; now: Date; active: boolean; draftSchedule?: WeeklySchedule | null;
+type Props = { refreshVersion?: number; week: Date; setWeek: (value: Date) => void; todayOnly?: boolean; weekLayout: WeekLayout; now: Date; active: boolean; draftSchedule?: WeeklySchedule | null;
   notificationTarget?: DueNotification | null; onNotificationResolved?: () => void };
-export default function CalendarScreen({ week, setWeek, todayOnly = false, weekLayout, now, active, draftSchedule, notificationTarget, onNotificationResolved }: Props) {
+export default function CalendarScreen({ refreshVersion = 0, week, setWeek, todayOnly = false, weekLayout, now, active, draftSchedule, notificationTarget, onNotificationResolved }: Props) {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [dailySummary, setDailySummary] = useState<{ key: string; text: string } | null>(null);
@@ -37,7 +37,7 @@ export default function CalendarScreen({ week, setWeek, todayOnly = false, weekL
     catch (error) { setLoadError(error instanceof Error ? error.message : 'Nie udało się wczytać wydarzeń.'); }
     finally { setLoading(false); }
   };
-  useEffect(() => { if (active) void reload(); }, [active]);
+  useEffect(() => { if (active) void reload(); }, [active, refreshVersion]);
   const { palette, styles } = useTheme();
   const colors: Record<Category, string> = { Class: palette.class, Work: palette.work, Personal: palette.personal };
   const { width: viewportWidth } = useWindowDimensions();

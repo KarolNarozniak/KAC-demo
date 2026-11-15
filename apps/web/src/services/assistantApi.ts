@@ -1,6 +1,7 @@
 import { apiBaseUrl } from './importApi.ts';
 import type { CalendarEvent } from '../domain/model.ts';
 import { dailySummaryContext } from '../domain/dailySummary.ts';
+import { getAssistantPreferences } from '../domain/assistantPreferences.ts';
 
 export type AssistantMessage = { id: string; role: 'user' | 'assistant' | 'tool'; content: Record<string, unknown>; createdAt: string };
 export type AssistantConversation = { id: string; title: string; modelDeployment: string; createdAt: string; updatedAt: string; expiresAt: string };
@@ -44,6 +45,8 @@ const aiErrorText: Record<string, string> = {
   ai_action_cancelled: 'Ta propozycja została anulowana.',
   ai_action_expired: 'Ta propozycja wygasła. Poproś o nową.',
   action_confirmation_failed: 'Nie udało się potwierdzić wyniku zapisu. Ponów zatwierdzenie tej samej propozycji — nie utworzy to duplikatu.',
+  assistant_incomplete_response: 'Model nie dokończył odpowiedzi. Spróbuj ponownie za chwilę.',
+  assistant_stream_interrupted: 'Połączenie zostało przerwane przed zakończeniem odpowiedzi. Otwórz ponownie rozmowę, aby sprawdzić jej zapisany stan.',
 };
 
 export const getAssistantConfig = () => call<{ enabled: boolean }>('/api/v1/assistant/config');
@@ -55,8 +58,62 @@ export const listAssistantConversations = async () => {
 export const createAssistantConversation = (title?: string) => call<AssistantConversation>('/api/v1/assistant/conversations', 'POST', title ? { title } : {});
 export const listAssistantMessages = (id: string) => call<{ messages: AssistantMessage[]; pendingActions: PendingAssistantAction[] }>(`/api/v1/assistant/conversations/${encodeURIComponent(id)}/messages`);
 export const sendAssistantMessage = (id: string, content: string) => call<{ conversationId: string; message: { role: string; content: string }; pendingActions: PendingAssistantAction[]; usage: { inputTokens: number; outputTokens: number } }>(
-  `/api/v1/assistant/conversations/${encodeURIComponent(id)}/messages`, 'POST', { content });
+  `/api/v1/assistant/conversations/${encodeURIComponent(id)}/messages`, 'POST', { content, preferences: getAssistantPreferences() });
+export type AssistantTurnResult = Awaited<ReturnType<typeof sendAssistantMessage>>;
+export type AssistantStreamEvent =
+  | { type: 'accepted'; message: AssistantMessage }
+  | { type: 'delta'; text: string }
+  | { type: 'reset' }
+  | { type: 'done'; result: AssistantTurnResult }
+  | { type: 'error'; error: string };
+
+export async function streamAssistantMessage(id: string, content: string, onEvent: (event: AssistantStreamEvent) => void, signal?: AbortSignal): Promise<AssistantTurnResult> {
+  const timeout = AbortSignal.timeout(120_000);
+  const response = await fetch(`${apiBaseUrl()}/api/v1/assistant/conversations/${encodeURIComponent(id)}/messages?stream=true`, {
+    method: 'POST', headers: { Accept: 'application/x-ndjson', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content, preferences: getAssistantPreferences() }), signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+  });
+  if (!response.ok) {
+    const result = await response.json().catch(() => ({}));
+    throw new AssistantApiError(result.error ?? `http_${response.status}`);
+  }
+  let result: AssistantTurnResult | undefined;
+  let buffer = '';
+  const consume = (text: string) => {
+    buffer += text;
+    let end: number;
+    while ((end = buffer.indexOf('\n')) >= 0) {
+      const line = buffer.slice(0, end).trim(); buffer = buffer.slice(end + 1);
+      if (!line) continue;
+      const event = JSON.parse(line) as AssistantStreamEvent;
+      if (event.type === 'error') throw new AssistantApiError(event.error);
+      if (event.type === 'done') result = event.result;
+      onEvent(event);
+    }
+  };
+  const reader = response.body?.getReader();
+  try {
+    if (reader) {
+      const decoder = new TextDecoder();
+      while (true) {
+        const chunk = await reader.read();
+        if (chunk.done) break;
+        consume(decoder.decode(chunk.value, { stream: true }));
+      }
+      consume(decoder.decode());
+    } else consume(await response.text());
+    if (buffer.trim()) consume('\n');
+    if (!result) throw new AssistantApiError('assistant_stream_interrupted');
+    return result;
+  } finally { await reader?.cancel().catch(() => undefined); reader?.releaseLock(); }
+}
 export const confirmAssistantAction = (id: string, collisionToken?: string) => call<{ status: string; actionId?: string; eventId: string | null }>(`/api/v1/assistant/actions/${encodeURIComponent(id)}/confirm`, 'POST', collisionToken ? { collisionToken } : {});
+export async function confirmAssistantActions(ids: string[], onConfirmed: (id: string) => void, collisionToken?: string) {
+  for (const id of ids) {
+    await confirmAssistantAction(id, collisionToken);
+    onConfirmed(id);
+  }
+}
 export const cancelAssistantAction = (id: string) => call<{ status: string }>(`/api/v1/assistant/actions/${encodeURIComponent(id)}/cancel`, 'POST', {});
 export const deleteAssistantConversation = (id: string) => call<{ status: string }>(`/api/v1/assistant/conversations/${encodeURIComponent(id)}`, 'DELETE');
 
@@ -74,10 +131,12 @@ export async function getDailySummary(dateKey: string, refresh = false) {
     });
     if (lastPrompt >= 0) {
       const saved = history.messages.slice(lastPrompt + 1).reverse().find((message) => message.role === 'assistant' && typeof message.content.text === 'string');
-      if (saved) return { conversationId: conversation.id, text: String(saved.content.text).trim() };
+      if (saved && !String(saved.content.text).startsWith('Nie udało mi się przygotować odpowiedzi')) return { conversationId: conversation.id, text: String(saved.content.text).trim() };
+      conversation = undefined;
     }
   }
-  if (!conversation) conversation = await createAssistantConversation(title);
+  // A fresh conversation prevents the model from treating an earlier tool result as current calendar data.
+  if (!conversation || refresh) conversation = await createAssistantConversation(title);
   const response = await sendAssistantMessage(conversation.id, dailySummaryPrompt);
   await Promise.allSettled(response.pendingActions.map((action) => cancelAssistantAction(action.id)));
   return { conversationId: conversation.id, text: response.message.content.trim() };

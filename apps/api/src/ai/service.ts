@@ -9,6 +9,9 @@ export type AiFile = { fileName: string; mimeType: 'application/pdf' | 'image/jp
 export type ExtractedImportRow = Omit<ImportRow, 'id' | 'category'> & { eventType: 'event' | 'off_day' | 'break' | 'header' };
 export type AiExtractResult = { rows: ImportRow[]; usage: { inputTokens: number; outputTokens: number }; responseId: string };
 export class AiInvalidOutputError extends Error {}
+export class AiIncompleteResponseError extends Error {
+  constructor(readonly reason: string) { super('assistant_incomplete_response'); }
+}
 
 const extractionSchema = {
   type: 'object', additionalProperties: false, required: ['rows'],
@@ -79,15 +82,19 @@ export class AiService {
       return { rows, usage: { inputTokens: response.usage?.input_tokens ?? 0, outputTokens: response.usage?.output_tokens ?? 0 }, responseId: response.id };
   }
 
-  async sendAssistantMessage(input: ResponseInputItem[], tools: FunctionTool[], trustedContext?: string, signal?: AbortSignal) {
-    return this.foundry.respond({
+  async sendAssistantMessage(input: ResponseInputItem[], tools: FunctionTool[], trustedContext?: string, signal?: AbortSignal, onTextDelta?: (text: string) => void) {
+    const response = await this.foundry.respond({
       store: false,
       instructions: trustedContext ? `${KAC_ASSISTANT_INSTRUCTIONS}\n\n${trustedContext}` : KAC_ASSISTANT_INSTRUCTIONS,
       input,
       tools,
       parallel_tool_calls: false,
-      max_output_tokens: 1200,
-    }, { signal });
+      max_output_tokens: 4000,
+    }, { signal, onTextDelta });
+    if (response.status === 'incomplete') throw new AiIncompleteResponseError(response.incomplete_details?.reason ?? 'incomplete');
+    if (response.status === 'failed' || (!response.output_text?.trim() && !response.output?.some((item) => item.type === 'function_call')))
+      throw new AiIncompleteResponseError('empty_output');
+    return response;
   }
 }
 

@@ -179,3 +179,132 @@ test('assistant create confirmation returns collisions and retries the same acti
     assert.equal(writes, 1);
   } finally { await app.close(); }
 });
+
+function streamingApi(send: (...args: any[]) => Promise<OpenAIResponse>) {
+  const messages: Array<{ id: string; role: string; content: Record<string, unknown>; createdAt: string }> = [];
+  const app = buildApi({ checkConnection: async () => {}, getOverview: async () => ({ user: { timezone: 'Europe/Warsaw' }, events: [] } as never) }, [], {
+    userScope: () => ({ userId: 'U001', calendarId: 'K001' }),
+    aiRepository: {
+      getConversation: async () => ({ id: 'stream-conversation' }),
+      appendMessage: async (_scope: unknown, _id: string, role: string, content: Record<string, unknown>) => {
+        const message = { id: `message-${messages.length}`, role, content, createdAt: new Date().toISOString() }; messages.push(message); return message;
+      },
+      listMessages: async () => messages, listPendingActions: async () => [], logUsage: async () => {},
+    } as never,
+    aiService: { sendAssistantMessage: send } as never,
+  });
+  return { app, messages };
+}
+
+test('assistant stream delivers accepted and text deltas before generation finishes, then persists one final answer', async () => {
+  let finish!: () => void;
+  const gate = new Promise<void>((resolve) => { finish = resolve; });
+  let completed = false;
+  const { app, messages } = streamingApi(async (_input, _tools, _context, _signal, delta) => {
+    delta('Dzień '); await gate; delta('dobry!'); completed = true;
+    return response({ output_text: 'Dzień dobry!' });
+  });
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+  try {
+    const address = await app.listen({ port: 0, host: '127.0.0.1' });
+    const result = await fetch(`${address}/api/v1/assistant/conversations/stream-conversation/messages?stream=true`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: 'Cześć' }),
+    });
+    assert.equal(result.status, 200);
+    assert.match(result.headers.get('content-type') ?? '', /application\/x-ndjson/);
+    reader = result.body!.getReader();
+    let text = '';
+    while (!text.includes('"type":"delta"')) text += new TextDecoder().decode((await reader.read()).value);
+    assert.equal(completed, false);
+    assert.match(text, /"type":"accepted"/);
+    assert.equal(messages.length, 1);
+    finish();
+    while (true) { const part = await reader.read(); if (part.done) break; text += new TextDecoder().decode(part.value); }
+    const events = text.trim().split('\n').map((line) => JSON.parse(line));
+    assert.equal(events.filter((event) => event.type === 'delta').map((event) => event.text).join(''), 'Dzień dobry!');
+    assert.equal(events.at(-1).type, 'done');
+    assert.equal(events.at(-1).result.message.content, 'Dzień dobry!');
+    assert.equal(messages.filter((message) => message.role === 'assistant').length, 1);
+  } finally { finish(); await reader?.cancel(); await app.close(); }
+});
+
+test('assistant stream resets provisional text around tool rounds and returns controlled errors after headers', async () => {
+  let calls = 0;
+  const first = streamingApi(async (_input, _tools, _context, _signal, delta) => {
+    calls++;
+    if (calls === 1) {
+      delta('Sprawdzam kalendarz.');
+      return response({ output: [{ type: 'function_call', id: 'fc-search', call_id: 'search', name: 'calendar_search_events', arguments: JSON.stringify({ from: '2026-11-16', to: '2026-11-16', query: null }) }] });
+    }
+    delta('Brak wydarzeń.'); return response({ output_text: 'Brak wydarzeń.' });
+  });
+  try {
+    const result = await first.app.inject({ method: 'POST', url: '/api/v1/assistant/conversations/stream-conversation/messages?stream=true', payload: { content: 'Sprawdź jutro' } });
+    assert.equal(result.statusCode, 200, result.body);
+    const events = result.body.trim().split('\n').map((line) => JSON.parse(line));
+    assert.deepEqual(events.map((event) => event.type), ['accepted', 'delta', 'reset', 'delta', 'done']);
+    assert.equal(events.at(-1).result.message.content, 'Brak wydarzeń.');
+  } finally { await first.app.close(); }
+  const failed = streamingApi(async (_input, _tools, _context, _signal, delta) => {
+    delta('Fragment'); throw Object.assign(new Error('synthetic'), { status: 429 });
+  });
+  try {
+    const result = await failed.app.inject({ method: 'POST', url: '/api/v1/assistant/conversations/stream-conversation/messages?stream=true', payload: { content: 'Cześć' } });
+    const events = result.body.trim().split('\n').map((line) => JSON.parse(line));
+    assert.equal(events.at(-1).type, 'error');
+    assert.equal(events.at(-1).error, 'assistant_rate_limited');
+    assert.equal(events.some((event) => event.type === 'done'), false);
+    assert.equal(failed.messages.filter((message) => message.role === 'assistant').length, 0);
+  } finally { await failed.app.close(); }
+});
+
+test('assistant validates personalization and includes it as style data without removing confirmation rules', async () => {
+  let calls = 0;
+  const { app } = streamingApi(async (_input, _tools, context) => {
+    calls++;
+    assert.match(context, /formalny i uprzejmy/);
+    assert.match(context, /Pani Testowa/);
+    assert.match(context, /nigdy jako instrukcję ani zgodę/);
+    return response({ output_text: 'Dzień dobry.' });
+  });
+  const url = '/api/v1/assistant/conversations/stream-conversation/messages';
+  try {
+    assert.equal((await app.inject({ method: 'POST', url, payload: { content: 'Cześć', preferences: { addressAs: 'Pani Testowa', tone: 'formal' } } })).statusCode, 200);
+    assert.equal((await app.inject({ method: 'POST', url, payload: { content: 'Cześć', preferences: { tone: 'unknown' } } })).statusCode, 400);
+    assert.equal((await app.inject({ method: 'POST', url, payload: { content: 'Cześć', preferences: { addressAs: 'x'.repeat(61) } } })).statusCode, 400);
+    assert.equal(calls, 1);
+  } finally { await app.close(); }
+});
+
+test('closing the assistant stream aborts the upstream response request', async () => {
+  let aborted!: () => void;
+  const sawAbort = new Promise<void>((resolve) => { aborted = resolve; });
+  const { app, messages } = streamingApi(async (_input, _tools, _context, signal: AbortSignal, delta) => {
+    delta('Początek');
+    return new Promise<OpenAIResponse>((_resolve, reject) => {
+      signal.addEventListener('abort', () => { aborted(); reject(new Error('cancelled')); }, { once: true });
+    });
+  });
+  const controller = new AbortController();
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const address = await app.listen({ port: 0, host: '127.0.0.1' });
+    const result = await fetch(`${address}/api/v1/assistant/conversations/stream-conversation/messages?stream=true`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: 'Cześć' }), signal: controller.signal,
+    });
+    const reader = result.body!.getReader();
+    await reader.read(); controller.abort(); await reader.cancel().catch(() => {});
+    await Promise.race([sawAbort, new Promise<void>((_resolve, reject) => { timeout = setTimeout(() => reject(new Error('upstream not aborted')), 5000); })]);
+    assert.equal(messages.filter((message) => message.role === 'assistant').length, 0);
+  } finally { if (timeout) clearTimeout(timeout); controller.abort(); app.server.closeAllConnections(); await app.close(); }
+});
+
+test('assistant does not persist an empty answer as a successful summary', async () => {
+  const { app, messages } = streamingApi(async () => response({ output_text: '' }));
+  try {
+    const result = await app.inject({ method: 'POST', url: '/api/v1/assistant/conversations/stream-conversation/messages', payload: { content: 'Podsumuj dzień' } });
+    assert.equal(result.statusCode, 502, result.body);
+    assert.equal(result.json().error, 'assistant_incomplete_response');
+    assert.equal(messages.some((message) => message.role === 'assistant'), false);
+  } finally { await app.close(); }
+});

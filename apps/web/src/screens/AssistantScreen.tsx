@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { Button, useTheme } from '../components/ui';
 import {
-  cancelAssistantAction, confirmAssistantAction, createAssistantConversation, deleteAssistantConversation,
-  getAssistantConfig, listAssistantConversations, listAssistantMessages, sendAssistantMessage,
+  cancelAssistantAction, confirmAssistantActions, createAssistantConversation, deleteAssistantConversation,
+  getAssistantConfig, listAssistantConversations, listAssistantMessages, streamAssistantMessage,
   type AssistantConversation, type AssistantMessage, type PendingAssistantAction,
   AssistantApiError,
 } from '../services/assistantApi';
@@ -37,6 +37,12 @@ export default function AssistantScreen({ active, onCalendarChange }: Props) {
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
+  const [replying, setReplying] = useState(false);
+  const [streamText, setStreamText] = useState('');
+  const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
+  const followReply = useRef(true);
+  const requestRef = useRef<AbortController | null>(null);
+  useEffect(() => () => requestRef.current?.abort(), []);
   const [collision, setCollision] = useState<{ actionId: string; error: AssistantApiError } | null>(null);
 
   useEffect(() => {
@@ -47,15 +53,17 @@ export default function AssistantScreen({ active, onCalendarChange }: Props) {
     void Promise.all([getAssistantConfig(), listAssistantConversations()]).then(([config, result]) => {
       if (!alive) return;
       setEnabled(config.enabled); setConversations(result.conversations);
-      if (result.conversations[0]) setConversationId(result.conversations[0].id);
+      setConversationId((current) => result.conversations.some((item) => item.id === current) ? current : result.conversations[0]?.id ?? '');
     }).catch((reason) => { if (alive) setError(reason instanceof Error ? reason.message : 'Nie udało się połączyć z asystentem.'); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, [active]);
 
   useEffect(() => {
-    if (!active || !conversationId) { setMessages([]); setPendingActions([]); return; }
+    if (!conversationId) { setMessages([]); setPendingActions([]); return; }
+    if (!active || requestRef.current) return;
     let alive = true;
+    setStreamText('');
     setLoading(true); setError('');
     void listAssistantMessages(conversationId).then((result) => {
       if (alive) { setMessages(result.messages); setPendingActions(result.pendingActions); }
@@ -67,15 +75,28 @@ export default function AssistantScreen({ active, onCalendarChange }: Props) {
   const send = async (targetConversationId = conversationId) => {
     const content = input.trim();
     if (!content || !targetConversationId || sending || !enabled) return;
-    setInput(''); setSending(true); setError('');
+    if (requestRef.current || loading) return;
+    const controller = new AbortController(); requestRef.current = controller;
+    const localId = `local-user-${Date.now()}`;
+    const createdAt = new Date().toISOString();
+    followReply.current = true;
+    setMessages((current) => [...current, { id: localId, role: 'user', content: { text: content, delivery: 'sending' }, createdAt }]);
+    setInput(''); setSending(true); setReplying(true); setStreamText(''); setError('');
     try {
-      const result = await sendAssistantMessage(targetConversationId, content);
-      const saved = await listAssistantMessages(targetConversationId);
-      setMessages(saved.messages); setPendingActions(saved.pendingActions);
-      if (!saved.messages.length) setMessages([{ id: `local-${Date.now()}`, role: 'assistant', content: { text: result.message.content }, createdAt: new Date().toISOString() }]);
+      const result = await streamAssistantMessage(targetConversationId, content, (event) => {
+        if (event.type === 'accepted') setMessages((current) => current.map((message) => message.id === localId ? event.message : message));
+        if (event.type === 'delta') setStreamText((current) => current + event.text);
+        if (event.type === 'reset') setStreamText('');
+      }, controller.signal);
+      setMessages((current) => [...current, { id: `local-assistant-${Date.now()}`, role: 'assistant', content: { text: result.message.content }, createdAt: new Date().toISOString() }]);
+      setPendingActions(result.pendingActions); setStreamText('');
       setConversations((current) => current.map((item) => item.id === targetConversationId ? { ...item, updatedAt: new Date().toISOString() } : item));
-    } catch (reason) { setInput(content); setError(reason instanceof Error ? reason.message : 'Nie udało się wysłać wiadomości.'); }
-    finally { setSending(false); }
+    } catch (reason) {
+      if (!controller.signal.aborted) {
+        setMessages((current) => current.map((message) => message.id === localId ? { ...message, content: { ...message.content, delivery: 'unconfirmed' } } : message));
+        setError(reason instanceof AssistantApiError ? reason.message : 'Połączenie zostało przerwane. Otwórz ponownie rozmowę, aby sprawdzić zapisane wiadomości.');
+      }
+    } finally { requestRef.current = null; setSending(false); setReplying(false); }
   };
 
   const newConversation = async () => {
@@ -88,23 +109,30 @@ export default function AssistantScreen({ active, onCalendarChange }: Props) {
     finally { setLoading(false); }
   };
 
-  const confirmAction = async (action: PendingAssistantAction, collisionToken?: string) => {
+  const confirmActions = async (actions: PendingAssistantAction[], collisionToken?: string) => {
     if (sending) return;
     setSending(true); setError('');
+    let confirmed = 0;
     try {
-      await confirmAssistantAction(action.id, collisionToken);
-      setCollision(null);
-      setPendingActions((current) => current.filter((item) => item.id !== action.id));
-      setMessages((current) => [...current, { id: `confirmed-${Date.now()}`, role: 'assistant',
-        content: { text: 'Akcja została zatwierdzona i zapisana w kalendarzu.' }, createdAt: new Date().toISOString() }]);
-      onCalendarChange();
+      await confirmAssistantActions(actions.map((action) => action.id), (id) => {
+        confirmed++;
+        setCollision(null);
+        setPendingActions((current) => current.filter((item) => item.id !== id));
+      }, collisionToken);
     } catch (reason) {
-      if (reason instanceof AssistantApiError && reason.code === 'event_collision') setCollision({ actionId: action.id, error: reason });
-      // Keep this action available after a lost response so retry uses its original id.
-      setError(reason instanceof Error ? reason.message : 'Nie udało się zatwierdzić akcji.');
+      const action = actions[confirmed];
+      if (action && reason instanceof AssistantApiError && reason.code === 'event_collision') setCollision({ actionId: action.id, error: reason });
+      setError(reason instanceof Error ? reason.message : 'Nie udało się zatwierdzić akcji. Ponów zatwierdzenie tej samej propozycji.');
+    } finally {
+      if (confirmed) {
+        setMessages((current) => [...current, { id: `confirmed-${Date.now()}`, role: 'assistant',
+          content: { text: confirmed === 1 ? 'Akcja została zatwierdzona i zapisana w kalendarzu.' : `Zatwierdzono i zapisano w kalendarzu: ${confirmed}.` }, createdAt: new Date().toISOString() }]);
+        onCalendarChange();
+      }
+      setSending(false);
     }
-    finally { setSending(false); }
   };
+  const confirmAction = (action: PendingAssistantAction, collisionToken?: string) => confirmActions([action], collisionToken);
 
   const cancelAction = async (action: PendingAssistantAction) => {
     setSending(true); setError('');
@@ -144,11 +172,20 @@ export default function AssistantScreen({ active, onCalendarChange }: Props) {
       <View style={[styles.row, { justifyContent: 'space-between', flexWrap: 'wrap' }]}><View><Text style={styles.heading}>Asystent KAC</Text><Text style={styles.muted}>Kalendarz i planowanie pracy · zmiany wymagają zatwierdzenia</Text></View></View>
       {enabled === false && <View style={[styles.card, { borderColor: palette.amber, marginTop: 12 }]}><Text style={styles.heading}>Azure AI Foundry nie jest skonfigurowane</Text><Text style={styles.body}>Ustaw endpoint projektu i nazwę deploymentu modelu w konfiguracji API, a lokalnie zaloguj się przez `az login`. Żadna wiadomość nie została wysłana.</Text></View>}
       {!!error && <Text accessibilityRole="alert" style={[styles.error, { marginTop: 8 }]}>{error}</Text>}
-      <ScrollView style={{ flex: 1, marginVertical: 10 }} contentContainerStyle={{ gap: 10, paddingBottom: 16 }}>
+      <ScrollView ref={scrollRef} onContentSizeChange={() => { if (followReply.current) scrollRef.current?.scrollToEnd({ animated: false }); }}
+        onScroll={({ nativeEvent }) => { followReply.current = nativeEvent.contentOffset.y + nativeEvent.layoutMeasurement.height >= nativeEvent.contentSize.height - 80; }} scrollEventThrottle={100} style={{ flex: 1, marginVertical: 10 }} contentContainerStyle={{ gap: 10, paddingBottom: 16 }}>
         {messages.filter((message) => message.role !== 'tool' && textOf(message)).map((message) => <View key={message.id} style={{ alignSelf: message.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '90%', padding: 12, borderRadius: 12, backgroundColor: message.role === 'user' ? palette.blueSoft : palette.surface }}>
           <Text style={styles.body}>{String(message.content.text ?? '')}</Text>
-          <Text style={[styles.muted, { marginTop: 4 }]}>{message.role === 'user' ? 'Ty' : 'Asystent'} · {new Date(message.createdAt).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}</Text>
+          <Text style={[styles.muted, { marginTop: 4 }]}>{message.role === 'user' ? message.content.delivery === 'sending' ? 'Wysyłanie…' : message.content.delivery === 'unconfirmed' ? 'Nie potwierdzono wysłania' : 'Ty' : 'Asystent'} · {new Date(message.createdAt).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}</Text>
         </View>)}
+        {(replying || streamText) && <View style={{ alignSelf: 'flex-start', maxWidth: '90%', padding: 12, borderRadius: 12, backgroundColor: palette.surface }}>
+          {!!streamText && <Text style={styles.body}>{streamText}</Text>}
+          <View accessibilityLiveRegion="polite" style={[styles.row, { marginTop: streamText ? 6 : 0 }]}>
+            {replying && <ActivityIndicator size="small" color={palette.blue} />}
+            <Text style={styles.muted}>{replying ? 'Asystent odpowiada…' : 'Odpowiedź przerwana'}</Text>
+          </View>
+        </View>}
+        {pendingActions.length > 1 && <Button title="Zatwierdź wszystko" primary disabled={sending} onPress={() => void confirmActions(pendingActions)} />}
         {pendingActions.map((action) => <View key={action.id} style={[styles.card, { borderColor: palette.amber }]}>
           <Text style={styles.heading}>Propozycja do potwierdzenia</Text><Text style={styles.body}>{actionSummary(action)}</Text>
           {!!action.payload.event && <Text style={styles.body}>{eventDetails(action.payload.event as Record<string, unknown>)}</Text>}
@@ -166,7 +203,7 @@ export default function AssistantScreen({ active, onCalendarChange }: Props) {
       <View style={[styles.row, { alignItems: 'flex-end' }]}>
         <TextInput value={input} onChangeText={setInput} placeholder={enabled ? 'Zapytaj o kalendarz lub plan pracy…' : 'Skonfiguruj Azure AI, aby rozpocząć'} multiline editable={Boolean(enabled) && !sending}
           accessibilityLabel="Wiadomość do asystenta" onSubmitEditing={() => void send()} style={[styles.input, { flex: 1, minHeight: 48, maxHeight: 120 }]} />
-        <Button title={sending ? '…' : 'Wyślij'} primary disabled={!enabled || sending || !input.trim()} onPress={() => void send()} />
+        <Button title={sending ? '…' : 'Wyślij'} primary disabled={!enabled || sending || loading || !conversationId || !input.trim()} onPress={() => void send()} />
       </View>
       <Text style={[styles.muted, { marginTop: 6 }]}>Załączniki i tekst traktowane są jako niezaufane dane. Asystent nie zapisuje zmian bez Twojej akceptacji.</Text>
     </View>

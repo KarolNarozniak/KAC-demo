@@ -31,3 +31,24 @@ test('assistant preserves collision details and sends explicit acceptance for th
     else process.env.EXPO_PUBLIC_API_URL = originalApiUrl;
   }
 });
+
+test('confirm all stops on a collision and preserves successful actions for a retry of the remainder', async () => {
+  const { confirmAssistantActions } = await import('../src/services/assistantApi.ts');
+  const originalFetch = globalThis.fetch;
+  const originalApiUrl = process.env.EXPO_PUBLIC_API_URL;
+  process.env.EXPO_PUBLIC_API_URL = 'http://localhost:4000';
+  const called: string[] = [];
+  const confirmed: string[] = [];
+  globalThis.fetch = async (url) => {
+    const id = String(url).split('/').at(-2)!; called.push(id);
+    if (id === 'second') return new Response(JSON.stringify({ error: 'event_collision', conflicts: [], collisionToken: 'a'.repeat(64) }), { status: 409 });
+    return new Response(JSON.stringify({ status: 'confirmed', eventId: id }), { status: 200 });
+  };
+  try {
+    await assert.rejects(confirmAssistantActions(['first', 'second', 'third'], (id) => confirmed.push(id)), AssistantApiError);
+    assert.deepEqual(called, ['first', 'second']); assert.deepEqual(confirmed, ['first']);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalApiUrl === undefined) delete process.env.EXPO_PUBLIC_API_URL; else process.env.EXPO_PUBLIC_API_URL = originalApiUrl;
+  }
+});

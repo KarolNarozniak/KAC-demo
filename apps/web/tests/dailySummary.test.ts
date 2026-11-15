@@ -76,7 +76,7 @@ test('daily summary automatically regenerates after today changes and reuses unc
   let turns = 0;
   const restore = stubFetch((url, init) => {
     if (url.pathname.endsWith('/config')) return { enabled: true };
-    if (url.pathname.endsWith('/conversations')) return { conversations: [conversation] };
+    if (url.pathname.endsWith('/conversations')) return init?.method === 'POST' ? conversation : { conversations: [conversation] };
     if (url.pathname.endsWith('/messages') && init?.method === 'POST') {
       turns++;
       return { message: { content: `Podsumowanie ${turns}` }, pendingActions: [] };
@@ -126,4 +126,20 @@ test('day context includes recurring and overnight events and greeting follows l
   assert.equal(dayGreeting(new Date(2026, 10, 13, 18)), 'Dobry wieczór!');
   assert.equal(dayGreeting(new Date(2026, 10, 14, 1)), 'Dobry wieczór!');
   assert.match(dailySummaryPrompt, /Nie wypisuj daty/);
+});
+
+test('regenerating a daily summary starts fresh instead of reusing stale calendar tool history', async () => {
+  let target = '';
+  const restore = stubFetch((url, init) => {
+    if (url.pathname.endsWith('/conversations')) return init?.method === 'POST' ? { ...conversation, id: 'fresh-summary' } : { conversations: [conversation] };
+    if (url.pathname.endsWith('/messages') && init?.method === 'POST') {
+      target = url.pathname;
+      return { message: { content: 'Masz spotkanie o 16:00.' }, pendingActions: [] };
+    }
+    throw new Error('Old tool history must not be reused');
+  });
+  try {
+    assert.equal((await getDailySummary(date, true)).text, 'Masz spotkanie o 16:00.');
+    assert.equal(target, '/api/v1/assistant/conversations/fresh-summary/messages');
+  } finally { restore(); }
 });

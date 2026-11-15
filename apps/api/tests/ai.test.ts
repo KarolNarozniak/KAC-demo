@@ -169,3 +169,28 @@ test('assistant cannot prepare an incomplete or invalid create proposal', async 
   }
   assert.equal(actions, 0);
 });
+
+test('assistant service forwards streaming text without waiting for the completed response', async () => {
+  const deltas: string[] = [];
+  let finish!: () => void;
+  const gate = new Promise<void>((resolve) => { finish = resolve; });
+  const service = new AiService({ respond: async (_options, options) => {
+    options?.onTextDelta?.('Fragment'); await gate; return response('Fragment odpowiedzi');
+  } });
+  const result = service.sendAssistantMessage([{ role: 'user', content: 'Cześć' }], [], undefined, undefined, (text) => deltas.push(text));
+  assert.deepEqual(deltas, ['Fragment']);
+  finish(); assert.equal((await result).output_text, 'Fragment odpowiedzi');
+});
+
+test('assistant rejects exhausted reasoning output and empty responses instead of returning a successful placeholder', async () => {
+  const { AiIncompleteResponseError } = await import('../src/ai/service.js');
+  for (const value of [
+    { ...response(''), status: 'incomplete', incomplete_details: { reason: 'max_output_tokens' } },
+    { ...response(''), status: 'completed', output: [] },
+  ]) {
+    const service = new AiService({ respond: async (options) => {
+      assert.equal(options.max_output_tokens, 4000); return value as unknown as OpenAIResponse;
+    } });
+    await assert.rejects(service.sendAssistantMessage([{ role: 'user', content: 'Podsumuj dzień' }], []), AiIncompleteResponseError);
+  }
+});

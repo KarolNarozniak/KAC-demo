@@ -114,3 +114,15 @@ Po utracie odpowiedzi ponów zatwierdzenie **tej samej propozycji**. Idempotencj
 Pusty dzień wyświetla stały komunikat bez odpytywania API asystenta i Azure. Sprawdzane są także dzisiejsze wystąpienia cotygodniowe oraz wydarzenia przechodzące przez północ. Podsumowanie odświeża się automatycznie po zmianie dzisiejszych wydarzeń; nie ma przycisku „Odśwież”. Niezmienione dane korzystają z wyniku zachowanego w bieżącej sesji aplikacji. Powitanie wyświetla aplikacja: „Dzień dobry!” od 05:00 do 17:59, „Dobry wieczór!” poza tym zakresem, według lokalnego czasu urządzenia. Model otrzymuje instrukcję pominięcia daty i dodatkowego powitania.
 
 Rozmowy techniczne zatytułowane „Dzień w skrócie YYYY-MM-DD” są wykorzystywane przez kartę, ale ukryte na liście rozmów w Asystencie.
+
+## Czat, streaming i personalizacja
+
+Czat od razu wyświetla wysłaną wiadomość i wskaźnik odpowiadania. Korzysta z `POST /api/v1/assistant/conversations/{id}/messages?stream=true`, który zwraca `application/x-ndjson`. Każda linia jest osobnym zdarzeniem: `accepted` potwierdza zapis wiadomości użytkownika, `delta` dopisuje fragment tekstu, `reset` czyści wstępny tekst przed kolejną rundą narzędzi, a `done` zwraca zapisaną odpowiedź i propozycje. `error` kończy nieudaną turę. Zamknięcie połączenia przerywa żądanie upstream. Bez parametru `stream` endpoint nadal zwraca dotychczasowy JSON. Niekompletny strumień bez `done` nie jest sukcesem.
+
+Puste lub niepełne odpowiedzi modelu są błędem `assistant_incomplete_response` (502 przed rozpoczęciem streamingu, zdarzenie `error` po jego rozpoczęciu), nie zapisanym podsumowaniem. Limit 4000 tokenów obejmuje również rozumowanie modelu; diagnostyka błędu zapisuje powód niepełnej odpowiedzi bez treści rozmowy.
+
+Zatwierdzanie pozostawia użytkownika w czacie. **Zatwierdź wszystko** wykonuje propozycje kolejno i zatrzymuje się przy pierwszym błędzie lub kolizji. Udane akcje znikają z listy; pozostałe zachowują identyfikatory do ponowienia. Zbiorcze zatwierdzenie nie jest transakcją obejmującą wszystkie propozycje.
+
+W Ustawieniach → Personalizacja agenta można zapisać formę zwracania się (do 60 znaków) i ton: rzeczowy, przyjazny lub formalny. Preferencje są przechowywane na urządzeniu i dołączane do kolejnych wiadomości jako opcjonalne `preferences: { addressAs, tone }`; API akceptuje `tone` równy `neutral`, `friendly` lub `formal`. To preferencje stylu, które nie zmieniają uprawnień ani wymogu potwierdzania akcji.
+
+Przy regeneracji karty Dziś powstaje świeża, ukryta rozmowa techniczna. Nie odziedziczy ona wyniku odczytu kalendarza z wcześniejszego podsumowania. Niezmieniony stan kalendarza korzysta z cache w bieżącej sesji aplikacji.

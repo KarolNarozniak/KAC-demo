@@ -12239,6 +12239,25 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 6000
+                  },
+                  "preferences": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "addressAs": {
+                        "type": "string",
+                        "maxLength": 60,
+                        "pattern": "^[^\\r\\n\\t]*$"
+                      },
+                      "tone": {
+                        "type": "string",
+                        "enum": [
+                          "neutral",
+                          "friendly",
+                          "formal"
+                        ]
+                      }
+                    }
                   }
                 }
               },
@@ -12257,6 +12276,16 @@
         "parameters": [
           {
             "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "in": "query",
+            "name": "stream",
+            "required": false,
+            "description": "Stream NDJSON events instead of waiting for the final JSON response."
+          },
+          {
+            "schema": {
               "type": "string",
               "minLength": 1,
               "maxLength": 100
@@ -12268,7 +12297,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Odpowiedź asystenta i akcje wymagające potwierdzenia.",
+            "description": "Assistant response as JSON or NDJSON events when stream=true.",
             "content": {
               "application/json": {
                 "schema": {
@@ -12582,7 +12611,25 @@
                       }
                     }
                   },
-                  "description": "Odpowiedź asystenta i akcje wymagające potwierdzenia."
+                  "description": "Odpowiedź asystenta i akcje wymagające potwierdzenia.",
+                  "x-examples": {
+                    "synthetic": {
+                      "summary": "Syntetyczna odpowiedź",
+                      "description": "Przykład zgodny z kontraktem; bez rzeczywistych danych użytkownika.",
+                      "value": {
+                        "conversationId": "synthetic-conversation-id",
+                        "message": {
+                          "role": "assistant",
+                          "content": "Mogę przygotować podgląd wydarzenia."
+                        },
+                        "pendingActions": [],
+                        "usage": {
+                          "inputTokens": 120,
+                          "outputTokens": 25
+                        }
+                      }
+                    }
+                  }
                 },
                 "examples": {
                   "synthetic": {
@@ -12599,6 +12646,565 @@
                         "inputTokens": 120,
                         "outputTokens": 25
                       }
+                    }
+                  }
+                }
+              },
+              "application/x-ndjson": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "type",
+                        "message"
+                      ],
+                      "properties": {
+                        "type": {
+                          "enum": [
+                            "accepted"
+                          ]
+                        },
+                        "message": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "id",
+                            "role",
+                            "content",
+                            "createdAt"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 100
+                            },
+                            "role": {
+                              "type": "string",
+                              "enum": [
+                                "user",
+                                "assistant",
+                                "tool"
+                              ]
+                            },
+                            "createdAt": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "content": {
+                              "oneOf": [
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "required": [
+                                    "text"
+                                  ],
+                                  "properties": {
+                                    "text": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "required": [
+                                    "text",
+                                    "pendingActionIds"
+                                  ],
+                                  "properties": {
+                                    "text": {
+                                      "type": "string"
+                                    },
+                                    "pendingActionIds": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 100
+                                      }
+                                    }
+                                  }
+                                },
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "required": [
+                                    "toolCalls"
+                                  ],
+                                  "properties": {
+                                    "toolCalls": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "additionalProperties": false,
+                                        "required": [
+                                          "id",
+                                          "callId",
+                                          "name",
+                                          "arguments"
+                                        ],
+                                        "properties": {
+                                          "id": {
+                                            "type": "string"
+                                          },
+                                          "callId": {
+                                            "type": "string"
+                                          },
+                                          "name": {
+                                            "type": "string"
+                                          },
+                                          "arguments": {
+                                            "type": "string"
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                },
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "required": [
+                                    "name",
+                                    "callId",
+                                    "result"
+                                  ],
+                                  "properties": {
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "callId": {
+                                      "type": "string"
+                                    },
+                                    "result": {
+                                      "type": "object",
+                                      "additionalProperties": true
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "type",
+                        "text"
+                      ],
+                      "properties": {
+                        "type": {
+                          "enum": [
+                            "delta"
+                          ]
+                        },
+                        "text": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "type"
+                      ],
+                      "properties": {
+                        "type": {
+                          "enum": [
+                            "reset"
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "type",
+                        "result"
+                      ],
+                      "properties": {
+                        "type": {
+                          "enum": [
+                            "done"
+                          ]
+                        },
+                        "result": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "conversationId",
+                            "message",
+                            "pendingActions",
+                            "usage"
+                          ],
+                          "properties": {
+                            "conversationId": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 100
+                            },
+                            "message": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "role",
+                                "content"
+                              ],
+                              "properties": {
+                                "role": {
+                                  "type": "string",
+                                  "enum": [
+                                    "assistant"
+                                  ]
+                                },
+                                "content": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "pendingActions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "id",
+                                  "conversationId",
+                                  "kind",
+                                  "payload",
+                                  "status",
+                                  "expiresAt"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 100
+                                  },
+                                  "conversationId": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 100
+                                  },
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "calendar_event_create",
+                                      "calendar_event_update",
+                                      "calendar_event_delete"
+                                    ]
+                                  },
+                                  "payload": {
+                                    "oneOf": [
+                                      {
+                                        "type": "object",
+                                        "additionalProperties": false,
+                                        "required": [
+                                          "event"
+                                        ],
+                                        "properties": {
+                                          "event": {
+                                            "type": "object",
+                                            "additionalProperties": false,
+                                            "required": [
+                                              "title",
+                                              "start",
+                                              "end",
+                                              "category",
+                                              "location",
+                                              "mandatory",
+                                              "repeatWeekly"
+                                            ],
+                                            "properties": {
+                                              "title": {
+                                                "type": "string",
+                                                "minLength": 1,
+                                                "maxLength": 200
+                                              },
+                                              "start": {
+                                                "type": "string",
+                                                "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                              },
+                                              "end": {
+                                                "type": "string",
+                                                "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                              },
+                                              "category": {
+                                                "type": "string",
+                                                "enum": [
+                                                  "Class",
+                                                  "Work",
+                                                  "Personal"
+                                                ]
+                                              },
+                                              "location": {
+                                                "type": "string"
+                                              },
+                                              "mandatory": {
+                                                "type": "boolean"
+                                              },
+                                              "repeatWeekly": {
+                                                "type": "boolean"
+                                              }
+                                            }
+                                          }
+                                        }
+                                      },
+                                      {
+                                        "type": "object",
+                                        "additionalProperties": false,
+                                        "required": [
+                                          "id",
+                                          "original",
+                                          "event"
+                                        ],
+                                        "properties": {
+                                          "id": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "maxLength": 100
+                                          },
+                                          "original": {
+                                            "type": "object",
+                                            "additionalProperties": false,
+                                            "required": [
+                                              "title",
+                                              "start",
+                                              "end",
+                                              "category"
+                                            ],
+                                            "properties": {
+                                              "title": {
+                                                "type": "string"
+                                              },
+                                              "start": {
+                                                "type": "string"
+                                              },
+                                              "end": {
+                                                "type": "string"
+                                              },
+                                              "category": {
+                                                "type": "string"
+                                              },
+                                              "location": {
+                                                "type": "string"
+                                              },
+                                              "mandatory": {
+                                                "type": "boolean"
+                                              },
+                                              "repeatWeekly": {
+                                                "type": "boolean"
+                                              },
+                                              "eventVersion": {
+                                                "type": "integer",
+                                                "minimum": 1
+                                              }
+                                            }
+                                          },
+                                          "event": {
+                                            "type": "object",
+                                            "additionalProperties": false,
+                                            "required": [
+                                              "title",
+                                              "start",
+                                              "end",
+                                              "category",
+                                              "location",
+                                              "mandatory",
+                                              "repeatWeekly"
+                                            ],
+                                            "properties": {
+                                              "title": {
+                                                "type": "string",
+                                                "minLength": 1,
+                                                "maxLength": 200
+                                              },
+                                              "start": {
+                                                "type": "string",
+                                                "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                              },
+                                              "end": {
+                                                "type": "string",
+                                                "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                              },
+                                              "category": {
+                                                "type": "string",
+                                                "enum": [
+                                                  "Class",
+                                                  "Work",
+                                                  "Personal"
+                                                ]
+                                              },
+                                              "location": {
+                                                "type": "string"
+                                              },
+                                              "mandatory": {
+                                                "type": "boolean"
+                                              },
+                                              "repeatWeekly": {
+                                                "type": "boolean"
+                                              }
+                                            }
+                                          }
+                                        }
+                                      },
+                                      {
+                                        "type": "object",
+                                        "additionalProperties": false,
+                                        "required": [
+                                          "id",
+                                          "original"
+                                        ],
+                                        "properties": {
+                                          "id": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "maxLength": 100
+                                          },
+                                          "original": {
+                                            "type": "object",
+                                            "additionalProperties": false,
+                                            "required": [
+                                              "title",
+                                              "start",
+                                              "end",
+                                              "category"
+                                            ],
+                                            "properties": {
+                                              "title": {
+                                                "type": "string"
+                                              },
+                                              "start": {
+                                                "type": "string"
+                                              },
+                                              "end": {
+                                                "type": "string"
+                                              },
+                                              "category": {
+                                                "type": "string"
+                                              },
+                                              "location": {
+                                                "type": "string"
+                                              },
+                                              "mandatory": {
+                                                "type": "boolean"
+                                              },
+                                              "repeatWeekly": {
+                                                "type": "boolean"
+                                              },
+                                              "eventVersion": {
+                                                "type": "integer",
+                                                "minimum": 1
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  "status": {
+                                    "type": "string",
+                                    "enum": [
+                                      "pending"
+                                    ]
+                                  },
+                                  "expiresAt": {
+                                    "type": "string",
+                                    "format": "date-time"
+                                  },
+                                  "eventId": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 100
+                                  }
+                                }
+                              }
+                            },
+                            "usage": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "inputTokens",
+                                "outputTokens"
+                              ],
+                              "properties": {
+                                "inputTokens": {
+                                  "type": "integer",
+                                  "minimum": 0
+                                },
+                                "outputTokens": {
+                                  "type": "integer",
+                                  "minimum": 0
+                                }
+                              }
+                            }
+                          },
+                          "description": "Odpowiedź asystenta i akcje wymagające potwierdzenia.",
+                          "x-examples": {
+                            "synthetic": {
+                              "summary": "Syntetyczna odpowiedź",
+                              "description": "Przykład zgodny z kontraktem; bez rzeczywistych danych użytkownika.",
+                              "value": {
+                                "conversationId": "synthetic-conversation-id",
+                                "message": {
+                                  "role": "assistant",
+                                  "content": "Mogę przygotować podgląd wydarzenia."
+                                },
+                                "pendingActions": [],
+                                "usage": {
+                                  "inputTokens": 120,
+                                  "outputTokens": 25
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "type",
+                        "error"
+                      ],
+                      "properties": {
+                        "type": {
+                          "enum": [
+                            "error"
+                          ]
+                        },
+                        "error": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  ],
+                  "description": "Each newline-delimited JSON record is one event. accepted confirms persisted user input; delta appends text; reset clears provisional text before the next tool round; done contains the persisted final answer and pending previews. error terminates an unsuccessful turn. Only done is a successful result.",
+                  "x-examples": {
+                    "delta": {
+                      "summary": "Synthetic streamed text fragment",
+                      "value": {
+                        "type": "delta",
+                        "text": "Masz dziś "
+                      }
+                    }
+                  }
+                },
+                "examples": {
+                  "delta": {
+                    "summary": "Synthetic streamed text fragment",
+                    "value": {
+                      "type": "delta",
+                      "text": "Masz dziś "
                     }
                   }
                 }
@@ -12771,6 +13377,61 @@
             }
           },
           "429": {
+            "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "conflicts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    },
+                    "collisionToken": {
+                      "type": "string"
+                    },
+                    "statusCode": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika."
+                },
+                "examples": {
+                  "unavailable": {
+                    "summary": "Usługa niedostępna",
+                    "value": {
+                      "error": "assistant_unavailable"
+                    }
+                  },
+                  "stalePreview": {
+                    "summary": "Nieaktualny podgląd",
+                    "description": "Przygotuj nową propozycję przed ponownym zatwierdzeniem.",
+                    "value": {
+                      "error": "ai_action_stale_preview",
+                      "message": "Wydarzenie zmieniło się od czasu podglądu."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
             "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika.",
             "content": {
               "application/json": {

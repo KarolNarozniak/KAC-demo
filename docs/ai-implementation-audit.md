@@ -22,3 +22,11 @@ Implementowany jako pierwszy: 252. Pozostałe wysokie priorytety (254 i 256) wym
 - W lokalnym środowisku nie skonfigurowano endpointu/deploymentu Azure AI i nie znaleziono Azure CLI. Nie wykonano rozmowy z rzeczywistym modelem. Konfiguracja i logowanie: README oraz dokumentacja integracji AI.
 - Końcowe `npm test`: 25/25 web i 156/156 API. `npm run typecheck` oraz `npm run api:openapi:check` zaliczone. Kontrakt i obie wersje referencji API zregenerowane na zależnościach odtworzonych przez `npm ci` (bez zmiany lockfile).
 - `npm run docs:build` i `npm run build`: zaliczone (obie wersje językowe dokumentacji, API i web).
+
+## Poprawki UX i diagnostyka podsumowania
+
+- Czat pokazuje wiadomość od razu, wskaźnik odpowiadania i rzeczywiste fragmenty odpowiedzi z Responses API. Potwierdzenie pozostaje w czacie; „Zatwierdź wszystko” wykonuje akcje kolejno, zatrzymując się przy błędzie lub kolizji.
+- Ustawienia zawierają zapisywaną lokalnie formę zwracania się i ton agenta. Preferencje stylu nie zmieniają zasad potwierdzania akcji.
+- Historia podsumowania z 15.11 wykazała ponowne użycie wyniku odczytu pustego kalendarza z 15:01 przy turze o 15:10, bez ponownego wywołania narzędzia. Regeneracja podsumowania używa teraz świeżej ukrytej rozmowy.
+- W turze o 15:20 narzędzie zwróciło trzy wydarzenia, ale końcowy tekst modelu był pusty. Stary kod zapisywał komunikat zastępczy jako sukces. Niepełne i puste wyniki są teraz błędami, a limit wyjściowy podniesiono z 1200 do 4000 tokenów (obejmuje również rozumowanie). Historyczne logi nie zawierają statusu zakończenia modelu, więc nie potwierdzają jednoznacznie przyczyny pustego wyniku; nowa diagnostyka zapisuje powód niepełnej odpowiedzi.
+- Weryfikacja: 34 testy web, 163 API; testy streamingu obejmują rzeczywiste lokalne połączenie HTTP i przerwanie upstream po rozłączeniu klienta. Sprawdzanie typów, kontrakt OpenAPI, dokumentacja PL/EN i pełny build zaliczone.
