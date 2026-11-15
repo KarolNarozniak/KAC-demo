@@ -1,6 +1,7 @@
 import { validateCommuteGaps } from './constraints.js';
 import { ProfileError } from '../profile/availability.js';
 import { DEFAULT_SCHEDULER_PENALTIES } from './config.js';
+import { hoursLabel, weeklyLimitDetails, weeklyWorkMinutes } from './limits.js';
 import { constraints, availabilityRanges, blockedPeriodIntervals, freeWindows, listBlockingOccurrences, paddedInterval, type Interval } from './constraints.js';
 import { expandEventsForWeek, addLocalDays, localDateKey, localDateTimeString, localInstant, minutesOfDay, overlap, overlapMinutes, validWeekStart, weekBounds } from './time.js';
 import type {
@@ -217,8 +218,8 @@ function buildCandidates(context: PlanningContext, weekStart: string, profile: E
   }
 
   const { start: weekStartInstant, end: weekEndInstant } = weekBounds(weekStart, timeZone);
-  const existingWorkMinutes = existingWork.reduce((sum, interval) =>
-    sum + overlapMinutes(interval.start, interval.end, weekStartInstant, weekEndInstant), 0);
+  // S23KC2S1P2-301: zapisana praca należy do tygodnia, w którym się zaczyna – ta sama reguła co dla nowych zmian (limits.ts).
+  const existingWorkMinutes = weeklyWorkMinutes(existingWork, weekStartInstant, weekEndInstant);
   const existingDays = new Set(existingWork
     .filter((interval) => interval.end > weekStartInstant && interval.start < weekEndInstant)
     .map((interval) => localDateTimeString(interval.start, timeZone).slice(0, 10)));
@@ -350,9 +351,9 @@ export function generateSchedule(context: PlanningContext, weekStart: string, ov
   });
   if (existingWorkMinutes > profile.maximumMinutes) violations.push({
     code: 'existing_work_exceeds_maximum', severity: 'error',
-    message: 'Już zapisane zmiany przekraczają maksymalny tygodniowy limit.',
-    candidateIds: [], eventIds: generated.existingWork.map((event) => event.id),
-    details: { maximumMinutes: profile.maximumMinutes, existingWorkMinutes },
+    message: `Już zapisane zmiany (${hoursLabel(existingWorkMinutes)}) przekraczają limit tygodniowy ${hoursLabel(profile.maximumMinutes)} o ${hoursLabel(existingWorkMinutes - profile.maximumMinutes)}.`,
+    candidateIds: [], eventIds: generated.existingWork.filter((event) => event.start >= generated.weekStartInstant && event.start < generated.weekEndInstant).map((event) => event.id),
+    details: weeklyLimitDetails(weekStart, profile.maximumMinutes, existingWorkMinutes, 0),
   });
 
   const inputSnapshot = {
@@ -515,11 +516,14 @@ export function validateSchedule(context: PlanningContext, weekStart: string, sh
     }
   }
 
-  const bounds = weekBounds(weekStart, context.profile.timeZone);
-  const existingWorkMinutes = generated.existingWork.reduce((sum, event) => sum + overlapMinutes(event.start, event.end, bounds.start, bounds.end), 0);
+  const existingWorkMinutes = generated.existingWorkMinutes;
   const proposedMinutes = normalized.reduce((sum, shift) => sum + shift.durationMinutes, 0);
   const totalMinutes = existingWorkMinutes + proposedMinutes;
-    if (totalMinutes > profile.maximumMinutes) errors.push({ code: 'maximum_hours', severity: 'error', message: 'Łączny czas pracy przekracza maksymalny limit tygodniowy.', candidateIds: normalized.map((shift) => shift.candidateId), eventIds: [], details: { maximumMinutes: profile.maximumMinutes, totalMinutes } });
+  // S23KC2S1P2-301 (N09): dokładny limit, suma i nadwyżka dla jawnie opisanego okresu (tydzień, reguła „początek zmiany”).
+  if (totalMinutes > profile.maximumMinutes) errors.push({ code: 'maximum_hours', severity: 'error',
+    message: `Łączny czas pracy w tygodniu (${hoursLabel(totalMinutes)}) przekracza limit ${hoursLabel(profile.maximumMinutes)} o ${hoursLabel(totalMinutes - profile.maximumMinutes)}.`,
+    candidateIds: normalized.map((shift) => shift.candidateId), eventIds: [],
+    details: weeklyLimitDetails(weekStart, profile.maximumMinutes, existingWorkMinutes, proposedMinutes) });
   const dailyUsage = new Map(generated.existingWorkDailyMinutes);
   const shiftsByDay = new Map<string, string[]>();
   for (const shift of normalized) {
@@ -529,9 +533,9 @@ export function validateSchedule(context: PlanningContext, weekStart: string, sh
   }
   for (const [date, minutes] of dailyUsage) {
     if (minutes > profile.maximumDailyMinutes) errors.push({ code: 'daily_maximum_hours', severity: 'error',
-      message: `Limit pracy na dzień ${date} wynosi ${profile.maximumDailyMinutes} minut.`, candidateIds: shiftsByDay.get(date) ?? [],
+      message: `Praca w dniu ${date} (${hoursLabel(minutes)}) przekracza limit dzienny ${hoursLabel(profile.maximumDailyMinutes)} o ${hoursLabel(minutes - profile.maximumDailyMinutes)}.`, candidateIds: shiftsByDay.get(date) ?? [],
       eventIds: generated.existingWork.filter((event) => localDateKey(event.start, context.profile.timeZone) === date).map((event) => event.id),
-      details: { date, maximumMinutes: profile.maximumDailyMinutes, totalMinutes: minutes } });
+      details: { period: 'day', date, maximumMinutes: profile.maximumDailyMinutes, totalMinutes: minutes, exceededByMinutes: minutes - profile.maximumDailyMinutes } });
   }
   if (totalMinutes < profile.minimumMinutes) warnings.push({ code: 'minimum_shortfall', severity: 'warning', message: 'Nie osiągnięto minimalnego tygodniowego wymiaru pracy.', candidateIds: normalized.map((shift) => shift.candidateId), eventIds: [], details: { minimumMinutes: profile.minimumMinutes, totalMinutes } });
   if (totalMinutes < profile.targetMinutes) warnings.push({ code: 'target_shortfall', severity: 'warning', message: 'Propozycja jest poniżej celu godzinowego.', candidateIds: normalized.map((shift) => shift.candidateId), eventIds: [], details: { targetMinutes: profile.targetMinutes, totalMinutes } });

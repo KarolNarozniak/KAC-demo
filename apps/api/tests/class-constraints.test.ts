@@ -144,3 +144,61 @@ test('N10: optional lecture warning names the skipped lecture and its time', () 
   assert.match(warning.message, /Analiza \(2026-11-03 10:00–11:30\)/);
   assert.equal((warning.details.conflicts as { title: string }[])[0]?.title, 'Analiza');
 });
+
+// S23KC2S1P2-301 (N09): ostrzeżenie o przekroczeniu maksimum i jawny okres rozliczeniowy.
+const workContext = (events: PlanningEvent[], overrides: Partial<PlanningContext['profile']> = {}) => ({
+  ...context(events, { maximumHours: 10, maxHoursPerDay: 12, maximumSlotMinutes: 600, ...overrides }),
+  availability: [1, 2, 3, 4, 5, 6, 7].map((day) => ({ id: `d${day}`, dayOfWeek: day, startTime: '00:00', endTime: '23:59' })),
+});
+const work = (id: string, start: string, end: string): PlanningEvent => ({ id, title: 'Zmiana pracy', start, end, category: 'Work', mandatory: false, repeatWeekly: false });
+
+test('N09: exactly the weekly limit is accepted, one minute more reports limit, total and excess for the week', () => {
+  const input = workContext([work('W1', '2026-11-02T08:00', '2026-11-02T14:00')], { commuteBufferMinutes: 0, minimumRestMinutes: 0 });
+  const exact = validateSchedule(input, WEEK, [{ id: 'S1', startLocal: '2026-11-04T08:00', endLocal: '2026-11-04T12:00' }]);
+  assert.equal(exact.totalMinutes, 600);
+  assert.ok(!exact.errors.some((error) => error.code === 'maximum_hours'));
+  const over = validateSchedule(input, WEEK, [{ id: 'S1', startLocal: '2026-11-04T08:00', endLocal: '2026-11-04T12:30' }]);
+  const error = over.errors.find((item) => item.code === 'maximum_hours');
+  assert.ok(error);
+  assert.deepEqual(error.details, { period: 'week', periodRule: 'shift_start', periodStartLocal: '2026-11-02T00:00', periodEndLocal: '2026-11-09T00:00',
+    maximumMinutes: 600, totalMinutes: 630, existingWorkMinutes: 360, proposedMinutes: 270, exceededByMinutes: 30 });
+  assert.equal(error.message, 'Łączny czas pracy w tygodniu (10 h 30 min) przekracza limit 10 h o 30 min.');
+});
+
+test('N09: a Sunday night shift belongs to the week it starts in and is not counted again next week', () => {
+  const night = work('N1', '2026-11-08T22:00', '2026-11-09T06:00');
+  const thisWeek = validateSchedule(workContext([night]), WEEK, []);
+  const nextWeek = validateSchedule(workContext([night]), '2026-11-09', []);
+  assert.equal(thisWeek.existingWorkMinutes, 480);
+  assert.equal(nextWeek.existingWorkMinutes, 0);
+  // Limit dzienny nadal dzieli zmianę o północy: poniedziałek ma 6 h z nocnej zmiany i 4 h nowej pracy.
+  const daily = validateSchedule(workContext([night], { maxHoursPerDay: 8 }), '2026-11-09', [{ id: 'S1', startLocal: '2026-11-09T08:00', endLocal: '2026-11-09T12:00' }]);
+  const dailyError = daily.errors.find((error) => error.code === 'daily_maximum_hours');
+  assert.equal(dailyError?.details.date, '2026-11-09');
+  assert.equal(dailyError?.details.totalMinutes, 600);
+  assert.equal(daily.errors.some((error) => error.code === 'maximum_hours'), false);
+});
+
+test('N09: daily limit reports the day, total and excess; equal to the limit is fine', () => {
+  const input = workContext([], { maximumHours: 40, maxHoursPerDay: 4 });
+  assert.ok(!validateSchedule(input, WEEK, [{ id: 'S1', startLocal: '2026-11-03T08:00', endLocal: '2026-11-03T12:00' }]).errors.some((error) => error.code === 'daily_maximum_hours'));
+  const error = validateSchedule(input, WEEK, [{ id: 'S1', startLocal: '2026-11-03T08:00', endLocal: '2026-11-03T13:00' }]).errors.find((item) => item.code === 'daily_maximum_hours');
+  assert.ok(error);
+  assert.deepEqual(error.details, { period: 'day', date: '2026-11-03', maximumMinutes: 240, totalMinutes: 300, exceededByMinutes: 60 });
+});
+
+test('N09: the DST week counts real elapsed minutes', () => {
+  // 25.10.2026: zmiana czasu z letniego na zimowy, 00:00–06:00 czasu lokalnego trwa 7 h.
+  const result = validateSchedule(workContext([], { maximumHours: 6, maxHoursPerDay: 12 }), '2026-10-19', [{ id: 'S1', startLocal: '2026-10-25T00:00', endLocal: '2026-10-25T06:00' }]);
+  const error = result.errors.find((item) => item.code === 'maximum_hours');
+  assert.equal(error?.details.totalMinutes, 420);
+  assert.equal(error?.details.exceededByMinutes, 60);
+});
+
+test('N09: existing work above the limit is reported with its excess', () => {
+  const schedule = generateSchedule(workContext([work('W1', '2026-11-02T08:00', '2026-11-02T19:00')], { maximumHours: 10 }), WEEK);
+  const error = schedule.violations.find((item) => item.code === 'existing_work_exceeds_maximum');
+  assert.ok(error);
+  assert.equal(error.details.exceededByMinutes, 60);
+  assert.deepEqual(error.eventIds, ['W1']);
+});

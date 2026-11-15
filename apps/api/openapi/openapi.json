@@ -4327,7 +4327,7 @@
                           {
                             "type": "object",
                             "title": "ScheduleViolation",
-                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. details: maximumMinutes, totalMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu przekracza maxHoursPerDay. details: date, maximumMinutes, totalMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: maximumMinutes, existingWorkMinutes.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: puste; zmiany wskazuje candidateIds.\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe.\nWartości w details są w minutach.",
+                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. Suma równa limitowi jest dozwolona. details: period (week), periodRule (shift_start – zmiana należy w całości do tygodnia, w którym się zaczyna; dotyczy też zapisanej pracy, więc nocna zmiana z niedzieli nie jest liczona drugi raz), periodStartLocal, periodEndLocal, maximumMinutes, totalMinutes, existingWorkMinutes, proposedMinutes, exceededByMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu kalendarzowym przekracza maxHoursPerDay; zmiana nocna dzieli się o północy. details: period (day), date, maximumMinutes, totalMinutes, exceededByMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: jak w maximum_hours (proposedMinutes = 0).\nOstrzeżenia o limicie są twarde: potwierdzenie przeczytania w aplikacji nie pozwala zatwierdzić grafiku ponad limit.\n- hard_conflict (error) – zmiana nachodzi na inne wydarzenie albo blokadę (razem z buforem dojazdu). details.conflicts: lista wszystkich kolidujących pozycji – id, title, startLocal, endLocal (rzeczywisty termin), bufferMinutes, overlapStartLocal, overlapEndLocal.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: kind (overlap | rest), gapMinutes, requiredMinutes, shifts (candidateId, startLocal, endLocal obu zmian w kolejności czasu).\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe. details: penalty, conflicts (jak w hard_conflict).\nWartości w details są w minutach.",
                             "required": [
                               "code",
                               "severity",
@@ -4996,7 +4996,7 @@
                           {
                             "type": "object",
                             "title": "ScheduleViolation",
-                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. details: maximumMinutes, totalMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu przekracza maxHoursPerDay. details: date, maximumMinutes, totalMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: maximumMinutes, existingWorkMinutes.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: puste; zmiany wskazuje candidateIds.\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe.\nWartości w details są w minutach.",
+                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. Suma równa limitowi jest dozwolona. details: period (week), periodRule (shift_start – zmiana należy w całości do tygodnia, w którym się zaczyna; dotyczy też zapisanej pracy, więc nocna zmiana z niedzieli nie jest liczona drugi raz), periodStartLocal, periodEndLocal, maximumMinutes, totalMinutes, existingWorkMinutes, proposedMinutes, exceededByMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu kalendarzowym przekracza maxHoursPerDay; zmiana nocna dzieli się o północy. details: period (day), date, maximumMinutes, totalMinutes, exceededByMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: jak w maximum_hours (proposedMinutes = 0).\nOstrzeżenia o limicie są twarde: potwierdzenie przeczytania w aplikacji nie pozwala zatwierdzić grafiku ponad limit.\n- hard_conflict (error) – zmiana nachodzi na inne wydarzenie albo blokadę (razem z buforem dojazdu). details.conflicts: lista wszystkich kolidujących pozycji – id, title, startLocal, endLocal (rzeczywisty termin), bufferMinutes, overlapStartLocal, overlapEndLocal.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: kind (overlap | rest), gapMinutes, requiredMinutes, shifts (candidateId, startLocal, endLocal obu zmian w kolejności czasu).\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe. details: penalty, conflicts (jak w hard_conflict).\nWartości w details są w minutach.",
                             "required": [
                               "code",
                               "severity",
@@ -5135,7 +5135,7 @@
                           {
                             "type": "object",
                             "title": "ScheduleViolation",
-                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. details: maximumMinutes, totalMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu przekracza maxHoursPerDay. details: date, maximumMinutes, totalMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: maximumMinutes, existingWorkMinutes.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: puste; zmiany wskazuje candidateIds.\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe.\nWartości w details są w minutach.",
+                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. Suma równa limitowi jest dozwolona. details: period (week), periodRule (shift_start – zmiana należy w całości do tygodnia, w którym się zaczyna; dotyczy też zapisanej pracy, więc nocna zmiana z niedzieli nie jest liczona drugi raz), periodStartLocal, periodEndLocal, maximumMinutes, totalMinutes, existingWorkMinutes, proposedMinutes, exceededByMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu kalendarzowym przekracza maxHoursPerDay; zmiana nocna dzieli się o północy. details: period (day), date, maximumMinutes, totalMinutes, exceededByMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: jak w maximum_hours (proposedMinutes = 0).\nOstrzeżenia o limicie są twarde: potwierdzenie przeczytania w aplikacji nie pozwala zatwierdzić grafiku ponad limit.\n- hard_conflict (error) – zmiana nachodzi na inne wydarzenie albo blokadę (razem z buforem dojazdu). details.conflicts: lista wszystkich kolidujących pozycji – id, title, startLocal, endLocal (rzeczywisty termin), bufferMinutes, overlapStartLocal, overlapEndLocal.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: kind (overlap | rest), gapMinutes, requiredMinutes, shifts (candidateId, startLocal, endLocal obu zmian w kolejności czasu).\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe. details: penalty, conflicts (jak w hard_conflict).\nWartości w details są w minutach.",
                             "required": [
                               "code",
                               "severity",
@@ -5236,14 +5236,14 @@
                   },
                   "weeklyLimit": {
                     "summary": "Przekroczony limit godzin",
-                    "description": "Nic nie zostało zapisane. maximum_hours – profil pozwala na 20 h tygodniowo (maximumHours: 20 → 1200 min), a zmiany dałyby 22 h (1320 min). daily_maximum_hours – we wtorek wyszłoby 10 h przy limicie 8 h (maxHoursPerDay: 8 → 480 min).",
+                    "description": "Nic nie zostało zapisane. maximum_hours – profil pozwala na 20 h tygodniowo (maximumHours: 20 → 1200 min), a zmiany dałyby 22 h (1320 min), czyli 120 min ponad limit (exceededByMinutes). Okres to tydzień od poniedziałku 00:00 do następnego poniedziałku 00:00; zmiana należy w całości do tygodnia, w którym się zaczyna (periodRule: shift_start). daily_maximum_hours – we wtorek wyszłoby 10 h przy limicie 8 h (maxHoursPerDay: 8 → 480 min). Suma równa limitowi nie jest błędem.",
                     "value": {
                       "error": "invalid_schedule",
                       "errors": [
                         {
                           "code": "maximum_hours",
                           "severity": "error",
-                          "message": "Łączny czas pracy przekracza maksymalny limit tygodniowy.",
+                          "message": "Łączny czas pracy w tygodniu (22 h) przekracza limit 20 h o 2 h.",
                           "candidateIds": [
                             "X1",
                             "X2",
@@ -5251,23 +5251,32 @@
                           ],
                           "eventIds": [],
                           "details": {
+                            "period": "week",
+                            "periodRule": "shift_start",
+                            "periodStartLocal": "2026-11-16T00:00",
+                            "periodEndLocal": "2026-11-23T00:00",
                             "maximumMinutes": 1200,
-                            "totalMinutes": 1320
+                            "totalMinutes": 1320,
+                            "existingWorkMinutes": 420,
+                            "proposedMinutes": 900,
+                            "exceededByMinutes": 120
                           }
                         },
                         {
                           "code": "daily_maximum_hours",
                           "severity": "error",
-                          "message": "Limit pracy na dzień 2026-11-17 wynosi 480 minut.",
+                          "message": "Praca w dniu 2026-11-17 (10 h) przekracza limit dzienny 8 h o 2 h.",
                           "candidateIds": [
                             "X2",
                             "X3"
                           ],
                           "eventIds": [],
                           "details": {
+                            "period": "day",
                             "date": "2026-11-17",
                             "maximumMinutes": 480,
-                            "totalMinutes": 600
+                            "totalMinutes": 600,
+                            "exceededByMinutes": 120
                           }
                         }
                       ],
@@ -5302,13 +5311,29 @@
                         {
                           "code": "shift_overlap_or_rest",
                           "severity": "error",
-                          "message": "Zmiany nakładają się lub nie zachowują bufora i odpoczynku.",
+                          "message": "Między zmianami 2026-11-16 08:00–12:00 i 2026-11-16 13:00–17:00 jest 60 min przerwy, wymagane 120 min.",
                           "candidateIds": [
                             "X1",
                             "X2"
                           ],
                           "eventIds": [],
-                          "details": {}
+                          "details": {
+                            "kind": "rest",
+                            "gapMinutes": 60,
+                            "requiredMinutes": 120,
+                            "shifts": [
+                              {
+                                "candidateId": "X1",
+                                "startLocal": "2026-11-16T08:00",
+                                "endLocal": "2026-11-16T12:00"
+                              },
+                              {
+                                "candidateId": "X2",
+                                "startLocal": "2026-11-16T13:00",
+                                "endLocal": "2026-11-16T17:00"
+                              }
+                            ]
+                          }
                         }
                       ],
                       "warnings": []
@@ -5661,7 +5686,7 @@
                           {
                             "type": "object",
                             "title": "ScheduleViolation",
-                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. details: maximumMinutes, totalMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu przekracza maxHoursPerDay. details: date, maximumMinutes, totalMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: maximumMinutes, existingWorkMinutes.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: puste; zmiany wskazuje candidateIds.\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe.\nWartości w details są w minutach.",
+                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. Suma równa limitowi jest dozwolona. details: period (week), periodRule (shift_start – zmiana należy w całości do tygodnia, w którym się zaczyna; dotyczy też zapisanej pracy, więc nocna zmiana z niedzieli nie jest liczona drugi raz), periodStartLocal, periodEndLocal, maximumMinutes, totalMinutes, existingWorkMinutes, proposedMinutes, exceededByMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu kalendarzowym przekracza maxHoursPerDay; zmiana nocna dzieli się o północy. details: period (day), date, maximumMinutes, totalMinutes, exceededByMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: jak w maximum_hours (proposedMinutes = 0).\nOstrzeżenia o limicie są twarde: potwierdzenie przeczytania w aplikacji nie pozwala zatwierdzić grafiku ponad limit.\n- hard_conflict (error) – zmiana nachodzi na inne wydarzenie albo blokadę (razem z buforem dojazdu). details.conflicts: lista wszystkich kolidujących pozycji – id, title, startLocal, endLocal (rzeczywisty termin), bufferMinutes, overlapStartLocal, overlapEndLocal.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: kind (overlap | rest), gapMinutes, requiredMinutes, shifts (candidateId, startLocal, endLocal obu zmian w kolejności czasu).\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe. details: penalty, conflicts (jak w hard_conflict).\nWartości w details są w minutach.",
                             "required": [
                               "code",
                               "severity",
@@ -6077,7 +6102,7 @@
                           {
                             "type": "object",
                             "title": "ScheduleViolation",
-                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. details: maximumMinutes, totalMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu przekracza maxHoursPerDay. details: date, maximumMinutes, totalMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: maximumMinutes, existingWorkMinutes.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: puste; zmiany wskazuje candidateIds.\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe.\nWartości w details są w minutach.",
+                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. Suma równa limitowi jest dozwolona. details: period (week), periodRule (shift_start – zmiana należy w całości do tygodnia, w którym się zaczyna; dotyczy też zapisanej pracy, więc nocna zmiana z niedzieli nie jest liczona drugi raz), periodStartLocal, periodEndLocal, maximumMinutes, totalMinutes, existingWorkMinutes, proposedMinutes, exceededByMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu kalendarzowym przekracza maxHoursPerDay; zmiana nocna dzieli się o północy. details: period (day), date, maximumMinutes, totalMinutes, exceededByMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: jak w maximum_hours (proposedMinutes = 0).\nOstrzeżenia o limicie są twarde: potwierdzenie przeczytania w aplikacji nie pozwala zatwierdzić grafiku ponad limit.\n- hard_conflict (error) – zmiana nachodzi na inne wydarzenie albo blokadę (razem z buforem dojazdu). details.conflicts: lista wszystkich kolidujących pozycji – id, title, startLocal, endLocal (rzeczywisty termin), bufferMinutes, overlapStartLocal, overlapEndLocal.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: kind (overlap | rest), gapMinutes, requiredMinutes, shifts (candidateId, startLocal, endLocal obu zmian w kolejności czasu).\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe. details: penalty, conflicts (jak w hard_conflict).\nWartości w details są w minutach.",
                             "required": [
                               "code",
                               "severity",
@@ -6216,7 +6241,7 @@
                           {
                             "type": "object",
                             "title": "ScheduleViolation",
-                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. details: maximumMinutes, totalMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu przekracza maxHoursPerDay. details: date, maximumMinutes, totalMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: maximumMinutes, existingWorkMinutes.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: puste; zmiany wskazuje candidateIds.\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe.\nWartości w details są w minutach.",
+                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. Suma równa limitowi jest dozwolona. details: period (week), periodRule (shift_start – zmiana należy w całości do tygodnia, w którym się zaczyna; dotyczy też zapisanej pracy, więc nocna zmiana z niedzieli nie jest liczona drugi raz), periodStartLocal, periodEndLocal, maximumMinutes, totalMinutes, existingWorkMinutes, proposedMinutes, exceededByMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu kalendarzowym przekracza maxHoursPerDay; zmiana nocna dzieli się o północy. details: period (day), date, maximumMinutes, totalMinutes, exceededByMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: jak w maximum_hours (proposedMinutes = 0).\nOstrzeżenia o limicie są twarde: potwierdzenie przeczytania w aplikacji nie pozwala zatwierdzić grafiku ponad limit.\n- hard_conflict (error) – zmiana nachodzi na inne wydarzenie albo blokadę (razem z buforem dojazdu). details.conflicts: lista wszystkich kolidujących pozycji – id, title, startLocal, endLocal (rzeczywisty termin), bufferMinutes, overlapStartLocal, overlapEndLocal.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: kind (overlap | rest), gapMinutes, requiredMinutes, shifts (candidateId, startLocal, endLocal obu zmian w kolejności czasu).\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe. details: penalty, conflicts (jak w hard_conflict).\nWartości w details są w minutach.",
                             "required": [
                               "code",
                               "severity",
@@ -6317,14 +6342,14 @@
                   },
                   "weeklyLimit": {
                     "summary": "Przekroczony limit godzin",
-                    "description": "Nic nie zostało zapisane. maximum_hours – profil pozwala na 20 h tygodniowo (maximumHours: 20 → 1200 min), a zmiany dałyby 22 h (1320 min). daily_maximum_hours – we wtorek wyszłoby 10 h przy limicie 8 h (maxHoursPerDay: 8 → 480 min).",
+                    "description": "Nic nie zostało zapisane. maximum_hours – profil pozwala na 20 h tygodniowo (maximumHours: 20 → 1200 min), a zmiany dałyby 22 h (1320 min), czyli 120 min ponad limit (exceededByMinutes). Okres to tydzień od poniedziałku 00:00 do następnego poniedziałku 00:00; zmiana należy w całości do tygodnia, w którym się zaczyna (periodRule: shift_start). daily_maximum_hours – we wtorek wyszłoby 10 h przy limicie 8 h (maxHoursPerDay: 8 → 480 min). Suma równa limitowi nie jest błędem.",
                     "value": {
                       "error": "invalid_schedule",
                       "errors": [
                         {
                           "code": "maximum_hours",
                           "severity": "error",
-                          "message": "Łączny czas pracy przekracza maksymalny limit tygodniowy.",
+                          "message": "Łączny czas pracy w tygodniu (22 h) przekracza limit 20 h o 2 h.",
                           "candidateIds": [
                             "X1",
                             "X2",
@@ -6332,23 +6357,32 @@
                           ],
                           "eventIds": [],
                           "details": {
+                            "period": "week",
+                            "periodRule": "shift_start",
+                            "periodStartLocal": "2026-11-16T00:00",
+                            "periodEndLocal": "2026-11-23T00:00",
                             "maximumMinutes": 1200,
-                            "totalMinutes": 1320
+                            "totalMinutes": 1320,
+                            "existingWorkMinutes": 420,
+                            "proposedMinutes": 900,
+                            "exceededByMinutes": 120
                           }
                         },
                         {
                           "code": "daily_maximum_hours",
                           "severity": "error",
-                          "message": "Limit pracy na dzień 2026-11-17 wynosi 480 minut.",
+                          "message": "Praca w dniu 2026-11-17 (10 h) przekracza limit dzienny 8 h o 2 h.",
                           "candidateIds": [
                             "X2",
                             "X3"
                           ],
                           "eventIds": [],
                           "details": {
+                            "period": "day",
                             "date": "2026-11-17",
                             "maximumMinutes": 480,
-                            "totalMinutes": 600
+                            "totalMinutes": 600,
+                            "exceededByMinutes": 120
                           }
                         }
                       ],
@@ -6383,13 +6417,29 @@
                         {
                           "code": "shift_overlap_or_rest",
                           "severity": "error",
-                          "message": "Zmiany nakładają się lub nie zachowują bufora i odpoczynku.",
+                          "message": "Między zmianami 2026-11-16 08:00–12:00 i 2026-11-16 13:00–17:00 jest 60 min przerwy, wymagane 120 min.",
                           "candidateIds": [
                             "X1",
                             "X2"
                           ],
                           "eventIds": [],
-                          "details": {}
+                          "details": {
+                            "kind": "rest",
+                            "gapMinutes": 60,
+                            "requiredMinutes": 120,
+                            "shifts": [
+                              {
+                                "candidateId": "X1",
+                                "startLocal": "2026-11-16T08:00",
+                                "endLocal": "2026-11-16T12:00"
+                              },
+                              {
+                                "candidateId": "X2",
+                                "startLocal": "2026-11-16T13:00",
+                                "endLocal": "2026-11-16T17:00"
+                              }
+                            ]
+                          }
                         }
                       ],
                       "warnings": []
@@ -7080,7 +7130,7 @@
                           {
                             "type": "object",
                             "title": "ScheduleViolation",
-                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. details: maximumMinutes, totalMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu przekracza maxHoursPerDay. details: date, maximumMinutes, totalMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: maximumMinutes, existingWorkMinutes.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: puste; zmiany wskazuje candidateIds.\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe.\nWartości w details są w minutach.",
+                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. Suma równa limitowi jest dozwolona. details: period (week), periodRule (shift_start – zmiana należy w całości do tygodnia, w którym się zaczyna; dotyczy też zapisanej pracy, więc nocna zmiana z niedzieli nie jest liczona drugi raz), periodStartLocal, periodEndLocal, maximumMinutes, totalMinutes, existingWorkMinutes, proposedMinutes, exceededByMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu kalendarzowym przekracza maxHoursPerDay; zmiana nocna dzieli się o północy. details: period (day), date, maximumMinutes, totalMinutes, exceededByMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: jak w maximum_hours (proposedMinutes = 0).\nOstrzeżenia o limicie są twarde: potwierdzenie przeczytania w aplikacji nie pozwala zatwierdzić grafiku ponad limit.\n- hard_conflict (error) – zmiana nachodzi na inne wydarzenie albo blokadę (razem z buforem dojazdu). details.conflicts: lista wszystkich kolidujących pozycji – id, title, startLocal, endLocal (rzeczywisty termin), bufferMinutes, overlapStartLocal, overlapEndLocal.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: kind (overlap | rest), gapMinutes, requiredMinutes, shifts (candidateId, startLocal, endLocal obu zmian w kolejności czasu).\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe. details: penalty, conflicts (jak w hard_conflict).\nWartości w details są w minutach.",
                             "required": [
                               "code",
                               "severity",
@@ -7868,7 +7918,7 @@
                           {
                             "type": "object",
                             "title": "ScheduleViolation",
-                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. details: maximumMinutes, totalMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu przekracza maxHoursPerDay. details: date, maximumMinutes, totalMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: maximumMinutes, existingWorkMinutes.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: puste; zmiany wskazuje candidateIds.\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe.\nWartości w details są w minutach.",
+                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. Suma równa limitowi jest dozwolona. details: period (week), periodRule (shift_start – zmiana należy w całości do tygodnia, w którym się zaczyna; dotyczy też zapisanej pracy, więc nocna zmiana z niedzieli nie jest liczona drugi raz), periodStartLocal, periodEndLocal, maximumMinutes, totalMinutes, existingWorkMinutes, proposedMinutes, exceededByMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu kalendarzowym przekracza maxHoursPerDay; zmiana nocna dzieli się o północy. details: period (day), date, maximumMinutes, totalMinutes, exceededByMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: jak w maximum_hours (proposedMinutes = 0).\nOstrzeżenia o limicie są twarde: potwierdzenie przeczytania w aplikacji nie pozwala zatwierdzić grafiku ponad limit.\n- hard_conflict (error) – zmiana nachodzi na inne wydarzenie albo blokadę (razem z buforem dojazdu). details.conflicts: lista wszystkich kolidujących pozycji – id, title, startLocal, endLocal (rzeczywisty termin), bufferMinutes, overlapStartLocal, overlapEndLocal.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: kind (overlap | rest), gapMinutes, requiredMinutes, shifts (candidateId, startLocal, endLocal obu zmian w kolejności czasu).\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe. details: penalty, conflicts (jak w hard_conflict).\nWartości w details są w minutach.",
                             "required": [
                               "code",
                               "severity",
@@ -8776,7 +8826,7 @@
                           {
                             "type": "object",
                             "title": "ScheduleViolation",
-                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. details: maximumMinutes, totalMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu przekracza maxHoursPerDay. details: date, maximumMinutes, totalMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: maximumMinutes, existingWorkMinutes.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: puste; zmiany wskazuje candidateIds.\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe.\nWartości w details są w minutach.",
+                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. Suma równa limitowi jest dozwolona. details: period (week), periodRule (shift_start – zmiana należy w całości do tygodnia, w którym się zaczyna; dotyczy też zapisanej pracy, więc nocna zmiana z niedzieli nie jest liczona drugi raz), periodStartLocal, periodEndLocal, maximumMinutes, totalMinutes, existingWorkMinutes, proposedMinutes, exceededByMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu kalendarzowym przekracza maxHoursPerDay; zmiana nocna dzieli się o północy. details: period (day), date, maximumMinutes, totalMinutes, exceededByMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: jak w maximum_hours (proposedMinutes = 0).\nOstrzeżenia o limicie są twarde: potwierdzenie przeczytania w aplikacji nie pozwala zatwierdzić grafiku ponad limit.\n- hard_conflict (error) – zmiana nachodzi na inne wydarzenie albo blokadę (razem z buforem dojazdu). details.conflicts: lista wszystkich kolidujących pozycji – id, title, startLocal, endLocal (rzeczywisty termin), bufferMinutes, overlapStartLocal, overlapEndLocal.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: kind (overlap | rest), gapMinutes, requiredMinutes, shifts (candidateId, startLocal, endLocal obu zmian w kolejności czasu).\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe. details: penalty, conflicts (jak w hard_conflict).\nWartości w details są w minutach.",
                             "required": [
                               "code",
                               "severity",
@@ -9191,7 +9241,7 @@
                           {
                             "type": "object",
                             "title": "ScheduleViolation",
-                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. details: maximumMinutes, totalMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu przekracza maxHoursPerDay. details: date, maximumMinutes, totalMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: maximumMinutes, existingWorkMinutes.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: puste; zmiany wskazuje candidateIds.\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe.\nWartości w details są w minutach.",
+                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. Suma równa limitowi jest dozwolona. details: period (week), periodRule (shift_start – zmiana należy w całości do tygodnia, w którym się zaczyna; dotyczy też zapisanej pracy, więc nocna zmiana z niedzieli nie jest liczona drugi raz), periodStartLocal, periodEndLocal, maximumMinutes, totalMinutes, existingWorkMinutes, proposedMinutes, exceededByMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu kalendarzowym przekracza maxHoursPerDay; zmiana nocna dzieli się o północy. details: period (day), date, maximumMinutes, totalMinutes, exceededByMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: jak w maximum_hours (proposedMinutes = 0).\nOstrzeżenia o limicie są twarde: potwierdzenie przeczytania w aplikacji nie pozwala zatwierdzić grafiku ponad limit.\n- hard_conflict (error) – zmiana nachodzi na inne wydarzenie albo blokadę (razem z buforem dojazdu). details.conflicts: lista wszystkich kolidujących pozycji – id, title, startLocal, endLocal (rzeczywisty termin), bufferMinutes, overlapStartLocal, overlapEndLocal.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: kind (overlap | rest), gapMinutes, requiredMinutes, shifts (candidateId, startLocal, endLocal obu zmian w kolejności czasu).\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe. details: penalty, conflicts (jak w hard_conflict).\nWartości w details są w minutach.",
                             "required": [
                               "code",
                               "severity",
@@ -9330,7 +9380,7 @@
                           {
                             "type": "object",
                             "title": "ScheduleViolation",
-                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. details: maximumMinutes, totalMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu przekracza maxHoursPerDay. details: date, maximumMinutes, totalMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: maximumMinutes, existingWorkMinutes.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: puste; zmiany wskazuje candidateIds.\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe.\nWartości w details są w minutach.",
+                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. Suma równa limitowi jest dozwolona. details: period (week), periodRule (shift_start – zmiana należy w całości do tygodnia, w którym się zaczyna; dotyczy też zapisanej pracy, więc nocna zmiana z niedzieli nie jest liczona drugi raz), periodStartLocal, periodEndLocal, maximumMinutes, totalMinutes, existingWorkMinutes, proposedMinutes, exceededByMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu kalendarzowym przekracza maxHoursPerDay; zmiana nocna dzieli się o północy. details: period (day), date, maximumMinutes, totalMinutes, exceededByMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: jak w maximum_hours (proposedMinutes = 0).\nOstrzeżenia o limicie są twarde: potwierdzenie przeczytania w aplikacji nie pozwala zatwierdzić grafiku ponad limit.\n- hard_conflict (error) – zmiana nachodzi na inne wydarzenie albo blokadę (razem z buforem dojazdu). details.conflicts: lista wszystkich kolidujących pozycji – id, title, startLocal, endLocal (rzeczywisty termin), bufferMinutes, overlapStartLocal, overlapEndLocal.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: kind (overlap | rest), gapMinutes, requiredMinutes, shifts (candidateId, startLocal, endLocal obu zmian w kolejności czasu).\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe. details: penalty, conflicts (jak w hard_conflict).\nWartości w details są w minutach.",
                             "required": [
                               "code",
                               "severity",
@@ -9431,14 +9481,14 @@
                   },
                   "weeklyLimit": {
                     "summary": "Przekroczony limit godzin",
-                    "description": "Nic nie zostało zapisane. maximum_hours – profil pozwala na 20 h tygodniowo (maximumHours: 20 → 1200 min), a zmiany dałyby 22 h (1320 min). daily_maximum_hours – we wtorek wyszłoby 10 h przy limicie 8 h (maxHoursPerDay: 8 → 480 min).",
+                    "description": "Nic nie zostało zapisane. maximum_hours – profil pozwala na 20 h tygodniowo (maximumHours: 20 → 1200 min), a zmiany dałyby 22 h (1320 min), czyli 120 min ponad limit (exceededByMinutes). Okres to tydzień od poniedziałku 00:00 do następnego poniedziałku 00:00; zmiana należy w całości do tygodnia, w którym się zaczyna (periodRule: shift_start). daily_maximum_hours – we wtorek wyszłoby 10 h przy limicie 8 h (maxHoursPerDay: 8 → 480 min). Suma równa limitowi nie jest błędem.",
                     "value": {
                       "error": "invalid_schedule",
                       "errors": [
                         {
                           "code": "maximum_hours",
                           "severity": "error",
-                          "message": "Łączny czas pracy przekracza maksymalny limit tygodniowy.",
+                          "message": "Łączny czas pracy w tygodniu (22 h) przekracza limit 20 h o 2 h.",
                           "candidateIds": [
                             "X1",
                             "X2",
@@ -9446,23 +9496,32 @@
                           ],
                           "eventIds": [],
                           "details": {
+                            "period": "week",
+                            "periodRule": "shift_start",
+                            "periodStartLocal": "2026-11-16T00:00",
+                            "periodEndLocal": "2026-11-23T00:00",
                             "maximumMinutes": 1200,
-                            "totalMinutes": 1320
+                            "totalMinutes": 1320,
+                            "existingWorkMinutes": 420,
+                            "proposedMinutes": 900,
+                            "exceededByMinutes": 120
                           }
                         },
                         {
                           "code": "daily_maximum_hours",
                           "severity": "error",
-                          "message": "Limit pracy na dzień 2026-11-17 wynosi 480 minut.",
+                          "message": "Praca w dniu 2026-11-17 (10 h) przekracza limit dzienny 8 h o 2 h.",
                           "candidateIds": [
                             "X2",
                             "X3"
                           ],
                           "eventIds": [],
                           "details": {
+                            "period": "day",
                             "date": "2026-11-17",
                             "maximumMinutes": 480,
-                            "totalMinutes": 600
+                            "totalMinutes": 600,
+                            "exceededByMinutes": 120
                           }
                         }
                       ],
@@ -9497,13 +9556,29 @@
                         {
                           "code": "shift_overlap_or_rest",
                           "severity": "error",
-                          "message": "Zmiany nakładają się lub nie zachowują bufora i odpoczynku.",
+                          "message": "Między zmianami 2026-11-16 08:00–12:00 i 2026-11-16 13:00–17:00 jest 60 min przerwy, wymagane 120 min.",
                           "candidateIds": [
                             "X1",
                             "X2"
                           ],
                           "eventIds": [],
-                          "details": {}
+                          "details": {
+                            "kind": "rest",
+                            "gapMinutes": 60,
+                            "requiredMinutes": 120,
+                            "shifts": [
+                              {
+                                "candidateId": "X1",
+                                "startLocal": "2026-11-16T08:00",
+                                "endLocal": "2026-11-16T12:00"
+                              },
+                              {
+                                "candidateId": "X2",
+                                "startLocal": "2026-11-16T13:00",
+                                "endLocal": "2026-11-16T17:00"
+                              }
+                            ]
+                          }
                         }
                       ],
                       "warnings": []

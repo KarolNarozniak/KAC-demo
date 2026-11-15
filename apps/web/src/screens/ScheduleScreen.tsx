@@ -7,6 +7,7 @@ import TargetProgress from '../components/TargetProgress';
 import { formatNumber } from '../domain/workProfile';
 import { classTimeLabel, conflictMessage, shiftClassConflicts, weekClasses, windowsLabel } from '../domain/scheduleClasses';
 import { useWorkProfile } from '../hooks/useWorkProfile';
+import { hoursLimitLines, hoursLimitStatus } from '../domain/hoursLimit';
 import WorkProfileScreen from './WorkProfileScreen';
 import { approveSchedule, generateSchedule, loadSchedule, listSchedules, loadScheduleById, type ScheduleListItem, NoClassesConfirmationRequired, rejectSchedule, saveSchedule, type ScheduleShift, type ShiftTemplate, type WeeklySchedule, type WorkMode } from '../services/scheduleApi';
 
@@ -38,6 +39,8 @@ export default function ScheduleScreen({ week, setWeek, now, active, onApproved,
   const [error, setError] = useState('');
   const [confirmNoClasses, setConfirmNoClasses] = useState(false);
   const [confirmReject, setConfirmReject] = useState(false);
+  // S23KC2S1P2-301: „Rozumiem” tylko zwija ostrzeżenie – nie omija limitu; zmiana sum unieważnia potwierdzenie.
+  const [limitAcknowledged, setLimitAcknowledged] = useState('');
 
   useEffect(() => {
     if (!active) return;
@@ -154,6 +157,9 @@ export default function ScheduleScreen({ week, setWeek, now, active, onApproved,
     try{setSchedule(await loadScheduleById(id));setHistoryReadOnly(true);setConfirmReject(false);setDirty(false);onPreview(null);}catch(e){setError((e as Error).message);}finally{setLoading(false);}
   }
   const shiftCount = schedule?.shifts.length ?? 0;
+  const limit = schedule && !historyReadOnly && !schedule.isApproved ? hoursLimitStatus(schedule, dirty) : null;
+  const limitLines = limit ? hoursLimitLines(limit) : [];
+  const limitCollapsed = !!limit && limitAcknowledged === limit.acknowledgementKey;
 
   return <ScrollView style={{ flex: 1 }} contentContainerStyle={{ width: '100%', maxWidth: 1120, alignSelf: 'center', padding: 16, paddingBottom: 40 }}>
     <View style={[styles.row, { flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 12 }]}>
@@ -193,8 +199,17 @@ export default function ScheduleScreen({ week, setWeek, now, active, onApproved,
         {!workaholic && schedule.targetMinutes > 0 && <TargetProgress plannedMinutes={schedule.totalMinutes} targetMinutes={schedule.targetMinutes} label="Praca w tym tygodniu względem celu"
           note={profile.saved?.targetPeriod === 'month' ? `cel miesięczny ${formatNumber(profile.saved.targetHours)} h ≈ ${formatNumber(profile.saved.weeklyTargetHours)} h tygodniowo` : undefined} />}
         {!!schedule.optionalLecturesSkipped.length && <Text style={[styles.muted, { marginTop: 12 }]}>Pominięte zajęcia nieobowiązkowe: {schedule.optionalLecturesSkipped.join(', ')}</Text>}
-        {schedule.violations.map((violation, index) => <Text key={`${violation.code}-${index}`} style={[styles.muted, { marginTop: 8, color: violation.severity === 'error' ? palette.red : palette.amber }]}>{violation.message}</Text>)}
+        {schedule.violations.filter((violation) => !limit?.exceeded || !['maximum_hours', 'daily_maximum_hours', 'existing_work_exceeds_maximum'].includes(violation.code)).map((violation, index) => <Text key={`${violation.code}-${index}`} style={[styles.muted, { marginTop: 8, color: violation.severity === 'error' ? palette.red : palette.amber }]}>{violation.message}</Text>)}
       </View>
+
+      {limit?.exceeded && <View accessibilityRole="alert" style={[styles.card, { borderColor: palette.red }]}>
+        <View style={[styles.row, { justifyContent: 'space-between', flexWrap: 'wrap' }]}>
+          <Text style={[styles.heading, { color: palette.red }]}>Przekroczony limit godzin pracy</Text>
+          {limitCollapsed ? <Button title="Pokaż szczegóły" onPress={() => setLimitAcknowledged('')} /> : <Button title="Rozumiem" onPress={() => setLimitAcknowledged(limit.acknowledgementKey)} />}
+        </View>
+        {!limitCollapsed && limitLines.map((line) => <Text key={line} style={[styles.body, { marginTop: 6 }]}>{line}</Text>)}
+        <Text style={[styles.muted, { marginTop: 8 }]}>{limitCollapsed ? 'Ostrzeżenie przeczytane. ' : ''}Grafiku ponad limit nie można zatwierdzić – usuń albo skróć zmiany, a potem kliknij „Sprawdź i zapisz zmiany”. Limit zmienisz w profilu pracy.</Text>
+      </View>}
 
       {/* S23KC2S1P2-40: zajęcia uwzględnione przy planowaniu tego tygodnia (serie rozwinięte na konkretne daty). */}
       <View style={styles.card}>
@@ -235,7 +250,7 @@ export default function ScheduleScreen({ week, setWeek, now, active, onApproved,
         </View>)}
         {dirty && <Button title={saving ? 'Sprawdzanie i zapisywanie…' : 'Sprawdź i zapisz zmiany'} disabled={saving || loading || !schedule.version} onPress={() => void save()} />}
         {!historyReadOnly && !schedule.isApproved && classCollision && <Text accessibilityRole="alert" style={styles.error}>Zmień albo usuń zmiany kolidujące z zajęciami obowiązkowymi – takiego grafiku nie można zatwierdzić.</Text>}
-        {!historyReadOnly && !schedule.isApproved && <Button title={saving ? 'Zatwierdzanie…' : 'Zatwierdź grafik i dodaj do kalendarza'} primary disabled={saving || loading || dirty || profile.dirty || classCollision || !schedule.version} onPress={() => void approve()} />}
+        {!historyReadOnly && !schedule.isApproved && <Button title={saving ? 'Zatwierdzanie…' : 'Zatwierdź grafik i dodaj do kalendarza'} primary disabled={saving || loading || dirty || profile.dirty || classCollision || !!limit?.exceeded || !schedule.version} onPress={() => void approve()} />}
         {!historyReadOnly && !schedule.isApproved && <Button title="Odrzuć propozycję" danger disabled={saving || loading || !schedule.version} onPress={() => setConfirmReject(true)} />}
         {!historyReadOnly && confirmReject && !schedule.isApproved && <View accessibilityRole="alert" style={[styles.card, { borderColor: palette.red }]}>
           <Text style={styles.body}>{dirty ? 'Odrzucić propozycję i utracić niezapisane poprawki?' : 'Odrzucić tę propozycję? Zatwierdzone wcześniej wydarzenia pozostaną w kalendarzu.'}</Text>
