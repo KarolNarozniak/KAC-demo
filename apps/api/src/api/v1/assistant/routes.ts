@@ -17,14 +17,6 @@ const idSchema = { type: 'string', minLength: 1, maxLength: 100 } as const;
 const objectResponse = (description: string, required: string[], properties: Record<string, unknown>, value: Record<string, unknown>) =>
   documented({ type: 'object', additionalProperties: false, required, properties }, description,
     { synthetic: { summary: 'Syntetyczna odpowiedź', description: 'Przykład zgodny z kontraktem; bez rzeczywistych danych użytkownika.', value } });
-const errorResponse = documented({ type: 'object', required: ['error'], additionalProperties: true, properties: {
-  error: { type: 'string' }, message: { type: 'string' }, conflicts: { type: 'array', items: { type: 'object', additionalProperties: true } },
-  collisionToken: { type: 'string' }, statusCode: { type: 'integer' }, code: { type: 'string' },
-  } }, 'Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika.', {
-  unavailable: { summary: 'Usługa niedostępna', value: { error: 'assistant_unavailable' } },
-  contentFiltered: { summary: 'Azure content filter blocked the request', value: { error: 'assistant_content_filtered', message: 'Azure zablokował żądanie filtrem treści.' } },
-  stalePreview: { summary: 'Nieaktualny podgląd', description: 'Przygotuj nową propozycję przed ponownym zatwierdzeniem.', value: { error: 'ai_action_stale_preview', message: 'Wydarzenie zmieniło się od czasu podglądu.' } },
-});
 const statusResponse = (status: 'cancelled' | 'deleted') => objectResponse('Wynik końcowej operacji.', ['status'], { status: { type: 'string', enum: [status] } }, { status });
 const actionResponse = objectResponse('Potwierdzenie zatwierdzonej akcji kalendarza.', ['status', 'eventId'], {
   status: { type: 'string', enum: ['confirmed'] }, actionId: { type: 'string' }, eventId: { type: ['string', 'null'] },
@@ -58,6 +50,15 @@ const storedMessageSchema = { type: 'object', additionalProperties: false, requi
   ] },
 } } as const;
 
+const errorResponse = documented({ type: 'object', required: ['error'], additionalProperties: true, properties: {
+  error: { type: 'string' }, message: { type: 'string' }, conflicts: { type: 'array', items: { type: 'object', additionalProperties: true } },
+  collisionToken: { type: 'string' }, statusCode: { type: 'integer' }, code: { type: 'string' },
+  } }, 'Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika.', {
+  unavailable: { summary: 'Usługa niedostępna', value: { error: 'assistant_unavailable' } },
+  contentFiltered: { summary: 'Azure content filter blocked the request', value: { error: 'assistant_content_filtered', message: 'Azure zablokował żądanie filtrem treści.' } },
+  stalePreview: { summary: 'Nieaktualny podgląd', description: 'Przygotuj nową propozycję przed ponownym zatwierdzeniem.', value: { error: 'ai_action_stale_preview', message: 'Wydarzenie zmieniło się od czasu podglądu.' } },
+});
+const assistantMessageErrorResponse = { ...errorResponse, properties: { ...errorResponse.properties, pendingActions: { type: 'array', items: pendingActionSchema } } };
 const assistantTurnResponse = objectResponse('Odpowiedź asystenta i akcje wymagające potwierdzenia.', ['conversationId', 'message', 'pendingActions', 'usage'], {
       conversationId: idSchema, message: { type: 'object', additionalProperties: false, required: ['role', 'content'], properties: { role: { type: 'string', enum: ['assistant'] }, content: { type: 'string' } } },
       pendingActions: { type: 'array', items: pendingActionSchema }, usage: { type: 'object', additionalProperties: false, required: ['inputTokens', 'outputTokens'], properties: { inputTokens: { type: 'integer', minimum: 0 }, outputTokens: { type: 'integer', minimum: 0 } } },
@@ -67,13 +68,16 @@ const streamEventSchema = documented({ oneOf: [
   { type: 'object', additionalProperties: false, required: ['type', 'text'], properties: { type: { const: 'delta' }, text: { type: 'string' } } },
   { type: 'object', additionalProperties: false, required: ['type'], properties: { type: { const: 'reset' } } },
   { type: 'object', additionalProperties: false, required: ['type', 'result'], properties: { type: { const: 'done' }, result: assistantTurnResponse } },
-  { type: 'object', additionalProperties: false, required: ['type', 'error'], properties: { type: { const: 'error' }, error: { type: 'string' } } },
+  { type: 'object', additionalProperties: false, required: ['type', 'error'], properties: { type: { const: 'error' }, error: { type: 'string' }, pendingActions: { type: 'array', items: pendingActionSchema } } },
 ] }, 'Each newline-delimited JSON record is one event. accepted confirms persisted user input; delta appends text; reset clears provisional text before the next tool round; done contains the persisted final answer and pending previews. error terminates an unsuccessful turn. Only done is a successful result.', {
   delta: { summary: 'Synthetic streamed text fragment', value: { type: 'delta', text: 'Masz dziś ' } },
 });
 
 function messagesToResponseInput(messages: AiMessage[]): ResponseInputItem[] {
   const input: ResponseInputItem[] = [];
+  const callIds = new Set(messages.flatMap((message) => Array.isArray(message.content.toolCalls)
+    ? message.content.toolCalls.map((call: { callId?: string }) => call.callId) : []));
+  const outputIds = new Set(messages.filter((message) => message.role === 'tool').map((message) => message.content.callId));
   for (const message of messages) {
     const content = message.content;
     if (message.role === 'user' && typeof content.text === 'string') {
@@ -83,16 +87,23 @@ function messagesToResponseInput(messages: AiMessage[]): ResponseInputItem[] {
       for (const value of calls) {
         if (!value || typeof value !== 'object') continue;
         const call = value as Record<string, unknown>;
-        if (typeof call.id === 'string' && typeof call.callId === 'string' && typeof call.name === 'string' && typeof call.arguments === 'string') {
+        if (typeof call.id === 'string' && typeof call.callId === 'string' && typeof call.name === 'string' && typeof call.arguments === 'string' && outputIds.has(call.callId)) {
           input.push({ type: 'function_call', id: call.id, call_id: call.callId, name: call.name, arguments: call.arguments });
         }
       }
       if (typeof content.text === 'string' && content.text) input.push({ role: 'assistant', content: content.text });
-    } else if (message.role === 'tool' && typeof content.callId === 'string') {
+    } else if (message.role === 'tool' && typeof content.callId === 'string' && callIds.has(content.callId)) {
       input.push({ type: 'function_call_output', call_id: content.callId, output: JSON.stringify(content.result ?? {}) });
     }
   }
   return input;
+}
+
+function proposalKey(name: string, rawArguments: string): string {
+  try {
+    const args = JSON.parse(rawArguments);
+    return JSON.stringify([name, Object.keys(args).sort().map((key) => [key, args[key]])]);
+  } catch { return `${name}:${rawArguments}`; }
 }
 
 export async function assistantRoutes(app: FastifyInstance, options: Pick<ApiDependencies, 'repository' | 'aiService' | 'aiRepository' | 'scope' | 'workProfileRepository'>) {
@@ -141,13 +152,15 @@ export async function assistantRoutes(app: FastifyInstance, options: Pick<ApiDep
 
   app.post<{ Params: { id: string }; Body: { content: string; preferences?: { addressAs?: string; tone?: 'neutral' | 'friendly' | 'formal' } }; Querystring: { stream?: boolean } }>('/assistant/conversations/:id/messages', { schema: { tags: ['Assistant'], summary: 'Send a message to the assistant', description: 'Runs a bounded Responses turn with the server tool allow-list. Mutations only create pending previews; the user confirms them through a separate endpoint.', operationId: 'sendAssistantMessage', params: conversationParams, querystring: { type: 'object', additionalProperties: false, properties: { stream: { type: 'boolean', default: false, description: 'Stream NDJSON events instead of waiting for the final JSON response.' } } },
     body: withExamples({ type: 'object', required: ['content'], additionalProperties: false, properties: { content: { type: 'string', minLength: 1, maxLength: 6000 }, preferences: { type: 'object', additionalProperties: false, properties: { addressAs: { type: 'string', maxLength: 60, pattern: '^[^\\r\\n\\t]*$' }, tone: { type: 'string', enum: ['neutral', 'friendly', 'formal'] } } } } }, { request: { summary: 'Send a message', description: 'Synthetic example.', value: { content: 'Pokaż mój plan na jutro.' } } }),
-    response: { 200: { description: 'Assistant response as JSON or NDJSON events when stream=true.', content: { 'application/json': { schema: assistantTurnResponse, examples: assistantTurnResponse['x-examples'] }, 'application/x-ndjson': { schema: streamEventSchema, examples: streamEventSchema['x-examples'] } } }, 400: errorResponse, 404: errorResponse, 409: errorResponse, 422: errorResponse, 429: errorResponse, 502: errorResponse, 503: errorResponse, 504: errorResponse },
+    response: { 200: { description: 'Assistant response as JSON or NDJSON events when stream=true.', content: { 'application/json': { schema: assistantTurnResponse, examples: assistantTurnResponse['x-examples'] }, 'application/x-ndjson': { schema: streamEventSchema, examples: streamEventSchema['x-examples'] } } }, 400: assistantMessageErrorResponse, 404: assistantMessageErrorResponse, 409: assistantMessageErrorResponse, 422: assistantMessageErrorResponse, 429: assistantMessageErrorResponse, 502: assistantMessageErrorResponse, 503: assistantMessageErrorResponse, 504: assistantMessageErrorResponse },
   } }, async (request, reply) => {
     const abortController = new AbortController();
     request.raw.once('aborted', () => abortController.abort());
     if (!aiService || !aiRepository || !repository) return reply.code(503).send({ error: 'azure_ai_not_configured' });
     const owner = scope(request);
     let stream: PassThrough | undefined;
+    let inputTokens = 0, outputTokens = 0;
+    const startedAt = Date.now();
     const emit = (event: Record<string, unknown>) => {
       if (stream && !stream.destroyed && !abortController.signal.aborted) stream.write(`${JSON.stringify(event)}\n`);
     };
@@ -166,8 +179,24 @@ export async function assistantRoutes(app: FastifyInstance, options: Pick<ApiDep
         reply.header('Content-Type', 'application/x-ndjson; charset=utf-8').header('Cache-Control', 'no-cache, no-transform').header('X-Accel-Buffering', 'no').send(stream);
         emit({ type: 'accepted', message: userMessage });
       }
-      let history = await aiRepository.listMessages(owner, conversation.id, 24);
+      let history = [...await aiRepository.listMessages(owner, conversation.id, 24)];
       const overview = await repository.getOverview(owner.userId, owner.calendarId);
+      const prepared = new Map<string, Record<string, unknown>>();
+      const existingActions = await aiRepository.listPendingActions(owner, conversation.id);
+      for (const action of existingActions) {
+        const operation = action.kind === 'calendar_event_create' ? 'create' : action.kind === 'calendar_event_update' ? 'update' : action.kind === 'calendar_event_delete' ? 'delete' : null;
+        if (!operation) continue;
+        if (operation !== 'create') {
+          const current = overview?.events.find((event) => event.id === action.payload.id);
+          const original = action.payload.original as Record<string, unknown> | undefined;
+          if (!current || !original || ['title', 'start', 'end', 'category'].some((key) => original[key] !== current[key as 'title' | 'start' | 'end' | 'category']) ||
+            original.location !== (current.location ?? '') || original.mandatory !== (current.mandatory ?? false) || original.repeatWeekly !== (current.repeatWeekly ?? false) ||
+            (typeof original.eventVersion === 'number' && original.eventVersion !== current.eventVersion)) continue;
+        }
+        const name = `calendar_prepare_event_${operation}`;
+        const args = { ...(action.kind !== 'calendar_event_create' ? { id: action.payload.id } : {}), ...(action.payload.event as Record<string, unknown> ?? {}) };
+        prepared.set(proposalKey(name, JSON.stringify(args)), { status: 'awaiting_user_confirmation', actionId: action.id, expiresAt: action.expiresAt, preview: action.payload });
+      }
       const preferences = request.body.preferences;
       const tones = { neutral: 'neutralny i rzeczowy', friendly: 'swobodny i przyjazny', formal: 'formalny i uprzejmy' };
       const personalization = preferences
@@ -175,35 +204,39 @@ export async function assistantRoutes(app: FastifyInstance, options: Pick<ApiDep
         : '';
       const timeContext = `${trustedTimeContext(new Date(), overview?.user.timezone || 'Europe/Warsaw')}\n${personalization}`;
       if (abortController.signal.aborted) return;
-      const startedAt = Date.now();
       let response = await aiService.sendAssistantMessage(messagesToResponseInput(history), assistantTools, timeContext, abortController.signal, onTextDelta);
-      let inputTokens = response.usage?.input_tokens ?? 0;
-      let outputTokens = response.usage?.output_tokens ?? 0;
-      let toolRounds = 0;
+      inputTokens = response.usage?.input_tokens ?? 0;
+      outputTokens = response.usage?.output_tokens ?? 0;
+      let toolRounds = 0, toolCallsCount = 0;
       while (toolRounds < config.azureAi.maxToolRounds) {
         if (abortController.signal.aborted) return;
         const calls = response.output.filter((item): item is ResponseFunctionToolCall => item.type === 'function_call');
         if (!calls.length) break;
+        if (toolCallsCount + calls.length > 64) throw new AiIncompleteResponseError('tool_call_limit');
+        toolCallsCount += calls.length;
         toolRounds++;
         const toolCalls = calls.map((call) => ({ id: call.id, callId: call.call_id, name: call.name, arguments: call.arguments }));
-        await aiRepository.appendMessage(owner, conversation.id, 'assistant', { toolCalls }, config.azureAi.conversationRetentionDays);
+        history.push(await aiRepository.appendMessage(owner, conversation.id, 'assistant', { toolCalls }, config.azureAi.conversationRetentionDays));
         for (const call of calls) {
           let result: Record<string, unknown>;
           if (abortController.signal.aborted) result = { error: 'request_cancelled' };
           else {
-            result = await executeAssistantTool(call.name, call.arguments, {
+            const key = proposalKey(call.name, call.arguments);
+            const previous = prepared.get(key);
+            const cached = previous && Date.parse(String(previous.expiresAt)) > Date.now() ? previous : undefined;
+            result = cached ?? await executeAssistantTool(call.name, call.arguments, {
               scope: owner, conversationId: conversation.id, calendar: repository,
               workProfile: options.workProfileRepository, ai: aiRepository, actionTtlMinutes: config.azureAi.pendingActionTtlMinutes,
             });
+            if (result.status === 'awaiting_user_confirmation') prepared.set(key, result);
             if (abortController.signal.aborted) {
-              if (result.status === 'awaiting_user_confirmation' && typeof result.actionId === 'string')
+              if (!cached && result.status === 'awaiting_user_confirmation' && typeof result.actionId === 'string')
                 await aiRepository.cancelAction(owner, result.actionId).catch(() => false);
               result = { error: 'request_cancelled' };
             }
           }
-          await aiRepository.appendMessage(owner, conversation.id, 'tool', { name: call.name, callId: call.call_id, result }, config.azureAi.conversationRetentionDays);
+          history.push(await aiRepository.appendMessage(owner, conversation.id, 'tool', { name: call.name, callId: call.call_id, result }, config.azureAi.conversationRetentionDays));
         }
-        history = await aiRepository.listMessages(owner, conversation.id, 24);
         if (abortController.signal.aborted) return;
         emit({ type: 'reset' });
         response = await aiService.sendAssistantMessage(messagesToResponseInput(history), assistantTools, timeContext, abortController.signal, onTextDelta);
@@ -229,10 +262,13 @@ export async function assistantRoutes(app: FastifyInstance, options: Pick<ApiDep
       const failure = classifyAiProviderFailure(error);
       const filtered = error instanceof AiContentFilterError || isAiContentFilterFailure(error);
       const refused = error instanceof AiModelRefusalError;
-      const errorCode = filtered ? 'assistant_content_filtered' : refused ? 'assistant_refused' : error instanceof AiIncompleteResponseError ? 'assistant_incomplete_response' : failure.code === 'rate_limited' ? 'assistant_rate_limited' : failure.code === 'timed_out' ? 'assistant_timeout' : 'assistant_unavailable';
-      await aiRepository.logUsage(owner, 'assistant_chat', config.azureAi.modelDeployment, 0, 0, 0, 'error', errorCode).catch(() => undefined);
-      if (stream) { emit({ type: 'error', error: errorCode }); stream.end(); return reply; }
-      return reply.code(filtered || refused ? 422 : error instanceof AiIncompleteResponseError ? 502 : failure.status).send({ error: errorCode });
+      const toolLimit = error instanceof AiIncompleteResponseError && ['tool_round_limit', 'tool_call_limit'].includes(error.reason);
+      const errorCode = toolLimit ? 'assistant_tool_limit' : filtered ? 'assistant_content_filtered' : refused ? 'assistant_refused' : error instanceof AiIncompleteResponseError ? 'assistant_incomplete_response' : failure.code === 'rate_limited' ? 'assistant_rate_limited' : failure.code === 'timed_out' ? 'assistant_timeout' : 'assistant_unavailable';
+      await aiRepository.logUsage(owner, 'assistant_chat', config.azureAi.modelDeployment, inputTokens, outputTokens, Date.now() - startedAt, 'error', errorCode).catch(() => undefined);
+      const pendingActions = await aiRepository.listPendingActions(owner, request.params.id).catch(() => undefined);
+      const failureBody = { error: errorCode, ...(pendingActions ? { pendingActions } : {}) };
+      if (stream) { emit({ type: 'error', ...failureBody }); stream.end(); return reply; }
+      return reply.code(toolLimit ? 409 : filtered || refused ? 422 : error instanceof AiIncompleteResponseError ? 502 : failure.status).send(failureBody);
     }
   });
 

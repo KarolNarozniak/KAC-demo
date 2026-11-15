@@ -150,6 +150,7 @@ test('assistant Responses puts trusted time context in instructions, not persist
   const abortController = new AbortController();
   await service.sendAssistantMessage([{ role: 'user', content: 'What time is it?' }], [], 'trusted server time context', abortController.signal);
   assert.equal(captured?.store, false);
+  assert.equal(captured?.parallel_tool_calls, true);
   assert.match(String(captured?.instructions), /trusted server time context/);
   assert.deepEqual((captured?.input as unknown[])[0], { role: 'user', content: 'What time is it?' });
   assert.equal(requestSignal, abortController.signal);

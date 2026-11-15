@@ -11,11 +11,13 @@ export class AssistantApiError extends Error {
   code: string;
   conflicts: AssistantCollision[];
   collisionToken?: string;
-  constructor(code: string, conflicts: AssistantCollision[] = [], collisionToken?: string) {
+  pendingActions?: PendingAssistantAction[];
+  constructor(code: string, conflicts: AssistantCollision[] = [], collisionToken?: string, pendingActions?: PendingAssistantAction[]) {
     super(aiErrorText[code] ?? 'Nie udało się wykonać operacji asystenta. Spróbuj ponownie.');
     this.code = code;
     this.conflicts = conflicts;
     this.collisionToken = collisionToken;
+    this.pendingActions = pendingActions;
   }
 }
 
@@ -27,7 +29,7 @@ async function call<T>(path: string, method = 'GET', body?: unknown): Promise<T>
     signal: AbortSignal.timeout(120_000),
   });
   const result = await response.json().catch(() => ({}));
-  if (!response.ok) throw new AssistantApiError(result.error ?? `http_${response.status}`, result.conflicts, result.collisionToken);
+  if (!response.ok) throw new AssistantApiError(result.error ?? `http_${response.status}`, result.conflicts, result.collisionToken, result.pendingActions);
   return result as T;
 }
 
@@ -48,6 +50,7 @@ const aiErrorText: Record<string, string> = {
   assistant_incomplete_response: 'Model nie dokończył odpowiedzi. Spróbuj ponownie za chwilę.',
   assistant_content_filtered: 'Azure zablokował tę wiadomość filtrem treści. Kalendarz nie został zmieniony.',
   assistant_refused: 'Model odmówił realizacji prośby. Kalendarz nie został zmieniony.',
+  assistant_tool_limit: 'Osiągnięto limit przygotowywania propozycji. Gotowe propozycje są poniżej; kalendarz nie został zmieniony. Poproś o przygotowanie pozostałych.',
   assistant_stream_interrupted: 'Połączenie zostało przerwane przed zakończeniem odpowiedzi. Otwórz ponownie rozmowę, aby sprawdzić jej zapisany stan.',
 };
 
@@ -67,7 +70,7 @@ export type AssistantStreamEvent =
   | { type: 'delta'; text: string }
   | { type: 'reset' }
   | { type: 'done'; result: AssistantTurnResult }
-  | { type: 'error'; error: string };
+  | { type: 'error'; error: string; pendingActions?: PendingAssistantAction[] };
 
 export async function streamAssistantMessage(id: string, content: string, onEvent: (event: AssistantStreamEvent) => void, signal?: AbortSignal): Promise<AssistantTurnResult> {
   const timeout = AbortSignal.timeout(120_000);
@@ -77,7 +80,7 @@ export async function streamAssistantMessage(id: string, content: string, onEven
   });
   if (!response.ok) {
     const result = await response.json().catch(() => ({}));
-    throw new AssistantApiError(result.error ?? `http_${response.status}`);
+    throw new AssistantApiError(result.error ?? `http_${response.status}`, [], undefined, result.pendingActions);
   }
   let result: AssistantTurnResult | undefined;
   let buffer = '';
@@ -88,7 +91,7 @@ export async function streamAssistantMessage(id: string, content: string, onEven
       const line = buffer.slice(0, end).trim(); buffer = buffer.slice(end + 1);
       if (!line) continue;
       const event = JSON.parse(line) as AssistantStreamEvent;
-      if (event.type === 'error') throw new AssistantApiError(event.error);
+      if (event.type === 'error') throw new AssistantApiError(event.error, [], undefined, event.pendingActions);
       if (event.type === 'done') result = event.result;
       onEvent(event);
     }

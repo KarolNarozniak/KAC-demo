@@ -78,3 +78,16 @@ test('chat preserves a content filter error as a Polish rejection message rather
     });
   } finally { restore(); }
 });
+
+test('tool limit errors preserve pending previews for display and confirmation', async () => {
+  const action = { id: 'prepared', kind: 'calendar_event_create', payload: {}, expiresAt: '2035-01-01T00:00:00Z' };
+  const restore = streamingFetch((controller) => {
+    controller.enqueue(new TextEncoder().encode(`${JSON.stringify({ type: 'error', error: 'assistant_tool_limit', pendingActions: [action] })}\n`)); controller.close();
+  });
+  try {
+    await assert.rejects(streamAssistantMessage('test', 'Przygotuj propozycje', () => {}), (error: unknown) => {
+      assert.ok(error instanceof AssistantApiError); assert.equal(error.code, 'assistant_tool_limit');
+      assert.deepEqual(error.pendingActions, [action]); assert.match(error.message, /Gotowe propozycje są poniżej/); return true;
+    });
+  } finally { restore(); }
+});

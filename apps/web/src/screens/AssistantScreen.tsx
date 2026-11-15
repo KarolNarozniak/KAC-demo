@@ -93,6 +93,7 @@ export default function AssistantScreen({ active, onCalendarChange }: Props) {
       setConversations((current) => current.map((item) => item.id === targetConversationId ? { ...item, updatedAt: new Date().toISOString() } : item));
     } catch (reason) {
       if (!controller.signal.aborted) {
+        if (reason instanceof AssistantApiError && reason.pendingActions) setPendingActions(reason.pendingActions);
         if (reason instanceof AssistantApiError && ['assistant_content_filtered', 'assistant_refused'].includes(reason.code)) setStreamText('');
         setMessages((current) => current.map((message) => message.id === localId ? { ...message, content: { ...message.content, delivery: 'unconfirmed' } } : message));
         setError(reason instanceof AssistantApiError ? reason.message : 'Połączenie zostało przerwane. Otwórz ponownie rozmowę, aby sprawdzić zapisane wiadomości.');

@@ -36,3 +36,11 @@ Implementowany jako pierwszy: 252. Pozostałe wysokie priorytety (254 i 256) wym
 Dla zgłoszenia z 15:41 odtworzono samo wywołanie modelu bez wykonania narzędzi ani zmian kalendarza. Azure zwrócił `status=incomplete`, `reason=content_filter`, blokadę wejścia w kategorii `violence` z poziomem `high`, brak wywołań narzędzi i zerowe użycie tokenów. Błędna klasyfikacja dostawcy została wcześniej pokazana jako ogólna niepełna odpowiedź.
 
 Backend rozróżnia teraz `assistant_content_filtered`, `assistant_refused` i rzeczywiście niepełną odpowiedź. Interfejs usuwa wstępny tekst odmowy i wyświetla polski komunikat o blokadzie. Nie wyłączano ani nie zmieniano polityk Azure. Sama błędna klasyfikacja wymaga weryfikacji po stronie dostawcy; zmiana aplikacji poprawia obsługę i diagnostykę, nie deklaruje usunięcia zewnętrznej przyczyny blokady.
+
+## Diagnostyka limitu wywołań narzędzi
+
+Zgłoszenie z 15:54 dotyczyło czterech aktualizacji i jednego dodania wydarzenia. Zapisano trzy poprawne wywołania `calendar_prepare_event_update` i trzy podglądy, po czym stary limit trzech rund zatrzymał turę. Interfejs pokazywał ogólny błąd bez przygotowanych podglądów.
+
+Włączono wiele wywołań w jednej odpowiedzi, domyślny limit ośmiu rund (maksymalnie 16) i niezależny limit 64 wywołań na turę. Bieżący kontekst nie jest przycinany do 24 wiadomości po każdej rundzie. Błędy zwracają dostępne podglądy, a identyczne, niewygasłe propozycje są ponownie używane przy kontynuacji rozmowy.
+
+Weryfikacja tej poprawki: 36 testów web i 169 API, sprawdzanie typów, OpenAPI, dokumentacja PL/EN oraz pełny build zaliczone. Regresje obejmują pięć propozycji przygotowywanych pojedynczo i zbiorczo, odzyskanie podglądów po limicie, ponowienie bez duplikowania aktualnych propozycji, nieaktualny snapshot oraz turę przekraczającą 24 zapisane wiadomości.

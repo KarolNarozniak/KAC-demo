@@ -132,3 +132,9 @@ Przy regeneracji karty Dziś powstaje świeża, ukryta rozmowa techniczna. Nie o
 `assistant_content_filtered` oznacza, że Azure zablokował wejście lub odpowiedź filtrem treści; `assistant_refused` oznacza jawną odmowę modelu. Oba przypadki zwracają 422 w trybie JSON albo zdarzenie `error` po rozpoczęciu streamingu. Interfejs usuwa wstępny tekst odmowy i pokazuje polski komunikat; nie oznacza go jako przerwanej transmisji. Kalendarz pozostaje bez zmian.
 
 Bezpieczna diagnostyka zapisuje kod dostawcy i nazwy kategorii filtrów, bez treści promptu. Błędna klasyfikacja dozwolonej prośby przez Azure wymaga weryfikacji przypisanej polityki w Foundry lub zgłoszenia dostawcy. Aplikacja nie wyłącza filtrów ani nie przepisuje automatycznie wiadomości w celu uniknięcia blokady.
+
+### Wiele propozycji w jednej turze
+
+Model może zwrócić wiele wywołań narzędzi w jednej odpowiedzi (`parallel_tool_calls: true`); backend wykonuje i waliduje je kolejno. Domyślny `AZURE_AI_MAX_TOOL_ROUNDS` wynosi 8 (konfigurowalny do 16), a tura ma dodatkowy limit 64 wywołań. Bieżąca tura zachowuje pełne pary wywołań i wyników, niezależnie od 24-wiadomościowego okna wcześniejszej historii.
+
+Wyczerpanie limitu zwraca `assistant_tool_limit` (409 lub zdarzenie `error`). Odpowiedź błędu może zawierać `pendingActions`; interfejs pokazuje już przygotowane podglądy do zatwierdzenia lub odrzucenia. Ponowne przygotowanie identycznej akcji w tej samej rozmowie wykorzystuje istniejący, niewygasły podgląd. Limity i błędy nie zatwierdzają żadnych zmian w kalendarzu.

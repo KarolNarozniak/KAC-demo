@@ -13212,6 +13212,264 @@
                         },
                         "error": {
                           "type": "string"
+                        },
+                        "pendingActions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "id",
+                              "conversationId",
+                              "kind",
+                              "payload",
+                              "status",
+                              "expiresAt"
+                            ],
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 100
+                              },
+                              "conversationId": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 100
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "calendar_event_create",
+                                  "calendar_event_update",
+                                  "calendar_event_delete"
+                                ]
+                              },
+                              "payload": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "event"
+                                    ],
+                                    "properties": {
+                                      "event": {
+                                        "type": "object",
+                                        "additionalProperties": false,
+                                        "required": [
+                                          "title",
+                                          "start",
+                                          "end",
+                                          "category",
+                                          "location",
+                                          "mandatory",
+                                          "repeatWeekly"
+                                        ],
+                                        "properties": {
+                                          "title": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "maxLength": 200
+                                          },
+                                          "start": {
+                                            "type": "string",
+                                            "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                          },
+                                          "end": {
+                                            "type": "string",
+                                            "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                          },
+                                          "category": {
+                                            "type": "string",
+                                            "enum": [
+                                              "Class",
+                                              "Work",
+                                              "Personal"
+                                            ]
+                                          },
+                                          "location": {
+                                            "type": "string"
+                                          },
+                                          "mandatory": {
+                                            "type": "boolean"
+                                          },
+                                          "repeatWeekly": {
+                                            "type": "boolean"
+                                          }
+                                        }
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "id",
+                                      "original",
+                                      "event"
+                                    ],
+                                    "properties": {
+                                      "id": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 100
+                                      },
+                                      "original": {
+                                        "type": "object",
+                                        "additionalProperties": false,
+                                        "required": [
+                                          "title",
+                                          "start",
+                                          "end",
+                                          "category"
+                                        ],
+                                        "properties": {
+                                          "title": {
+                                            "type": "string"
+                                          },
+                                          "start": {
+                                            "type": "string"
+                                          },
+                                          "end": {
+                                            "type": "string"
+                                          },
+                                          "category": {
+                                            "type": "string"
+                                          },
+                                          "location": {
+                                            "type": "string"
+                                          },
+                                          "mandatory": {
+                                            "type": "boolean"
+                                          },
+                                          "repeatWeekly": {
+                                            "type": "boolean"
+                                          },
+                                          "eventVersion": {
+                                            "type": "integer",
+                                            "minimum": 1
+                                          }
+                                        }
+                                      },
+                                      "event": {
+                                        "type": "object",
+                                        "additionalProperties": false,
+                                        "required": [
+                                          "title",
+                                          "start",
+                                          "end",
+                                          "category",
+                                          "location",
+                                          "mandatory",
+                                          "repeatWeekly"
+                                        ],
+                                        "properties": {
+                                          "title": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "maxLength": 200
+                                          },
+                                          "start": {
+                                            "type": "string",
+                                            "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                          },
+                                          "end": {
+                                            "type": "string",
+                                            "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                          },
+                                          "category": {
+                                            "type": "string",
+                                            "enum": [
+                                              "Class",
+                                              "Work",
+                                              "Personal"
+                                            ]
+                                          },
+                                          "location": {
+                                            "type": "string"
+                                          },
+                                          "mandatory": {
+                                            "type": "boolean"
+                                          },
+                                          "repeatWeekly": {
+                                            "type": "boolean"
+                                          }
+                                        }
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "id",
+                                      "original"
+                                    ],
+                                    "properties": {
+                                      "id": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 100
+                                      },
+                                      "original": {
+                                        "type": "object",
+                                        "additionalProperties": false,
+                                        "required": [
+                                          "title",
+                                          "start",
+                                          "end",
+                                          "category"
+                                        ],
+                                        "properties": {
+                                          "title": {
+                                            "type": "string"
+                                          },
+                                          "start": {
+                                            "type": "string"
+                                          },
+                                          "end": {
+                                            "type": "string"
+                                          },
+                                          "category": {
+                                            "type": "string"
+                                          },
+                                          "location": {
+                                            "type": "string"
+                                          },
+                                          "mandatory": {
+                                            "type": "boolean"
+                                          },
+                                          "repeatWeekly": {
+                                            "type": "boolean"
+                                          },
+                                          "eventVersion": {
+                                            "type": "integer",
+                                            "minimum": 1
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                ]
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "pending"
+                                ]
+                              },
+                              "expiresAt": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "eventId": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 100
+                              }
+                            }
+                          }
                         }
                       }
                     }
@@ -13271,6 +13529,264 @@
                     },
                     "code": {
                       "type": "string"
+                    },
+                    "pendingActions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "conversationId",
+                          "kind",
+                          "payload",
+                          "status",
+                          "expiresAt"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          },
+                          "conversationId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "calendar_event_create",
+                              "calendar_event_update",
+                              "calendar_event_delete"
+                            ]
+                          },
+                          "payload": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "event"
+                                ],
+                                "properties": {
+                                  "event": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "title",
+                                      "start",
+                                      "end",
+                                      "category",
+                                      "location",
+                                      "mandatory",
+                                      "repeatWeekly"
+                                    ],
+                                    "properties": {
+                                      "title": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 200
+                                      },
+                                      "start": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                      },
+                                      "end": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                      },
+                                      "category": {
+                                        "type": "string",
+                                        "enum": [
+                                          "Class",
+                                          "Work",
+                                          "Personal"
+                                        ]
+                                      },
+                                      "location": {
+                                        "type": "string"
+                                      },
+                                      "mandatory": {
+                                        "type": "boolean"
+                                      },
+                                      "repeatWeekly": {
+                                        "type": "boolean"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "id",
+                                  "original",
+                                  "event"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 100
+                                  },
+                                  "original": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "title",
+                                      "start",
+                                      "end",
+                                      "category"
+                                    ],
+                                    "properties": {
+                                      "title": {
+                                        "type": "string"
+                                      },
+                                      "start": {
+                                        "type": "string"
+                                      },
+                                      "end": {
+                                        "type": "string"
+                                      },
+                                      "category": {
+                                        "type": "string"
+                                      },
+                                      "location": {
+                                        "type": "string"
+                                      },
+                                      "mandatory": {
+                                        "type": "boolean"
+                                      },
+                                      "repeatWeekly": {
+                                        "type": "boolean"
+                                      },
+                                      "eventVersion": {
+                                        "type": "integer",
+                                        "minimum": 1
+                                      }
+                                    }
+                                  },
+                                  "event": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "title",
+                                      "start",
+                                      "end",
+                                      "category",
+                                      "location",
+                                      "mandatory",
+                                      "repeatWeekly"
+                                    ],
+                                    "properties": {
+                                      "title": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 200
+                                      },
+                                      "start": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                      },
+                                      "end": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                      },
+                                      "category": {
+                                        "type": "string",
+                                        "enum": [
+                                          "Class",
+                                          "Work",
+                                          "Personal"
+                                        ]
+                                      },
+                                      "location": {
+                                        "type": "string"
+                                      },
+                                      "mandatory": {
+                                        "type": "boolean"
+                                      },
+                                      "repeatWeekly": {
+                                        "type": "boolean"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "id",
+                                  "original"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 100
+                                  },
+                                  "original": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "title",
+                                      "start",
+                                      "end",
+                                      "category"
+                                    ],
+                                    "properties": {
+                                      "title": {
+                                        "type": "string"
+                                      },
+                                      "start": {
+                                        "type": "string"
+                                      },
+                                      "end": {
+                                        "type": "string"
+                                      },
+                                      "category": {
+                                        "type": "string"
+                                      },
+                                      "location": {
+                                        "type": "string"
+                                      },
+                                      "mandatory": {
+                                        "type": "boolean"
+                                      },
+                                      "repeatWeekly": {
+                                        "type": "boolean"
+                                      },
+                                      "eventVersion": {
+                                        "type": "integer",
+                                        "minimum": 1
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending"
+                            ]
+                          },
+                          "expiresAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "eventId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          }
+                        }
+                      }
                     }
                   },
                   "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika."
@@ -13333,6 +13849,264 @@
                     },
                     "code": {
                       "type": "string"
+                    },
+                    "pendingActions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "conversationId",
+                          "kind",
+                          "payload",
+                          "status",
+                          "expiresAt"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          },
+                          "conversationId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "calendar_event_create",
+                              "calendar_event_update",
+                              "calendar_event_delete"
+                            ]
+                          },
+                          "payload": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "event"
+                                ],
+                                "properties": {
+                                  "event": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "title",
+                                      "start",
+                                      "end",
+                                      "category",
+                                      "location",
+                                      "mandatory",
+                                      "repeatWeekly"
+                                    ],
+                                    "properties": {
+                                      "title": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 200
+                                      },
+                                      "start": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                      },
+                                      "end": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                      },
+                                      "category": {
+                                        "type": "string",
+                                        "enum": [
+                                          "Class",
+                                          "Work",
+                                          "Personal"
+                                        ]
+                                      },
+                                      "location": {
+                                        "type": "string"
+                                      },
+                                      "mandatory": {
+                                        "type": "boolean"
+                                      },
+                                      "repeatWeekly": {
+                                        "type": "boolean"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "id",
+                                  "original",
+                                  "event"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 100
+                                  },
+                                  "original": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "title",
+                                      "start",
+                                      "end",
+                                      "category"
+                                    ],
+                                    "properties": {
+                                      "title": {
+                                        "type": "string"
+                                      },
+                                      "start": {
+                                        "type": "string"
+                                      },
+                                      "end": {
+                                        "type": "string"
+                                      },
+                                      "category": {
+                                        "type": "string"
+                                      },
+                                      "location": {
+                                        "type": "string"
+                                      },
+                                      "mandatory": {
+                                        "type": "boolean"
+                                      },
+                                      "repeatWeekly": {
+                                        "type": "boolean"
+                                      },
+                                      "eventVersion": {
+                                        "type": "integer",
+                                        "minimum": 1
+                                      }
+                                    }
+                                  },
+                                  "event": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "title",
+                                      "start",
+                                      "end",
+                                      "category",
+                                      "location",
+                                      "mandatory",
+                                      "repeatWeekly"
+                                    ],
+                                    "properties": {
+                                      "title": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 200
+                                      },
+                                      "start": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                      },
+                                      "end": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                      },
+                                      "category": {
+                                        "type": "string",
+                                        "enum": [
+                                          "Class",
+                                          "Work",
+                                          "Personal"
+                                        ]
+                                      },
+                                      "location": {
+                                        "type": "string"
+                                      },
+                                      "mandatory": {
+                                        "type": "boolean"
+                                      },
+                                      "repeatWeekly": {
+                                        "type": "boolean"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "id",
+                                  "original"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 100
+                                  },
+                                  "original": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "title",
+                                      "start",
+                                      "end",
+                                      "category"
+                                    ],
+                                    "properties": {
+                                      "title": {
+                                        "type": "string"
+                                      },
+                                      "start": {
+                                        "type": "string"
+                                      },
+                                      "end": {
+                                        "type": "string"
+                                      },
+                                      "category": {
+                                        "type": "string"
+                                      },
+                                      "location": {
+                                        "type": "string"
+                                      },
+                                      "mandatory": {
+                                        "type": "boolean"
+                                      },
+                                      "repeatWeekly": {
+                                        "type": "boolean"
+                                      },
+                                      "eventVersion": {
+                                        "type": "integer",
+                                        "minimum": 1
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending"
+                            ]
+                          },
+                          "expiresAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "eventId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          }
+                        }
+                      }
                     }
                   },
                   "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika."
@@ -13395,6 +14169,264 @@
                     },
                     "code": {
                       "type": "string"
+                    },
+                    "pendingActions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "conversationId",
+                          "kind",
+                          "payload",
+                          "status",
+                          "expiresAt"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          },
+                          "conversationId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "calendar_event_create",
+                              "calendar_event_update",
+                              "calendar_event_delete"
+                            ]
+                          },
+                          "payload": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "event"
+                                ],
+                                "properties": {
+                                  "event": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "title",
+                                      "start",
+                                      "end",
+                                      "category",
+                                      "location",
+                                      "mandatory",
+                                      "repeatWeekly"
+                                    ],
+                                    "properties": {
+                                      "title": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 200
+                                      },
+                                      "start": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                      },
+                                      "end": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                      },
+                                      "category": {
+                                        "type": "string",
+                                        "enum": [
+                                          "Class",
+                                          "Work",
+                                          "Personal"
+                                        ]
+                                      },
+                                      "location": {
+                                        "type": "string"
+                                      },
+                                      "mandatory": {
+                                        "type": "boolean"
+                                      },
+                                      "repeatWeekly": {
+                                        "type": "boolean"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "id",
+                                  "original",
+                                  "event"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 100
+                                  },
+                                  "original": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "title",
+                                      "start",
+                                      "end",
+                                      "category"
+                                    ],
+                                    "properties": {
+                                      "title": {
+                                        "type": "string"
+                                      },
+                                      "start": {
+                                        "type": "string"
+                                      },
+                                      "end": {
+                                        "type": "string"
+                                      },
+                                      "category": {
+                                        "type": "string"
+                                      },
+                                      "location": {
+                                        "type": "string"
+                                      },
+                                      "mandatory": {
+                                        "type": "boolean"
+                                      },
+                                      "repeatWeekly": {
+                                        "type": "boolean"
+                                      },
+                                      "eventVersion": {
+                                        "type": "integer",
+                                        "minimum": 1
+                                      }
+                                    }
+                                  },
+                                  "event": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "title",
+                                      "start",
+                                      "end",
+                                      "category",
+                                      "location",
+                                      "mandatory",
+                                      "repeatWeekly"
+                                    ],
+                                    "properties": {
+                                      "title": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 200
+                                      },
+                                      "start": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                      },
+                                      "end": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                      },
+                                      "category": {
+                                        "type": "string",
+                                        "enum": [
+                                          "Class",
+                                          "Work",
+                                          "Personal"
+                                        ]
+                                      },
+                                      "location": {
+                                        "type": "string"
+                                      },
+                                      "mandatory": {
+                                        "type": "boolean"
+                                      },
+                                      "repeatWeekly": {
+                                        "type": "boolean"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "id",
+                                  "original"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 100
+                                  },
+                                  "original": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "title",
+                                      "start",
+                                      "end",
+                                      "category"
+                                    ],
+                                    "properties": {
+                                      "title": {
+                                        "type": "string"
+                                      },
+                                      "start": {
+                                        "type": "string"
+                                      },
+                                      "end": {
+                                        "type": "string"
+                                      },
+                                      "category": {
+                                        "type": "string"
+                                      },
+                                      "location": {
+                                        "type": "string"
+                                      },
+                                      "mandatory": {
+                                        "type": "boolean"
+                                      },
+                                      "repeatWeekly": {
+                                        "type": "boolean"
+                                      },
+                                      "eventVersion": {
+                                        "type": "integer",
+                                        "minimum": 1
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending"
+                            ]
+                          },
+                          "expiresAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "eventId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          }
+                        }
+                      }
                     }
                   },
                   "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika."
@@ -13457,6 +14489,264 @@
                     },
                     "code": {
                       "type": "string"
+                    },
+                    "pendingActions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "conversationId",
+                          "kind",
+                          "payload",
+                          "status",
+                          "expiresAt"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          },
+                          "conversationId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "calendar_event_create",
+                              "calendar_event_update",
+                              "calendar_event_delete"
+                            ]
+                          },
+                          "payload": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "event"
+                                ],
+                                "properties": {
+                                  "event": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "title",
+                                      "start",
+                                      "end",
+                                      "category",
+                                      "location",
+                                      "mandatory",
+                                      "repeatWeekly"
+                                    ],
+                                    "properties": {
+                                      "title": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 200
+                                      },
+                                      "start": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                      },
+                                      "end": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                      },
+                                      "category": {
+                                        "type": "string",
+                                        "enum": [
+                                          "Class",
+                                          "Work",
+                                          "Personal"
+                                        ]
+                                      },
+                                      "location": {
+                                        "type": "string"
+                                      },
+                                      "mandatory": {
+                                        "type": "boolean"
+                                      },
+                                      "repeatWeekly": {
+                                        "type": "boolean"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "id",
+                                  "original",
+                                  "event"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 100
+                                  },
+                                  "original": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "title",
+                                      "start",
+                                      "end",
+                                      "category"
+                                    ],
+                                    "properties": {
+                                      "title": {
+                                        "type": "string"
+                                      },
+                                      "start": {
+                                        "type": "string"
+                                      },
+                                      "end": {
+                                        "type": "string"
+                                      },
+                                      "category": {
+                                        "type": "string"
+                                      },
+                                      "location": {
+                                        "type": "string"
+                                      },
+                                      "mandatory": {
+                                        "type": "boolean"
+                                      },
+                                      "repeatWeekly": {
+                                        "type": "boolean"
+                                      },
+                                      "eventVersion": {
+                                        "type": "integer",
+                                        "minimum": 1
+                                      }
+                                    }
+                                  },
+                                  "event": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "title",
+                                      "start",
+                                      "end",
+                                      "category",
+                                      "location",
+                                      "mandatory",
+                                      "repeatWeekly"
+                                    ],
+                                    "properties": {
+                                      "title": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 200
+                                      },
+                                      "start": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                      },
+                                      "end": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                      },
+                                      "category": {
+                                        "type": "string",
+                                        "enum": [
+                                          "Class",
+                                          "Work",
+                                          "Personal"
+                                        ]
+                                      },
+                                      "location": {
+                                        "type": "string"
+                                      },
+                                      "mandatory": {
+                                        "type": "boolean"
+                                      },
+                                      "repeatWeekly": {
+                                        "type": "boolean"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "id",
+                                  "original"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 100
+                                  },
+                                  "original": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "title",
+                                      "start",
+                                      "end",
+                                      "category"
+                                    ],
+                                    "properties": {
+                                      "title": {
+                                        "type": "string"
+                                      },
+                                      "start": {
+                                        "type": "string"
+                                      },
+                                      "end": {
+                                        "type": "string"
+                                      },
+                                      "category": {
+                                        "type": "string"
+                                      },
+                                      "location": {
+                                        "type": "string"
+                                      },
+                                      "mandatory": {
+                                        "type": "boolean"
+                                      },
+                                      "repeatWeekly": {
+                                        "type": "boolean"
+                                      },
+                                      "eventVersion": {
+                                        "type": "integer",
+                                        "minimum": 1
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending"
+                            ]
+                          },
+                          "expiresAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "eventId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          }
+                        }
+                      }
                     }
                   },
                   "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika."
@@ -13519,6 +14809,264 @@
                     },
                     "code": {
                       "type": "string"
+                    },
+                    "pendingActions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "conversationId",
+                          "kind",
+                          "payload",
+                          "status",
+                          "expiresAt"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          },
+                          "conversationId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "calendar_event_create",
+                              "calendar_event_update",
+                              "calendar_event_delete"
+                            ]
+                          },
+                          "payload": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "event"
+                                ],
+                                "properties": {
+                                  "event": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "title",
+                                      "start",
+                                      "end",
+                                      "category",
+                                      "location",
+                                      "mandatory",
+                                      "repeatWeekly"
+                                    ],
+                                    "properties": {
+                                      "title": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 200
+                                      },
+                                      "start": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                      },
+                                      "end": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                      },
+                                      "category": {
+                                        "type": "string",
+                                        "enum": [
+                                          "Class",
+                                          "Work",
+                                          "Personal"
+                                        ]
+                                      },
+                                      "location": {
+                                        "type": "string"
+                                      },
+                                      "mandatory": {
+                                        "type": "boolean"
+                                      },
+                                      "repeatWeekly": {
+                                        "type": "boolean"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "id",
+                                  "original",
+                                  "event"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 100
+                                  },
+                                  "original": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "title",
+                                      "start",
+                                      "end",
+                                      "category"
+                                    ],
+                                    "properties": {
+                                      "title": {
+                                        "type": "string"
+                                      },
+                                      "start": {
+                                        "type": "string"
+                                      },
+                                      "end": {
+                                        "type": "string"
+                                      },
+                                      "category": {
+                                        "type": "string"
+                                      },
+                                      "location": {
+                                        "type": "string"
+                                      },
+                                      "mandatory": {
+                                        "type": "boolean"
+                                      },
+                                      "repeatWeekly": {
+                                        "type": "boolean"
+                                      },
+                                      "eventVersion": {
+                                        "type": "integer",
+                                        "minimum": 1
+                                      }
+                                    }
+                                  },
+                                  "event": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "title",
+                                      "start",
+                                      "end",
+                                      "category",
+                                      "location",
+                                      "mandatory",
+                                      "repeatWeekly"
+                                    ],
+                                    "properties": {
+                                      "title": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 200
+                                      },
+                                      "start": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                      },
+                                      "end": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                      },
+                                      "category": {
+                                        "type": "string",
+                                        "enum": [
+                                          "Class",
+                                          "Work",
+                                          "Personal"
+                                        ]
+                                      },
+                                      "location": {
+                                        "type": "string"
+                                      },
+                                      "mandatory": {
+                                        "type": "boolean"
+                                      },
+                                      "repeatWeekly": {
+                                        "type": "boolean"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "id",
+                                  "original"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 100
+                                  },
+                                  "original": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "title",
+                                      "start",
+                                      "end",
+                                      "category"
+                                    ],
+                                    "properties": {
+                                      "title": {
+                                        "type": "string"
+                                      },
+                                      "start": {
+                                        "type": "string"
+                                      },
+                                      "end": {
+                                        "type": "string"
+                                      },
+                                      "category": {
+                                        "type": "string"
+                                      },
+                                      "location": {
+                                        "type": "string"
+                                      },
+                                      "mandatory": {
+                                        "type": "boolean"
+                                      },
+                                      "repeatWeekly": {
+                                        "type": "boolean"
+                                      },
+                                      "eventVersion": {
+                                        "type": "integer",
+                                        "minimum": 1
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending"
+                            ]
+                          },
+                          "expiresAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "eventId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          }
+                        }
+                      }
                     }
                   },
                   "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika."
@@ -13581,6 +15129,264 @@
                     },
                     "code": {
                       "type": "string"
+                    },
+                    "pendingActions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "conversationId",
+                          "kind",
+                          "payload",
+                          "status",
+                          "expiresAt"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          },
+                          "conversationId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "calendar_event_create",
+                              "calendar_event_update",
+                              "calendar_event_delete"
+                            ]
+                          },
+                          "payload": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "event"
+                                ],
+                                "properties": {
+                                  "event": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "title",
+                                      "start",
+                                      "end",
+                                      "category",
+                                      "location",
+                                      "mandatory",
+                                      "repeatWeekly"
+                                    ],
+                                    "properties": {
+                                      "title": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 200
+                                      },
+                                      "start": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                      },
+                                      "end": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                      },
+                                      "category": {
+                                        "type": "string",
+                                        "enum": [
+                                          "Class",
+                                          "Work",
+                                          "Personal"
+                                        ]
+                                      },
+                                      "location": {
+                                        "type": "string"
+                                      },
+                                      "mandatory": {
+                                        "type": "boolean"
+                                      },
+                                      "repeatWeekly": {
+                                        "type": "boolean"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "id",
+                                  "original",
+                                  "event"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 100
+                                  },
+                                  "original": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "title",
+                                      "start",
+                                      "end",
+                                      "category"
+                                    ],
+                                    "properties": {
+                                      "title": {
+                                        "type": "string"
+                                      },
+                                      "start": {
+                                        "type": "string"
+                                      },
+                                      "end": {
+                                        "type": "string"
+                                      },
+                                      "category": {
+                                        "type": "string"
+                                      },
+                                      "location": {
+                                        "type": "string"
+                                      },
+                                      "mandatory": {
+                                        "type": "boolean"
+                                      },
+                                      "repeatWeekly": {
+                                        "type": "boolean"
+                                      },
+                                      "eventVersion": {
+                                        "type": "integer",
+                                        "minimum": 1
+                                      }
+                                    }
+                                  },
+                                  "event": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "title",
+                                      "start",
+                                      "end",
+                                      "category",
+                                      "location",
+                                      "mandatory",
+                                      "repeatWeekly"
+                                    ],
+                                    "properties": {
+                                      "title": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 200
+                                      },
+                                      "start": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                      },
+                                      "end": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                      },
+                                      "category": {
+                                        "type": "string",
+                                        "enum": [
+                                          "Class",
+                                          "Work",
+                                          "Personal"
+                                        ]
+                                      },
+                                      "location": {
+                                        "type": "string"
+                                      },
+                                      "mandatory": {
+                                        "type": "boolean"
+                                      },
+                                      "repeatWeekly": {
+                                        "type": "boolean"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "id",
+                                  "original"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 100
+                                  },
+                                  "original": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "title",
+                                      "start",
+                                      "end",
+                                      "category"
+                                    ],
+                                    "properties": {
+                                      "title": {
+                                        "type": "string"
+                                      },
+                                      "start": {
+                                        "type": "string"
+                                      },
+                                      "end": {
+                                        "type": "string"
+                                      },
+                                      "category": {
+                                        "type": "string"
+                                      },
+                                      "location": {
+                                        "type": "string"
+                                      },
+                                      "mandatory": {
+                                        "type": "boolean"
+                                      },
+                                      "repeatWeekly": {
+                                        "type": "boolean"
+                                      },
+                                      "eventVersion": {
+                                        "type": "integer",
+                                        "minimum": 1
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending"
+                            ]
+                          },
+                          "expiresAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "eventId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          }
+                        }
+                      }
                     }
                   },
                   "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika."
@@ -13643,6 +15449,264 @@
                     },
                     "code": {
                       "type": "string"
+                    },
+                    "pendingActions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "conversationId",
+                          "kind",
+                          "payload",
+                          "status",
+                          "expiresAt"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          },
+                          "conversationId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "calendar_event_create",
+                              "calendar_event_update",
+                              "calendar_event_delete"
+                            ]
+                          },
+                          "payload": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "event"
+                                ],
+                                "properties": {
+                                  "event": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "title",
+                                      "start",
+                                      "end",
+                                      "category",
+                                      "location",
+                                      "mandatory",
+                                      "repeatWeekly"
+                                    ],
+                                    "properties": {
+                                      "title": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 200
+                                      },
+                                      "start": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                      },
+                                      "end": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                      },
+                                      "category": {
+                                        "type": "string",
+                                        "enum": [
+                                          "Class",
+                                          "Work",
+                                          "Personal"
+                                        ]
+                                      },
+                                      "location": {
+                                        "type": "string"
+                                      },
+                                      "mandatory": {
+                                        "type": "boolean"
+                                      },
+                                      "repeatWeekly": {
+                                        "type": "boolean"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "id",
+                                  "original",
+                                  "event"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 100
+                                  },
+                                  "original": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "title",
+                                      "start",
+                                      "end",
+                                      "category"
+                                    ],
+                                    "properties": {
+                                      "title": {
+                                        "type": "string"
+                                      },
+                                      "start": {
+                                        "type": "string"
+                                      },
+                                      "end": {
+                                        "type": "string"
+                                      },
+                                      "category": {
+                                        "type": "string"
+                                      },
+                                      "location": {
+                                        "type": "string"
+                                      },
+                                      "mandatory": {
+                                        "type": "boolean"
+                                      },
+                                      "repeatWeekly": {
+                                        "type": "boolean"
+                                      },
+                                      "eventVersion": {
+                                        "type": "integer",
+                                        "minimum": 1
+                                      }
+                                    }
+                                  },
+                                  "event": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "title",
+                                      "start",
+                                      "end",
+                                      "category",
+                                      "location",
+                                      "mandatory",
+                                      "repeatWeekly"
+                                    ],
+                                    "properties": {
+                                      "title": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 200
+                                      },
+                                      "start": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                      },
+                                      "end": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                      },
+                                      "category": {
+                                        "type": "string",
+                                        "enum": [
+                                          "Class",
+                                          "Work",
+                                          "Personal"
+                                        ]
+                                      },
+                                      "location": {
+                                        "type": "string"
+                                      },
+                                      "mandatory": {
+                                        "type": "boolean"
+                                      },
+                                      "repeatWeekly": {
+                                        "type": "boolean"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "id",
+                                  "original"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 100
+                                  },
+                                  "original": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "title",
+                                      "start",
+                                      "end",
+                                      "category"
+                                    ],
+                                    "properties": {
+                                      "title": {
+                                        "type": "string"
+                                      },
+                                      "start": {
+                                        "type": "string"
+                                      },
+                                      "end": {
+                                        "type": "string"
+                                      },
+                                      "category": {
+                                        "type": "string"
+                                      },
+                                      "location": {
+                                        "type": "string"
+                                      },
+                                      "mandatory": {
+                                        "type": "boolean"
+                                      },
+                                      "repeatWeekly": {
+                                        "type": "boolean"
+                                      },
+                                      "eventVersion": {
+                                        "type": "integer",
+                                        "minimum": 1
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending"
+                            ]
+                          },
+                          "expiresAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "eventId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          }
+                        }
+                      }
                     }
                   },
                   "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika."
@@ -13705,6 +15769,264 @@
                     },
                     "code": {
                       "type": "string"
+                    },
+                    "pendingActions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "conversationId",
+                          "kind",
+                          "payload",
+                          "status",
+                          "expiresAt"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          },
+                          "conversationId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "calendar_event_create",
+                              "calendar_event_update",
+                              "calendar_event_delete"
+                            ]
+                          },
+                          "payload": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "event"
+                                ],
+                                "properties": {
+                                  "event": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "title",
+                                      "start",
+                                      "end",
+                                      "category",
+                                      "location",
+                                      "mandatory",
+                                      "repeatWeekly"
+                                    ],
+                                    "properties": {
+                                      "title": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 200
+                                      },
+                                      "start": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                      },
+                                      "end": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                      },
+                                      "category": {
+                                        "type": "string",
+                                        "enum": [
+                                          "Class",
+                                          "Work",
+                                          "Personal"
+                                        ]
+                                      },
+                                      "location": {
+                                        "type": "string"
+                                      },
+                                      "mandatory": {
+                                        "type": "boolean"
+                                      },
+                                      "repeatWeekly": {
+                                        "type": "boolean"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "id",
+                                  "original",
+                                  "event"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 100
+                                  },
+                                  "original": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "title",
+                                      "start",
+                                      "end",
+                                      "category"
+                                    ],
+                                    "properties": {
+                                      "title": {
+                                        "type": "string"
+                                      },
+                                      "start": {
+                                        "type": "string"
+                                      },
+                                      "end": {
+                                        "type": "string"
+                                      },
+                                      "category": {
+                                        "type": "string"
+                                      },
+                                      "location": {
+                                        "type": "string"
+                                      },
+                                      "mandatory": {
+                                        "type": "boolean"
+                                      },
+                                      "repeatWeekly": {
+                                        "type": "boolean"
+                                      },
+                                      "eventVersion": {
+                                        "type": "integer",
+                                        "minimum": 1
+                                      }
+                                    }
+                                  },
+                                  "event": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "title",
+                                      "start",
+                                      "end",
+                                      "category",
+                                      "location",
+                                      "mandatory",
+                                      "repeatWeekly"
+                                    ],
+                                    "properties": {
+                                      "title": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 200
+                                      },
+                                      "start": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                      },
+                                      "end": {
+                                        "type": "string",
+                                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$"
+                                      },
+                                      "category": {
+                                        "type": "string",
+                                        "enum": [
+                                          "Class",
+                                          "Work",
+                                          "Personal"
+                                        ]
+                                      },
+                                      "location": {
+                                        "type": "string"
+                                      },
+                                      "mandatory": {
+                                        "type": "boolean"
+                                      },
+                                      "repeatWeekly": {
+                                        "type": "boolean"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "id",
+                                  "original"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 100
+                                  },
+                                  "original": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "title",
+                                      "start",
+                                      "end",
+                                      "category"
+                                    ],
+                                    "properties": {
+                                      "title": {
+                                        "type": "string"
+                                      },
+                                      "start": {
+                                        "type": "string"
+                                      },
+                                      "end": {
+                                        "type": "string"
+                                      },
+                                      "category": {
+                                        "type": "string"
+                                      },
+                                      "location": {
+                                        "type": "string"
+                                      },
+                                      "mandatory": {
+                                        "type": "boolean"
+                                      },
+                                      "repeatWeekly": {
+                                        "type": "boolean"
+                                      },
+                                      "eventVersion": {
+                                        "type": "integer",
+                                        "minimum": 1
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending"
+                            ]
+                          },
+                          "expiresAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "eventId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 100
+                          }
+                        }
+                      }
                     }
                   },
                   "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika."

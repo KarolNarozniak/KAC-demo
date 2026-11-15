@@ -92,7 +92,7 @@ export class AiService {
       instructions: trustedContext ? `${KAC_ASSISTANT_INSTRUCTIONS}\n\n${trustedContext}` : KAC_ASSISTANT_INSTRUCTIONS,
       input,
       tools,
-      parallel_tool_calls: false,
+      parallel_tool_calls: true,
       max_output_tokens: 4000,
     }, { signal, onTextDelta });
     const filters = (response as unknown as { content_filters?: Array<{ blocked?: boolean; content_filter_results?: Record<string, { filtered?: boolean }> }> }).content_filters;

@@ -180,16 +180,16 @@ test('assistant create confirmation returns collisions and retries the same acti
   } finally { await app.close(); }
 });
 
-function streamingApi(send: (...args: any[]) => Promise<OpenAIResponse>) {
+function streamingApi(send: (...args: any[]) => Promise<OpenAIResponse>, extraAi: Record<string, unknown> = {}, extraCalendar: Record<string, unknown> = {}) {
   const messages: Array<{ id: string; role: string; content: Record<string, unknown>; createdAt: string }> = [];
-  const app = buildApi({ checkConnection: async () => {}, getOverview: async () => ({ user: { timezone: 'Europe/Warsaw' }, events: [] } as never) }, [], {
+  const app = buildApi({ checkConnection: async () => {}, getOverview: async () => ({ user: { timezone: 'Europe/Warsaw' }, events: [] } as never), ...extraCalendar }, [], {
     userScope: () => ({ userId: 'U001', calendarId: 'K001' }),
     aiRepository: {
       getConversation: async () => ({ id: 'stream-conversation' }),
       appendMessage: async (_scope: unknown, _id: string, role: string, content: Record<string, unknown>) => {
         const message = { id: `message-${messages.length}`, role, content, createdAt: new Date().toISOString() }; messages.push(message); return message;
       },
-      listMessages: async () => messages, listPendingActions: async () => [], logUsage: async () => {},
+      listMessages: async () => messages.slice(-24), listPendingActions: async () => [], logUsage: async () => {}, ...extraAi,
     } as never,
     aiService: { sendAssistantMessage: send } as never,
   });
@@ -326,9 +326,116 @@ test('assistant reports Azure filtering consistently for a blocked HTTP call and
       const stream = await app.inject({ method: 'POST', url: `${url}?stream=true`, payload: { content: 'Przygotuj podgląd wydarzenia' } });
       assert.equal(stream.statusCode, 200);
       const events = stream.body.trim().split('\n').map((line) => JSON.parse(line));
-      assert.deepEqual(events.at(-1), { type: 'error', error: scenario.code });
+      assert.equal(events.at(-1).type, 'error'); assert.equal(events.at(-1).error, scenario.code);
+      assert.deepEqual(events.at(-1).pendingActions, []);
       assert.equal(events.some((event) => event.type === 'done'), false);
       assert.equal(messages.some((message) => message.role === 'assistant'), false);
     } finally { await app.close(); }
   }
+});
+
+const bulkEvent = { title: 'Zajęcia testowe', start: '2026-11-17T09:00', end: '2026-11-17T12:30', category: 'Class', location: 'Sala testowa', mandatory: false, repeatWeekly: false };
+const bulkCalls = Array.from({ length: 5 }, (_, index) => ({ type: 'function_call', id: `fc-bulk-${index}`, call_id: `bulk-${index}`,
+  name: index < 4 ? 'calendar_prepare_event_update' : 'calendar_prepare_event_create',
+  arguments: JSON.stringify({ ...bulkEvent, start: `2026-11-${index < 4 ? 17 + index : 16}T09:00`, end: `2026-11-${index < 4 ? 17 + index : 16}T12:30`, ...(index < 4 ? { id: `event-${index}` } : {}) }),
+}));
+
+function bulkFixture() {
+  const pending: any[] = [];
+  let writes = 0;
+  return { pending, writes: () => writes,
+    ai: {
+      listPendingActions: async () => pending,
+      createAction: async (_scope: unknown, conversationId: string, kind: string, payload: Record<string, unknown>) => {
+        const action = { id: `proposal-${pending.length}`, conversationId, kind, payload, status: 'pending', expiresAt: new Date(Date.now() + 900_000).toISOString() };
+        pending.push(action); return action;
+      },
+    },
+    calendar: {
+      getOverview: async () => ({ user: { timezone: 'Europe/Warsaw' }, events: Array.from({ length: 4 }, (_, index) => ({ ...bulkEvent, id: `event-${index}`, start: `2026-11-${17 + index}T08:00`, end: `2026-11-${17 + index}T11:30`, category: 'Zajęcia', eventVersion: 1 })) }),
+      createEvent: async () => { writes++; throw new Error('must not write calendar'); },
+      updateEvent: async () => { writes++; throw new Error('must not write calendar'); },
+    },
+  };
+}
+
+test('assistant prepares four updates and one creation in either serial or grouped tool calls without saving events', async () => {
+  const { config } = await import('../src/config.js');
+  const originalRounds = config.azureAi.maxToolRounds; config.azureAi.maxToolRounds = 8;
+  try {
+    for (const grouped of [false, true]) {
+      const fixture = bulkFixture(); let calls = 0;
+      const { app } = streamingApi(async (input) => {
+        const priorCalls = new Set(input.filter((item: any) => item.type === 'function_call').map((item: any) => item.call_id));
+        for (const item of input.filter((item: any) => item.type === 'function_call_output')) assert.ok(priorCalls.has(item.call_id));
+        const index = calls++;
+        if (grouped ? index === 0 : index < bulkCalls.length) return response({ output: grouped ? bulkCalls : [bulkCalls[index]] });
+        return response({ output_text: 'Przygotowano pięć propozycji do potwierdzenia.' });
+      }, fixture.ai, fixture.calendar);
+      try {
+        const result = await app.inject({ method: 'POST', url: '/api/v1/assistant/conversations/stream-conversation/messages?stream=true', payload: { content: 'Przygotuj cztery zmiany i dodanie zajęć testowych.' } });
+        const events = result.body.trim().split('\n').map((line) => JSON.parse(line));
+        assert.equal(events.at(-1).type, 'done', result.body);
+        assert.equal(events.at(-1).result.pendingActions.length, 5);
+        assert.equal(fixture.pending.filter((action) => action.kind === 'calendar_event_update').length, 4);
+        assert.equal(fixture.pending.filter((action) => action.kind === 'calendar_event_create').length, 1);
+        assert.equal(fixture.writes(), 0);
+      } finally { await app.close(); }
+    }
+  } finally { config.azureAi.maxToolRounds = originalRounds; }
+});
+
+test('tool limit returns prepared previews and retry reuses them instead of creating duplicates', async () => {
+  const { config } = await import('../src/config.js');
+  const originalRounds = config.azureAi.maxToolRounds; config.azureAi.maxToolRounds = 2;
+  const fixture = bulkFixture(); let calls = 0;
+  const { app } = streamingApi(async () => {
+    const index = calls++;
+    if (index < bulkCalls.length) return response({ output: [bulkCalls[index]] });
+    return response({ output_text: 'Przygotowano wszystkie propozycje.' });
+  }, fixture.ai, fixture.calendar);
+  const url = '/api/v1/assistant/conversations/stream-conversation/messages?stream=true';
+  try {
+    const stopped = await app.inject({ method: 'POST', url, payload: { content: 'Przygotuj zmiany zajęć.' } });
+    const failure = stopped.body.trim().split('\n').map((line) => JSON.parse(line)).at(-1);
+    assert.equal(failure.type, 'error'); assert.equal(failure.error, 'assistant_tool_limit');
+    assert.equal(failure.pendingActions.length, 2);
+    const existingIds = fixture.pending.map((action) => action.id);
+    calls = 0; config.azureAi.maxToolRounds = 8;
+    const retried = await app.inject({ method: 'POST', url, payload: { content: 'Przygotuj pozostałe propozycje.' } });
+    const done = retried.body.trim().split('\n').map((line) => JSON.parse(line)).at(-1);
+    assert.equal(done.type, 'done', retried.body); assert.equal(done.result.pendingActions.length, 5);
+    assert.deepEqual(fixture.pending.slice(0, 2).map((action) => action.id), existingIds);
+    assert.equal(fixture.writes(), 0);
+  } finally { config.azureAi.maxToolRounds = originalRounds; await app.close(); }
+});
+
+test('assistant retains complete tool context when the current turn exceeds the 24-message history window', async () => {
+  let calls = 0;
+  const { app } = streamingApi(async (input) => {
+    if (calls++ === 0) return response({ output: Array.from({ length: 30 }, (_, index) => ({ type: 'function_call', id: `fc-read-${index}`, call_id: `read-${index}`, name: 'calendar_search_events', arguments: JSON.stringify({ from: '2026-11-16', to: '2026-11-16', query: null }) })) });
+    assert.equal(input.filter((item: any) => item.type === 'function_call').length, 30);
+    assert.equal(input.filter((item: any) => item.type === 'function_call_output').length, 30);
+    assert.ok(input.some((item: any) => item.role === 'user' && item.content === 'Sprawdź terminy testowe'));
+    return response({ output_text: 'Terminy sprawdzone.' });
+  });
+  try {
+    const result = await app.inject({ method: 'POST', url: '/api/v1/assistant/conversations/stream-conversation/messages', payload: { content: 'Sprawdź terminy testowe' } });
+    assert.equal(result.statusCode, 200, result.body); assert.equal(result.json().message.content, 'Terminy sprawdzone.');
+  } finally { await app.close(); }
+});
+
+test('assistant replaces a stale pending update rather than reusing its obsolete snapshot', async () => {
+  const fixture = bulkFixture();
+  fixture.pending.push({ id: 'stale-proposal', kind: 'calendar_event_update', conversationId: 'stream-conversation', status: 'pending', expiresAt: new Date(Date.now() + 900_000).toISOString(),
+    payload: { id: 'event-0', original: { ...bulkEvent, category: 'Zajęcia', eventVersion: 99 }, event: { ...bulkEvent } } });
+  let calls = 0;
+  const { app } = streamingApi(async () => calls++ === 0 ? response({ output: [bulkCalls[0]] }) : response({ output_text: 'Nowa propozycja gotowa.' }), fixture.ai, fixture.calendar);
+  try {
+    const result = await app.inject({ method: 'POST', url: '/api/v1/assistant/conversations/stream-conversation/messages', payload: { content: 'Przygotuj ponownie zmianę.' } });
+    assert.equal(result.statusCode, 200, result.body);
+    assert.equal(fixture.pending.length, 2);
+    assert.equal(fixture.pending[1].payload.original.eventVersion, 1);
+    assert.equal(fixture.writes(), 0);
+  } finally { await app.close(); }
 });

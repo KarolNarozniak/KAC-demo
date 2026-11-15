@@ -132,3 +132,9 @@ Regenerating the Today card creates a fresh hidden internal conversation, preven
 `assistant_content_filtered` means Azure blocked the input or output through content filtering; `assistant_refused` indicates an explicit model refusal. Both return 422 in JSON mode or an `error` event after streaming starts. The UI clears provisional refusal text and displays a Polish explanation instead of labeling it as an interrupted transmission. The calendar remains unchanged.
 
 Safe diagnostics record the provider code and filtered category names without prompt text. Incorrect classification of an allowed request requires reviewing the assigned Foundry policy or reporting the issue to the provider. The application does not disable filters or automatically rewrite messages to avoid a block.
+
+### Multiple proposals in one turn
+
+The model can return multiple tool calls in one response (`parallel_tool_calls: true`); the backend validates and executes them sequentially. `AZURE_AI_MAX_TOOL_ROUNDS` defaults to 8 (configurable up to 16), with an additional limit of 64 calls per turn. Complete current-turn call/output pairs are retained independently of the 24-message window for earlier history.
+
+Exhausting the limit returns `assistant_tool_limit` (409 or an `error` event). Error responses may include `pendingActions`; the UI shows already prepared previews for confirmation or cancellation. Preparing the identical action again in the same conversation reuses its existing unexpired preview. Limits and errors never confirm calendar changes.
