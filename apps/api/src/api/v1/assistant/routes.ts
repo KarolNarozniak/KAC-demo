@@ -12,6 +12,7 @@ import type { AiMessage } from '../../../ai/repository.js';
 import { documented, withExamples } from '../../examples.js';
 import { DaySummaryService } from '../../../ai/day-summary.js';
 import { isValidDate } from '../../../ai/calendar-facts.js';
+import { withPreviewCollisions } from '../../../ai/event-preview.js';
 
 const idSchema = { type: 'string', minLength: 1, maxLength: 100 } as const;
 const objectResponse = (description: string, required: string[], properties: Record<string, unknown>, value: Record<string, unknown>) =>
@@ -46,6 +47,11 @@ const pendingActionSchema = { type: 'object', additionalProperties: false, requi
     { type: 'object', additionalProperties: false, required: ['id', 'original'], properties: { id: idSchema, original: eventSnapshotSchema } },
   ] },
   status: { type: 'string', enum: ['pending'] }, expiresAt: { type: 'string', format: 'date-time' }, eventId: idSchema,
+  collisions: { type: 'array', description: 'S23KC2S1P2-252: wydarzenia kolidujące z proponowanym terminem, liczone przy każdym odczycie z bieżącego kalendarza. Niepusta lista oznacza, że zatwierdzenie zostanie odrzucone (409 event_collision).',
+    items: { type: 'object', additionalProperties: false, required: ['id', 'title', 'category', 'startLocal', 'endLocal'], properties: {
+      id: { type: 'string' }, title: { type: 'string' }, category: { type: 'string', enum: ['Class', 'Work', 'Personal'] },
+      startLocal: { type: 'string', description: 'YYYY-MM-DDTHH:MM w strefie kalendarza.' }, endLocal: { type: 'string' } } } },
+  validationError: { type: 'string', description: 'Kod błędu walidacji terminu, np. invalid_event (czas nie istnieje w strefie przy zmianie czasu).' },
 } } as const;
 const storedMessageSchema = { type: 'object', additionalProperties: false, required: ['id', 'role', 'content', 'createdAt'], properties: {
   id: idSchema, role: { type: 'string', enum: ['user', 'assistant', 'tool'] }, createdAt: { type: 'string', format: 'date-time' },
@@ -173,7 +179,8 @@ export async function assistantRoutes(app: FastifyInstance, options: Pick<ApiDep
     try {
       const owner = scope(request);
       const messages = await aiRepository.listMessages(owner, request.params.id);
-      const pendingActions = await aiRepository.listPendingActions(owner, request.params.id);
+      const overview = await repository?.getOverview(owner.userId, owner.calendarId).catch(() => null);
+      const pendingActions = withPreviewCollisions(await aiRepository.listPendingActions(owner, request.params.id), overview?.events, overview?.user.timezone || 'Europe/Warsaw');
       return { messages, pendingActions };
     } catch (error) {
       if (error instanceof AiConversationNotFoundError) return reply.code(404).send({ error: 'conversation_not_found_or_expired' });
@@ -244,7 +251,7 @@ export async function assistantRoutes(app: FastifyInstance, options: Pick<ApiDep
       const answer = text
         ? truncated ? `${text}\n\n(Odpowiedź została skrócona. Zapytaj o węższy zakres, np. jeden dzień albo konkretne godziny.)` : text
         : 'Nie udało mi się przygotować odpowiedzi. Spróbuj przeformułować prośbę albo zapytać o węższy zakres.';
-      const pendingActions = await aiRepository.listPendingActions(owner, conversation.id);
+      const pendingActions = withPreviewCollisions(await aiRepository.listPendingActions(owner, conversation.id), overview?.events, overview?.user.timezone || 'Europe/Warsaw');
       await aiRepository.appendMessage(owner, conversation.id, 'assistant', { text: answer, pendingActionIds: pendingActions.map((action) => action.id) }, config.azureAi.conversationRetentionDays);
       await aiRepository.logUsage(owner, 'assistant_chat', config.azureAi.modelDeployment, inputTokens, outputTokens, Date.now() - startedAt, 'ok');
       return { conversationId: conversation.id, message: { role: 'assistant', content: answer }, pendingActions, usage: { inputTokens, outputTokens } };

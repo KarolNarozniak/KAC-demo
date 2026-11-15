@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { Button, useTheme } from '../components/ui';
 import {
@@ -6,8 +6,9 @@ import {
   getAssistantConfig, listAssistantConversations, listAssistantMessages, sendAssistantMessage,
   type AssistantConversation, type AssistantMessage, type PendingAssistantAction,
 } from '../services/assistantApi';
+import { createdMessage, eventPreview } from '../domain/assistantPreview';
 
-type Props = { active: boolean; onCalendarChange: () => void; prefill?: { text: string; nonce: number } | null };
+type Props = { active: boolean; onCalendarChange: (dateKey?: string) => void; prefill?: { text: string; nonce: number } | null };
 const textOf = (message: AssistantMessage) => typeof message.content.text === 'string' ? message.content.text : '';
 const actionSummary = (action: PendingAssistantAction) => {
   const value = action.payload.event as Record<string, unknown> | undefined;
@@ -30,6 +31,10 @@ export default function AssistantScreen({ active, onCalendarChange, prefill }: P
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
+  // S23KC2S1P2-263: jedna decyzja naraz – ref blokuje podwójne kliknięcie, zanim React zdąży przerysować przyciski.
+  const decisionInFlight = useRef(false);
+  const [busyActionId, setBusyActionId] = useState('');
+  const [lastCreated, setLastCreated] = useState<{ text: string; dateKey: string } | null>(null);
   // Pytanie przygotowane na karcie „Twój dzień w skrócie” – użytkownik może je zmienić przed wysłaniem.
   useEffect(() => { if (prefill) setInput(prefill.text); }, [prefill?.nonce]);
 
@@ -47,6 +52,7 @@ export default function AssistantScreen({ active, onCalendarChange, prefill }: P
   }, [active]);
 
   useEffect(() => {
+    setLastCreated(null);
     if (!active || !conversationId) { setMessages([]); setPendingActions([]); return; }
     let alive = true;
     setLoading(true); setError('');
@@ -60,7 +66,7 @@ export default function AssistantScreen({ active, onCalendarChange, prefill }: P
   const send = async (targetConversationId = conversationId) => {
     const content = input.trim();
     if (!content || !targetConversationId || sending || !enabled) return;
-    setInput(''); setSending(true); setError('');
+    setInput(''); setSending(true); setError(''); setLastCreated(null);
     // Wysłana wiadomość pojawia się od razu; po odpowiedzi lista jest zastępowana historią z serwera.
     const pendingId = `pending-${Date.now()}`;
     setMessages((current) => [...current, { id: pendingId, role: 'user', content: { text: content }, createdAt: new Date().toISOString() }]);
@@ -91,28 +97,36 @@ export default function AssistantScreen({ active, onCalendarChange, prefill }: P
   };
 
   const confirmAction = async (action: PendingAssistantAction) => {
+    if (decisionInFlight.current) return;
+    decisionInFlight.current = true; setBusyActionId(action.id);
     setSending(true); setError('');
+    const preview = eventPreview(action);
     try {
       await confirmAssistantAction(action.id);
       setPendingActions((current) => current.filter((item) => item.id !== action.id));
-      setMessages((current) => [...current, { id: `confirmed-${Date.now()}`, role: 'assistant',
-        content: { text: 'Akcja została zatwierdzona i zapisana w kalendarzu.' }, createdAt: new Date().toISOString() }]);
-      onCalendarChange();
+      const text = preview ? createdMessage(preview) : 'Akcja została zatwierdzona i zapisana w kalendarzu.';
+      setMessages((current) => [...current, { id: `confirmed-${Date.now()}`, role: 'assistant', content: { text }, createdAt: new Date().toISOString() }]);
+      // Dodanie: zostajemy w rozmowie i dajemy przycisk do daty wydarzenia (scenariusz, krok 6). Edycja/usunięcie (S23KC2S1P2-255) bez zmian.
+      if (preview) setLastCreated({ text, dateKey: preview.dateKey });
+      else onCalendarChange();
     } catch (reason) {
+      // Podgląd zostaje (5b) – po odświeżeniu widać aktualne kolizje i można ponowić tę samą akcję bez duplikatu.
       try { setPendingActions((await listAssistantMessages(conversationId)).pendingActions); } catch { /* keep the current action until refresh succeeds */ }
       setError(reason instanceof Error ? reason.message : 'Nie udało się zatwierdzić akcji.');
     }
-    finally { setSending(false); }
+    finally { setSending(false); setBusyActionId(''); decisionInFlight.current = false; }
   };
 
   const cancelAction = async (action: PendingAssistantAction) => {
+    if (decisionInFlight.current) return;
+    decisionInFlight.current = true; setBusyActionId(action.id);
     setSending(true); setError('');
     try {
       await cancelAssistantAction(action.id);
       setPendingActions((current) => current.filter((item) => item.id !== action.id));
       setMessages((current) => [...current, { id: `cancelled-${Date.now()}`, role: 'assistant', content: { text: 'Propozycja została anulowana. Kalendarz pozostał bez zmian.' }, createdAt: new Date().toISOString() }]);
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Nie udało się anulować akcji.'); }
-    finally { setSending(false); }
+    finally { setSending(false); setBusyActionId(''); decisionInFlight.current = false; }
   };
 
   const removeConversation = async () => {
@@ -148,11 +162,36 @@ export default function AssistantScreen({ active, onCalendarChange, prefill }: P
           <Text style={styles.body}>{String(message.content.text ?? '')}</Text>
           <Text style={[styles.muted, { marginTop: 4 }]}>{message.role === 'user' ? 'Ty' : 'Asystent'} · {new Date(message.createdAt).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}</Text>
         </View>)}
-        {pendingActions.map((action) => <View key={action.id} style={[styles.card, { borderColor: palette.amber }]}>
-          <Text style={styles.heading}>Propozycja do potwierdzenia</Text><Text style={styles.body}>{actionSummary(action)}</Text>
-          <Text style={styles.muted}>Ważna do: {new Date(action.expiresAt).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}. Kalendarz nie zmieni się bez potwierdzenia.</Text>
-          <View style={[styles.row, { flexWrap: 'wrap', marginTop: 8 }]}><Button title="Zatwierdź" primary disabled={sending} onPress={() => void confirmAction(action)} /><Button title="Odrzuć" danger disabled={sending} onPress={() => void cancelAction(action)} /></View>
-        </View>)}
+        {pendingActions.map((action) => {
+          const preview = eventPreview(action);
+          const expires = new Date(action.expiresAt).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+          const busy = busyActionId === action.id;
+          // S23KC2S1P2-263: pełny podgląd nowego wydarzenia; edycja i usuwanie (S23KC2S1P2-255) zostają przy krótkim opisie.
+          if (preview) return <View key={action.id} accessibilityLabel="Podgląd nowego wydarzenia" style={[styles.card, { borderColor: preview.blocked ? palette.red : palette.amber }]}>
+            <Text style={styles.heading}>Nowe wydarzenie – sprawdź przed dodaniem</Text>
+            {[['Tytuł', preview.title], ['Data', preview.date], ['Godziny', preview.time],
+              ['Kategoria', preview.mandatory ? `${preview.category} · ${preview.mandatory}` : preview.category], ['Miejsce', preview.location], ['Powtarzanie', preview.recurrence]]
+              .map(([label, value]) => <View key={label} style={[styles.row, { gap: 8, marginTop: 4 }]}><Text style={[styles.muted, { width: 96 }]}>{label}</Text><Text style={[styles.body, { flex: 1 }]}>{value}</Text></View>)}
+            {!!preview.collisions.length && <View accessibilityRole="alert" style={{ marginTop: 8 }}>
+              <Text style={styles.error}>Koliduje z:</Text>
+              {preview.collisions.map((item) => <Text key={item} style={styles.error}>• {item}</Text>)}
+            </View>}
+            {!!preview.blockReason && <Text style={[styles.muted, { marginTop: 6 }]}>{preview.blockReason}</Text>}
+            <Text style={[styles.muted, { marginTop: 6 }]}>Ważna do {expires}. Kalendarz nie zmieni się bez Twojej decyzji.</Text>
+            <View style={[styles.row, { flexWrap: 'wrap', marginTop: 8 }]}>
+              <Button title={busy ? 'Dodawanie…' : 'Dodaj do kalendarza'} primary disabled={sending || preview.blocked} onPress={() => void confirmAction(action)} />
+              <Button title="Anuluj" disabled={sending} onPress={() => void cancelAction(action)} />
+            </View>
+          </View>;
+          return <View key={action.id} style={[styles.card, { borderColor: palette.amber }]}>
+            <Text style={styles.heading}>Propozycja do potwierdzenia</Text><Text style={styles.body}>{actionSummary(action)}</Text>
+            <Text style={styles.muted}>Ważna do: {expires}. Kalendarz nie zmieni się bez potwierdzenia.</Text>
+            <View style={[styles.row, { flexWrap: 'wrap', marginTop: 8 }]}><Button title="Zatwierdź" primary disabled={sending} onPress={() => void confirmAction(action)} /><Button title="Odrzuć" danger disabled={sending} onPress={() => void cancelAction(action)} /></View>
+          </View>;
+        })}
+        {!!lastCreated && <View style={[styles.row, { alignSelf: 'flex-start' }]}>
+          <Button title="Pokaż w kalendarzu" accessibilityLabel="Przejdź do daty dodanego wydarzenia w kalendarzu" onPress={() => onCalendarChange(lastCreated.dateKey)} />
+        </View>}
         {sending && <View style={{ alignSelf: 'flex-start', padding: 12, borderRadius: 12, backgroundColor: palette.surface }}>
           <Text accessibilityLiveRegion="polite" style={styles.muted}>Asystent pisze…</Text>
         </View>}

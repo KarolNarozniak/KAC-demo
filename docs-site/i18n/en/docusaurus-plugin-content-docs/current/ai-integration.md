@@ -70,6 +70,16 @@ For a private endpoint, configure API App Service VNet Integration and private D
 - **Memory:** PostgreSQL is the source of truth, scoped by `UserScope`. Context is limited to the last 24 ordered messages, and function calls/results are reconstructed as stateless Responses input items. `demoScope` represents the current development setup without login.
 - **Guardrails:** the model cannot mutate the calendar directly. Mutations create a TTL-bound `t_ai_akcje` proposal; a separate confirmation endpoint checks ownership, the full event snapshot, current conflicts and an idempotency key. Updates and deletes persist the action result in the same transaction as the calendar mutation; a retry after a lost response returns that result instead of applying the write again. A stale preview is failed and must be prepared again. Prompt Shields complement input limits, JSON Schema parsing, tool/round limits and server validation.
 
+## Adding events through the conversation (S23KC2S1P2-252)
+
+The assistant prepares an event with the `calendar_prepare_event_create` tool but saves nothing: it creates an action in `t_ai_akcje` with a TTL. The event is created only after "Dodaj do kalendarza" is clicked (`POST /api/v1/assistant/actions/{id}/confirm`), through the same operation as manual creation.
+
+- **Dates and missing data:** relative dates ("tomorrow") are resolved to a concrete date from the trusted server context (date, time, time zone). When the date, start or end/duration is missing, the assistant asks and never assumes a default end time.
+- **Shared validation and collisions** (`src/ai/event-preview.ts`): the preview goes through `validateTimedEvent` (e.g. a time skipped by the clock change → `invalid_event_time`) and `findEventCollisions`, including weekly series. Collisions are returned in the tool result, and every read of pending actions adds a current `collisions` field computed from the live calendar. The chat never bypasses collisions or moves other events: the add button is disabled and confirmation still fails with 409 `event_collision`; the action returns to `pending`, so the user can correct the time in the conversation or cancel.
+- **Replacing a preview:** a new create preview in the same conversation cancels the previous one (`cancelPendingActionsOfKind`, `blad_kod = superseded_by_new_preview`), so the old preview can no longer create an event.
+- **Recurrence and mandatory flag:** `repeatWeekly` only on explicit request; series use the existing series mechanism. `mandatory` is stored for classes only. A plain Work event is not a schedule approval and gets no pay snapshots.
+- **UI:** the preview card shows the title, full date with weekday, times, category, location ("nie podano" when empty), recurrence and the list of colliding events. One decision at a time – a double click does not send a second request. After adding, the chat confirms with the date and offers "Pokaż w kalendarzu", which opens that week. A failed save keeps the preview; retrying the same action is idempotent and creates no duplicate.
+
 ## Day summary and calendar questions (S23KC2S1P2-254)
 
 The "Twój dzień w skrócie" card on the "Dziś" screen uses `GET /api/v1/assistant/day-summary?date=YYYY-MM-DD`. The endpoint only reads the calendar – it never creates or changes events.

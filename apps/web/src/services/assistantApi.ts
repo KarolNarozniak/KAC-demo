@@ -2,7 +2,10 @@ import { apiBaseUrl } from './importApi.ts';
 
 export type AssistantMessage = { id: string; role: 'user' | 'assistant' | 'tool'; content: Record<string, unknown>; createdAt: string };
 export type AssistantConversation = { id: string; title: string; modelDeployment: string; createdAt: string; updatedAt: string; expiresAt: string };
-export type PendingAssistantAction = { id: string; kind: string; payload: Record<string, unknown>; expiresAt: string };
+export type PreviewCollision = { id: string; title: string; category: 'Class' | 'Work' | 'Personal'; startLocal: string; endLocal: string };
+export type PendingAssistantAction = { id: string; kind: string; payload: Record<string, unknown>; expiresAt: string;
+  /** S23KC2S1P2-263: kolizje liczone przez API przy każdym odczycie; niepusta lista blokuje zatwierdzenie. */
+  collisions?: PreviewCollision[]; validationError?: string };
 
 async function call<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
   const response = await fetch(`${apiBaseUrl()}${path}`, {

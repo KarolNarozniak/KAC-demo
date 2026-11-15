@@ -13,7 +13,7 @@ import type { AiRepository } from '../ai/repository.js';
 export type AiServiceContract = Pick<AiService, 'extractSchedule' | 'sendAssistantMessage'> & Partial<Pick<AiService, 'summarizeDay'>>;
 export type AiRepositoryContract = Pick<AiRepository,
   'createConversation' | 'getConversation' | 'listConversations' | 'appendMessage' | 'listMessages' | 'listPendingActions' |
-  'closeConversation' | 'logUsage' | 'createAction' | 'getAction' | 'claimAction' | 'completeAction' | 'releaseAction' | 'failAction' | 'cancelAction' | 'cancelPendingActions'>;
+  'closeConversation' | 'logUsage' | 'createAction' | 'getAction' | 'claimAction' | 'completeAction' | 'releaseAction' | 'failAction' | 'cancelAction' | 'cancelPendingActions'> & Partial<Pick<AiRepository, 'cancelPendingActionsOfKind'>>;
 
 export type CalendarRepository = {
   deleteEvent?: (eventId: string, userId?: string, calendarId?: string, assistantAction?: { actionId: string; expected?: Record<string, unknown> }) => Promise<string[] | null>;

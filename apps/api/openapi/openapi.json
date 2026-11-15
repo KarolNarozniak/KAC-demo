@@ -12538,6 +12538,48 @@
                             "type": "string",
                             "minLength": 1,
                             "maxLength": 100
+                          },
+                          "collisions": {
+                            "type": "array",
+                            "description": "S23KC2S1P2-252: wydarzenia kolidujące z proponowanym terminem, liczone przy każdym odczycie z bieżącego kalendarza. Niepusta lista oznacza, że zatwierdzenie zostanie odrzucone (409 event_collision).",
+                            "items": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "id",
+                                "title",
+                                "category",
+                                "startLocal",
+                                "endLocal"
+                              ],
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "title": {
+                                  "type": "string"
+                                },
+                                "category": {
+                                  "type": "string",
+                                  "enum": [
+                                    "Class",
+                                    "Work",
+                                    "Personal"
+                                  ]
+                                },
+                                "startLocal": {
+                                  "type": "string",
+                                  "description": "YYYY-MM-DDTHH:MM w strefie kalendarza."
+                                },
+                                "endLocal": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          },
+                          "validationError": {
+                            "type": "string",
+                            "description": "Kod błędu walidacji terminu, np. invalid_event (czas nie istnieje w strefie przy zmianie czasu)."
                           }
                         }
                       }
@@ -13012,6 +13054,48 @@
                             "type": "string",
                             "minLength": 1,
                             "maxLength": 100
+                          },
+                          "collisions": {
+                            "type": "array",
+                            "description": "S23KC2S1P2-252: wydarzenia kolidujące z proponowanym terminem, liczone przy każdym odczycie z bieżącego kalendarza. Niepusta lista oznacza, że zatwierdzenie zostanie odrzucone (409 event_collision).",
+                            "items": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "id",
+                                "title",
+                                "category",
+                                "startLocal",
+                                "endLocal"
+                              ],
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "title": {
+                                  "type": "string"
+                                },
+                                "category": {
+                                  "type": "string",
+                                  "enum": [
+                                    "Class",
+                                    "Work",
+                                    "Personal"
+                                  ]
+                                },
+                                "startLocal": {
+                                  "type": "string",
+                                  "description": "YYYY-MM-DDTHH:MM w strefie kalendarza."
+                                },
+                                "endLocal": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          },
+                          "validationError": {
+                            "type": "string",
+                            "description": "Kod błędu walidacji terminu, np. invalid_event (czas nie istnieje w strefie przy zmianie czasu)."
                           }
                         }
                       }

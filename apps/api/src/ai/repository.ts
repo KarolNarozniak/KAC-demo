@@ -169,6 +169,14 @@ export class AiRepository {
     return Boolean(result.rowCount);
   }
 
+  /** S23KC2S1P2-252 KA5: nowy podgląd zastępuje poprzedni – stare propozycje tego rodzaju w rozmowie przestają być ważne. */
+  async cancelPendingActionsOfKind(scope: UserScope, conversationId: string, kind: string): Promise<number> {
+    const result = await this.pool.query(`update t_ai_akcje set status = 'cancelled', blad_kod = 'superseded_by_new_preview', completed_at = now(), updated_at = now()
+      where id_rozmowy = $1 and id_uzytkownika = $2 and id_kalendarza = $3 and typ = $4 and status = 'pending'`,
+    [conversationId, scope.userId, scope.calendarId, kind]);
+    return result.rowCount ?? 0;
+  }
+
   async cancelPendingActions(scope: UserScope, conversationId: string): Promise<void> {
     await this.pool.query(`update t_ai_akcje set status = 'cancelled', completed_at = now(), updated_at = now()
       where id_rozmowy = $1 and id_uzytkownika = $2 and id_kalendarza = $3 and status = 'pending'`,

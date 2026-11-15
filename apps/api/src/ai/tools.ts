@@ -3,6 +3,8 @@ import type { UserScope } from '../api/scope.js';
 import type { CalendarRepository } from '../api/contracts.js';
 import type { WorkProfileRepository } from '../profile/repository.js';
 import { AiRepository } from './repository.js';
+import { previewCollisions, type PreviewCollision } from './event-preview.js';
+import { EventValidationError } from '../collisions.js';
 import { addDays, freeWindowsInRange, isValidDate, isValidTime, localMidnight, occurrencesInRange, totalsInRange } from './calendar-facts.js';
 
 const objectSchema = (properties: Record<string, unknown>, required: string[]) => ({
@@ -48,7 +50,7 @@ export type AssistantToolContext = {
   conversationId: string;
   calendar: CalendarRepository;
   workProfile?: WorkProfileRepository;
-  ai: Pick<AiRepository, 'createAction'>;
+  ai: Pick<AiRepository, 'createAction'> & Partial<Pick<AiRepository, 'cancelPendingActionsOfKind'>>;
   actionTtlMinutes: number;
 };
 
@@ -128,6 +130,7 @@ export async function executeAssistantTool(name: string, rawArguments: string, c
   if (name === 'calendar_prepare_event_create' || name === 'calendar_prepare_event_update' || name === 'calendar_prepare_event_delete') {
     const kind = name.endsWith('_create') ? 'calendar_event_create' : name.endsWith('_update') ? 'calendar_event_update' : 'calendar_event_delete';
     let payload: Record<string, unknown>;
+    let collisions: PreviewCollision[] | undefined;
     if (kind === 'calendar_event_delete') {
       if (!onlyKeys(args, ['id']) || typeof args.id !== 'string' || !args.id || args.id.length > 200) return { error: 'invalid_tool_arguments' };
       const id = typeof args.id === 'string' ? args.id : '';
@@ -137,17 +140,26 @@ export async function executeAssistantTool(name: string, rawArguments: string, c
       payload = { id, original: eventSnapshot(event) };
     } else {
       if (!validEventArguments(args, kind === 'calendar_event_update')) return { error: 'invalid_tool_arguments' };
-      const event = { title: args.title, start: args.start, end: args.end, category: args.category, location: args.location,
-        mandatory: args.mandatory, repeatWeekly: args.repeatWeekly };
+      // Obowiązkowość ma sens tylko dla zajęć; tytuł i miejsce bez zbędnych spacji (S23KC2S1P2-262).
+      const event = { title: String(args.title).trim(), start: String(args.start), end: String(args.end), category: String(args.category),
+        location: String(args.location).trim(), mandatory: args.category === 'Class' && args.mandatory === true, repeatWeekly: args.repeatWeekly === true };
+      const overview = await context.calendar.getOverview(context.scope.userId, context.scope.calendarId);
+      if (!overview) return { error: 'calendar_not_found' };
       if (typeof args.id === 'string') {
-        const overview = await context.calendar.getOverview(context.scope.userId, context.scope.calendarId);
-        const current = overview?.events.find((item) => item.id === args.id);
+        const current = overview.events.find((item) => item.id === args.id);
         if (!current) return { error: 'event_not_found' };
         payload = { id: args.id, original: eventSnapshot(current), event };
       } else payload = { event };
+      // Wspólna walidacja i kolizje: te same reguły co przy ręcznym dodawaniu. Kolizje nie blokują podglądu,
+      // ale model musi je pokazać, a zatwierdzenie i tak zostanie odrzucone, dopóki użytkownik nie poprawi terminu (5a).
+      try { collisions = previewCollisions(event, overview.events, overview.user.timezone, typeof args.id === 'string' ? args.id : undefined); }
+      catch (error) { return { error: error instanceof EventValidationError ? error.message === 'event_too_long' ? 'event_too_long' : 'invalid_event_time' : 'invalid_event' }; }
+      // Nowy podgląd dodania zastępuje poprzedni w tej rozmowie – stary nie może już utworzyć wydarzenia (KA5).
+      if (kind === 'calendar_event_create') await context.ai.cancelPendingActionsOfKind?.(context.scope, context.conversationId, kind);
     }
     const action = await context.ai.createAction(context.scope, context.conversationId, kind, payload, context.actionTtlMinutes);
-    return { status: 'awaiting_user_confirmation', actionId: action.id, expiresAt: action.expiresAt, preview: payload };
+    return { status: 'awaiting_user_confirmation', actionId: action.id, expiresAt: action.expiresAt, preview: payload,
+      ...(collisions ? { collisions, collisionNotice: collisions.length ? 'Termin koliduje z wydarzeniami – nie da się go zatwierdzić bez poprawy.' : 'Brak kolizji.' } : {}) };
   }
 
   return { error: 'tool_not_allowed' };

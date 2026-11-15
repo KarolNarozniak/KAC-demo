@@ -232,7 +232,11 @@ function CalendarApp() {
           onAskAssistant={route === 'Dziś' ? () => { setAssistantPrefill({ text: 'Co mam dziś w planie i kiedy mam wolny czas?', nonce: Date.now() }); setTab('Asystent'); } : undefined} /> :
         route === 'Grafik' ? <ScheduleScreen active={active} now={now} week={week} setWeek={setWeek} onPreview={setSchedulePreview} onApproved={() => setTab('Tydzień')} onUnsavedChange={onUnsavedChange} discardSignal={discardSignal} /> :
         route === 'Blokady' ? <BlocksScreen /> :
-        route === 'Asystent' ? <AssistantScreen active={active} onCalendarChange={() => setTab('Tydzień')} prefill={assistantPrefill} /> :
+        route === 'Asystent' ? <AssistantScreen active={active} prefill={assistantPrefill} onCalendarChange={(dateKey) => {
+          // S23KC2S1P2-263: „Pokaż w kalendarzu” otwiera tydzień z datą dodanego wydarzenia.
+          if (dateKey) { const [year, month, day] = dateKey.split('-').map(Number); setWeek(new Date(year, month - 1, day, 12)); }
+          setTab('Tydzień');
+        }} /> :
         route === 'Ustawienia' ? <ScrollView style={{ flex: 1, minHeight: 0 }} contentContainerStyle={[styles.content, { padding: 16, paddingBottom: 32 }]} keyboardShouldPersistTaps="handled">
           <View style={[styles.row, { justifyContent: 'space-between', marginBottom: 20 }]}><Text style={styles.heading}>Motyw</Text><ThemeToggle /></View>
            <Text style={[styles.heading, { marginBottom: 12 }]}>Układ tygodnia</Text>

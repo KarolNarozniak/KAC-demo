@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import test, { after } from 'node:test';
 import { config } from '../src/config.js';
 import { pool, PostgresCalendarRepository } from '../src/database.js';
 import { AiRepository } from '../src/ai/repository.js';
 import { AiActionStalePreviewError } from '../src/ai/repository.js';
+
+// Pula jest zamykana raz, po wszystkich testach pliku.
+after(async () => { await pool?.end(); });
 
 test('AI conversation scope, pending actions and calendar writes are locally persisted and idempotent', { skip: !config.databaseUrl }, async () => {
   assert.ok(pool);
@@ -17,7 +20,8 @@ test('AI conversation scope, pending actions and calendar writes are locally per
     assert.equal((await ai.listMessages(owner, conversation.id)).length, 1);
     assert.equal(await ai.getConversation({ userId: 'different-user', calendarId: owner.calendarId }, conversation.id), null);
 
-    const payload = { event: { title: 'AI integration synthetic', start: '2035-02-14T12:00', end: '2035-02-14T13:00',
+    // 2035-02-14 to środa: seed ma cotygodniową „Pracę” 12:00–16:00, więc termin musi być poza nią (inaczej event_collision w CI).
+    const payload = { event: { title: 'AI integration synthetic', start: '2035-02-14T18:00', end: '2035-02-14T19:00',
       category: 'Personal', location: '', mandatory: false, repeatWeekly: false } };
     const competing = await ai.createAction(owner, conversation.id, 'calendar_event_create', payload, 15);
     const competingClaims = await Promise.allSettled([ai.claimAction(owner, competing.id), ai.claimAction(owner, competing.id)]);
@@ -87,6 +91,22 @@ test('AI conversation scope, pending actions and calendar writes are locally per
       await pool.query('delete from t_event_outbox where id_agregatu = $1', [eventId]);
     }
     await ai.closeConversation(owner, conversation.id);
-    await pool.end();
+  }
+});
+
+test('S23KC2S1P2-252 KA5: nowy podgląd dodania anuluje poprzedni w tej samej rozmowie, a stary nie może utworzyć wydarzenia', { skip: !config.databaseUrl }, async () => {
+  assert.ok(pool);
+  const ai = new AiRepository(pool);
+  const owner = { userId: config.demoUserId, calendarId: config.demoCalendarId };
+  const conversation = await ai.createConversation(owner, 'gpt-5-mini', 30, 'Integration test KA5');
+  try {
+    const event = { title: 'Podgląd KA5', start: '2035-02-18T18:00', end: '2035-02-18T19:00', category: 'Personal', location: '', mandatory: false, repeatWeekly: false };
+    const first = await ai.createAction(owner, conversation.id, 'calendar_event_create', { event }, 15);
+    assert.equal(await ai.cancelPendingActionsOfKind(owner, conversation.id, 'calendar_event_create'), 1);
+    const second = await ai.createAction(owner, conversation.id, 'calendar_event_create', { event: { ...event, start: '2035-02-18T19:00', end: '2035-02-18T20:00' } }, 15);
+    assert.deepEqual((await ai.listPendingActions(owner, conversation.id)).map((action) => action.id), [second.id]);
+    await assert.rejects(ai.claimAction(owner, first.id), 'anulowany podgląd nie może zostać zatwierdzony');
+  } finally {
+    await ai.closeConversation(owner, conversation.id);
   }
 });

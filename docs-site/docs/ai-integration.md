@@ -70,6 +70,16 @@ Przy private endpoint wymagane są VNet Integration API App Service i poprawne p
 - **Memory:** źródłem pamięci jest PostgreSQL z `UserScope`. Historie są ograniczane do ostatnich 24 wiadomości w kontekście i zapisywane z monotoniczną kolejnością; wywołania narzędzi są odtwarzane jako stateless Responses input items. `demoScope` odpowiada obecnemu środowisku bez logowania.
 - **Guardrails:** model nie może modyfikować kalendarza. Zmiana tworzy `t_ai_akcje` z TTL, a niezależny endpoint potwierdzenia weryfikuje właściciela, pełny snapshot wydarzenia, kolizje i idempotency key. Aktualizacje i usunięcia zapisują wynik akcji w tej samej transakcji co zmianę kalendarza; ponowienie po utracie odpowiedzi odczytuje ten wynik zamiast ponownie zapisywać. Nieaktualny podgląd przechodzi do stanu `failed` i wymaga nowej propozycji. Rolę Prompt Shields uzupełniają limity wejścia, parsowanie JSON Schema, limit narzędzi/cykli i walidacja serwerowa.
 
+## Dodawanie wydarzeń przez rozmowę (S23KC2S1P2-252)
+
+Asystent przygotowuje wydarzenie narzędziem `calendar_prepare_event_create`, ale niczego nie zapisuje: tworzy akcję w `t_ai_akcje` z TTL. Wydarzenie powstaje dopiero po kliknięciu „Dodaj do kalendarza” (`POST /api/v1/assistant/actions/{id}/confirm`), przez tę samą operację co ręczne dodawanie.
+
+- **Daty i braki:** daty względne („jutro”) model zamienia na konkretną datę według zaufanego kontekstu serwera (data, czas, strefa). Gdy brakuje daty, początku albo końca/czasu trwania, asystent dopytuje i nie przyjmuje domyślnej godziny końca.
+- **Wspólna walidacja i kolizje** (`src/ai/event-preview.ts`): podgląd przechodzi przez `validateTimedEvent` (np. godzina nieistniejąca przy zmianie czasu → `invalid_event_time`) i `findEventCollisions`, także dla serii cotygodniowych. Kolizje trafiają do wyniku narzędzia, a przy każdym odczycie oczekujących akcji API dokleja aktualne pole `collisions` (liczone z bieżącego kalendarza). Czat nie omija kolizji ani nie przesuwa innych wydarzeń: przycisk dodania jest zablokowany, a zatwierdzenie i tak kończy się 409 `event_collision`; akcja wraca do stanu `pending`, więc użytkownik może poprawić termin w rozmowie albo anulować.
+- **Zastępowanie podglądu:** nowy podgląd dodania w tej samej rozmowie anuluje poprzedni (`cancelPendingActionsOfKind`, `blad_kod = superseded_by_new_preview`), więc stary podgląd nie może już utworzyć wydarzenia.
+- **Cykliczność i obowiązkowość:** `repeatWeekly` tylko na wyraźną prośbę; seria korzysta z istniejącego mechanizmu serii. `mandatory` jest zapisywane tylko dla zajęć. Zwykłe wydarzenie kategorii Work nie jest zatwierdzeniem grafiku i nie dostaje migawek wynagrodzenia.
+- **Interfejs:** karta podglądu pokazuje tytuł, pełną datę z dniem tygodnia, godziny, kategorię, miejsce („nie podano”, gdy brak) i powtarzanie oraz listę kolidujących wydarzeń. Jedna decyzja naraz – podwójne kliknięcie nie wysyła drugiego żądania. Po dodaniu czat potwierdza zapis z datą i oferuje „Pokaż w kalendarzu”, które otwiera tydzień tej daty. Błąd zapisu zostawia podgląd; ponowienie tej samej akcji jest idempotentne i nie tworzy duplikatu.
+
 ## Podsumowanie dnia i pytania o kalendarz (S23KC2S1P2-254)
 
 Karta „Twój dzień w skrócie” na ekranie „Dziś” korzysta z `GET /api/v1/assistant/day-summary?date=YYYY-MM-DD`. Endpoint tylko czyta kalendarz – nie tworzy ani nie zmienia wydarzeń.
