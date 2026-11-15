@@ -439,3 +439,41 @@ test('assistant replaces a stale pending update rather than reusing its obsolete
     assert.equal(fixture.writes(), 0);
   } finally { await app.close(); }
 });
+
+test('retry refreshes expired action results and prepares only three missing updates after two confirmations', async () => {
+  const fixture = bulkFixture();
+  const overview = await fixture.calendar.getOverview();
+  overview.events[3] = { ...overview.events[3], start: '2026-11-20T09:00', end: '2026-11-20T12:30', eventVersion: 2 };
+  overview.events.push({ ...bulkEvent, id: 'saved-4', start: '2026-11-16T09:00', end: '2026-11-16T12:30', category: 'Zajęcia', eventVersion: 1 });
+  const oldActions = bulkCalls.map((call, index) => {
+    const args = JSON.parse(call.arguments); const { id, ...event } = args;
+    return { id: `old-${index}`, conversationId: 'stream-conversation', kind: index < 4 ? 'calendar_event_update' : 'calendar_event_create',
+      status: index < 3 ? 'expired' : 'confirmed', expiresAt: '2026-01-01T00:00:00Z', eventId: index >= 3 ? `saved-${index}` : undefined,
+      payload: index < 4 ? { id, original: { ...event, start: event.start.replace('09:00', '08:00'), end: event.end.replace('12:30', '11:30'), category: 'Zajęcia', eventVersion: 1 }, event } : { event } };
+  });
+  const oldHistory: any[] = [
+    { id: 'old-calls', role: 'assistant', content: { toolCalls: bulkCalls.map((call) => ({ id: call.id, callId: call.call_id, name: call.name, arguments: call.arguments })) }, createdAt: '2026-01-01T00:00:00Z' },
+    ...oldActions.map((action, index) => ({ id: `old-result-${index}`, role: 'tool', content: { name: bulkCalls[index].name, callId: bulkCalls[index].call_id,
+      result: { status: 'awaiting_user_confirmation', actionId: action.id, expiresAt: action.expiresAt, preview: action.payload } }, createdAt: '2026-01-01T00:00:00Z' })),
+  ];
+  let liveMessages: any[] = []; let calls = 0;
+  const { app, messages } = streamingApi(async (input) => {
+    if (calls++ === 0) {
+      const results = input.filter((item: any) => item.type === 'function_call_output').map((item: any) => JSON.parse(item.output));
+      assert.deepEqual(results.map((result: any) => result.status), ['expired', 'expired', 'expired', 'confirmed', 'confirmed']);
+      assert.ok(results.slice(0, 3).every((result: any) => result.requiresNewProposal === true));
+      return response({ output: bulkCalls.slice(0, 3).map((call, index) => ({ ...call, id: `retry-fc-${index}`, call_id: `retry-${index}` })) });
+    }
+    return response({ output_text: 'Przygotowano trzy brakujące propozycje. Dwa pozostałe wydarzenia są już zapisane.' });
+  }, { ...fixture.ai, listMessages: async () => [...oldHistory, ...liveMessages], getAction: async (scope: any, id: string) => {
+    assert.equal(scope.userId, 'U001'); assert.equal(scope.calendarId, 'K001'); return oldActions.find((action) => action.id === id) ?? null;
+  } }, { ...fixture.calendar, getOverview: async () => overview });
+  liveMessages = messages;
+  try {
+    const result = await app.inject({ method: 'POST', url: '/api/v1/assistant/conversations/stream-conversation/messages', payload: { content: 'Przygotuj ponownie brakujące przesunięcia.' } });
+    assert.equal(result.statusCode, 200, result.body); assert.equal(result.json().pendingActions.length, 3);
+    assert.deepEqual(fixture.pending.map((action) => action.payload.event.start), ['2026-11-17T09:00', '2026-11-18T09:00', '2026-11-19T09:00']);
+    assert.equal(fixture.writes(), 0);
+    assert.equal(oldHistory[1].content.result.status, 'awaiting_user_confirmation');
+  } finally { await app.close(); }
+});

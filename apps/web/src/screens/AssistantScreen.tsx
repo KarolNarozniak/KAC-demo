@@ -187,6 +187,7 @@ export default function AssistantScreen({ active, onCalendarChange }: Props) {
             <Text style={styles.muted}>{replying ? 'Asystent odpowiada…' : 'Odpowiedź przerwana'}</Text>
           </View>
         </View>}
+        {pendingActions.length > 0 && <Text style={styles.heading}>Gotowe propozycje do zatwierdzenia: {pendingActions.length}</Text>}
         {pendingActions.length > 1 && <Button title="Zatwierdź wszystko" primary disabled={sending} onPress={() => void confirmActions(pendingActions)} />}
         {pendingActions.map((action) => <View key={action.id} style={[styles.card, { borderColor: palette.amber }]}>
           <Text style={styles.heading}>Propozycja do potwierdzenia</Text><Text style={styles.body}>{actionSummary(action)}</Text>

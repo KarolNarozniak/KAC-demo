@@ -44,3 +44,11 @@ Zgłoszenie z 15:54 dotyczyło czterech aktualizacji i jednego dodania wydarzeni
 Włączono wiele wywołań w jednej odpowiedzi, domyślny limit ośmiu rund (maksymalnie 16) i niezależny limit 64 wywołań na turę. Bieżący kontekst nie jest przycinany do 24 wiadomości po każdej rundzie. Błędy zwracają dostępne podglądy, a identyczne, niewygasłe propozycje są ponownie używane przy kontynuacji rozmowy.
 
 Weryfikacja tej poprawki: 36 testów web i 169 API, sprawdzanie typów, OpenAPI, dokumentacja PL/EN oraz pełny build zaliczone. Regresje obejmują pięć propozycji przygotowywanych pojedynczo i zbiorczo, odzyskanie podglądów po limicie, ponowienie bez duplikowania aktualnych propozycji, nieaktualny snapshot oraz turę przekraczającą 24 zapisane wiadomości.
+
+## Kontynuacja po wygaśnięciu podglądów
+
+Zapis bazy wykazał, że trzy propozycje z 15:54 wygasły o 16:09 (czas Europe/Warsaw). Przy ponowieniu o 16:19 model odczytał stare wyniki `awaiting_user_confirmation` i przygotował tylko brakujące dwa podglądy. Oba zostały zatwierdzone około 16:20, natomiast trzy wygasłe nie zostały zapisane. Przyczyną był nieaktualny stan akcji w kontekście rozmowy, a nie błąd zapisu dwóch nowych propozycji.
+
+Backend odświeża teraz status każdej historycznej propozycji przed turą modelu, z uwzględnieniem zakresu użytkownika i rozmowy. Rozróżnia ważne, potwierdzone, wygasłe, anulowane, błędne, przetwarzane i niedostępne akcje. Interfejs pokazuje liczbę rzeczywiście oczekujących podglądów. Nie zmieniano ręcznie wydarzeń użytkownika ani nie zatwierdzano za niego brakujących zmian.
+
+Weryfikacja odświeżania statusów: 36 testów web i 171 API zaliczone, w tym regresja trzech wygasłych i dwóch potwierdzonych propozycji oraz izolacja akcji obcej rozmowy. Sprawdzanie typów, OpenAPI, dokumentacja PL/EN i pełny build zaliczone.

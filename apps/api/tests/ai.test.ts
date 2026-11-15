@@ -206,3 +206,19 @@ test('assistant distinguishes Azure content filtering and model refusal from exh
   const refused = new AiService({ respond: async () => ({ ...response(''), status: 'completed', output: [{ type: 'message', content: [{ type: 'refusal', refusal: 'Synthetic model refusal' }] }] } as unknown as OpenAIResponse) });
   await assert.rejects(refused.sendAssistantMessage([{ role: 'user', content: 'Przygotuj podgląd zajęć' }], []), AiModelRefusalError);
 });
+
+test('historical previews use current action states and cannot reuse another conversation action', async () => {
+  const { refreshActionHistory } = await import('../src/ai/action-history.js');
+  const statuses = ['pending', 'confirmed', 'expired', 'cancelled', 'failed', 'processing', 'foreign', 'missing'];
+  const actions = statuses.slice(0, -1).map((status, index) => ({ id: `action-${index}`, conversationId: status === 'foreign' ? 'other' : 'conversation', kind: 'calendar_event_create', payload: {}, status, expiresAt: '2035-01-01T00:00:00Z' }));
+  const messages = statuses.map((_status, index) => ({ id: `message-${index}`, role: 'tool' as const, content: { name: 'calendar_prepare_event_create', callId: `call-${index}`, result: { status: 'awaiting_user_confirmation', actionId: `action-${index}` } }, createdAt: '2026-01-01T00:00:00Z' }));
+  let reads = 0;
+  const history = await refreshActionHistory(messages, { userId: 'synthetic-user', calendarId: 'synthetic-calendar' }, 'conversation', {
+    getAction: async (_scope, id) => { reads++; return actions.find((action) => action.id === id) ?? null; },
+  }, [actions[0]]);
+  assert.equal(reads, 7);
+  const results = history.map((message) => message.content.result as Record<string, unknown>);
+  assert.deepEqual(results.map((result) => result.status), ['awaiting_user_confirmation', 'confirmed', 'expired', 'cancelled', 'failed', 'processing', 'unavailable', 'unavailable']);
+  assert.equal(results[5].requiresNewProposal, false);
+  assert.ok(messages.every((message) => message.content.result.status === 'awaiting_user_confirmation'));
+});

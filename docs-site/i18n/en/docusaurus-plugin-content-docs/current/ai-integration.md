@@ -138,3 +138,9 @@ Safe diagnostics record the provider code and filtered category names without pr
 The model can return multiple tool calls in one response (`parallel_tool_calls: true`); the backend validates and executes them sequentially. `AZURE_AI_MAX_TOOL_ROUNDS` defaults to 8 (configurable up to 16), with an additional limit of 64 calls per turn. Complete current-turn call/output pairs are retained independently of the 24-message window for earlier history.
 
 Exhausting the limit returns `assistant_tool_limit` (409 or an `error` event). Error responses may include `pendingActions`; the UI shows already prepared previews for confirmation or cancellation. Preparing the identical action again in the same conversation reuses its existing unexpired preview. Limits and errors never confirm calendar changes.
+
+### Current status of historical proposals
+
+A historical `awaiting_user_confirmation` result does not prove that a preview is still valid. Before each turn, the backend refreshes referenced action statuses in the model context from the database, scoped to the user and conversation. Expired, cancelled, failed or unavailable proposals need a fresh preview when requested again; confirmed actions indicate completed writes, while processing actions must not be duplicated. Stored historical messages remain unchanged.
+
+The Assistant displays the actual pending proposal count beside batch confirmation. An earlier textual claim by the model does not establish that all proposals remain available for saving. Preview TTL remains 15 minutes.

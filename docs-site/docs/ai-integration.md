@@ -138,3 +138,9 @@ Bezpieczna diagnostyka zapisuje kod dostawcy i nazwy kategorii filtrów, bez tre
 Model może zwrócić wiele wywołań narzędzi w jednej odpowiedzi (`parallel_tool_calls: true`); backend wykonuje i waliduje je kolejno. Domyślny `AZURE_AI_MAX_TOOL_ROUNDS` wynosi 8 (konfigurowalny do 16), a tura ma dodatkowy limit 64 wywołań. Bieżąca tura zachowuje pełne pary wywołań i wyników, niezależnie od 24-wiadomościowego okna wcześniejszej historii.
 
 Wyczerpanie limitu zwraca `assistant_tool_limit` (409 lub zdarzenie `error`). Odpowiedź błędu może zawierać `pendingActions`; interfejs pokazuje już przygotowane podglądy do zatwierdzenia lub odrzucenia. Ponowne przygotowanie identycznej akcji w tej samej rozmowie wykorzystuje istniejący, niewygasły podgląd. Limity i błędy nie zatwierdzają żadnych zmian w kalendarzu.
+
+### Aktualny status dawnych propozycji
+
+Historyczny wynik `awaiting_user_confirmation` nie oznacza, że podgląd nadal jest ważny. Przed każdą turą backend odświeża w kontekście modelu statusy wskazanych akcji na podstawie bazy i bieżącego zakresu użytkownika oraz rozmowy. Wygasłe, anulowane, błędne lub niedostępne propozycje wymagają nowego podglądu po ponowieniu prośby; potwierdzone oznaczają już wykonany zapis, a przetwarzane nie powinny być duplikowane. Sam zapis dawnej historii pozostaje niezmieniony.
+
+Asystent pokazuje liczbę faktycznie oczekujących propozycji obok przycisku zbiorczego zatwierdzania. Dawna deklaracja tekstowa modelu nie jest potwierdzeniem, że wszystkie propozycje nadal są dostępne do zapisu. TTL podglądu pozostaje równy 15 minut.

@@ -7,6 +7,7 @@ import { config } from '../../../config.js';
 import type { ApiDependencies } from '../../contracts.js';
 import { AiActionConflictError, AiActionNotFoundError, AiActionStalePreviewError, AiConversationNotFoundError } from '../../../ai/repository.js';
 import { assistantTools, executeAssistantTool } from '../../../ai/tools.js';
+import { refreshActionHistory } from '../../../ai/action-history.js';
 import { trustedTimeContext } from '../../../ai/context.js';
 import { classifyAiProviderFailure, isAiContentFilterFailure, safeAiProviderDiagnostics } from '../../../ai/provider-errors.js';
 import type { EventInput } from '../../../database.js';
@@ -179,10 +180,11 @@ export async function assistantRoutes(app: FastifyInstance, options: Pick<ApiDep
         reply.header('Content-Type', 'application/x-ndjson; charset=utf-8').header('Cache-Control', 'no-cache, no-transform').header('X-Accel-Buffering', 'no').send(stream);
         emit({ type: 'accepted', message: userMessage });
       }
-      let history = [...await aiRepository.listMessages(owner, conversation.id, 24)];
+      const storedHistory = await aiRepository.listMessages(owner, conversation.id, 24);
       const overview = await repository.getOverview(owner.userId, owner.calendarId);
       const prepared = new Map<string, Record<string, unknown>>();
       const existingActions = await aiRepository.listPendingActions(owner, conversation.id);
+      const history = await refreshActionHistory(storedHistory, owner, conversation.id, aiRepository, existingActions);
       for (const action of existingActions) {
         const operation = action.kind === 'calendar_event_create' ? 'create' : action.kind === 'calendar_event_update' ? 'update' : action.kind === 'calendar_event_delete' ? 'delete' : null;
         if (!operation) continue;
