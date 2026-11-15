@@ -25,6 +25,10 @@ const aiErrorText: Record<string, string> = {
   ai_action_stale_preview: 'Wydarzenie zmieniło się od czasu przygotowania podglądu. Poproś o nową propozycję.',
   action_not_found_or_expired: 'Ta propozycja wygasła lub nie istnieje. Poproś asystenta o przygotowanie nowej.',
   conversation_not_found_or_expired: 'Ta rozmowa wygasła lub nie istnieje. Rozpocznij nową rozmowę.',
+  invalid_date: 'Nieprawidłowa data podsumowania.',
+  calendar_unavailable: 'Nie udało się odczytać kalendarza. Spróbuj ponownie.',
+  calendar_not_configured: 'Kalendarz nie jest skonfigurowany w API.',
+  calendar_not_found: 'Nie znaleziono kalendarza.',
   event_collision: 'Ta propozycja koliduje z wydarzeniem w kalendarzu. Sprawdź kalendarz i popraw propozycję.',
 };
 
@@ -38,25 +42,17 @@ export const confirmAssistantAction = (id: string) => call<{ status: string; act
 export const cancelAssistantAction = (id: string) => call<{ status: string }>(`/api/v1/assistant/actions/${encodeURIComponent(id)}/cancel`, 'POST', {});
 export const deleteAssistantConversation = (id: string) => call<{ status: string }>(`/api/v1/assistant/conversations/${encodeURIComponent(id)}`, 'DELETE');
 
-export const dailySummaryPrompt = 'Podsumuj krótko wydarzenia na dziś, korzystając z kalendarza i zaufanej bieżącej daty oraz strefy czasu konta. Napisz po polsku 2–4 zdania: podaj najważniejsze wydarzenia z godzinami oraz dłuższe wolne okna. Jeśli kalendarz jest pusty, powiedz to wprost. Nie twórz ani nie zmieniaj wydarzeń i nie przygotowuj żadnych akcji.';
+export type DaySummary = {
+  date: string; timeZone: string; status: 'ai' | 'local' | 'empty'; text: string; aiAvailable: boolean; cached: boolean;
+  generatedAt: string; fingerprint: string; aiError?: string;
+  facts: {
+    events: Array<{ id: string; title: string; category: 'Class' | 'Work' | 'Personal'; location: string; mandatory: boolean; repeatWeekly: boolean;
+      startLocal: string; endLocal: string; startsBeforeDay: boolean; endsAfterDay: boolean }>;
+    gaps: Array<{ date: string; startLocal: string; endLocal: string; minutes: number; label: string }>;
+    totals: { classMinutes: number; workMinutes: number; personalMinutes: number; busyMinutes: number };
+  };
+};
 
-export async function getDailySummary(dateKey: string, refresh = false) {
-  const title = `Dzień w skrócie ${dateKey}`;
-  const { conversations } = await listAssistantConversations();
-  let conversation = conversations.find((item) => item.title === title);
-  if (conversation && !refresh) {
-    const history = await listAssistantMessages(conversation.id);
-    let lastPrompt = -1;
-    history.messages.forEach((message, index) => {
-      if (message.role === 'user' && message.content.text === dailySummaryPrompt) lastPrompt = index;
-    });
-    if (lastPrompt >= 0) {
-      const saved = history.messages.slice(lastPrompt + 1).reverse().find((message) => message.role === 'assistant' && typeof message.content.text === 'string');
-      if (saved) return { conversationId: conversation.id, text: String(saved.content.text).trim() };
-    }
-  }
-  if (!conversation) conversation = await createAssistantConversation(title);
-  const response = await sendAssistantMessage(conversation.id, dailySummaryPrompt);
-  await Promise.allSettled(response.pendingActions.map((action) => cancelAssistantAction(action.id)));
-  return { conversationId: conversation.id, text: response.message.content.trim() };
-}
+/** S23KC2S1P2-271: podsumowanie dnia z faktami wyliczonymi przez backend; refresh wymusza nowe wywołanie modelu. */
+export const getDaySummary = (date: string, refresh = false) =>
+  call<DaySummary>(`/api/v1/assistant/day-summary?date=${encodeURIComponent(date)}${refresh ? '&refresh=true' : ''}`);

@@ -3,7 +3,10 @@ import type { FunctionTool, ResponseInputItem, Response as OpenAIResponse } from
 import type { ImportSource } from '../import/session.js';
 import type { ImportRow } from '../import/rules.js';
 import type { FoundryResponsesProvider } from './foundry.js';
-import { importInstructions, KAC_ASSISTANT_INSTRUCTIONS } from './prompts.js';
+import { DAY_SUMMARY_INSTRUCTIONS, importInstructions, KAC_ASSISTANT_INSTRUCTIONS } from './prompts.js';
+import { formatDuration, type DayFacts } from './calendar-facts.js';
+
+const CATEGORY_PL = { Class: 'zajęcia', Work: 'praca', Personal: 'prywatne' } as const;
 
 export type AiFile = { fileName: string; mimeType: 'application/pdf' | 'image/jpeg' | 'image/png'; bytes: Buffer };
 export type ExtractedImportRow = Omit<ImportRow, 'id' | 'category'> & { eventType: 'event' | 'off_day' | 'break' | 'header' };
@@ -79,6 +82,26 @@ export class AiService {
       return { rows, usage: { inputTokens: response.usage?.input_tokens ?? 0, outputTokens: response.usage?.output_tokens ?? 0 }, responseId: response.id };
   }
 
+  /** Podsumowanie dnia (S23KC2S1P2-270): model dostaje tylko fakty wyliczone przez backend, bez narzędzi. */
+  async summarizeDay(facts: DayFacts, trustedContext: string, signal?: AbortSignal) {
+    const response = await this.foundry.respond({
+      store: false,
+      instructions: `${DAY_SUMMARY_INSTRUCTIONS}\n\n${trustedContext}`,
+      input: [{ role: 'user', content: JSON.stringify({ date: facts.date, timeZone: facts.timeZone, events: facts.events.map((item) => ({
+        title: item.title, category: CATEGORY_PL[item.category], start: item.startLocal.slice(11), end: item.endLocal.slice(11), location: item.location || undefined,
+        mandatory: item.category === 'Class' ? item.mandatory : undefined, repeatWeekly: item.repeatWeekly || undefined,
+        startsBeforeDay: item.startsBeforeDay || undefined, endsAfterDay: item.endsAfterDay || undefined,
+      })), gaps: facts.gaps.map((gap) => ({ start: gap.startLocal.slice(11), end: gap.endLocal.slice(11), duration: gap.label })),
+      totals: { zajęcia: formatDuration(facts.totals.classMinutes), praca: formatDuration(facts.totals.workMinutes),
+        prywatne: formatDuration(facts.totals.personalMinutes), łącznieZajęty: formatDuration(facts.totals.busyMinutes) } }) }],
+      // gpt-5-mini zużywa część limitu na rozumowanie; za mały limit dawał pusty tekst i niepotrzebny tryb bez AI.
+      max_output_tokens: 1500,
+    }, { signal });
+    const text = response.output_text?.trim();
+    if (!text) throw new AiInvalidOutputError('empty_day_summary');
+    return { text: text.slice(0, 1200), usage: { inputTokens: response.usage?.input_tokens ?? 0, outputTokens: response.usage?.output_tokens ?? 0 } };
+  }
+
   async sendAssistantMessage(input: ResponseInputItem[], tools: FunctionTool[], trustedContext?: string, signal?: AbortSignal) {
     return this.foundry.respond({
       store: false,
@@ -86,7 +109,8 @@ export class AiService {
       input,
       tools,
       parallel_tool_calls: false,
-      max_output_tokens: 1200,
+      // gpt-5-mini wlicza rozumowanie do limitu; przy 1200 dłuższe odpowiedzi (lista wydarzeń + wolne okna) urywały się w połowie.
+      max_output_tokens: 4000,
     }, { signal });
   }
 }

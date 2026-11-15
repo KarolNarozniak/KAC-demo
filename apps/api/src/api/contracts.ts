@@ -10,7 +10,7 @@ import type { ScopeResolver } from './scope.js';
 import type { AiService } from '../ai/service.js';
 import type { AiRepository } from '../ai/repository.js';
 
-export type AiServiceContract = Pick<AiService, 'extractSchedule' | 'sendAssistantMessage'>;
+export type AiServiceContract = Pick<AiService, 'extractSchedule' | 'sendAssistantMessage'> & Partial<Pick<AiService, 'summarizeDay'>>;
 export type AiRepositoryContract = Pick<AiRepository,
   'createConversation' | 'getConversation' | 'listConversations' | 'appendMessage' | 'listMessages' | 'listPendingActions' |
   'closeConversation' | 'logUsage' | 'createAction' | 'getAction' | 'claimAction' | 'completeAction' | 'releaseAction' | 'failAction' | 'cancelAction' | 'cancelPendingActions'>;

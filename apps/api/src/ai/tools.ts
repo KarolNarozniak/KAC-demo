@@ -3,6 +3,7 @@ import type { UserScope } from '../api/scope.js';
 import type { CalendarRepository } from '../api/contracts.js';
 import type { WorkProfileRepository } from '../profile/repository.js';
 import { AiRepository } from './repository.js';
+import { addDays, freeWindowsInRange, isValidDate, isValidTime, localMidnight, occurrencesInRange, totalsInRange } from './calendar-facts.js';
 
 const objectSchema = (properties: Record<string, unknown>, required: string[]) => ({
   type: 'object', additionalProperties: false, properties, required,
@@ -19,6 +20,15 @@ export const assistantTools: FunctionTool[] = [
   { type: 'function', name: 'calendar_search_events', strict: true,
     description: 'Search the current user calendar in a bounded date range. Read-only.',
     parameters: objectSchema({ from: { type: 'string', format: 'date' }, to: { type: 'string', format: 'date' }, query: { type: ['string', 'null'], maxLength: 120 } }, ['from', 'to', 'query']) },
+  // S23KC2S1P2-270: wolne okna i sumy liczy backend na rozwiniętych seriach, model tylko je opisuje.
+  { type: 'function', name: 'calendar_free_windows', strict: true,
+    description: 'Find calendar gaps (no event at all) between dayStart and dayEnd on each day from..to (max 14 days). Read-only. Free time is not work availability.',
+    parameters: objectSchema({ from: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' }, to: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
+      dayStart: { type: 'string', pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' }, dayEnd: { type: 'string', pattern: '^(([01]\\d|2[0-3]):[0-5]\\d|24:00)$' },
+      minMinutes: { type: 'integer', minimum: 5, maximum: 720 } }, ['from', 'to', 'dayStart', 'dayEnd', 'minMinutes']) },
+  { type: 'function', name: 'calendar_time_totals', strict: true,
+    description: 'Sum event minutes per category (Class, Work, Personal) and total busy minutes for days from..to inclusive (max 93 days), with weekly series and overnight events. Read-only.',
+    parameters: objectSchema({ from: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' }, to: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' } }, ['from', 'to']) },
   { type: 'function', name: 'work_profile_get', strict: true,
     description: 'Read the current user work profile and planning availability. Read-only.',
     parameters: objectSchema({}, []) },
@@ -78,10 +88,34 @@ export async function executeAssistantTool(name: string, rawArguments: string, c
     const overview = await context.calendar.getOverview(context.scope.userId, context.scope.calendarId);
     if (!overview) return { error: 'calendar_not_found' };
     const query = typeof args.query === 'string' ? args.query.trim().toLocaleLowerCase() : '';
-    const events = overview.events.filter((event) => event.start.slice(0, 10) <= to && event.end.slice(0, 10) >= from &&
-      (!query || `${event.title} ${event.location ?? ''}`.toLocaleLowerCase().includes(query)))
-      .slice(0, 100).map(({ id, title, start, end, category, mandatory, repeatWeekly, location }) => ({ id, title, start, end, category, mandatory, repeatWeekly, location }));
-    return { timeZone: overview.user.timezone, events };
+    // Serie cotygodniowe rozwijamy na wystąpienia w zakresie (S23KC2S1P2-270), żeby „co mam jutro?” obejmowało zajęcia z serii.
+    const zone = overview.user.timezone;
+    const byId = new Map(overview.events.map((event) => [event.id, event]));
+    const matching = overview.events.filter((event) => !query || `${event.title} ${event.location ?? ''}`.toLocaleLowerCase().includes(query));
+    const events = occurrencesInRange(matching, localMidnight(from, zone), localMidnight(addDays(to, 1), zone), zone).slice(0, 100).map((item) => {
+      const source = byId.get(item.id)!;
+      return { id: item.id, title: item.title, start: item.startLocal, end: item.endLocal, category: source.category,
+        // Obowiązkowość dotyczy tylko zajęć – przy pracy i wydarzeniach prywatnych jej nie podajemy.
+        ...(item.category === 'Class' ? { mandatory: item.mandatory } : {}),
+        repeatWeekly: item.repeatWeekly, location: item.location, ...(item.repeatWeekly ? { seriesStart: source.start, seriesEnd: source.end } : {}) };
+    });
+    return { timeZone: zone, events };
+  }
+
+  if (name === 'calendar_free_windows' || name === 'calendar_time_totals') {
+    const keys = name === 'calendar_free_windows' ? ['from', 'to', 'dayStart', 'dayEnd', 'minMinutes'] : ['from', 'to'];
+    if (!onlyKeys(args, keys) || keys.some((key) => !(key in args))) return { error: 'invalid_tool_arguments' };
+    const from = String(args.from), to = String(args.to);
+    const maxDays = name === 'calendar_free_windows' ? 14 : 93;
+    if (!isValidDate(from) || !isValidDate(to) || from > to || addDays(from, maxDays - 1) < to) return { error: 'invalid_or_too_wide_date_range' };
+    const overview = await context.calendar.getOverview(context.scope.userId, context.scope.calendarId);
+    if (!overview) return { error: 'calendar_not_found' };
+    const zone = overview.user.timezone;
+    if (name === 'calendar_time_totals') return totalsInRange(overview.events, from, to, zone);
+    const dayStart = String(args.dayStart), dayEnd = String(args.dayEnd), minMinutes = Number(args.minMinutes);
+    if (!isValidTime(dayStart) || dayStart === '24:00' || !isValidTime(dayEnd) || dayEnd <= dayStart || !Number.isInteger(minMinutes) || minMinutes < 5 || minMinutes > 720)
+      return { error: 'invalid_tool_arguments' };
+    return { timeZone: zone, dayStart, dayEnd, minMinutes, windows: freeWindowsInRange(overview.events, from, to, dayStart, dayEnd, minMinutes, zone).slice(0, 100) };
   }
 
   if (name === 'work_profile_get') {

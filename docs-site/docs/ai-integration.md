@@ -65,10 +65,19 @@ Przy private endpoint wymagane są VNet Integration API App Service i poprawne p
 ## Instructions, tools, knowledge i guardrails
 
 - **Instructions:** wersjonowany `KAC_ASSISTANT_INSTRUCTIONS` i instrukcja zadania importu są przekazywane w requestcie. Wskazują polski język, wiarygodne źródła i traktowanie tekstu w pliku jako niezaufanych danych.
-- **Tools:** `assistantTools` jest ścisłą allow-listą w `src/ai/tools.ts`: odczyt kalendarza/profilu i przygotowanie podglądu utworzenia, zmiany lub usunięcia wydarzenia. Argumenty są sprawdzane ponownie w backendzie. Model nigdy nie ma narzędzia `confirm`.
+- **Tools:** `assistantTools` jest ścisłą allow-listą w `src/ai/tools.ts`: odczyt kalendarza/profilu, wolne okna i sumy czasu liczone w backendzie oraz przygotowanie podglądu utworzenia, zmiany lub usunięcia wydarzenia. Argumenty są sprawdzane ponownie w backendzie. Model nigdy nie ma narzędzia `confirm`.
 - **Knowledge:** nie konfigurujemy File Search, vector store ani zewnętrznego RAG w MVP. Kalendarz/profil są pobierane przez scope-owane narzędzia, a plik jest wejściem tylko bieżącego importu.
 - **Memory:** źródłem pamięci jest PostgreSQL z `UserScope`. Historie są ograniczane do ostatnich 24 wiadomości w kontekście i zapisywane z monotoniczną kolejnością; wywołania narzędzi są odtwarzane jako stateless Responses input items. `demoScope` odpowiada obecnemu środowisku bez logowania.
 - **Guardrails:** model nie może modyfikować kalendarza. Zmiana tworzy `t_ai_akcje` z TTL, a niezależny endpoint potwierdzenia weryfikuje właściciela, pełny snapshot wydarzenia, kolizje i idempotency key. Aktualizacje i usunięcia zapisują wynik akcji w tej samej transakcji co zmianę kalendarza; ponowienie po utracie odpowiedzi odczytuje ten wynik zamiast ponownie zapisywać. Nieaktualny podgląd przechodzi do stanu `failed` i wymaga nowej propozycji. Rolę Prompt Shields uzupełniają limity wejścia, parsowanie JSON Schema, limit narzędzi/cykli i walidacja serwerowa.
+
+## Podsumowanie dnia i pytania o kalendarz (S23KC2S1P2-254)
+
+Karta „Twój dzień w skrócie” na ekranie „Dziś” korzysta z `GET /api/v1/assistant/day-summary?date=YYYY-MM-DD`. Endpoint tylko czyta kalendarz – nie tworzy ani nie zmienia wydarzeń.
+
+- **Fakty liczy backend** (`src/ai/calendar-facts.ts`): wystąpienia dnia w strefie właściciela kalendarza (serie cotygodniowe rozwinięte przez `eventOccurrences`, wydarzenia przez północ przycięte do dnia z flagami `startsBeforeDay`/`endsAfterDay`), przerwy między wydarzeniami (od 15 min) i sumy minut w kategoriach liczone na rzeczywistych chwilach czasu, więc dzień zmiany czasu ma prawidłową długość. Model dostaje tylko te fakty i ma je opisać; nie ma narzędzi i nie liczy sum.
+- **Statusy:** `ai` – tekst modelu; `empty` – brak wydarzeń, tekst bez wywołania modelu; `local` – model niedostępny albo nieskonfigurowany (`aiError`), tekst złożony lokalnie z tych samych faktów. Awaria AI zwraca 200, żeby ekran „Dziś” pozostał użyteczny.
+- **Cache:** wynik jest zapamiętywany per użytkownik, kalendarz i dzień razem z odciskiem (`fingerprint`) odczytanych wydarzeń. Niezmieniony kalendarz zwraca ten sam tekst z `cached: true` bez kolejnego płatnego wywołania; zmiana wydarzeń daje nowy odcisk i nowe podsumowanie; `refresh=true` wymusza nowe wywołanie. Cache jest w pamięci procesu API (ograniczony do 500 wpisów) – po restarcie lub na innej instancji podsumowanie powstaje ponownie. Frontend pobiera podsumowanie tylko po zmianie daty albo wydarzeń dnia.
+- **Pytania w Asystencie:** narzędzia `calendar_free_windows` (luki w kalendarzu w podanych godzinach, maks. 14 dni) i `calendar_time_totals` (sumy minut w kategoriach, maks. 93 dni) liczą wynik w backendzie; `calendar_search_events` zwraca wystąpienia serii w zakresie. Wolny czas oznacza lukę w kalendarzu, a nie dostępność do pracy z profilu. Przycisk „Zapytaj asystenta” na karcie przechodzi do Asystenta z przygotowanym pytaniem, którego nie wysyła automatycznie.
 
 ## Anulowanie odczytu pliku
 

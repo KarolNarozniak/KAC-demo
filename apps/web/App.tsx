@@ -35,6 +35,8 @@ function CalendarApp() {
   const [tab, setTab] = useState<typeof tabs[number]>('Dziś');
   const [week, setWeek] = useState(new Date());
   const [schedulePreview, setSchedulePreview] = useState<WeeklySchedule | null>(null);
+  // S23KC2S1P2-271: „Zapytaj asystenta” z karty dnia przechodzi do Asystenta z przygotowanym pytaniem (bez automatycznego wysłania).
+  const [assistantPrefill, setAssistantPrefill] = useState<{ text: string; nonce: number } | null>(null);
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings | null>(null);
   const [notificationError, setNotificationError] = useState('');
   const [notificationMinutes, setNotificationMinutes] = useState('30');
@@ -226,10 +228,11 @@ function CalendarApp() {
       const route = tabs[index];
       return (
         route === 'Dziś' || route === 'Tydzień' ? <CalendarScreen active={active} now={now} weekLayout={weekLayout} todayOnly={route === 'Dziś'} week={week} setWeek={setWeek} draftSchedule={schedulePreview}
-          notificationTarget={route === 'Tydzień' ? notificationTarget : null} onNotificationResolved={() => setNotificationTarget(null)} /> :
+          notificationTarget={route === 'Tydzień' ? notificationTarget : null} onNotificationResolved={() => setNotificationTarget(null)}
+          onAskAssistant={route === 'Dziś' ? () => { setAssistantPrefill({ text: 'Co mam dziś w planie i kiedy mam wolny czas?', nonce: Date.now() }); setTab('Asystent'); } : undefined} /> :
         route === 'Grafik' ? <ScheduleScreen active={active} now={now} week={week} setWeek={setWeek} onPreview={setSchedulePreview} onApproved={() => setTab('Tydzień')} onUnsavedChange={onUnsavedChange} discardSignal={discardSignal} /> :
         route === 'Blokady' ? <BlocksScreen /> :
-        route === 'Asystent' ? <AssistantScreen active={active} onCalendarChange={() => setTab('Tydzień')} /> :
+        route === 'Asystent' ? <AssistantScreen active={active} onCalendarChange={() => setTab('Tydzień')} prefill={assistantPrefill} /> :
         route === 'Ustawienia' ? <ScrollView style={{ flex: 1, minHeight: 0 }} contentContainerStyle={[styles.content, { padding: 16, paddingBottom: 32 }]} keyboardShouldPersistTaps="handled">
           <View style={[styles.row, { justifyContent: 'space-between', marginBottom: 20 }]}><Text style={styles.heading}>Motyw</Text><ThemeToggle /></View>
            <Text style={[styles.heading, { marginBottom: 12 }]}>Układ tygodnia</Text>

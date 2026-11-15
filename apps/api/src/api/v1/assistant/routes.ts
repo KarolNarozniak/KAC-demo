@@ -10,6 +10,8 @@ import { classifyAiProviderFailure, safeAiProviderDiagnostics } from '../../../a
 import type { EventInput } from '../../../database.js';
 import type { AiMessage } from '../../../ai/repository.js';
 import { documented, withExamples } from '../../examples.js';
+import { DaySummaryService } from '../../../ai/day-summary.js';
+import { isValidDate } from '../../../ai/calendar-facts.js';
 
 const idSchema = { type: 'string', minLength: 1, maxLength: 100 } as const;
 const objectResponse = (description: string, required: string[], properties: Record<string, unknown>, value: Record<string, unknown>) =>
@@ -82,6 +84,64 @@ export async function assistantRoutes(app: FastifyInstance, options: Pick<ApiDep
   const { aiService, aiRepository, repository, workProfileRepository, scope } = options;
 
   app.get('/assistant/config', { schema: { tags: ['Assistant'], summary: 'Get assistant capability status', description: 'Returns whether the configured Azure Responses deployment is available. Does not expose endpoint, deployment, or credential details.', operationId: 'getAssistantConfig', response: { 200: objectResponse('Możliwość korzystania z asystenta.', ['enabled'], { enabled: { type: 'boolean' } }, { enabled: true }) } } }, async () => ({ enabled: Boolean(aiService && aiRepository) }));
+
+  // S23KC2S1P2-270: podsumowanie dnia z faktami wyliczonymi przez backend. Odczyt bez zapisu biznesowego.
+  const daySummaries = new DaySummaryService();
+  app.get<{ Querystring: { date: string; refresh?: boolean } }>('/assistant/day-summary', { schema: { tags: ['Assistant'], summary: 'Get a read-only day summary',
+    description: 'Reads the server-resolved calendar for one local day (weekly series expanded, overnight events clipped to the day), computes events, gaps between them and per-category minutes, and asks the model only to describe these facts. The text is reused while the day\'s events are unchanged (same fingerprint); refresh=true forces a new model call. Without events no model is called (status empty). When Azure AI is unavailable the response still succeeds with a locally composed summary (status local) and aiAvailable=false. Never creates or changes events.',
+    operationId: 'getAssistantDaySummary',
+    querystring: { type: 'object', additionalProperties: false, required: ['date'], properties: {
+      date: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'Lokalna data w strefie właściciela kalendarza.' },
+      refresh: { type: 'boolean', default: false, description: 'Wymusza nowe podsumowanie mimo niezmienionych wydarzeń.' } } },
+    response: { 200: objectResponse('Podsumowanie dnia z faktami wyliczonymi przez backend.', ['date', 'timeZone', 'status', 'text', 'aiAvailable', 'cached', 'generatedAt', 'fingerprint', 'facts'], {
+      date: { type: 'string' }, timeZone: { type: 'string' },
+      status: { type: 'string', enum: ['ai', 'local', 'empty'], description: 'ai – tekst modelu; local – tekst złożony bez AI (model niedostępny); empty – brak wydarzeń.' },
+      text: { type: 'string' }, aiAvailable: { type: 'boolean' }, cached: { type: 'boolean', description: 'Tekst użyty ponownie bez kolejnego wywołania modelu.' },
+      generatedAt: { type: 'string', format: 'date-time' }, fingerprint: { type: 'string', description: 'Odcisk odczytanych wydarzeń dnia; zmienia się po zmianie kalendarza.' },
+      aiError: { type: 'string', enum: ['azure_ai_not_configured', 'assistant_unavailable', 'assistant_rate_limited', 'assistant_timeout'] },
+      facts: { type: 'object', additionalProperties: false, required: ['events', 'gaps', 'totals'], properties: {
+        events: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['id', 'title', 'category', 'location', 'mandatory', 'repeatWeekly', 'startLocal', 'endLocal', 'startsBeforeDay', 'endsAfterDay'], properties: {
+          id: { type: 'string' }, title: { type: 'string' }, category: { type: 'string', enum: ['Class', 'Work', 'Personal'] }, location: { type: 'string' },
+          mandatory: { type: 'boolean' }, repeatWeekly: { type: 'boolean' }, startLocal: { type: 'string' }, endLocal: { type: 'string' },
+          startsBeforeDay: { type: 'boolean' }, endsAfterDay: { type: 'boolean' } } } },
+        gaps: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['date', 'startLocal', 'endLocal', 'minutes', 'label'], properties: {
+          date: { type: 'string' }, startLocal: { type: 'string' }, endLocal: { type: 'string' }, minutes: { type: 'integer', minimum: 0 }, label: { type: 'string', description: 'Czas trwania po polsku, np. „2 h 25 min”.' } } } },
+        totals: { type: 'object', additionalProperties: false, required: ['classMinutes', 'workMinutes', 'personalMinutes', 'busyMinutes'], properties: {
+          classMinutes: { type: 'integer', minimum: 0 }, workMinutes: { type: 'integer', minimum: 0 }, personalMinutes: { type: 'integer', minimum: 0 }, busyMinutes: { type: 'integer', minimum: 0 } } },
+      } },
+    }, { date: '2026-11-16', timeZone: 'Europe/Warsaw', status: 'ai', text: 'Masz dziś 2 wydarzenia: zajęcia 08:00–09:35 i pracę 12:00–16:00. Między nimi masz ponad 2 godziny przerwy.',
+      aiAvailable: true, cached: false, generatedAt: '2026-11-16T06:00:00.000Z', fingerprint: 'synthetic-fingerprint',
+      facts: { events: [{ id: 'synthetic-class', title: 'Laboratorium', category: 'Class', location: '', mandatory: true, repeatWeekly: true, startLocal: '2026-11-16T08:00', endLocal: '2026-11-16T09:35', startsBeforeDay: false, endsAfterDay: false },
+        { id: 'synthetic-work', title: 'Praca', category: 'Work', location: '', mandatory: false, repeatWeekly: false, startLocal: '2026-11-16T12:00', endLocal: '2026-11-16T16:00', startsBeforeDay: false, endsAfterDay: false }],
+      gaps: [{ date: '2026-11-16', startLocal: '2026-11-16T09:35', endLocal: '2026-11-16T12:00', minutes: 145, label: '2 h 25 min' }],
+      totals: { classMinutes: 95, workMinutes: 240, personalMinutes: 0, busyMinutes: 335 } } }),
+      400: errorResponse, 404: errorResponse, 503: errorResponse } } }, async (request, reply) => {
+    if (!repository) return reply.code(503).send({ error: 'calendar_not_configured' });
+    const { date, refresh = false } = request.query;
+    if (!isValidDate(date)) return reply.code(400).send({ error: 'invalid_date' });
+    const owner = scope(request);
+    const abortController = new AbortController();
+    request.raw.once('aborted', () => abortController.abort());
+    let overview;
+    try { overview = await repository.getOverview(owner.userId, owner.calendarId); }
+    catch (error) {
+      request.log.error({ errorName: error instanceof Error ? error.name : 'unknown' }, 'Day summary calendar read failed');
+      return reply.code(503).send({ error: 'calendar_unavailable' });
+    }
+    if (!overview) return reply.code(404).send({ error: 'calendar_not_found' });
+    const zone = overview.user.timezone || 'Europe/Warsaw';
+    const summarizer = aiService?.summarizeDay
+      ? (facts: Parameters<NonNullable<typeof aiService.summarizeDay>>[0], signal?: AbortSignal) => aiService.summarizeDay!(facts, trustedTimeContext(new Date(), zone), signal)
+      : undefined;
+    const startedAt = Date.now();
+    return daySummaries.summarize(owner, date, zone, overview.events, summarizer, {
+      refresh, signal: abortController.signal,
+      onUsage: (usage, status, errorCode) => {
+        if (status === 'error') request.log.warn({ code: errorCode }, 'Day summary fell back to local text');
+        void aiRepository?.logUsage(owner, 'day_summary', config.azureAi.modelDeployment, usage.inputTokens, usage.outputTokens, Date.now() - startedAt, status, errorCode).catch(() => undefined);
+      },
+    });
+  });
 
   app.get<{ Querystring: { limit?: number } }>('/assistant/conversations', { schema: { tags: ['Assistant'], summary: 'List current-scope conversations', description: 'Lists active conversations owned by the server-resolved UserScope.', operationId: 'listAssistantConversations', querystring: { type: 'object', properties: { limit: { type: 'integer', minimum: 1, maximum: 100, default: 30 } } }, response: { 200: objectResponse('Aktywne rozmowy bieżącego zakresu.', ['conversations'], { conversations: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['id', 'title', 'modelDeployment', 'createdAt', 'updatedAt', 'expiresAt'], properties: { id: idSchema, title: { type: 'string' }, modelDeployment: { type: 'string' }, createdAt: { type: 'string', format: 'date-time' }, updatedAt: { type: 'string', format: 'date-time' }, expiresAt: { type: 'string', format: 'date-time' } } } } }, { conversations: [] }), 503: errorResponse } } }, async (request, reply) => {
     if (!aiRepository) return reply.code(503).send({ error: 'ai_storage_not_configured' });
@@ -178,7 +238,12 @@ export async function assistantRoutes(app: FastifyInstance, options: Pick<ApiDep
         outputTokens += response.usage?.output_tokens ?? 0;
       }
       if (abortController.signal.aborted) return;
-      const answer = response.output_text?.trim() || 'Nie udało mi się przygotować odpowiedzi. Spróbuj przeformułować prośbę.';
+      const text = response.output_text?.trim();
+      // Odpowiedź ucięta przez limit tokenów: zaznaczamy to zamiast pokazywać urwane zdanie bez komentarza.
+      const truncated = response.status === 'incomplete';
+      const answer = text
+        ? truncated ? `${text}\n\n(Odpowiedź została skrócona. Zapytaj o węższy zakres, np. jeden dzień albo konkretne godziny.)` : text
+        : 'Nie udało mi się przygotować odpowiedzi. Spróbuj przeformułować prośbę albo zapytać o węższy zakres.';
       const pendingActions = await aiRepository.listPendingActions(owner, conversation.id);
       await aiRepository.appendMessage(owner, conversation.id, 'assistant', { text: answer, pendingActionIds: pendingActions.map((action) => action.id) }, config.azureAi.conversationRetentionDays);
       await aiRepository.logUsage(owner, 'assistant_chat', config.azureAi.modelDeployment, inputTokens, outputTokens, Date.now() - startedAt, 'ok');

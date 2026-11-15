@@ -11387,6 +11387,459 @@
         }
       }
     },
+    "/api/v1/assistant/day-summary": {
+      "get": {
+        "operationId": "getAssistantDaySummary",
+        "summary": "Get a read-only day summary",
+        "tags": [
+          "Assistant"
+        ],
+        "description": "Reads the server-resolved calendar for one local day (weekly series expanded, overnight events clipped to the day), computes events, gaps between them and per-category minutes, and asks the model only to describe these facts. The text is reused while the day's events are unchanged (same fingerprint); refresh=true forces a new model call. Without events no model is called (status empty). When Azure AI is unavailable the response still succeeds with a locally composed summary (status local) and aiAvailable=false. Never creates or changes events.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "in": "query",
+            "name": "date",
+            "required": true,
+            "description": "Lokalna data w strefie właściciela kalendarza."
+          },
+          {
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "in": "query",
+            "name": "refresh",
+            "required": false,
+            "description": "Wymusza nowe podsumowanie mimo niezmienionych wydarzeń."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Podsumowanie dnia z faktami wyliczonymi przez backend.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "date",
+                    "timeZone",
+                    "status",
+                    "text",
+                    "aiAvailable",
+                    "cached",
+                    "generatedAt",
+                    "fingerprint",
+                    "facts"
+                  ],
+                  "properties": {
+                    "date": {
+                      "type": "string"
+                    },
+                    "timeZone": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ai",
+                        "local",
+                        "empty"
+                      ],
+                      "description": "ai – tekst modelu; local – tekst złożony bez AI (model niedostępny); empty – brak wydarzeń."
+                    },
+                    "text": {
+                      "type": "string"
+                    },
+                    "aiAvailable": {
+                      "type": "boolean"
+                    },
+                    "cached": {
+                      "type": "boolean",
+                      "description": "Tekst użyty ponownie bez kolejnego wywołania modelu."
+                    },
+                    "generatedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "fingerprint": {
+                      "type": "string",
+                      "description": "Odcisk odczytanych wydarzeń dnia; zmienia się po zmianie kalendarza."
+                    },
+                    "aiError": {
+                      "type": "string",
+                      "enum": [
+                        "azure_ai_not_configured",
+                        "assistant_unavailable",
+                        "assistant_rate_limited",
+                        "assistant_timeout"
+                      ]
+                    },
+                    "facts": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "events",
+                        "gaps",
+                        "totals"
+                      ],
+                      "properties": {
+                        "events": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "id",
+                              "title",
+                              "category",
+                              "location",
+                              "mandatory",
+                              "repeatWeekly",
+                              "startLocal",
+                              "endLocal",
+                              "startsBeforeDay",
+                              "endsAfterDay"
+                            ],
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "category": {
+                                "type": "string",
+                                "enum": [
+                                  "Class",
+                                  "Work",
+                                  "Personal"
+                                ]
+                              },
+                              "location": {
+                                "type": "string"
+                              },
+                              "mandatory": {
+                                "type": "boolean"
+                              },
+                              "repeatWeekly": {
+                                "type": "boolean"
+                              },
+                              "startLocal": {
+                                "type": "string"
+                              },
+                              "endLocal": {
+                                "type": "string"
+                              },
+                              "startsBeforeDay": {
+                                "type": "boolean"
+                              },
+                              "endsAfterDay": {
+                                "type": "boolean"
+                              }
+                            }
+                          }
+                        },
+                        "gaps": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "date",
+                              "startLocal",
+                              "endLocal",
+                              "minutes",
+                              "label"
+                            ],
+                            "properties": {
+                              "date": {
+                                "type": "string"
+                              },
+                              "startLocal": {
+                                "type": "string"
+                              },
+                              "endLocal": {
+                                "type": "string"
+                              },
+                              "minutes": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "label": {
+                                "type": "string",
+                                "description": "Czas trwania po polsku, np. „2 h 25 min”."
+                              }
+                            }
+                          }
+                        },
+                        "totals": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "classMinutes",
+                            "workMinutes",
+                            "personalMinutes",
+                            "busyMinutes"
+                          ],
+                          "properties": {
+                            "classMinutes": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "workMinutes": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "personalMinutes": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "busyMinutes": {
+                              "type": "integer",
+                              "minimum": 0
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "description": "Podsumowanie dnia z faktami wyliczonymi przez backend."
+                },
+                "examples": {
+                  "synthetic": {
+                    "summary": "Syntetyczna odpowiedź",
+                    "description": "Przykład zgodny z kontraktem; bez rzeczywistych danych użytkownika.",
+                    "value": {
+                      "date": "2026-11-16",
+                      "timeZone": "Europe/Warsaw",
+                      "status": "ai",
+                      "text": "Masz dziś 2 wydarzenia: zajęcia 08:00–09:35 i pracę 12:00–16:00. Między nimi masz ponad 2 godziny przerwy.",
+                      "aiAvailable": true,
+                      "cached": false,
+                      "generatedAt": "2026-11-16T06:00:00.000Z",
+                      "fingerprint": "synthetic-fingerprint",
+                      "facts": {
+                        "events": [
+                          {
+                            "id": "synthetic-class",
+                            "title": "Laboratorium",
+                            "category": "Class",
+                            "location": "",
+                            "mandatory": true,
+                            "repeatWeekly": true,
+                            "startLocal": "2026-11-16T08:00",
+                            "endLocal": "2026-11-16T09:35",
+                            "startsBeforeDay": false,
+                            "endsAfterDay": false
+                          },
+                          {
+                            "id": "synthetic-work",
+                            "title": "Praca",
+                            "category": "Work",
+                            "location": "",
+                            "mandatory": false,
+                            "repeatWeekly": false,
+                            "startLocal": "2026-11-16T12:00",
+                            "endLocal": "2026-11-16T16:00",
+                            "startsBeforeDay": false,
+                            "endsAfterDay": false
+                          }
+                        ],
+                        "gaps": [
+                          {
+                            "date": "2026-11-16",
+                            "startLocal": "2026-11-16T09:35",
+                            "endLocal": "2026-11-16T12:00",
+                            "minutes": 145,
+                            "label": "2 h 25 min"
+                          }
+                        ],
+                        "totals": {
+                          "classMinutes": 95,
+                          "workMinutes": 240,
+                          "personalMinutes": 0,
+                          "busyMinutes": 335
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "conflicts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    },
+                    "collisionToken": {
+                      "type": "string"
+                    },
+                    "statusCode": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika."
+                },
+                "examples": {
+                  "unavailable": {
+                    "summary": "Usługa niedostępna",
+                    "value": {
+                      "error": "assistant_unavailable"
+                    }
+                  },
+                  "stalePreview": {
+                    "summary": "Nieaktualny podgląd",
+                    "description": "Przygotuj nową propozycję przed ponownym zatwierdzeniem.",
+                    "value": {
+                      "error": "ai_action_stale_preview",
+                      "message": "Wydarzenie zmieniło się od czasu podglądu."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "conflicts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    },
+                    "collisionToken": {
+                      "type": "string"
+                    },
+                    "statusCode": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika."
+                },
+                "examples": {
+                  "unavailable": {
+                    "summary": "Usługa niedostępna",
+                    "value": {
+                      "error": "assistant_unavailable"
+                    }
+                  },
+                  "stalePreview": {
+                    "summary": "Nieaktualny podgląd",
+                    "description": "Przygotuj nową propozycję przed ponownym zatwierdzeniem.",
+                    "value": {
+                      "error": "ai_action_stale_preview",
+                      "message": "Wydarzenie zmieniło się od czasu podglądu."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "conflicts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    },
+                    "collisionToken": {
+                      "type": "string"
+                    },
+                    "statusCode": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika."
+                },
+                "examples": {
+                  "unavailable": {
+                    "summary": "Usługa niedostępna",
+                    "value": {
+                      "error": "assistant_unavailable"
+                    }
+                  },
+                  "stalePreview": {
+                    "summary": "Nieaktualny podgląd",
+                    "description": "Przygotuj nową propozycję przed ponownym zatwierdzeniem.",
+                    "value": {
+                      "error": "ai_action_stale_preview",
+                      "message": "Wydarzenie zmieniło się od czasu podglądu."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/assistant/conversations": {
       "get": {
         "operationId": "listAssistantConversations",

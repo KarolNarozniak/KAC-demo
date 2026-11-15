@@ -65,10 +65,19 @@ For a private endpoint, configure API App Service VNet Integration and private D
 ## Instructions, tools, knowledge and guardrails
 
 - **Instructions:** versioned `KAC_ASSISTANT_INSTRUCTIONS` and import-specific instructions are sent with each request. They require Polish responses, authoritative sources and treating file text as untrusted data.
-- **Tools:** `assistantTools` is a strict allow-list in `src/ai/tools.ts`: read calendar/profile and prepare create/update/delete previews. Arguments are validated again by the backend. The model never receives a confirmation tool.
+- **Tools:** `assistantTools` is a strict allow-list in `src/ai/tools.ts`: read calendar/profile, backend-computed free windows and time totals, and prepare create/update/delete previews. Arguments are validated again by the backend. The model never receives a confirmation tool.
 - **Knowledge:** no File Search, vector store or external RAG is configured for this MVP. Calendar/profile data comes from scope-bound tools; an uploaded file is only input to its current import.
 - **Memory:** PostgreSQL is the source of truth, scoped by `UserScope`. Context is limited to the last 24 ordered messages, and function calls/results are reconstructed as stateless Responses input items. `demoScope` represents the current development setup without login.
 - **Guardrails:** the model cannot mutate the calendar directly. Mutations create a TTL-bound `t_ai_akcje` proposal; a separate confirmation endpoint checks ownership, the full event snapshot, current conflicts and an idempotency key. Updates and deletes persist the action result in the same transaction as the calendar mutation; a retry after a lost response returns that result instead of applying the write again. A stale preview is failed and must be prepared again. Prompt Shields complement input limits, JSON Schema parsing, tool/round limits and server validation.
+
+## Day summary and calendar questions (S23KC2S1P2-254)
+
+The "Twój dzień w skrócie" card on the "Dziś" screen uses `GET /api/v1/assistant/day-summary?date=YYYY-MM-DD`. The endpoint only reads the calendar – it never creates or changes events.
+
+- **Facts are computed by the backend** (`src/ai/calendar-facts.ts`): the day's occurrences in the calendar owner's time zone (weekly series expanded with `eventOccurrences`, overnight events clipped to the day with `startsBeforeDay`/`endsAfterDay` flags), gaps between events (15 min or longer) and per-category minutes computed on real instants, so a clock-change day has the correct length. The model receives only these facts and describes them; it has no tools and does not compute totals.
+- **Statuses:** `ai` – model text; `empty` – no events, text without a model call; `local` – the model is unavailable or not configured (`aiError`) and the text is composed locally from the same facts. An AI failure still returns 200 so that the "Dziś" screen stays usable.
+- **Cache:** the result is kept per user, calendar and day together with a `fingerprint` of the events read. An unchanged calendar returns the same text with `cached: true` and no further paid call; changed events produce a new fingerprint and a new summary; `refresh=true` forces a new call. The cache lives in the API process memory (capped at 500 entries), so after a restart or on another instance the summary is generated again. The frontend requests the summary only when the date or the day's events change.
+- **Assistant questions:** the `calendar_free_windows` (calendar gaps within given hours, up to 14 days) and `calendar_time_totals` (per-category minutes, up to 93 days) tools compute results in the backend; `calendar_search_events` returns series occurrences within the range. Free time means a gap in the calendar, not work availability from the profile. The "Zapytaj asystenta" button on the card opens the Assistant with a prepared question that is not sent automatically.
 
 ## Cancelling file analysis
 

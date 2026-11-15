@@ -10,21 +10,22 @@ import WeekGrid, { type WeekLayout } from '../components/WeekGrid';
 import type { WeeklySchedule } from '../services/scheduleApi';
 import type { DueNotification } from '../services/notificationsApi';
 import { resolveNotificationTarget } from '../domain/notifications';
-import { getAssistantConfig, getDailySummary } from '../services/assistantApi';
+import { getDaySummary, type DaySummary } from '../services/assistantApi';
+import { dayEventsKey, daySummaryView } from '../domain/daySummary';
 import ClassScheduleImport from '../components/ClassScheduleImport';
 import WorkScheduleImport from '../components/WorkScheduleImport';
 import GoogleCalendarImport from '../components/GoogleCalendarImport';
 const categories: Category[] = ['Class', 'Work', 'Personal'];
 const labels: Record<Category, string> = { Class: 'Zajęcia', Work: 'Praca', Personal: 'Prywatne' };
 type Props = { week: Date; setWeek: (value: Date) => void; todayOnly?: boolean; weekLayout: WeekLayout; now: Date; active: boolean; draftSchedule?: WeeklySchedule | null;
-  notificationTarget?: DueNotification | null; onNotificationResolved?: () => void };
-export default function CalendarScreen({ week, setWeek, todayOnly = false, weekLayout, now, active, draftSchedule, notificationTarget, onNotificationResolved }: Props) {
+  notificationTarget?: DueNotification | null; onNotificationResolved?: () => void; onAskAssistant?: () => void };
+export default function CalendarScreen({ week, setWeek, todayOnly = false, weekLayout, now, active, draftSchedule, notificationTarget, onNotificationResolved, onAskAssistant }: Props) {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dailySummary, setDailySummary] = useState<{ date: string; text: string } | null>(null);
+  const [dailySummary, setDailySummary] = useState<DaySummary | null>(null);
   const [dailySummaryLoading, setDailySummaryLoading] = useState(false);
   const [dailySummaryError, setDailySummaryError] = useState('');
-  const summaryAttemptedDate = useRef('');
+  const summaryRequestedKey = useRef('');
   const summaryRequesting = useRef(false);
   const [loadError, setLoadError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -48,27 +49,30 @@ export default function CalendarScreen({ week, setWeek, todayOnly = false, weekL
   const [error, setError] = useState(''); const [conflicts, setConflicts] = useState<EventCollision[]>([]); const [pending, setPending] = useState<CalendarEvent | null>(null);
   const monday = startOfWeek(todayOnly ? now : week); const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addCalendarDays(monday, i)), [monday.getTime()]);
   const todayKey = localDateKey(now);
+  // S23KC2S1P2-271: podsumowanie pobierane przy zmianie daty albo wydarzeń dnia, nie przy każdym renderze.
+  // Serwer i tak zwraca zapamiętany tekst, gdy wydarzenia się nie zmieniły (bez kolejnego wywołania modelu).
+  const todayStart = useMemo(() => new Date(now.getFullYear(), now.getMonth(), now.getDate()), [todayKey]);
+  const todayEventsKey = useMemo(() => dayEventsKey(todayKey, occurrencesForRange(events, { start: todayStart, end: addCalendarDays(todayStart, 1) })), [events, todayKey, todayStart]);
   const requestDailySummary = useCallback(async (refresh = false) => {
-    if (summaryRequesting.current || (!refresh && summaryAttemptedDate.current === todayKey)) return;
+    if (summaryRequesting.current) return;
     summaryRequesting.current = true;
-    summaryAttemptedDate.current = todayKey;
+    summaryRequestedKey.current = todayEventsKey;
     setDailySummaryLoading(true); setDailySummaryError('');
     try {
-      const config = await getAssistantConfig();
-      if (!config.enabled) throw new Error('Asystent AI jest niedostępny. Sprawdź konfigurację Azure AI i spróbuj ponownie.');
-      const result = await getDailySummary(todayKey, refresh);
-      setDailySummary({ date: todayKey, text: result.text });
+      setDailySummary(await getDaySummary(todayKey, refresh));
     } catch (error) {
       setDailySummaryError(error instanceof Error ? error.message : 'Nie udało się przygotować podsumowania dnia.');
     } finally {
       summaryRequesting.current = false;
       setDailySummaryLoading(false);
     }
-  }, [todayKey]);
+  }, [todayKey, todayEventsKey]);
+  // Podsumowanie złożone bez AI (np. chwilowa awaria) ponawiamy przy kolejnym wejściu na ekran – wynik AI pozostaje w cache serwera.
+  useEffect(() => { if (!active && dailySummary?.status === 'local') summaryRequestedKey.current = ''; }, [active, dailySummary?.status]);
   useEffect(() => {
-    if (!active || !todayOnly || loading || loadError || summaryAttemptedDate.current === todayKey) return;
+    if (!active || !todayOnly || loading || loadError || summaryRequestedKey.current === todayEventsKey) return;
     void requestDailySummary();
-  }, [active, todayOnly, loading, loadError, todayKey, requestDailySummary]);
+  }, [active, todayOnly, loading, loadError, todayEventsKey, requestDailySummary]);
   const list = useMemo(() => occurrencesForRange(events, { start: monday, end: addCalendarDays(monday, 7) }), [events, monday.getTime()]);
   useEffect(() => {
     if (!active || loading || !notificationTarget) return;
@@ -166,12 +170,17 @@ export default function CalendarScreen({ week, setWeek, todayOnly = false, weekL
        <View accessibilityLabel="Podsumowanie dnia od asystenta" style={{ backgroundColor: palette.blueSoft, borderRadius: 8, padding: 12, marginBottom: 14, minHeight: 88 }}>
          <View style={[styles.row, { justifyContent: 'space-between', alignItems: 'center' }]}>
            <Text style={[styles.body, { fontWeight: '700' }]}>Twój dzień w skrócie</Text>
-           <Button title={dailySummaryLoading ? '...' : 'Odśwież'} disabled={dailySummaryLoading || !active} onPress={() => void requestDailySummary(true)} />
+           <Button title={dailySummaryLoading ? '...' : dailySummaryError ? 'Spróbuj ponownie' : 'Odśwież'} accessibilityLabel="Odśwież podsumowanie dnia" disabled={dailySummaryLoading || !active || loading} onPress={() => void requestDailySummary(!dailySummaryError)} />
          </View>
-         {dailySummaryLoading ? <Text accessibilityLiveRegion="polite" style={styles.muted}>Asystent analizuje dzisiejsze wydarzenia…</Text>
-           : dailySummaryError ? <Text accessibilityRole="alert" style={styles.error}>{dailySummaryError}</Text>
-           : dailySummary?.date === todayKey ? <Text accessibilityLiveRegion="polite" style={styles.body}>{dailySummary.text}</Text>
-           : <Text style={styles.muted}>Asystent przygotuje podsumowanie dzisiejszego kalendarza.</Text>}
+         {dailySummaryLoading ? <Text accessibilityLiveRegion="polite" style={styles.muted}>Przygotowuję podsumowanie dzisiejszego kalendarza…</Text>
+           : dailySummaryError ? <View><Text accessibilityRole="alert" style={styles.error}>{dailySummaryError}</Text>
+             <Text style={styles.muted}>Lista wydarzeń poniżej działa bez podsumowania.</Text></View>
+           : dailySummary?.date === todayKey ? (() => { const view = daySummaryView(dailySummary); return <View>
+             <Text accessibilityLiveRegion="polite" style={view.tone === 'muted' ? styles.muted : styles.body}>{view.text}</Text>
+             {!!view.note && <Text style={[styles.muted, { marginTop: 4 }]}>{view.note}</Text>}
+           </View>; })()
+           : <Text style={styles.muted}>Podsumowanie pojawi się po wczytaniu kalendarza.</Text>}
+         {!!onAskAssistant && <View style={[styles.row, { marginTop: 8 }]}><Button title="Zapytaj asystenta" accessibilityLabel="Zadaj asystentowi pytanie o dzisiejszy plan" onPress={onAskAssistant} /></View>}
        </View>
       <WeekGrid active={active} days={[addCalendarDays(now, 0)]} events={upcoming} layout="days-top" now={now} startAtNow hideDayHeader onAdd={newEvent} onSelect={details} />
     </View> : <WeekGrid active={active} days={weekDays} events={gridEvents} layout={weekLayout} now={now} onAdd={newEvent} onSelect={details} />}

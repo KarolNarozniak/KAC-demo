@@ -7,7 +7,7 @@ import {
   type AssistantConversation, type AssistantMessage, type PendingAssistantAction,
 } from '../services/assistantApi';
 
-type Props = { active: boolean; onCalendarChange: () => void };
+type Props = { active: boolean; onCalendarChange: () => void; prefill?: { text: string; nonce: number } | null };
 const textOf = (message: AssistantMessage) => typeof message.content.text === 'string' ? message.content.text : '';
 const actionSummary = (action: PendingAssistantAction) => {
   const value = action.payload.event as Record<string, unknown> | undefined;
@@ -19,7 +19,7 @@ const actionSummary = (action: PendingAssistantAction) => {
   return `Dodać „${String(value?.title ?? 'wydarzenie')}” · ${String(value?.start ?? '')} – ${String(value?.end ?? '')}?`;
 };
 
-export default function AssistantScreen({ active, onCalendarChange }: Props) {
+export default function AssistantScreen({ active, onCalendarChange, prefill }: Props) {
   const { palette, styles } = useTheme();
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [conversations, setConversations] = useState<AssistantConversation[]>([]);
@@ -30,6 +30,8 @@ export default function AssistantScreen({ active, onCalendarChange }: Props) {
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
+  // Pytanie przygotowane na karcie „Twój dzień w skrócie” – użytkownik może je zmienić przed wysłaniem.
+  useEffect(() => { if (prefill) setInput(prefill.text); }, [prefill?.nonce]);
 
   useEffect(() => {
     if (!active) return;
@@ -59,13 +61,22 @@ export default function AssistantScreen({ active, onCalendarChange }: Props) {
     const content = input.trim();
     if (!content || !targetConversationId || sending || !enabled) return;
     setInput(''); setSending(true); setError('');
+    // Wysłana wiadomość pojawia się od razu; po odpowiedzi lista jest zastępowana historią z serwera.
+    const pendingId = `pending-${Date.now()}`;
+    setMessages((current) => [...current, { id: pendingId, role: 'user', content: { text: content }, createdAt: new Date().toISOString() }]);
     try {
       const result = await sendAssistantMessage(targetConversationId, content);
       const saved = await listAssistantMessages(targetConversationId);
       setMessages(saved.messages); setPendingActions(saved.pendingActions);
       if (!saved.messages.length) setMessages([{ id: `local-${Date.now()}`, role: 'assistant', content: { text: result.message.content }, createdAt: new Date().toISOString() }]);
       setConversations((current) => current.map((item) => item.id === targetConversationId ? { ...item, updatedAt: new Date().toISOString() } : item));
-    } catch (reason) { setInput(content); setError(reason instanceof Error ? reason.message : 'Nie udało się wysłać wiadomości.'); }
+    } catch (reason) {
+      setInput(content); setError(reason instanceof Error ? reason.message : 'Nie udało się wysłać wiadomości.');
+      // Serwer mógł już zapisać wiadomość przed błędem modelu – pokazujemy stan z historii, a bez połączenia usuwamy tymczasowy dymek.
+      await listAssistantMessages(targetConversationId)
+        .then((saved) => { setMessages(saved.messages); setPendingActions(saved.pendingActions); })
+        .catch(() => setMessages((current) => current.filter((message) => message.id !== pendingId)));
+    }
     finally { setSending(false); }
   };
 
@@ -132,7 +143,8 @@ export default function AssistantScreen({ active, onCalendarChange }: Props) {
       {enabled === false && <View style={[styles.card, { borderColor: palette.amber, marginTop: 12 }]}><Text style={styles.heading}>Azure AI Foundry nie jest skonfigurowane</Text><Text style={styles.body}>Ustaw endpoint projektu i nazwę agenta w konfiguracji API, a lokalnie zaloguj się przez `az login`. Żadna wiadomość nie została wysłana.</Text></View>}
       {!!error && <Text accessibilityRole="alert" style={[styles.error, { marginTop: 8 }]}>{error}</Text>}
       <ScrollView style={{ flex: 1, marginVertical: 10 }} contentContainerStyle={{ gap: 10, paddingBottom: 16 }}>
-        {messages.filter((message) => message.role !== 'tool').map((message) => <View key={message.id} style={{ alignSelf: message.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '90%', padding: 12, borderRadius: 12, backgroundColor: message.role === 'user' ? palette.blueSoft : palette.surface }}>
+        {/* Wiadomości z samymi wywołaniami narzędzi nie mają tekstu – nie pokazujemy pustych dymków. */}
+        {messages.filter((message) => message.role !== 'tool' && textOf(message).trim()).map((message) => <View key={message.id} style={{ alignSelf: message.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '90%', padding: 12, borderRadius: 12, backgroundColor: message.role === 'user' ? palette.blueSoft : palette.surface }}>
           <Text style={styles.body}>{String(message.content.text ?? '')}</Text>
           <Text style={[styles.muted, { marginTop: 4 }]}>{message.role === 'user' ? 'Ty' : 'Asystent'} · {new Date(message.createdAt).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}</Text>
         </View>)}
@@ -141,6 +153,9 @@ export default function AssistantScreen({ active, onCalendarChange }: Props) {
           <Text style={styles.muted}>Ważna do: {new Date(action.expiresAt).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}. Kalendarz nie zmieni się bez potwierdzenia.</Text>
           <View style={[styles.row, { flexWrap: 'wrap', marginTop: 8 }]}><Button title="Zatwierdź" primary disabled={sending} onPress={() => void confirmAction(action)} /><Button title="Odrzuć" danger disabled={sending} onPress={() => void cancelAction(action)} /></View>
         </View>)}
+        {sending && <View style={{ alignSelf: 'flex-start', padding: 12, borderRadius: 12, backgroundColor: palette.surface }}>
+          <Text accessibilityLiveRegion="polite" style={styles.muted}>Asystent pisze…</Text>
+        </View>}
         {loading && <Text accessibilityLiveRegion="polite" style={styles.muted}>Wczytywanie…</Text>}
       </ScrollView>
       <View style={[styles.row, { alignItems: 'flex-end' }]}>
