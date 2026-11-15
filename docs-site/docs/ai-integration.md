@@ -108,3 +108,9 @@ Po utracie odpowiedzi ponów zatwierdzenie **tej samej propozycji**. Idempotencj
 3. Wybierz **Odrzuć** i sprawdź kalendarz. Przygotuj ponownie, wybierz **Zatwierdź** i sprawdź pojedyncze wydarzenie.
 4. Dodaj drugie wydarzenie na ten sam termin. Sprawdź listę konfliktów, a następnie świadomie wybierz zapis mimo kolizji. Sprawdź również wariant odrzucenia i podania innej godziny.
 5. Przy utracie odpowiedzi ponów zatwierdzenie tej samej karty. W kalendarzu ma powstać tylko jedno wydarzenie dla tej akcji.
+
+## Karta „Dziś”
+
+Pusty dzień wyświetla stały komunikat bez odpytywania API asystenta i Azure. Sprawdzane są także dzisiejsze wystąpienia cotygodniowe oraz wydarzenia przechodzące przez północ. Podsumowanie odświeża się automatycznie po zmianie dzisiejszych wydarzeń; nie ma przycisku „Odśwież”. Niezmienione dane korzystają z wyniku zachowanego w bieżącej sesji aplikacji. Powitanie wyświetla aplikacja: „Dzień dobry!” od 05:00 do 17:59, „Dobry wieczór!” poza tym zakresem, według lokalnego czasu urządzenia. Model otrzymuje instrukcję pominięcia daty i dodatkowego powitania.
+
+Rozmowy techniczne zatytułowane „Dzień w skrócie YYYY-MM-DD” są wykorzystywane przez kartę, ale ukryte na liście rozmów w Asystencie.

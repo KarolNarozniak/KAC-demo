@@ -108,3 +108,9 @@ After a lost response, confirm **the same proposal** again. Existing action iden
 3. Select **Odrzuć** and check the calendar. Prepare another proposal, select **Zatwierdź**, and verify a single event.
 4. Propose another event at the same time. Review the collision list and explicitly save despite collisions. Also test rejecting it and requesting another time.
 5. After losing a confirmation response, retry the same card. Only one event should exist for that action.
+
+## Today card
+
+An empty day displays a fixed message without calling the assistant API or Azure. Detection includes today's weekly occurrences and events crossing midnight. The summary refreshes automatically when today's events change; there is no Refresh button. Unchanged data reuses the result within the current app session. The application displays “Dzień dobry!” from 05:00 through 17:59 and “Dobry wieczór!” otherwise, using the device's local time. The model is instructed to omit the date and an additional greeting.
+
+Internal conversations titled “Dzień w skrócie YYYY-MM-DD” remain available to the card but are hidden from the Assistant conversation list.

@@ -61,3 +61,69 @@ test('daily summary reuses the saved answer for the same date unless explicitly 
     assert.deepEqual(requests, ['GET /api/v1/assistant/conversations', `GET /api/v1/assistant/conversations/${conversation.id}/messages`]);
   } finally { restore(); }
 });
+
+test('empty daily calendar uses a fixed message without any assistant requests', async () => {
+  const restore = stubFetch(() => { throw new Error('Empty days must not call the API'); });
+  try {
+    const { getDailySummaryForCalendar } = await import('../src/services/assistantApi.ts');
+    const result = await getDailySummaryForCalendar([], new Date(2026, 10, 18, 10));
+    assert.match(result.text, /Nie masz dziś zaplanowanych wydarzeń/);
+  } finally { restore(); }
+});
+
+test('daily summary automatically regenerates after today changes and reuses unchanged days', async () => {
+  const { getDailySummaryForCalendar } = await import('../src/services/assistantApi.ts');
+  let turns = 0;
+  const restore = stubFetch((url, init) => {
+    if (url.pathname.endsWith('/config')) return { enabled: true };
+    if (url.pathname.endsWith('/conversations')) return { conversations: [conversation] };
+    if (url.pathname.endsWith('/messages') && init?.method === 'POST') {
+      turns++;
+      return { message: { content: `Podsumowanie ${turns}` }, pendingActions: [] };
+    }
+    throw new Error(`Unexpected request: ${url.pathname}`);
+  });
+  const now = new Date(2026, 10, 13, 10);
+  const event = { id: 'daily-test', title: 'Spotkanie', start: '2026-11-13T12:00', end: '2026-11-13T13:00', category: 'Personal' as const, mandatory: false, repeatWeekly: false };
+  try {
+    const first = await getDailySummaryForCalendar([event], now);
+    const unchanged = await getDailySummaryForCalendar([{ ...event }], now);
+    assert.equal(first.text, unchanged.text);
+    assert.equal(turns, 1);
+    await getDailySummaryForCalendar([event, { ...event, id: 'tomorrow', start: '2026-11-14T12:00', end: '2026-11-14T13:00' }], now);
+    assert.equal(turns, 1);
+    assert.equal((await getDailySummaryForCalendar([event, { ...event, id: 'second' }], now)).text, 'Podsumowanie 2');
+    assert.equal((await getDailySummaryForCalendar([{ ...event, title: 'Zmienione spotkanie' }], now)).text, 'Podsumowanie 3');
+    assert.match((await getDailySummaryForCalendar([], now)).text, /Nie masz dziś/);
+    assert.equal(turns, 3);
+  } finally { restore(); }
+});
+
+test('daily summary conversations are hidden from Assistant but remain available to the daily card', async () => {
+  const { listAssistantConversations } = await import('../src/services/assistantApi.ts');
+  const restore = stubFetch((url) => {
+    if (url.pathname.endsWith('/conversations')) return { conversations: [conversation, { ...conversation, id: 'chat', title: 'Moja rozmowa' }] };
+    if (url.pathname.endsWith('/messages')) return { messages: [
+      { role: 'user', content: { text: dailySummaryPrompt } },
+      { role: 'assistant', content: { text: 'Twoje wydarzenia.' } },
+    ] };
+    throw new Error(`Unexpected request: ${url.pathname}`);
+  });
+  try {
+    assert.deepEqual((await listAssistantConversations()).conversations.map((item) => item.id), ['chat']);
+    assert.equal((await getDailySummary(date)).text, 'Twoje wydarzenia.');
+  } finally { restore(); }
+});
+
+test('day context includes recurring and overnight events and greeting follows local time', async () => {
+  const { dailySummaryContext, dayGreeting } = await import('../src/domain/dailySummary.ts');
+  const event = { id: 'weekly', title: 'Zajęcia', start: '2026-11-06T10:00', end: '2026-11-06T11:00', category: 'Class' as const, mandatory: true, repeatWeekly: true };
+  const today = new Date(2026, 10, 13, 10);
+  assert.equal(dailySummaryContext([event], today).empty, false);
+  assert.equal(dailySummaryContext([{ ...event, repeatWeekly: false }], today).empty, true);
+  assert.equal(dailySummaryContext([{ ...event, start: '2026-11-12T23:00', end: '2026-11-13T01:00', repeatWeekly: false }], today).empty, false);
+  assert.equal(dayGreeting(new Date(2026, 10, 13, 9)), 'Dzień dobry!');
+  assert.equal(dayGreeting(new Date(2026, 10, 13, 18)), 'Dobry wieczór!');
+  assert.equal(dayGreeting(new Date(2026, 10, 14, 1)), 'Dobry wieczór!');
+  assert.match(dailySummaryPrompt, /Nie wypisuj daty/);
+});

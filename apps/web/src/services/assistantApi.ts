@@ -1,4 +1,6 @@
 import { apiBaseUrl } from './importApi.ts';
+import type { CalendarEvent } from '../domain/model.ts';
+import { dailySummaryContext } from '../domain/dailySummary.ts';
 
 export type AssistantMessage = { id: string; role: 'user' | 'assistant' | 'tool'; content: Record<string, unknown>; createdAt: string };
 export type AssistantConversation = { id: string; title: string; modelDeployment: string; createdAt: string; updatedAt: string; expiresAt: string };
@@ -45,7 +47,11 @@ const aiErrorText: Record<string, string> = {
 };
 
 export const getAssistantConfig = () => call<{ enabled: boolean }>('/api/v1/assistant/config');
-export const listAssistantConversations = () => call<{ conversations: AssistantConversation[] }>('/api/v1/assistant/conversations');
+const listAllConversations = () => call<{ conversations: AssistantConversation[] }>('/api/v1/assistant/conversations');
+export const listAssistantConversations = async () => {
+  const result = await listAllConversations();
+  return { conversations: result.conversations.filter((item) => !/^Dzień w skrócie \d{4}-\d{2}-\d{2}$/.test(item.title)) };
+};
 export const createAssistantConversation = (title?: string) => call<AssistantConversation>('/api/v1/assistant/conversations', 'POST', title ? { title } : {});
 export const listAssistantMessages = (id: string) => call<{ messages: AssistantMessage[]; pendingActions: PendingAssistantAction[] }>(`/api/v1/assistant/conversations/${encodeURIComponent(id)}/messages`);
 export const sendAssistantMessage = (id: string, content: string) => call<{ conversationId: string; message: { role: string; content: string }; pendingActions: PendingAssistantAction[]; usage: { inputTokens: number; outputTokens: number } }>(
@@ -54,11 +60,11 @@ export const confirmAssistantAction = (id: string, collisionToken?: string) => c
 export const cancelAssistantAction = (id: string) => call<{ status: string }>(`/api/v1/assistant/actions/${encodeURIComponent(id)}/cancel`, 'POST', {});
 export const deleteAssistantConversation = (id: string) => call<{ status: string }>(`/api/v1/assistant/conversations/${encodeURIComponent(id)}`, 'DELETE');
 
-export const dailySummaryPrompt = 'Podsumuj krótko wydarzenia na dziś, korzystając z kalendarza i zaufanej bieżącej daty oraz strefy czasu konta. Napisz po polsku 2–4 zdania: podaj najważniejsze wydarzenia z godzinami oraz dłuższe wolne okna. Jeśli kalendarz jest pusty, powiedz to wprost. Nie twórz ani nie zmieniaj wydarzeń i nie przygotowuj żadnych akcji.';
+export const dailySummaryPrompt = 'Podsumuj krótko wydarzenia na dziś, korzystając z kalendarza i zaufanej bieżącej daty oraz strefy czasu konta. Napisz po polsku 2–4 zdania: podaj najważniejsze wydarzenia z godzinami oraz dłuższe wolne okna. Nie wypisuj daty, nagłówka ani powitania — aplikacja wyświetla powitanie odpowiednie do pory dnia. Jeśli kalendarz jest pusty, powiedz to wprost. Nie twórz ani nie zmieniaj wydarzeń i nie przygotowuj żadnych akcji.';
 
 export async function getDailySummary(dateKey: string, refresh = false) {
   const title = `Dzień w skrócie ${dateKey}`;
-  const { conversations } = await listAssistantConversations();
+  const { conversations } = await listAllConversations();
   let conversation = conversations.find((item) => item.title === title);
   if (conversation && !refresh) {
     const history = await listAssistantMessages(conversation.id);
@@ -75,4 +81,26 @@ export async function getDailySummary(dateKey: string, refresh = false) {
   const response = await sendAssistantMessage(conversation.id, dailySummaryPrompt);
   await Promise.allSettled(response.pendingActions.map((action) => cancelAssistantAction(action.id)));
   return { conversationId: conversation.id, text: response.message.content.trim() };
+}
+
+let calendarSummaryCache: { key: string; result: Promise<{ text: string }> } | undefined;
+
+/** Reuse an unchanged day's result; an empty day never contacts the assistant API. */
+export function getDailySummaryForCalendar(events: CalendarEvent[], now: Date): Promise<{ text: string }> {
+  const context = dailySummaryContext(events, now);
+  if (context.empty) {
+    calendarSummaryCache = undefined;
+    return Promise.resolve({ text: 'Nie masz dziś zaplanowanych wydarzeń. Możesz spokojnie zaplanować swój dzień.' });
+  }
+  if (calendarSummaryCache?.key === context.key) return calendarSummaryCache.result;
+  const result = (async () => {
+    const config = await getAssistantConfig();
+    if (!config.enabled) throw new Error('Asystent AI jest niedostępny. Sprawdź konfigurację Azure AI.');
+    return getDailySummary(context.date, true);
+  })();
+  calendarSummaryCache = { key: context.key, result };
+  void result.catch(() => {
+    if (calendarSummaryCache?.result === result) calendarSummaryCache = undefined;
+  });
+  return result;
 }
