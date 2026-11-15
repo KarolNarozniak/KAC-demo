@@ -3,7 +3,11 @@ import type { UserScope } from '../api/scope.js';
 import { parseEventTime, reminderText, reminderTime } from './schedule.js';
 
 export type NotificationSettings = { enabled: boolean; workRemindersEnabled: boolean; eventChangesEnabled: boolean; minutesBefore: number; quietStart: string | null; quietEnd: string | null; pendingReminderCount: number };
-export type DueNotification = { id: string; eventId: string; type: string; message: string; scheduledAt: string; eventStart: string; eventEnd: string; title: string };
+export type PlanChangeDetails = { kind: 'changed' | 'unknown_previous'; fields: ('date' | 'time' | 'location')[];
+  before: { start: string; end: string; location: string | null } | null; after: { start: string; end: string; location: string | null }; eventVersion: number };
+export type DueNotification = { id: string; eventId: string; type: string; message: string; scheduledAt: string; eventStart: string; eventEnd: string; title: string;
+  /** S23KC2S1P2-299: szczegóły różnicy dla typu „Zmiana planu”; null dla przypomnień. */
+  change?: PlanChangeDetails | null };
 export type PushSubscriptionInput = { endpoint: string; p256dh: string; auth: string; expirationTime?: number | null };
 
 export class PostgresNotificationRepository {
@@ -101,7 +105,7 @@ export class PostgresNotificationRepository {
           where e.id_wydarzenia = n.id_wydarzenia and e.id_kalendarza = $2 and c.id_uzytkownika = $1 and c.aktywny
             and e.status = 'Aktywne' and e.rozpoczecie <= now())`, [scope.userId, scope.calendarId]);
     const result = await this.pool.query(`with due as (
-        select n.id_powiadomienia, n.id_wydarzenia, n.typ, n.tresc, n.planowana_data,
+        select n.id_powiadomienia, n.id_wydarzenia, n.typ, n.tresc, n.planowana_data, n.szczegoly,
           to_char(e.rozpoczecie at time zone u.strefa_czasowa, 'YYYY-MM-DD"T"HH24:MI') as event_start,
           to_char(e.zakonczenie at time zone u.strefa_czasowa, 'YYYY-MM-DD"T"HH24:MI') as event_end, e.tytul
         from t_powiadomienia n join t_wydarzenia e on e.id_wydarzenia = n.id_wydarzenia
@@ -114,7 +118,8 @@ export class PostgresNotificationRepository {
         from due where n.id_powiadomienia = due.id_powiadomienia returning due.*`,
     [scope.userId, scope.calendarId, Math.min(Math.max(limit, 1), 100)]);
     return result.rows.map((row) => ({ id: row.id_powiadomienia, eventId: row.id_wydarzenia, type: row.typ, message: row.tresc,
-      scheduledAt: new Date(row.planowana_data).toISOString(), eventStart: row.event_start, eventEnd: row.event_end, title: row.tytul }));
+      scheduledAt: new Date(row.planowana_data).toISOString(), eventStart: row.event_start, eventEnd: row.event_end, title: row.tytul,
+      change: row.szczegoly ?? null }));
   }
 
   async acknowledge(scope: UserScope, notificationId: string): Promise<boolean> {

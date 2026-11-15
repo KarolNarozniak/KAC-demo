@@ -14933,6 +14933,114 @@
                           },
                           "title": {
                             "type": "string"
+                          },
+                          "change": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "title": "PlanChangeDetails",
+                                "additionalProperties": false,
+                                "required": [
+                                  "kind",
+                                  "fields",
+                                  "before",
+                                  "after",
+                                  "eventVersion"
+                                ],
+                                "description": "Różnica terminu wydarzenia. kind=changed: realna zmiana (fields: date/time/location). kind=unknown_previous: poprzedni stan nie był znany – aplikacja ma ponownie odczytać wydarzenie zamiast pokazywać zmyśloną różnicę.",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "changed",
+                                      "unknown_previous"
+                                    ]
+                                  },
+                                  "fields": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "enum": [
+                                        "date",
+                                        "time",
+                                        "location"
+                                      ]
+                                    }
+                                  },
+                                  "before": {
+                                    "anyOf": [
+                                      {
+                                        "type": "object",
+                                        "additionalProperties": false,
+                                        "required": [
+                                          "start",
+                                          "end",
+                                          "location"
+                                        ],
+                                        "properties": {
+                                          "start": {
+                                            "type": "string",
+                                            "description": "Lokalna data i godzina (YYYY-MM-DDTHH:MM) w strefie użytkownika."
+                                          },
+                                          "end": {
+                                            "type": "string"
+                                          },
+                                          "location": {
+                                            "anyOf": [
+                                              {
+                                                "type": "string"
+                                              },
+                                              {
+                                                "type": "null"
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "after": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "start",
+                                      "end",
+                                      "location"
+                                    ],
+                                    "properties": {
+                                      "start": {
+                                        "type": "string",
+                                        "description": "Lokalna data i godzina (YYYY-MM-DDTHH:MM) w strefie użytkownika."
+                                      },
+                                      "end": {
+                                        "type": "string"
+                                      },
+                                      "location": {
+                                        "anyOf": [
+                                          {
+                                            "type": "string"
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  },
+                                  "eventVersion": {
+                                    "type": "integer",
+                                    "minimum": 1
+                                  }
+                                }
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "S23KC2S1P2-299: dla typu „Zmiana planu” – co się zmieniło (przed/po); null dla przypomnień."
                           }
                         }
                       }
@@ -14953,7 +15061,45 @@
                           "scheduledAt": "2026-11-16T07:30:00Z",
                           "eventStart": "2026-11-16T08:00",
                           "eventEnd": "2026-11-16T16:00",
-                          "title": "Zmiana"
+                          "title": "Zmiana",
+                          "change": null
+                        }
+                      ]
+                    }
+                  },
+                  "planChange": {
+                    "summary": "Zmiana planu z różnicą",
+                    "description": "Laboratorium przeniesiono z czwartku 10:00–11:30 na piątek 12:00–13:30 i do innej sali. change.fields mówi, co się zmieniło; kliknięcie otwiera aktualny stan wydarzenia.",
+                    "value": {
+                      "notifications": [
+                        {
+                          "id": "synthetic-change",
+                          "eventId": "synthetic-lab",
+                          "type": "Zmiana planu",
+                          "message": "Zmiana planu: „Laboratorium” – nowy termin 2026-11-20 12:00–13:30 (było 2026-11-19 10:00–11:30); miejsce: s. 204 (było s. 101).",
+                          "scheduledAt": "2026-11-16T09:00:00Z",
+                          "eventStart": "2026-11-20T12:00",
+                          "eventEnd": "2026-11-20T13:30",
+                          "title": "Laboratorium",
+                          "change": {
+                            "kind": "changed",
+                            "fields": [
+                              "date",
+                              "time",
+                              "location"
+                            ],
+                            "before": {
+                              "start": "2026-11-19T10:00",
+                              "end": "2026-11-19T11:30",
+                              "location": "s. 101"
+                            },
+                            "after": {
+                              "start": "2026-11-20T12:00",
+                              "end": "2026-11-20T13:30",
+                              "location": "s. 204"
+                            },
+                            "eventVersion": 3
+                          }
                         }
                       ]
                     }

@@ -10,7 +10,7 @@ import TimeField from '../components/TimeField';
 import WeekGrid, { type WeekLayout } from '../components/WeekGrid';
 import type { WeeklySchedule } from '../services/scheduleApi';
 import type { DueNotification } from '../services/notificationsApi';
-import { resolveNotificationTarget } from '../domain/notifications';
+import { PLAN_CHANGE_TYPE, planChangeLines, planChangeOutdated, resolveNotificationTarget } from '../domain/notifications';
 import { getAssistantConfig, getDailySummary } from '../services/assistantApi';
 import ClassScheduleImport from '../components/ClassScheduleImport';
 import WorkScheduleImport from '../components/WorkScheduleImport';
@@ -71,10 +71,22 @@ export default function CalendarScreen({ week, setWeek, todayOnly = false, weekL
     void requestDailySummary();
   }, [active, todayOnly, loading, loadError, todayKey, requestDailySummary]);
   const list = useMemo(() => occurrencesForRange(events, { start: monday, end: addCalendarDays(monday, 7) }), [events, monday.getTime()]);
+  // S23KC2S1P2-299: po kliknięciu „Zmiana planu” najpierw ładujemy aktualny stan kalendarza, potem otwieramy wydarzenie z różnicą.
+  const [refreshedFor, setRefreshedFor] = useState('');
+  const [planChange, setPlanChange] = useState<{ lines: string[]; outdated: boolean } | null>(null);
+  useEffect(() => {
+    if (!active || !notificationTarget || notificationTarget.type !== PLAN_CHANGE_TYPE || refreshedFor === notificationTarget.id) return;
+    const id = notificationTarget.id;
+    void reload().finally(() => setRefreshedFor(id));
+  }, [active, notificationTarget, refreshedFor]);
   useEffect(() => {
     if (!active || loading || !notificationTarget) return;
+    const isPlanChange = notificationTarget.type === PLAN_CHANGE_TYPE;
+    if (isPlanChange && refreshedFor !== notificationTarget.id) return;
     const resolution = resolveNotificationTarget(events, notificationTarget, { start: monday, end: addCalendarDays(monday, 7) });
     if (resolution.kind === 'open') {
+      const current = events.find((event) => event.id === notificationTarget.eventId);
+      setPlanChange(isPlanChange ? { lines: planChangeLines(notificationTarget.change), outdated: planChangeOutdated(notificationTarget.change, current ?? null) } : null);
       setSelected(resolution.occurrence); setDialog('details');
     } else if (resolution.kind === 'navigate') {
       const [year, month, day] = resolution.date.split('-').map(Number);
@@ -90,7 +102,7 @@ export default function CalendarScreen({ week, setWeek, todayOnly = false, weekL
         : 'Ta zmiana została usunięta. Kalendarz został otwarty.');
     }
     onNotificationResolved?.();
-  }, [active, loading, notificationTarget, list, events, onNotificationResolved]);
+  }, [active, loading, notificationTarget, list, events, onNotificationResolved, refreshedFor]);
   const previewEvents = useMemo(() => {
     if (!draftSchedule || draftSchedule.isApproved || draftSchedule.weekStart !== localDateKey(monday)) return [];
     return draftSchedule.shifts.map((shift) => ({ id: `preview-${shift.candidateId}`, title: 'Propozycja pracy', location: 'Nieopublikowana propozycja',
@@ -103,7 +115,7 @@ export default function CalendarScreen({ week, setWeek, todayOnly = false, weekL
   // S23KC2S1P2-302: wynik ponownego sprawdzenia dotyczy dokładnie tego szkicu – każda zmiana pola go unieważnia.
   const [recheck, setRecheck] = useState<{ draft: CalendarEvent; conflicts: EventCollision[] } | null>(null);
   const [checking, setChecking] = useState(false);
-  const close = () => { setDialog(null); setDraft(null); setSelected(null); setPending(null); setEditId(null); setError(''); setCollisionToken(undefined); setRecheck(null); };
+  const close = () => { setDialog(null); setDraft(null); setSelected(null); setPending(null); setEditId(null); setError(''); setCollisionToken(undefined); setRecheck(null); setPlanChange(null); };
   const normalizedDraft = (value: CalendarEvent) => ({ ...value, title: value.title.trim(), mandatory: value.category === 'Class' && value.mandatory });
   const recheckDraft = async () => {
     if (!draft || checking) return;
@@ -204,7 +216,11 @@ export default function CalendarScreen({ week, setWeek, todayOnly = false, weekL
         </View>}
         {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}<View style={[styles.row, { justifyContent: 'flex-end', flexWrap: 'wrap', marginTop: 12 }]}><Button title="Anuluj" disabled={saving} onPress={close} /><Button title={checking ? 'Sprawdzanie…' : 'Sprawdź kolizje'} disabled={saving || checking || loading || !!loadError} onPress={() => void recheckDraft()} /><Button title={saving ? 'Zapisywanie…' : editId ? 'Zapisz zmiany' : 'Zapisz wydarzenie'} disabled={saving || loading || !!loadError} primary onPress={save} /></View>
       </View></>}
-      {dialog === 'details' && selected && <><Text style={[styles.heading, { marginTop: 12 }]}>{selected.title}</Text><Text style={styles.subtitle}>{selected.occurrenceStart.toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' })} · {selected.occurrenceStart.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}–{selected.occurrenceEnd.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}</Text><Text style={[styles.subtitle, { marginTop: 8 }]}>{selected.location ? `Miejsce: ${selected.location}` : 'Nie podano miejsca.'}</Text><Text style={[styles.body, { marginTop: 12 }]}>{selected.repeatWeekly ? 'Seria cotygodniowa. Edycja zmienia całą serię.' : 'Wydarzenie jednorazowe.'} {selected.mandatory ? 'Zajęcia obowiązkowe.' : ''}</Text><View style={[styles.row, { justifyContent: 'flex-end', flexWrap: 'wrap', marginTop: 18 }]}><Button title="Edytuj" primary onPress={edit} /><Button title={selected.repeatWeekly ? 'Usuń serię' : 'Usuń wydarzenie'} danger onPress={() => { setError(''); setDialog('delete'); }} /><Button title="Zamknij" onPress={close} /></View></>}
+      {dialog === 'details' && selected && <>{planChange && <View accessibilityRole="alert" style={{ marginTop: 8, padding: 10, borderRadius: 10, borderWidth: 1, borderColor: palette.amber, backgroundColor: palette.surfaceAlt }}>
+        <Text style={[styles.body, { fontWeight: '700' }]}>Zmiana planu</Text>
+        {planChange.lines.map((line) => <Text key={line} style={styles.body}>{line}</Text>)}
+        {planChange.outdated && <Text style={[styles.muted, { color: palette.amber }]}>Wydarzenie zmieniło się ponownie po wysłaniu powiadomienia – poniżej aktualny termin.</Text>}
+      </View>}<Text style={[styles.heading, { marginTop: 12 }]}>{selected.title}</Text><Text style={styles.subtitle}>{selected.occurrenceStart.toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' })} · {selected.occurrenceStart.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}–{selected.occurrenceEnd.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}</Text><Text style={[styles.subtitle, { marginTop: 8 }]}>{selected.location ? `Miejsce: ${selected.location}` : 'Nie podano miejsca.'}</Text><Text style={[styles.body, { marginTop: 12 }]}>{selected.repeatWeekly ? 'Seria cotygodniowa. Edycja zmienia całą serię.' : 'Wydarzenie jednorazowe.'} {selected.mandatory ? 'Zajęcia obowiązkowe.' : ''}</Text><View style={[styles.row, { justifyContent: 'flex-end', flexWrap: 'wrap', marginTop: 18 }]}><Button title="Edytuj" primary onPress={edit} /><Button title={selected.repeatWeekly ? 'Usuń serię' : 'Usuń wydarzenie'} danger onPress={() => { setError(''); setDialog('delete'); }} /><Button title="Zamknij" onPress={close} /></View></>}
       {dialog === 'delete' && selected && <>
         <Text style={styles.heading}>{selected.repeatWeekly ? 'Usunąć całą serię?' : 'Usunąć wydarzenie?'}</Text>
         <Text style={styles.subtitle}>{selected.title}</Text>
