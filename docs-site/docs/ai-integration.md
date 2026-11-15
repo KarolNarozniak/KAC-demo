@@ -144,3 +144,9 @@ Wyczerpanie limitu zwraca `assistant_tool_limit` (409 lub zdarzenie `error`). Od
 Historyczny wynik `awaiting_user_confirmation` nie oznacza, że podgląd nadal jest ważny. Przed każdą turą backend odświeża w kontekście modelu statusy wskazanych akcji na podstawie bazy i bieżącego zakresu użytkownika oraz rozmowy. Wygasłe, anulowane, błędne lub niedostępne propozycje wymagają nowego podglądu po ponowieniu prośby; potwierdzone oznaczają już wykonany zapis, a przetwarzane nie powinny być duplikowane. Sam zapis dawnej historii pozostaje niezmieniony.
 
 Asystent pokazuje liczbę faktycznie oczekujących propozycji obok przycisku zbiorczego zatwierdzania. Dawna deklaracja tekstowa modelu nie jest potwierdzeniem, że wszystkie propozycje nadal są dostępne do zapisu. TTL podglądu pozostaje równy 15 minut.
+
+### Zdjęcie lub plik z Asystenta
+
+Ikona aparatu obok pola wiadomości otwiera wybór planu zajęć albo grafiku pracy, a następnie dotychczasowe okno importu. Wybór pliku, korekta wierszy, decyzje o duplikatach i zatwierdzenie korzystają ze wspólnych mechanizmów importu. Po zapisie użytkownik pozostaje w Asystencie, a kalendarz zostaje oznaczony do odświeżenia. Skrót działa również bez aktywnego czatu; lokalny odczyt pozostaje dostępny bez konfiguracji Azure.
+
+W oknie importu są dwie metody: lokalny OCR (Tesseract i parser rozpoznanego tekstu) oraz Azure AI (interpretacja obrazu przez model). Lokalny OCR przetwarza obraz na serwerze API; dla zajęć obsługuje rozpoznawany układ tabeli WAT, a dla grafiku pracy korzysta z parsera zmian. Azure otrzymuje obraz i zwraca uporządkowane wiersze. Obie metody prowadzą do podglądu wymagającego potwierdzenia. Ikona jest skrótem do importu, a sam obraz nie staje się załącznikiem historii rozmowy.

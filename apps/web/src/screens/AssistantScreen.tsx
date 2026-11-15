@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { Button, useTheme } from '../components/ui';
+import ClassScheduleImport from '../components/ClassScheduleImport';
+import WorkScheduleImport from '../components/WorkScheduleImport';
 import {
   cancelAssistantAction, confirmAssistantActions, createAssistantConversation, deleteAssistantConversation,
   getAssistantConfig, listAssistantConversations, listAssistantMessages, streamAssistantMessage,
@@ -39,6 +41,8 @@ export default function AssistantScreen({ active, onCalendarChange }: Props) {
   const [error, setError] = useState('');
   const [replying, setReplying] = useState(false);
   const [streamText, setStreamText] = useState('');
+  const [attachmentMenuOpen, setAttachmentMenuOpen] = useState(false);
+  const [importKind, setImportKind] = useState<'classes' | 'work' | null>(null);
   const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const followReply = useRef(true);
   const requestRef = useRef<AbortController | null>(null);
@@ -204,11 +208,30 @@ export default function AssistantScreen({ active, onCalendarChange }: Props) {
         {loading && <Text accessibilityLiveRegion="polite" style={styles.muted}>Wczytywanie…</Text>}
       </ScrollView>
       <View style={[styles.row, { alignItems: 'flex-end' }]}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Importuj zdjęcie lub plik" accessibilityHint="Wybierz plan zajęć albo grafik pracy i sprawdź dane przed zapisem."
+          accessibilityState={{ disabled: sending || loading }} disabled={sending || loading} onPress={() => setAttachmentMenuOpen(true)}
+          style={[styles.button, { minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' }, (sending || loading) && { opacity: 0.5 }]}>
+          <Text style={{ fontSize: 22 }}>📷</Text>
+        </Pressable>
         <TextInput value={input} onChangeText={setInput} placeholder={enabled ? 'Zapytaj o kalendarz lub plan pracy…' : 'Skonfiguruj Azure AI, aby rozpocząć'} multiline editable={Boolean(enabled) && !sending}
           accessibilityLabel="Wiadomość do asystenta" onSubmitEditing={() => void send()} style={[styles.input, { flex: 1, minHeight: 48, maxHeight: 120 }]} />
         <Button title={sending ? '…' : 'Wyślij'} primary disabled={!enabled || sending || loading || !conversationId || !input.trim()} onPress={() => void send()} />
       </View>
       <Text style={[styles.muted, { marginTop: 6 }]}>Załączniki i tekst traktowane są jako niezaufane dane. Asystent nie zapisuje zmian bez Twojej akceptacji.</Text>
     </View>
+    <Modal visible={attachmentMenuOpen} transparent animationType="fade" onRequestClose={() => setAttachmentMenuOpen(false)}>
+      <View style={{ flex: 1, backgroundColor: palette.scrim, alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+        <View style={[styles.card, { width: '100%', maxWidth: 440, gap: 12 }]}>
+          <Text style={styles.heading}>Dodaj zdjęcie lub plik</Text>
+          <Text style={styles.body}>Co chcesz odczytać?</Text>
+          <Button title="Plan zajęć" onPress={() => { setAttachmentMenuOpen(false); setImportKind('classes'); }} />
+          <Button title="Grafik pracy" onPress={() => { setAttachmentMenuOpen(false); setImportKind('work'); }} />
+          <Text style={styles.muted}>Wybierzesz plik i sposób odczytu, a następnie sprawdzisz i zatwierdzisz dane przed zapisem.</Text>
+          <Button title="Anuluj" onPress={() => setAttachmentMenuOpen(false)} />
+        </View>
+      </View>
+    </Modal>
+    {importKind === 'classes' && <ClassScheduleImport visible onClose={() => setImportKind(null)} onImported={onCalendarChange} />}
+    {importKind === 'work' && <WorkScheduleImport visible onClose={() => setImportKind(null)} onImported={onCalendarChange} />}
   </View>;
 }

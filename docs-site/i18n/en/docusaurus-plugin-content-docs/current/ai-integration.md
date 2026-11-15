@@ -144,3 +144,9 @@ Exhausting the limit returns `assistant_tool_limit` (409 or an `error` event). E
 A historical `awaiting_user_confirmation` result does not prove that a preview is still valid. Before each turn, the backend refreshes referenced action statuses in the model context from the database, scoped to the user and conversation. Expired, cancelled, failed or unavailable proposals need a fresh preview when requested again; confirmed actions indicate completed writes, while processing actions must not be duplicated. Stored historical messages remain unchanged.
 
 The Assistant displays the actual pending proposal count beside batch confirmation. An earlier textual claim by the model does not establish that all proposals remain available for saving. Preview TTL remains 15 minutes.
+
+### Photo or file from the Assistant
+
+The camera icon beside the message input offers class timetable or work schedule import, then opens the existing import dialog. File selection, row correction, duplicate decisions and confirmation reuse the shared import workflow. Saving keeps the user in the Assistant and marks the calendar for refresh. The shortcut also works without an active chat; local reading remains available without Azure configuration.
+
+The import dialog offers local OCR (Tesseract plus a parser) and Azure AI (model interpretation of the image). Local OCR processes images on the API server; class imports support the recognized WAT table layout, while work imports use the shift parser. Azure receives the image and returns structured rows. Both methods lead to a preview requiring confirmation. The icon is an import shortcut; the original image is not attached to conversation history.
