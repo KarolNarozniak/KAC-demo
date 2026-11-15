@@ -137,3 +137,45 @@ test('assistant provider 429 and timeout failures stop after one request and ret
     } finally { await app.close(); }
   }
 });
+
+test('assistant create confirmation returns collisions and retries the same action with explicit decision', async () => {
+  const { CollisionError } = await import('../src/collisions.js');
+  const token = 'a'.repeat(64);
+  const event = { title: 'Spotkanie testowe', start: '2026-11-16T10:00', end: '2026-11-16T11:00', category: 'Personal', location: '', mandatory: false, repeatWeekly: false };
+  let writes = 0;
+  let released = 0;
+  let completed = false;
+  const app = buildApi({ checkConnection: async () => {}, getOverview: async () => null,
+    createEvent: async (input, userId, calendarId, actionId) => {
+      assert.equal(userId, 'U001'); assert.equal(calendarId, 'K001'); assert.equal(actionId, 'action-create');
+      if (input.collisionToken !== token) throw new CollisionError([{ id: 'existing', title: 'Zajęcia testowe', category: 'Class', start: event.start, end: event.end, overlapStart: event.start, overlapEnd: event.end }], token);
+      writes++;
+      return { ...input, id: 'created-event' };
+    },
+  }, [], {
+    userScope: () => ({ userId: 'U001', calendarId: 'K001' }),
+    aiRepository: {
+      claimAction: async () => ({ id: 'action-create', conversationId: 'conversation-1', kind: 'calendar_event_create', payload: { event }, status: completed ? 'confirmed' : 'processing', eventId: completed ? 'created-event' : undefined, expiresAt: new Date(Date.now() + 60_000).toISOString() }),
+      releaseAction: async () => { released++; }, completeAction: async () => { completed = true; },
+    } as never,
+  });
+  try {
+    const url = '/api/v1/assistant/actions/action-create/confirm';
+    const blocked = await app.inject({ method: 'POST', url, payload: {} });
+    assert.equal(blocked.statusCode, 409, blocked.body);
+    assert.equal(blocked.json().conflicts[0].title, 'Zajęcia testowe');
+    assert.equal(blocked.json().collisionToken, token);
+    assert.equal(writes, 0); assert.equal(released, 1);
+    const invalid = await app.inject({ method: 'POST', url, payload: { collisionToken: 'invalid' } });
+    assert.equal(invalid.statusCode, 400);
+    const changed = await app.inject({ method: 'POST', url, payload: { collisionToken: 'b'.repeat(64) } });
+    assert.equal(changed.statusCode, 409); assert.equal(writes, 0);
+    const accepted = await app.inject({ method: 'POST', url, payload: { collisionToken: token } });
+    assert.equal(accepted.statusCode, 200, accepted.body);
+    assert.equal(accepted.json().eventId, 'created-event');
+    const retry = await app.inject({ method: 'POST', url, payload: {} });
+    assert.equal(retry.statusCode, 200, retry.body);
+    assert.equal(retry.json().eventId, 'created-event');
+    assert.equal(writes, 1);
+  } finally { await app.close(); }
+});

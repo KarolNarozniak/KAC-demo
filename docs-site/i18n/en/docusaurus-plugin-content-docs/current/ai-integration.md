@@ -90,3 +90,21 @@ The script prints only row count, unresolved fields and usage; it does not print
 ## Sprint integration limits
 
 W02 adds a separate outbox worker. Reminders are scheduled in the database; optional Web Push requires VAPID configuration in the API/worker. Google import currently has only `calendar.readonly`; publishing changes requires adding a write OAuth scope and obtaining consent again. The Google consumer keeps its deliveries explicitly blocked until write scope is granted.
+
+## Creating events in chat (S23KC2S1P2-252)
+
+The assistant asks for a title, date, start and end or duration, and an ambiguous category. Location is optional; mandatory attendance and weekly recurrence default to false. Conversation rules are model instructions and also require testing against the actual Azure deployment.
+
+The Assistant preview displays the time, category, location and both flags. **Zatwierdź** saves the event; **Odrzuć** cancels the proposal. Saying “yes” in chat does not replace the application confirmation.
+
+`POST /api/v1/assistant/actions/{id}/confirm` accepts `{}` or `{ "collisionToken": "<64 hexadecimal characters>" }`. A collision returns HTTP 409 with `conflicts` and a token bound to the proposal and current conflicts. The UI displays them and offers a separate **Zapisz mimo kolizji** button. Changed conflicts invalidate the old token and require another decision. The backend issues this token; the model cannot confirm operations with it.
+
+After a lost response, confirm **the same proposal** again. Existing action identifiers make calendar writes idempotent; requesting another proposal is unnecessary. Cancelled or expired actions cannot be saved.
+
+### Manual test
+
+1. Start an Assistant conversation with “Dodaj spotkanie osobiste”. Verify that it asks for the missing title and time without creating an event.
+2. Reply “Spotkanie testowe, 20 listopada 2026, od 10:00 do 11:00”. Check all preview fields. Saying “tak” must not save the event.
+3. Select **Odrzuć** and check the calendar. Prepare another proposal, select **Zatwierdź**, and verify a single event.
+4. Propose another event at the same time. Review the collision list and explicitly save despite collisions. Also test rejecting it and requesting another time.
+5. After losing a confirmation response, retry the same card. Only one event should exist for that action.

@@ -3,6 +3,18 @@ import { apiBaseUrl } from './importApi.ts';
 export type AssistantMessage = { id: string; role: 'user' | 'assistant' | 'tool'; content: Record<string, unknown>; createdAt: string };
 export type AssistantConversation = { id: string; title: string; modelDeployment: string; createdAt: string; updatedAt: string; expiresAt: string };
 export type PendingAssistantAction = { id: string; kind: string; payload: Record<string, unknown>; expiresAt: string };
+export type AssistantCollision = { id: string; title: string; start: string; end: string };
+export class AssistantApiError extends Error {
+  code: string;
+  conflicts: AssistantCollision[];
+  collisionToken?: string;
+  constructor(code: string, conflicts: AssistantCollision[] = [], collisionToken?: string) {
+    super(aiErrorText[code] ?? 'Nie udało się wykonać operacji asystenta. Spróbuj ponownie.');
+    this.code = code;
+    this.conflicts = conflicts;
+    this.collisionToken = collisionToken;
+  }
+}
 
 async function call<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
   const response = await fetch(`${apiBaseUrl()}${path}`, {
@@ -12,7 +24,7 @@ async function call<T>(path: string, method = 'GET', body?: unknown): Promise<T>
     signal: AbortSignal.timeout(120_000),
   });
   const result = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(aiErrorText[result.error] ?? `Asystent API zwróciło HTTP ${response.status}.`);
+  if (!response.ok) throw new AssistantApiError(result.error ?? `http_${response.status}`, result.conflicts, result.collisionToken);
   return result as T;
 }
 
@@ -26,6 +38,10 @@ const aiErrorText: Record<string, string> = {
   action_not_found_or_expired: 'Ta propozycja wygasła lub nie istnieje. Poproś asystenta o przygotowanie nowej.',
   conversation_not_found_or_expired: 'Ta rozmowa wygasła lub nie istnieje. Rozpocznij nową rozmowę.',
   event_collision: 'Ta propozycja koliduje z wydarzeniem w kalendarzu. Sprawdź kalendarz i popraw propozycję.',
+  ai_action_processing: 'Trwa zapis tej propozycji. Poczekaj chwilę i ponów zatwierdzenie.',
+  ai_action_cancelled: 'Ta propozycja została anulowana.',
+  ai_action_expired: 'Ta propozycja wygasła. Poproś o nową.',
+  action_confirmation_failed: 'Nie udało się potwierdzić wyniku zapisu. Ponów zatwierdzenie tej samej propozycji — nie utworzy to duplikatu.',
 };
 
 export const getAssistantConfig = () => call<{ enabled: boolean }>('/api/v1/assistant/config');
@@ -34,7 +50,7 @@ export const createAssistantConversation = (title?: string) => call<AssistantCon
 export const listAssistantMessages = (id: string) => call<{ messages: AssistantMessage[]; pendingActions: PendingAssistantAction[] }>(`/api/v1/assistant/conversations/${encodeURIComponent(id)}/messages`);
 export const sendAssistantMessage = (id: string, content: string) => call<{ conversationId: string; message: { role: string; content: string }; pendingActions: PendingAssistantAction[]; usage: { inputTokens: number; outputTokens: number } }>(
   `/api/v1/assistant/conversations/${encodeURIComponent(id)}/messages`, 'POST', { content });
-export const confirmAssistantAction = (id: string) => call<{ status: string; actionId?: string; eventId: string | null }>(`/api/v1/assistant/actions/${encodeURIComponent(id)}/confirm`, 'POST', {});
+export const confirmAssistantAction = (id: string, collisionToken?: string) => call<{ status: string; actionId?: string; eventId: string | null }>(`/api/v1/assistant/actions/${encodeURIComponent(id)}/confirm`, 'POST', collisionToken ? { collisionToken } : {});
 export const cancelAssistantAction = (id: string) => call<{ status: string }>(`/api/v1/assistant/actions/${encodeURIComponent(id)}/cancel`, 'POST', {});
 export const deleteAssistantConversation = (id: string) => call<{ status: string }>(`/api/v1/assistant/conversations/${encodeURIComponent(id)}`, 'DELETE');
 

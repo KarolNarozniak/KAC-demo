@@ -154,3 +154,18 @@ test('assistant Responses puts trusted time context in instructions, not persist
   assert.deepEqual((captured?.input as unknown[])[0], { role: 'user', content: 'What time is it?' });
   assert.equal(requestSignal, abortController.signal);
 });
+
+test('assistant cannot prepare an incomplete or invalid create proposal', async () => {
+  let actions = 0;
+  const context: AssistantToolContext = {
+    scope: { userId: 'U-test', calendarId: 'K-test' }, conversationId: 'C-test',
+    calendar: { checkConnection: async () => {}, getOverview: async () => null },
+    ai: { createAction: async () => { actions++; throw new Error('must not prepare'); } }, actionTtlMinutes: 15,
+  };
+  const complete = { title: 'Spotkanie testowe', start: '2026-11-20T10:00', end: '2026-11-20T11:00', category: 'Personal', location: '', mandatory: false, repeatWeekly: false };
+  for (const patch of [{ title: '' }, { start: undefined }, { end: undefined }, { start: '2026-02-30T10:00' }, { end: complete.start }, { category: 'unknown' }]) {
+    const result = await executeAssistantTool('calendar_prepare_event_create', JSON.stringify({ ...complete, ...patch }), context);
+    assert.equal(result.error, 'invalid_tool_arguments');
+  }
+  assert.equal(actions, 0);
+});

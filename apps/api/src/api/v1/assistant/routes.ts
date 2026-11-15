@@ -194,7 +194,9 @@ export async function assistantRoutes(app: FastifyInstance, options: Pick<ApiDep
     }
   });
 
-  app.post<{ Params: { id: string } }>('/assistant/actions/:id/confirm', { schema: { tags: ['Assistant'], summary: 'Confirm a pending assistant action', description: 'Revalidates the complete event snapshot and executes the action idempotently. A stale snapshot is rejected and must be previewed again.', operationId: 'confirmAssistantAction', params: actionParams, response: { 200: actionResponse, 404: errorResponse, 409: errorResponse, 422: errorResponse, 503: errorResponse } } }, async (request, reply) => {
+  app.post<{ Params: { id: string }; Body: { collisionToken?: string } }>('/assistant/actions/:id/confirm', { schema: { tags: ['Assistant'], summary: 'Confirm a pending assistant action', description: 'Revalidates the complete event snapshot and executes the action idempotently. A stale snapshot is rejected and must be previewed again. On event_collision, show conflicts to the user; only their explicit acceptance may resend the same action with the returned collisionToken. Changed conflicts require another review.', operationId: 'confirmAssistantAction', params: actionParams,
+    body: withExamples({ type: 'object', additionalProperties: false, properties: { collisionToken: { type: 'string', pattern: '^[a-f0-9]{64}$' } } }, { confirm: { summary: 'Confirm the preview', value: {} } }),
+    response: { 200: actionResponse, 400: errorResponse, 404: errorResponse, 409: errorResponse, 422: errorResponse, 503: errorResponse } } }, async (request, reply) => {
     if (!aiRepository || !repository) return reply.code(503).send({ error: 'ai_storage_not_configured' });
     const owner = scope(request);
     let action;
@@ -203,12 +205,12 @@ export async function assistantRoutes(app: FastifyInstance, options: Pick<ApiDep
       if (action.status === 'confirmed') return { status: 'confirmed', eventId: action.eventId ?? null };
       let eventId: string | null = null;
       if (action.kind === 'calendar_event_create') {
-        const event = action.payload.event as EventInput;
+        const event = { ...action.payload.event as EventInput, collisionToken: request.body?.collisionToken };
         if (!repository.createEvent) return reply.code(503).send({ error: 'calendar_not_configured' });
         const created = await repository.createEvent(event, owner.userId, owner.calendarId, action.id);
         eventId = created.id;
       } else if (action.kind === 'calendar_event_update') {
-        const event = action.payload.event as EventInput;
+        const event = { ...action.payload.event as EventInput, collisionToken: request.body?.collisionToken };
         const targetId = String(action.payload.id ?? '');
         if (!repository.updateEvent || !targetId) return reply.code(503).send({ error: 'calendar_not_configured' });
         eventId = (await repository.updateEvent(targetId, event, owner.userId, owner.calendarId,

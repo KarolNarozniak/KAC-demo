@@ -5,10 +5,17 @@ import {
   cancelAssistantAction, confirmAssistantAction, createAssistantConversation, deleteAssistantConversation,
   getAssistantConfig, listAssistantConversations, listAssistantMessages, sendAssistantMessage,
   type AssistantConversation, type AssistantMessage, type PendingAssistantAction,
+  AssistantApiError,
 } from '../services/assistantApi';
 
 type Props = { active: boolean; onCalendarChange: () => void };
 const textOf = (message: AssistantMessage) => typeof message.content.text === 'string' ? message.content.text : '';
+const eventDetails = (event: Record<string, unknown>) => [
+  `Kategoria: ${{ Class: 'Zajęcia', Work: 'Praca', Personal: 'Osobiste' }[String(event.category)] ?? String(event.category)}`,
+  `Miejsce: ${event.location || 'nie podano'}`,
+  `Obowiązkowe: ${event.mandatory ? 'tak' : 'nie'}`,
+  `Co tydzień: ${event.repeatWeekly ? 'tak' : 'nie'}`,
+].join(' · ');
 const actionSummary = (action: PendingAssistantAction) => {
   const value = action.payload.event as Record<string, unknown> | undefined;
   if (action.kind === 'calendar_event_delete') {
@@ -30,8 +37,10 @@ export default function AssistantScreen({ active, onCalendarChange }: Props) {
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
+  const [collision, setCollision] = useState<{ actionId: string; error: AssistantApiError } | null>(null);
 
   useEffect(() => {
+    setCollision(null);
     if (!active) return;
     let alive = true;
     setLoading(true); setError('');
@@ -79,16 +88,19 @@ export default function AssistantScreen({ active, onCalendarChange }: Props) {
     finally { setLoading(false); }
   };
 
-  const confirmAction = async (action: PendingAssistantAction) => {
+  const confirmAction = async (action: PendingAssistantAction, collisionToken?: string) => {
+    if (sending) return;
     setSending(true); setError('');
     try {
-      await confirmAssistantAction(action.id);
+      await confirmAssistantAction(action.id, collisionToken);
+      setCollision(null);
       setPendingActions((current) => current.filter((item) => item.id !== action.id));
       setMessages((current) => [...current, { id: `confirmed-${Date.now()}`, role: 'assistant',
         content: { text: 'Akcja została zatwierdzona i zapisana w kalendarzu.' }, createdAt: new Date().toISOString() }]);
       onCalendarChange();
     } catch (reason) {
-      try { setPendingActions((await listAssistantMessages(conversationId)).pendingActions); } catch { /* keep the current action until refresh succeeds */ }
+      if (reason instanceof AssistantApiError && reason.code === 'event_collision') setCollision({ actionId: action.id, error: reason });
+      // Keep this action available after a lost response so retry uses its original id.
       setError(reason instanceof Error ? reason.message : 'Nie udało się zatwierdzić akcji.');
     }
     finally { setSending(false); }
@@ -98,6 +110,7 @@ export default function AssistantScreen({ active, onCalendarChange }: Props) {
     setSending(true); setError('');
     try {
       await cancelAssistantAction(action.id);
+      setCollision(null);
       setPendingActions((current) => current.filter((item) => item.id !== action.id));
       setMessages((current) => [...current, { id: `cancelled-${Date.now()}`, role: 'assistant', content: { text: 'Propozycja została anulowana. Kalendarz pozostał bez zmian.' }, createdAt: new Date().toISOString() }]);
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Nie udało się anulować akcji.'); }
@@ -119,7 +132,7 @@ export default function AssistantScreen({ active, onCalendarChange }: Props) {
     <View style={{ width: 230, maxWidth: '36%', borderRightWidth: 1, borderColor: palette.line, padding: 10, gap: 8 }}>
       <Button title="Nowa rozmowa" primary disabled={!enabled || loading || sending} onPress={() => void newConversation()} />
       <ScrollView contentContainerStyle={{ gap: 6 }}>
-        {conversations.map((conversation) => <Pressable key={conversation.id} accessibilityRole="button" accessibilityState={{ selected: conversationId === conversation.id }} onPress={() => setConversationId(conversation.id)} style={{ padding: 10, borderRadius: 9, backgroundColor: conversationId === conversation.id ? palette.blueSoft : palette.surface }}>
+        {conversations.map((conversation) => <Pressable key={conversation.id} disabled={sending} accessibilityRole="button" accessibilityState={{ selected: conversationId === conversation.id }} onPress={() => { setCollision(null); setConversationId(conversation.id); }} style={{ padding: 10, borderRadius: 9, backgroundColor: conversationId === conversation.id ? palette.blueSoft : palette.surface }}>
           <Text numberOfLines={2} style={[styles.body, { fontWeight: conversationId === conversation.id ? '800' : '500' }]}>{conversation.title || 'Rozmowa'}</Text>
           <Text style={styles.muted}>{new Date(conversation.updatedAt).toLocaleDateString('pl-PL')}</Text>
         </Pressable>)}
@@ -129,15 +142,22 @@ export default function AssistantScreen({ active, onCalendarChange }: Props) {
 
     <View style={{ flex: 1, minWidth: 0, padding: 14 }}>
       <View style={[styles.row, { justifyContent: 'space-between', flexWrap: 'wrap' }]}><View><Text style={styles.heading}>Asystent KAC</Text><Text style={styles.muted}>Kalendarz i planowanie pracy · zmiany wymagają zatwierdzenia</Text></View></View>
-      {enabled === false && <View style={[styles.card, { borderColor: palette.amber, marginTop: 12 }]}><Text style={styles.heading}>Azure AI Foundry nie jest skonfigurowane</Text><Text style={styles.body}>Ustaw endpoint projektu i nazwę agenta w konfiguracji API, a lokalnie zaloguj się przez `az login`. Żadna wiadomość nie została wysłana.</Text></View>}
+      {enabled === false && <View style={[styles.card, { borderColor: palette.amber, marginTop: 12 }]}><Text style={styles.heading}>Azure AI Foundry nie jest skonfigurowane</Text><Text style={styles.body}>Ustaw endpoint projektu i nazwę deploymentu modelu w konfiguracji API, a lokalnie zaloguj się przez `az login`. Żadna wiadomość nie została wysłana.</Text></View>}
       {!!error && <Text accessibilityRole="alert" style={[styles.error, { marginTop: 8 }]}>{error}</Text>}
       <ScrollView style={{ flex: 1, marginVertical: 10 }} contentContainerStyle={{ gap: 10, paddingBottom: 16 }}>
-        {messages.filter((message) => message.role !== 'tool').map((message) => <View key={message.id} style={{ alignSelf: message.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '90%', padding: 12, borderRadius: 12, backgroundColor: message.role === 'user' ? palette.blueSoft : palette.surface }}>
+        {messages.filter((message) => message.role !== 'tool' && textOf(message)).map((message) => <View key={message.id} style={{ alignSelf: message.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '90%', padding: 12, borderRadius: 12, backgroundColor: message.role === 'user' ? palette.blueSoft : palette.surface }}>
           <Text style={styles.body}>{String(message.content.text ?? '')}</Text>
           <Text style={[styles.muted, { marginTop: 4 }]}>{message.role === 'user' ? 'Ty' : 'Asystent'} · {new Date(message.createdAt).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}</Text>
         </View>)}
         {pendingActions.map((action) => <View key={action.id} style={[styles.card, { borderColor: palette.amber }]}>
           <Text style={styles.heading}>Propozycja do potwierdzenia</Text><Text style={styles.body}>{actionSummary(action)}</Text>
+          {!!action.payload.event && <Text style={styles.body}>{eventDetails(action.payload.event as Record<string, unknown>)}</Text>}
+          {collision?.actionId === action.id && <View accessibilityRole="alert">
+            <Text style={styles.body}>W tym terminie masz już:</Text>
+            {collision.error.conflicts.map((item) => <Text key={item.id} style={styles.body}>• {item.title} · {new Date(item.start).toLocaleString('pl-PL')} – {new Date(item.end).toLocaleString('pl-PL')}</Text>)}
+            <Text style={styles.muted}>Możesz zapisać mimo kolizji lub odrzucić propozycję i poprosić o inny termin.</Text>
+            {!!collision.error.collisionToken && <Button title="Zapisz mimo kolizji" disabled={sending} onPress={() => void confirmAction(action, collision.error.collisionToken)} />}
+          </View>}
           <Text style={styles.muted}>Ważna do: {new Date(action.expiresAt).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}. Kalendarz nie zmieni się bez potwierdzenia.</Text>
           <View style={[styles.row, { flexWrap: 'wrap', marginTop: 8 }]}><Button title="Zatwierdź" primary disabled={sending} onPress={() => void confirmAction(action)} /><Button title="Odrzuć" danger disabled={sending} onPress={() => void cancelAction(action)} /></View>
         </View>)}

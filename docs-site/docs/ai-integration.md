@@ -90,3 +90,21 @@ Skrypt wypisuje jedynie liczbę wierszy, unresolved fields i usage; nie drukuje 
 ## Ograniczenia wdrożeniowe sprintu
 
 W02 uruchamia osobny outbox worker. Przypomnienia są planowane w bazie, a opcjonalny Web Push wymaga ustawienia VAPID w API/workerze. Google importer ma dziś scope tylko `calendar.readonly`; publikacja zmian wymaga rozszerzenia OAuth do zapisu i ponownej zgody. Konsument Google pozostawia dostawy jawnie zablokowane do czasu uzyskania scope zapisu.
+
+## Dodawanie wydarzeń przez czat (S23KC2S1P2-252)
+
+Asystent dopytuje o tytuł, datę, początek i koniec lub czas trwania oraz niejednoznaczną kategorię. Lokalizacja jest opcjonalna; obowiązkowość i cotygodniowe powtarzanie są domyślnie wyłączone. Reguły rozmowy są instrukcjami modelu i wymagają również testu z rzeczywistym deploymentem Azure.
+
+Podgląd w Asystencie pokazuje termin, kategorię, lokalizację i obie flagi. Dopiero **Zatwierdź** zapisuje wydarzenie; **Odrzuć** anuluje propozycję. Samo „tak” w czacie nie zastępuje potwierdzenia przyciskiem.
+
+`POST /api/v1/assistant/actions/{id}/confirm` przyjmuje `{}` albo `{ "collisionToken": "<64 znaki hex>" }`. Pierwsza próba przy kolizji zwraca HTTP 409, listę `conflicts` i token związany z propozycją oraz aktualnymi konfliktami. Interfejs pokazuje listę i osobny przycisk **Zapisz mimo kolizji**. Zmiana konfliktów unieważnia poprzedni token i wymaga kolejnej decyzji. Token pochodzi z backendu; model nie może nim zatwierdzać operacji.
+
+Po utracie odpowiedzi ponów zatwierdzenie **tej samej propozycji**. Idempotencja zapisu korzysta z istniejącego identyfikatora akcji; nie trzeba ponownie prosić modelu o utworzenie wydarzenia. Anulowane i wygasłe akcje nie mogą zostać zapisane.
+
+### Test ręczny
+
+1. W Asystencie rozpocznij rozmowę: „Dodaj spotkanie osobiste”. Sprawdź dopytanie o nazwę i termin oraz brak wydarzenia w kalendarzu.
+2. Podaj: „Spotkanie testowe, 20 listopada 2026, od 10:00 do 11:00”. Sprawdź wszystkie dane podglądu. Napisanie „tak” nie powinno zapisać wydarzenia.
+3. Wybierz **Odrzuć** i sprawdź kalendarz. Przygotuj ponownie, wybierz **Zatwierdź** i sprawdź pojedyncze wydarzenie.
+4. Dodaj drugie wydarzenie na ten sam termin. Sprawdź listę konfliktów, a następnie świadomie wybierz zapis mimo kolizji. Sprawdź również wariant odrzucenia i podania innej godziny.
+5. Przy utracie odpowiedzi ponów zatwierdzenie tej samej karty. W kalendarzu ma powstać tylko jedno wydarzenie dla tej akcji.

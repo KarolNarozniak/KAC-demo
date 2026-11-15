@@ -12945,7 +12945,30 @@
         "tags": [
           "Assistant"
         ],
-        "description": "Revalidates the complete event snapshot and executes the action idempotently. A stale snapshot is rejected and must be previewed again.",
+        "description": "Revalidates the complete event snapshot and executes the action idempotently. A stale snapshot is rejected and must be previewed again. On event_collision, show conflicts to the user; only their explicit acceptance may resend the same action with the returned collisionToken. Changed conflicts require another review.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "collisionToken": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  }
+                }
+              },
+              "examples": {
+                "confirm": {
+                  "summary": "Confirm the preview",
+                  "value": {}
+                }
+              }
+            }
+          }
+        },
         "parameters": [
           {
             "schema": {
@@ -12997,6 +13020,61 @@
                       "status": "confirmed",
                       "actionId": "synthetic-action-id",
                       "eventId": "synthetic-event-id"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "conflicts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    },
+                    "collisionToken": {
+                      "type": "string"
+                    },
+                    "statusCode": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika."
+                },
+                "examples": {
+                  "unavailable": {
+                    "summary": "Usługa niedostępna",
+                    "value": {
+                      "error": "assistant_unavailable"
+                    }
+                  },
+                  "stalePreview": {
+                    "summary": "Nieaktualny podgląd",
+                    "description": "Przygotuj nową propozycję przed ponownym zatwierdzeniem.",
+                    "value": {
+                      "error": "ai_action_stale_preview",
+                      "message": "Wydarzenie zmieniło się od czasu podglądu."
                     }
                   }
                 }
