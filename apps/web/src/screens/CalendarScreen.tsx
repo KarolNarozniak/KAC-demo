@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Modal, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import type { CalendarEvent, Category, Occurrence } from '../domain/model';
 import { addCalendarDays, localDateKey, occurrencesForRange, startOfWeek, validateEventInput } from '../domain/calendar';
-import { loadCalendar, createEvent, updateEvent, EventCollisionError, type EventCollision, deleteEvent } from '../services/calendarApi';
+import { loadCalendar, createEvent, updateEvent, EventCollisionError, type EventCollision, deleteEvent, checkEventCollisions } from '../services/calendarApi';
+import { collisionSummary, describeCollision } from '../domain/collisions';
 import { Button, Field, useTheme } from '../components/ui';
 import DateField from '../components/DateField';
 import TimeField from '../components/TimeField';
@@ -99,7 +100,21 @@ export default function CalendarScreen({ week, setWeek, todayOnly = false, weekL
   const gridEvents = useMemo(() => [...list, ...previewEvents], [list, previewEvents]);
   const [collisionToken, setCollisionToken] = useState<string | undefined>();
   const [notice, setNotice] = useState('');
-  const close = () => { setDialog(null); setDraft(null); setSelected(null); setPending(null); setEditId(null); setError(''); setCollisionToken(undefined); };
+  // S23KC2S1P2-302: wynik ponownego sprawdzenia dotyczy dokładnie tego szkicu – każda zmiana pola go unieważnia.
+  const [recheck, setRecheck] = useState<{ draft: CalendarEvent; conflicts: EventCollision[] } | null>(null);
+  const [checking, setChecking] = useState(false);
+  const close = () => { setDialog(null); setDraft(null); setSelected(null); setPending(null); setEditId(null); setError(''); setCollisionToken(undefined); setRecheck(null); };
+  const normalizedDraft = (value: CalendarEvent) => ({ ...value, title: value.title.trim(), mandatory: value.category === 'Class' && value.mandatory });
+  const recheckDraft = async () => {
+    if (!draft || checking) return;
+    const validation = validateEventInput(draft); if (validation) { setError(validation); return; }
+    const candidate = normalizedDraft(draft);
+    setChecking(true); setError('');
+    try { setRecheck({ draft: candidate, conflicts: (await checkEventCollisions(candidate, editId ?? undefined)).conflicts }); }
+    catch (reason) { setRecheck(null); setError(reason instanceof Error ? reason.message : 'Nie udało się sprawdzić kolizji.'); }
+    finally { setChecking(false); }
+  };
+  const recheckCurrent = recheck && draft && JSON.stringify(normalizedDraft(draft)) === JSON.stringify(recheck.draft) ? recheck : null;
   const newEvent = (date: Date) => { const key = localDateKey(date); setDraft({ id: `evt-${Date.now()}`, title: '', location: '', start: `${key}T09:00`, end: `${key}T10:00`, category: 'Class', mandatory: false, repeatWeekly: false }); setDialog('form'); };
   const details = (item: Occurrence) => { setSelected(item); setDialog('details'); };
   const edit = () => {
@@ -183,7 +198,11 @@ export default function CalendarScreen({ week, setWeek, todayOnly = false, weekL
         <Text style={styles.label}>KATEGORIA</Text><View style={[styles.row, { flexWrap: 'wrap', marginBottom: 8 }]}>{categories.map((category) => <Pressable key={category} onPress={() => setDraft({ ...draft, category, mandatory: category === 'Class' && draft.mandatory })} style={{ padding: 9, borderRadius: 8, borderWidth: 1, borderColor: draft.category === category ? colors[category] : palette.line, backgroundColor: draft.category === category ? `${colors[category]}18` : palette.surfaceAlt }}><Text style={{ color: colors[category], fontWeight: '700', fontSize: 12 }}>{labels[category]}</Text></Pressable>)}</View>
         <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: draft.repeatWeekly }} onPress={() => setDraft({ ...draft, repeatWeekly: !draft.repeatWeekly })} style={{ paddingVertical: 8 }}><Text style={styles.body}>{draft.repeatWeekly ? '☑' : '☐'} Powtarzaj co tydzień</Text></Pressable>
         {draft.category === 'Class' && <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: draft.mandatory }} onPress={() => setDraft({ ...draft, mandatory: !draft.mandatory })} style={{ paddingVertical: 8 }}><Text style={styles.body}>{draft.mandatory ? '☑' : '☐'} Zajęcia obowiązkowe</Text></Pressable>}
-        {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}<View style={[styles.row, { justifyContent: 'flex-end', marginTop: 12 }]}><Button title="Anuluj" disabled={saving} onPress={close} /><Button title={saving ? 'Zapisywanie…' : editId ? 'Zapisz zmiany' : 'Zapisz wydarzenie'} disabled={saving || loading || !!loadError} primary onPress={save} /></View>
+        {recheckCurrent && <View accessibilityLiveRegion="polite" style={{ marginTop: 8 }}>
+          <Text style={[styles.body, { color: recheckCurrent.conflicts.length ? palette.amber : palette.green }]}>{collisionSummary(recheckCurrent.conflicts)}</Text>
+          {recheckCurrent.conflicts.map((conflict) => describeCollision(conflict)).map(item => <Text key={item.key} style={styles.muted}>• {item.title} ({item.kind}) {item.range}{item.notes.length ? ` – ${item.notes.join(', ')}` : ''}</Text>)}
+        </View>}
+        {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}<View style={[styles.row, { justifyContent: 'flex-end', flexWrap: 'wrap', marginTop: 12 }]}><Button title="Anuluj" disabled={saving} onPress={close} /><Button title={checking ? 'Sprawdzanie…' : 'Sprawdź kolizje'} disabled={saving || checking || loading || !!loadError} onPress={() => void recheckDraft()} /><Button title={saving ? 'Zapisywanie…' : editId ? 'Zapisz zmiany' : 'Zapisz wydarzenie'} disabled={saving || loading || !!loadError} primary onPress={save} /></View>
       </View></>}
       {dialog === 'details' && selected && <><Text style={[styles.heading, { marginTop: 12 }]}>{selected.title}</Text><Text style={styles.subtitle}>{selected.occurrenceStart.toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' })} · {selected.occurrenceStart.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}–{selected.occurrenceEnd.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}</Text><Text style={[styles.subtitle, { marginTop: 8 }]}>{selected.location ? `Miejsce: ${selected.location}` : 'Nie podano miejsca.'}</Text><Text style={[styles.body, { marginTop: 12 }]}>{selected.repeatWeekly ? 'Seria cotygodniowa. Edycja zmienia całą serię.' : 'Wydarzenie jednorazowe.'} {selected.mandatory ? 'Zajęcia obowiązkowe.' : ''}</Text><View style={[styles.row, { justifyContent: 'flex-end', flexWrap: 'wrap', marginTop: 18 }]}><Button title="Edytuj" primary onPress={edit} /><Button title={selected.repeatWeekly ? 'Usuń serię' : 'Usuń wydarzenie'} danger onPress={() => { setError(''); setDialog('delete'); }} /><Button title="Zamknij" onPress={close} /></View></>}
       {dialog === 'delete' && selected && <>
@@ -199,10 +218,12 @@ export default function CalendarScreen({ week, setWeek, todayOnly = false, weekL
       {dialog === 'collision' && <>
         <Text style={[styles.heading, { marginTop: 12 }]}>Wydarzenia nakładają się.</Text>
         <Text style={styles.subtitle}>Nic nie zapisano. Popraw termin, świadomie zaakceptuj kolizje albo anuluj.</Text>
-        {conflicts.map(item => <View key={item.id} style={{ marginTop: 12 }}>
-          <Text style={styles.body}>{item.title} · {item.category}</Text>
-          <Text style={styles.muted}>{new Date(item.start).toLocaleString('pl-PL', { timeZone: 'Europe/Warsaw' })} – {new Date(item.end).toLocaleString('pl-PL', { timeZone: 'Europe/Warsaw' })}</Text>
-          <Text style={styles.muted}>Nakładanie: {new Date(item.overlapStart).toLocaleString('pl-PL', { timeZone: 'Europe/Warsaw' })} – {new Date(item.overlapEnd).toLocaleString('pl-PL', { timeZone: 'Europe/Warsaw' })}</Text>
+        <Text style={[styles.body, { marginTop: 8 }]}>{collisionSummary(conflicts)}</Text>
+        {conflicts.map((conflict) => describeCollision(conflict)).map(item => <View key={item.key} style={{ marginTop: 12, paddingTop: 8, borderTopWidth: 1, borderColor: palette.line }}>
+          <Text style={[styles.body, { fontWeight: '700' }]}>{item.title} · {item.kind}</Text>
+          <Text style={styles.muted}>Termin: {item.range}</Text>
+          <Text style={styles.muted}>Nakładanie: {item.overlap}</Text>
+          {!!item.notes.length && <Text style={[styles.muted, { color: palette.amber }]}>{item.notes.join(' · ')}</Text>}
         </View>)}
         <View style={[styles.row, { flexWrap: 'wrap', marginTop: 18 }]}>
           <Button title="Popraw termin" disabled={saving} onPress={() => { setDialog('form'); setPending(null); setCollisionToken(undefined); }} />

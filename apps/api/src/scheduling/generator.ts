@@ -401,6 +401,19 @@ export function generateSchedule(context: PlanningContext, weekStart: string, ov
   };
 }
 
+/** Opis kolidującego przedziału do komunikatu: lokalna data i godziny (S23KC2S1P2-302). */
+function conflictLabel(interval: Interval, timeZone: string) {
+  const start = localDateTimeString(interval.eventStart ?? interval.start, timeZone), end = localDateTimeString(interval.eventEnd ?? interval.end, timeZone);
+  return `${start.slice(0, 10)} ${start.slice(11, 16)}–${end.slice(0, 10) === start.slice(0, 10) ? end.slice(11, 16) : end.replace('T', ' ').slice(0, 16)}`;
+}
+function conflictItem(interval: Interval, shiftStart: Date, shiftEnd: Date, timeZone: string) {
+  return { id: interval.id, title: interval.title,
+    startLocal: localDateTimeString(interval.eventStart ?? interval.start, timeZone).slice(0, 16),
+    endLocal: localDateTimeString(interval.eventEnd ?? interval.end, timeZone).slice(0, 16), bufferMinutes: interval.bufferMinutes ?? 0,
+    overlapStartLocal: localDateTimeString(new Date(Math.max(shiftStart.getTime(), interval.start.getTime())), timeZone).slice(0, 16),
+    overlapEndLocal: localDateTimeString(new Date(Math.min(shiftEnd.getTime(), interval.end.getTime())), timeZone).slice(0, 16) };
+}
+
 export function validateSchedule(context: PlanningContext, weekStart: string, shifts: ManualShiftInput[], overrides: PlannerOverrides = {}): ValidationResult {
   const profile = profileFor(context, overrides);
   if (!validWeekStart(weekStart)) throw new Error('weekStart musi być poniedziałkiem w lokalnym formacie YYYY-MM-DD.');
@@ -452,14 +465,21 @@ export function validateSchedule(context: PlanningContext, weekStart: string, sh
     }
     // S23KC2S1P2-194: kolizja z zajęciami obowiązkowymi ma własny błąd ze wskazaniem zajęć; pozostałe blokady – hard_conflict.
     errors.push(...constraints.classCollision({ id: input.id, start, end }, generated.occurrences, context.profile.timeZone));
-    const hardConflict = generated.hardBlocks.find((block) => !generated.classBlockIds.has(block.id) && overlap(start, end, block.start, block.end));
-    if (hardConflict) errors.push({ code: 'hard_conflict', severity: 'error', message: `Zmiana koliduje z blokadą: ${hardConflict.title}.`, candidateIds: [input.id], eventIds: [hardConflict.id], details: {} });
-    const optionalIds = generated.optionalLectures.filter((event) => overlap(start, end, event.start, event.end)).map((event) => event.id).sort();
+    // S23KC2S1P2-302 (N10): wszystkie kolidujące blokady i wydarzenia z nazwą i przedziałem, nie tylko pierwsza.
+    const timeZone = context.profile.timeZone;
+    const hardConflicts = generated.hardBlocks.filter((block) => !generated.classBlockIds.has(block.id) && overlap(start, end, block.start, block.end));
+    if (hardConflicts.length) errors.push({ code: 'hard_conflict', severity: 'error',
+      message: `Zmiana koliduje z: ${hardConflicts.map((block) => `${block.title} (${conflictLabel(block, timeZone)})`).join(', ')}.`,
+      candidateIds: [input.id], eventIds: [...new Set(hardConflicts.map((block) => block.id))],
+      details: { conflicts: hardConflicts.map((block) => conflictItem(block, start, end, timeZone)) } });
+    const optionalHits = generated.optionalLectures.filter((event) => overlap(start, end, event.start, event.end))
+      .sort((a, b) => a.id.localeCompare(b.id));
+    const optionalIds = optionalHits.map((event) => event.id);
     if (optionalIds.length) warnings.push({
       code: 'optional_lecture_conflict', severity: 'warning',
-      message: `Zmiana pomija ${optionalIds.length} nieobowiązkowe zajęcia.`,
+      message: `Zmiana pomija ${optionalIds.length} nieobowiązkowe zajęcia: ${optionalHits.map((event) => `${event.title} (${conflictLabel(event, timeZone)})`).join(', ')}.`,
       candidateIds: [input.id], eventIds: optionalIds,
-      details: { penalty: optionalIds.length * DEFAULT_SCHEDULER_PENALTIES.optionalLecturePenalty },
+      details: { penalty: optionalIds.length * DEFAULT_SCHEDULER_PENALTIES.optionalLecturePenalty, conflicts: optionalHits.map((event) => conflictItem(event, start, end, timeZone)) },
     });
     normalized.push({ candidateId: input.id, title: input.id, start: start.toISOString(), end: end.toISOString(), startLocal: input.startLocal, endLocal: input.endLocal, durationMinutes: Math.round((end.getTime()-start.getTime())/60000), workDate: startDate, mode: profile.mode, optionalLectureIds: optionalIds, softPenalty: optionalIds.length * DEFAULT_SCHEDULER_PENALTIES.optionalLecturePenalty });
   }
@@ -479,7 +499,18 @@ export function validateSchedule(context: PlanningContext, weekStart: string, sh
       if (!a || !b) continue;
       const aStart = new Date(a.start), aEnd = new Date(a.end), bStart = new Date(b.start), bEnd = new Date(b.end);
       if (overlap(aStart, aEnd, bStart, bEnd) || (aEnd <= bStart && bStart.getTime() - aEnd.getTime() < gapMs) || (bEnd <= aStart && aStart.getTime() - bEnd.getTime() < gapMs)) {
-        errors.push({ code: 'shift_overlap_or_rest', severity: 'error', message: 'Zmiany nakładają się lub nie zachowują bufora i odpoczynku.', candidateIds: [a.candidateId, b.candidateId], eventIds: [], details: {} });
+        // S23KC2S1P2-302 (N10): konflikt między samymi zmianami – oba przedziały i rodzaj problemu.
+        const [first, second] = aStart <= bStart ? [a, b] : [b, a];
+        const overlapping = overlap(aStart, aEnd, bStart, bEnd);
+        const gapMinutes = overlapping ? 0 : Math.round((Date.parse(second.start) - Date.parse(first.end)) / 60_000);
+        const shiftLabel = (shift: CandidateShift) => `${shift.startLocal.replace('T', ' ')}–${shift.endLocal.slice(11)}`;
+        errors.push({ code: 'shift_overlap_or_rest', severity: 'error',
+          message: overlapping
+            ? `Zmiany ${shiftLabel(first)} i ${shiftLabel(second)} nakładają się.`
+            : `Między zmianami ${shiftLabel(first)} i ${shiftLabel(second)} jest ${gapMinutes} min przerwy, wymagane ${gapMs / 60_000} min.`,
+          candidateIds: [a.candidateId, b.candidateId], eventIds: [],
+          details: { kind: overlapping ? 'overlap' : 'rest', gapMinutes, requiredMinutes: gapMs / 60_000,
+            shifts: [first, second].map((shift) => ({ candidateId: shift.candidateId, startLocal: shift.startLocal, endLocal: shift.endLocal })) } });
       }
     }
   }

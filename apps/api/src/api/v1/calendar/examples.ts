@@ -44,15 +44,43 @@ export const savedEventExamples: NamedExamples = {
   saved: { summary: 'Zapisane wydarzenie', description: 'Serwer zwraca wysłane dane razem z nadanym id – jest ono potrzebne do późniejszej edycji (PUT) albo usunięcia (DELETE).', value: { id: eventId, ...consultation } },
 };
 
+const labConflict = { id: 'E-LAB', title: 'Sieci komputerowe – laboratorium', category: 'Class', start: '2026-11-19T14:30:00.000Z', end: '2026-11-19T15:30:00.000Z',
+  overlapStart: '2026-11-19T14:30:00.000Z', overlapEnd: '2026-11-19T15:00:00.000Z', mandatory: true, repeatWeekly: true, recurring: false };
+const workConflict = { id: 'E-WORK', title: 'Praca', category: 'Work', start: '2026-11-19T13:00:00.000Z', end: '2026-11-19T17:00:00.000Z',
+  overlapStart: '2026-11-19T14:00:00.000Z', overlapEnd: '2026-11-19T15:00:00.000Z', mandatory: false, repeatWeekly: false, recurring: false };
+const collisionToken = '5f2b9c0e7d4a1b3c6e8f0a2d4c6b8e0f1a3c5e7b9d1f3a5c7e9b1d3f5a7c9e1b';
+
 export const collisionExamples: NamedExamples = {
   collision: {
     summary: 'Termin nachodzi na inne wydarzenie',
-    description: 'Nic nie zostało zapisane. conflicts pokazuje, z czym jest kolizja i w jakich godzinach: konsultacje 15:00–16:00 nachodzą na laboratorium 15:30–16:30, więc wspólna część to 15:30–16:00 (w odpowiedzi w UTC: overlapStart 14:30Z – overlapEnd 15:00Z). Użytkownik może zmienić termin albo zapisać mimo to – wtedy wysyła żądanie ponownie z collisionToken (zobacz przykład żądania „Zapis mimo kolizji”).',
-    value: {
-      error: 'event_collision',
-      conflicts: [{ id: 'E-LAB', title: 'Sieci komputerowe – laboratorium', category: 'Class', start: '2026-11-19T14:30:00.000Z', end: '2026-11-19T15:30:00.000Z', overlapStart: '2026-11-19T14:30:00.000Z', overlapEnd: '2026-11-19T15:00:00.000Z' }],
-      collisionToken: '5f2b9c0e7d4a1b3c6e8f0a2d4c6b8e0f1a3c5e7b9d1f3a5c7e9b1d3f5a7c9e1b',
-    },
+    description: 'Nic nie zostało zapisane. conflicts pokazuje, z czym jest kolizja i w jakich godzinach: konsultacje 15:00–16:00 nachodzą na laboratorium 15:30–16:30, więc wspólna część to 15:30–16:00 (w odpowiedzi w UTC: overlapStart 14:30Z – overlapEnd 15:00Z). mandatory: true – to zajęcia obowiązkowe. Użytkownik może zmienić termin albo zapisać mimo to – wtedy wysyła żądanie ponownie z collisionToken (zobacz przykład żądania „Zapis mimo kolizji”).',
+    value: { error: 'event_collision', conflicts: [labConflict], collisionToken },
+  },
+  many: {
+    summary: 'Kilka kolizji naraz',
+    description: 'Lista zawiera wszystkie wydarzenia, z którymi koliduje szkic, posortowane po czasie – tu zmiana w pracy i laboratorium. Każda pozycja ma nazwę, kategorię, pełny przedział wydarzenia i wspólną część.',
+    value: { error: 'event_collision', conflicts: [workConflict, labConflict], collisionToken },
+  },
+};
+
+export const collisionCheckInputExamples: NamedExamples = {
+  afterCorrection: {
+    summary: 'Ponowne sprawdzenie po korekcie',
+    description: 'Użytkownik przesunął konsultacje na 16:30–17:30 i chce sprawdzić termin przed zapisem. eventId podajemy przy edycji istniejącego wydarzenia, żeby nie porównywać go z samym sobą.',
+    value: { ...consultation, start: '2026-11-19T16:30', end: '2026-11-19T17:30', eventId },
+  },
+};
+
+export const collisionCheckExamples: NamedExamples = {
+  clear: {
+    summary: 'Brak kolizji',
+    description: 'Termin jest wolny: conflicts jest puste, a collisionToken ma wartość null – zapis (POST/PUT) przejdzie bez tokenu. Nic nie zostało zapisane.',
+    value: { conflicts: [], collisionToken: null },
+  },
+  conflicts: {
+    summary: 'Nadal są kolizje',
+    description: 'Po korekcie termin wciąż nachodzi na wydarzenia. Token można wysłać w POST/PUT, jeśli użytkownik świadomie zapisuje mimo kolizji; każda zmiana danych szkicu albo listy kolizji go unieważnia.',
+    value: { conflicts: [workConflict, labConflict], collisionToken },
   },
 };
 

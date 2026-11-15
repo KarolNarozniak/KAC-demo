@@ -1,5 +1,8 @@
 import type { CalendarEvent } from '../domain/model';
-export type EventCollision = { id: string; title: string; category: string; start: string; end: string; overlapStart: string; overlapEnd: string };
+export type EventCollision = { id: string; title: string; category: string; start: string; end: string; overlapStart: string; overlapEnd: string;
+  /** S23KC2S1P2-302: rodzaj i powtarzalność kolizji. */
+  mandatory?: boolean; repeatWeekly?: boolean; recurring?: boolean };
+export type CollisionCheck = { conflicts: EventCollision[]; collisionToken: string | null };
 export class EventCollisionError extends Error {
   constructor(public conflicts: EventCollision[], public token: string) { super('Wydarzenia nakładają się.'); }
 }
@@ -39,4 +42,10 @@ export async function deleteEvent(id: string): Promise<string[]> {
 export async function updateEvent(id: string, event: CalendarEvent, collisionToken?: string): Promise<CalendarEvent> {
   const { title, start, end, category, mandatory, repeatWeekly } = event;
   return request(`/api/v1/calendar/events/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ title, start, end, category, mandatory, repeatWeekly, location: event.location ?? '', collisionToken }) });
+}
+
+/** S23KC2S1P2-302: ponowne sprawdzenie kolizji szkicu bez zapisu (np. po korekcie terminu). */
+export async function checkEventCollisions(event: CalendarEvent, eventId?: string): Promise<CollisionCheck> {
+  const { title, start, end, category, mandatory, repeatWeekly } = event;
+  return request('/api/v1/calendar/events/collision-check', { method: 'POST', body: JSON.stringify({ title, start, end, category, mandatory, repeatWeekly, location: event.location ?? '', ...(eventId ? { eventId } : {}) }) });
 }

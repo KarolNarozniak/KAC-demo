@@ -103,3 +103,44 @@ test('ręczna zmiana: kolizja z zajęciami obowiązkowymi to class_collision, z 
   const fine = validateSchedule(input, WEEK, [{ id: 'S3', startLocal: '2026-11-03T13:15', endLocal: '2026-11-03T15:45' }]);
   assert.deepEqual(fine.errors, []);
 });
+
+// S23KC2S1P2-302 (N10): grafik pokazuje nazwy i przedziały wszystkich kolidujących pozycji, także konflikty między zmianami.
+test('N10: hard_conflict lists every colliding event with its real time, not only the first ID', () => {
+  const dentist: PlanningEvent = { id: 'D1', title: 'Dentysta', start: '2026-11-03T12:00', end: '2026-11-03T13:00', category: 'Personal', mandatory: false, repeatWeekly: false };
+  const meeting: PlanningEvent = { id: 'M1', title: 'Spotkanie koła', start: '2026-11-03T14:00', end: '2026-11-03T14:30', category: 'Personal', mandatory: false, repeatWeekly: false };
+  const result = validateSchedule(context([dentist, meeting]), WEEK, [{ id: 'S1', startLocal: '2026-11-03T11:30', endLocal: '2026-11-03T15:30' }]);
+  const conflict = result.errors.find((error) => error.code === 'hard_conflict');
+  assert.ok(conflict);
+  assert.deepEqual(conflict.eventIds, ['D1', 'M1']);
+  const items = conflict.details.conflicts as { id: string; title: string; startLocal: string; endLocal: string; bufferMinutes: number }[];
+  assert.deepEqual(items.map((item) => [item.title, item.startLocal, item.endLocal, item.bufferMinutes]),
+    [['Dentysta', '2026-11-03T12:00', '2026-11-03T13:00', 15], ['Spotkanie koła', '2026-11-03T14:00', '2026-11-03T14:30', 15]]);
+  assert.match(conflict.message, /Dentysta \(2026-11-03 12:00–13:00\)/);
+  assert.match(conflict.message, /Spotkanie koła/);
+});
+
+test('N10: conflict between two shifts names both ranges and tells overlap from missing rest', () => {
+  const input = context([], { maxHoursPerDay: 12 });
+  const overlapping = validateSchedule(input, WEEK, [
+    { id: 'B', startLocal: '2026-11-03T11:00', endLocal: '2026-11-03T14:00' },
+    { id: 'A', startLocal: '2026-11-03T08:30', endLocal: '2026-11-03T12:00' },
+  ]).errors.find((error) => error.code === 'shift_overlap_or_rest');
+  assert.ok(overlapping);
+  assert.equal(overlapping.details.kind, 'overlap');
+  assert.deepEqual((overlapping.details.shifts as { candidateId: string }[]).map((shift) => shift.candidateId), ['A', 'B']);
+  assert.match(overlapping.message, /2026-11-03 08:30–12:00 i 2026-11-03 11:00–14:00 nakładają się/);
+  const rest = validateSchedule(input, WEEK, [
+    { id: 'A', startLocal: '2026-11-03T08:30', endLocal: '2026-11-03T10:30' },
+    { id: 'B', startLocal: '2026-11-03T10:45', endLocal: '2026-11-03T12:45' },
+  ]).errors.find((error) => error.code === 'shift_overlap_or_rest');
+  assert.ok(rest);
+  assert.deepEqual([rest.details.kind, rest.details.gapMinutes, rest.details.requiredMinutes], ['rest', 15, 30]);
+});
+
+test('N10: optional lecture warning names the skipped lecture and its time', () => {
+  const result = validateSchedule(context([lecture({ mandatory: false })]), WEEK, [{ id: 'S1', startLocal: '2026-11-03T09:00', endLocal: '2026-11-03T12:00' }]);
+  const warning = result.warnings.find((item) => item.code === 'optional_lecture_conflict');
+  assert.ok(warning);
+  assert.match(warning.message, /Analiza \(2026-11-03 10:00–11:30\)/);
+  assert.equal((warning.details.conflicts as { title: string }[])[0]?.title, 'Analiza');
+});
