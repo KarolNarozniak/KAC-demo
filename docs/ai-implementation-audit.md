@@ -30,3 +30,9 @@ Implementowany jako pierwszy: 252. Pozostałe wysokie priorytety (254 i 256) wym
 - Historia podsumowania z 15.11 wykazała ponowne użycie wyniku odczytu pustego kalendarza z 15:01 przy turze o 15:10, bez ponownego wywołania narzędzia. Regeneracja podsumowania używa teraz świeżej ukrytej rozmowy.
 - W turze o 15:20 narzędzie zwróciło trzy wydarzenia, ale końcowy tekst modelu był pusty. Stary kod zapisywał komunikat zastępczy jako sukces. Niepełne i puste wyniki są teraz błędami, a limit wyjściowy podniesiono z 1200 do 4000 tokenów (obejmuje również rozumowanie). Historyczne logi nie zawierają statusu zakończenia modelu, więc nie potwierdzają jednoznacznie przyczyny pustego wyniku; nowa diagnostyka zapisuje powód niepełnej odpowiedzi.
 - Weryfikacja: 34 testy web, 163 API; testy streamingu obejmują rzeczywiste lokalne połączenie HTTP i przerwanie upstream po rozłączeniu klienta. Sprawdzanie typów, kontrakt OpenAPI, dokumentacja PL/EN i pełny build zaliczone.
+
+## Diagnostyka blokady wiadomości przez Azure
+
+Dla zgłoszenia z 15:41 odtworzono samo wywołanie modelu bez wykonania narzędzi ani zmian kalendarza. Azure zwrócił `status=incomplete`, `reason=content_filter`, blokadę wejścia w kategorii `violence` z poziomem `high`, brak wywołań narzędzi i zerowe użycie tokenów. Błędna klasyfikacja dostawcy została wcześniej pokazana jako ogólna niepełna odpowiedź.
+
+Backend rozróżnia teraz `assistant_content_filtered`, `assistant_refused` i rzeczywiście niepełną odpowiedź. Interfejs usuwa wstępny tekst odmowy i wyświetla polski komunikat o blokadzie. Nie wyłączano ani nie zmieniano polityk Azure. Sama błędna klasyfikacja wymaga weryfikacji po stronie dostawcy; zmiana aplikacji poprawia obsługę i diagnostykę, nie deklaruje usunięcia zewnętrznej przyczyny blokady.

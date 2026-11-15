@@ -11518,6 +11518,13 @@
                       "error": "assistant_unavailable"
                     }
                   },
+                  "contentFiltered": {
+                    "summary": "Azure content filter blocked the request",
+                    "value": {
+                      "error": "assistant_content_filtered",
+                      "message": "Azure zablokował żądanie filtrem treści."
+                    }
+                  },
                   "stalePreview": {
                     "summary": "Nieaktualny podgląd",
                     "description": "Przygotuj nową propozycję przed ponownym zatwierdzeniem.",
@@ -11655,6 +11662,13 @@
                     "summary": "Usługa niedostępna",
                     "value": {
                       "error": "assistant_unavailable"
+                    }
+                  },
+                  "contentFiltered": {
+                    "summary": "Azure content filter blocked the request",
+                    "value": {
+                      "error": "assistant_content_filtered",
+                      "message": "Azure zablokował żądanie filtrem treści."
                     }
                   },
                   "stalePreview": {
@@ -12148,6 +12162,13 @@
                       "error": "assistant_unavailable"
                     }
                   },
+                  "contentFiltered": {
+                    "summary": "Azure content filter blocked the request",
+                    "value": {
+                      "error": "assistant_content_filtered",
+                      "message": "Azure zablokował żądanie filtrem treści."
+                    }
+                  },
                   "stalePreview": {
                     "summary": "Nieaktualny podgląd",
                     "description": "Przygotuj nową propozycję przed ponownym zatwierdzeniem.",
@@ -12201,6 +12222,13 @@
                     "summary": "Usługa niedostępna",
                     "value": {
                       "error": "assistant_unavailable"
+                    }
+                  },
+                  "contentFiltered": {
+                    "summary": "Azure content filter blocked the request",
+                    "value": {
+                      "error": "assistant_content_filtered",
+                      "message": "Azure zablokował żądanie filtrem treści."
                     }
                   },
                   "stalePreview": {
@@ -13254,6 +13282,13 @@
                       "error": "assistant_unavailable"
                     }
                   },
+                  "contentFiltered": {
+                    "summary": "Azure content filter blocked the request",
+                    "value": {
+                      "error": "assistant_content_filtered",
+                      "message": "Azure zablokował żądanie filtrem treści."
+                    }
+                  },
                   "stalePreview": {
                     "summary": "Nieaktualny podgląd",
                     "description": "Przygotuj nową propozycję przed ponownym zatwierdzeniem.",
@@ -13307,6 +13342,13 @@
                     "summary": "Usługa niedostępna",
                     "value": {
                       "error": "assistant_unavailable"
+                    }
+                  },
+                  "contentFiltered": {
+                    "summary": "Azure content filter blocked the request",
+                    "value": {
+                      "error": "assistant_content_filtered",
+                      "message": "Azure zablokował żądanie filtrem treści."
                     }
                   },
                   "stalePreview": {
@@ -13364,6 +13406,75 @@
                       "error": "assistant_unavailable"
                     }
                   },
+                  "contentFiltered": {
+                    "summary": "Azure content filter blocked the request",
+                    "value": {
+                      "error": "assistant_content_filtered",
+                      "message": "Azure zablokował żądanie filtrem treści."
+                    }
+                  },
+                  "stalePreview": {
+                    "summary": "Nieaktualny podgląd",
+                    "description": "Przygotuj nową propozycję przed ponownym zatwierdzeniem.",
+                    "value": {
+                      "error": "ai_action_stale_preview",
+                      "message": "Wydarzenie zmieniło się od czasu podglądu."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "conflicts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    },
+                    "collisionToken": {
+                      "type": "string"
+                    },
+                    "statusCode": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika."
+                },
+                "examples": {
+                  "unavailable": {
+                    "summary": "Usługa niedostępna",
+                    "value": {
+                      "error": "assistant_unavailable"
+                    }
+                  },
+                  "contentFiltered": {
+                    "summary": "Azure content filter blocked the request",
+                    "value": {
+                      "error": "assistant_content_filtered",
+                      "message": "Azure zablokował żądanie filtrem treści."
+                    }
+                  },
                   "stalePreview": {
                     "summary": "Nieaktualny podgląd",
                     "description": "Przygotuj nową propozycję przed ponownym zatwierdzeniem.",
@@ -13417,6 +13528,13 @@
                     "summary": "Usługa niedostępna",
                     "value": {
                       "error": "assistant_unavailable"
+                    }
+                  },
+                  "contentFiltered": {
+                    "summary": "Azure content filter blocked the request",
+                    "value": {
+                      "error": "assistant_content_filtered",
+                      "message": "Azure zablokował żądanie filtrem treści."
                     }
                   },
                   "stalePreview": {
@@ -13474,6 +13592,13 @@
                       "error": "assistant_unavailable"
                     }
                   },
+                  "contentFiltered": {
+                    "summary": "Azure content filter blocked the request",
+                    "value": {
+                      "error": "assistant_content_filtered",
+                      "message": "Azure zablokował żądanie filtrem treści."
+                    }
+                  },
                   "stalePreview": {
                     "summary": "Nieaktualny podgląd",
                     "description": "Przygotuj nową propozycję przed ponownym zatwierdzeniem.",
@@ -13529,6 +13654,13 @@
                       "error": "assistant_unavailable"
                     }
                   },
+                  "contentFiltered": {
+                    "summary": "Azure content filter blocked the request",
+                    "value": {
+                      "error": "assistant_content_filtered",
+                      "message": "Azure zablokował żądanie filtrem treści."
+                    }
+                  },
                   "stalePreview": {
                     "summary": "Nieaktualny podgląd",
                     "description": "Przygotuj nową propozycję przed ponownym zatwierdzeniem.",
@@ -13582,6 +13714,13 @@
                     "summary": "Usługa niedostępna",
                     "value": {
                       "error": "assistant_unavailable"
+                    }
+                  },
+                  "contentFiltered": {
+                    "summary": "Azure content filter blocked the request",
+                    "value": {
+                      "error": "assistant_content_filtered",
+                      "message": "Azure zablokował żądanie filtrem treści."
                     }
                   },
                   "stalePreview": {
@@ -13730,6 +13869,13 @@
                       "error": "assistant_unavailable"
                     }
                   },
+                  "contentFiltered": {
+                    "summary": "Azure content filter blocked the request",
+                    "value": {
+                      "error": "assistant_content_filtered",
+                      "message": "Azure zablokował żądanie filtrem treści."
+                    }
+                  },
                   "stalePreview": {
                     "summary": "Nieaktualny podgląd",
                     "description": "Przygotuj nową propozycję przed ponownym zatwierdzeniem.",
@@ -13783,6 +13929,13 @@
                     "summary": "Usługa niedostępna",
                     "value": {
                       "error": "assistant_unavailable"
+                    }
+                  },
+                  "contentFiltered": {
+                    "summary": "Azure content filter blocked the request",
+                    "value": {
+                      "error": "assistant_content_filtered",
+                      "message": "Azure zablokował żądanie filtrem treści."
                     }
                   },
                   "stalePreview": {
@@ -13840,6 +13993,13 @@
                       "error": "assistant_unavailable"
                     }
                   },
+                  "contentFiltered": {
+                    "summary": "Azure content filter blocked the request",
+                    "value": {
+                      "error": "assistant_content_filtered",
+                      "message": "Azure zablokował żądanie filtrem treści."
+                    }
+                  },
                   "stalePreview": {
                     "summary": "Nieaktualny podgląd",
                     "description": "Przygotuj nową propozycję przed ponownym zatwierdzeniem.",
@@ -13895,6 +14055,13 @@
                       "error": "assistant_unavailable"
                     }
                   },
+                  "contentFiltered": {
+                    "summary": "Azure content filter blocked the request",
+                    "value": {
+                      "error": "assistant_content_filtered",
+                      "message": "Azure zablokował żądanie filtrem treści."
+                    }
+                  },
                   "stalePreview": {
                     "summary": "Nieaktualny podgląd",
                     "description": "Przygotuj nową propozycję przed ponownym zatwierdzeniem.",
@@ -13948,6 +14115,13 @@
                     "summary": "Usługa niedostępna",
                     "value": {
                       "error": "assistant_unavailable"
+                    }
+                  },
+                  "contentFiltered": {
+                    "summary": "Azure content filter blocked the request",
+                    "value": {
+                      "error": "assistant_content_filtered",
+                      "message": "Azure zablokował żądanie filtrem treści."
                     }
                   },
                   "stalePreview": {
@@ -14061,6 +14235,13 @@
                       "error": "assistant_unavailable"
                     }
                   },
+                  "contentFiltered": {
+                    "summary": "Azure content filter blocked the request",
+                    "value": {
+                      "error": "assistant_content_filtered",
+                      "message": "Azure zablokował żądanie filtrem treści."
+                    }
+                  },
                   "stalePreview": {
                     "summary": "Nieaktualny podgląd",
                     "description": "Przygotuj nową propozycję przed ponownym zatwierdzeniem.",
@@ -14116,6 +14297,13 @@
                       "error": "assistant_unavailable"
                     }
                   },
+                  "contentFiltered": {
+                    "summary": "Azure content filter blocked the request",
+                    "value": {
+                      "error": "assistant_content_filtered",
+                      "message": "Azure zablokował żądanie filtrem treści."
+                    }
+                  },
                   "stalePreview": {
                     "summary": "Nieaktualny podgląd",
                     "description": "Przygotuj nową propozycję przed ponownym zatwierdzeniem.",
@@ -14169,6 +14357,13 @@
                     "summary": "Usługa niedostępna",
                     "value": {
                       "error": "assistant_unavailable"
+                    }
+                  },
+                  "contentFiltered": {
+                    "summary": "Azure content filter blocked the request",
+                    "value": {
+                      "error": "assistant_content_filtered",
+                      "message": "Azure zablokował żądanie filtrem treści."
                     }
                   },
                   "stalePreview": {
@@ -14282,6 +14477,13 @@
                       "error": "assistant_unavailable"
                     }
                   },
+                  "contentFiltered": {
+                    "summary": "Azure content filter blocked the request",
+                    "value": {
+                      "error": "assistant_content_filtered",
+                      "message": "Azure zablokował żądanie filtrem treści."
+                    }
+                  },
                   "stalePreview": {
                     "summary": "Nieaktualny podgląd",
                     "description": "Przygotuj nową propozycję przed ponownym zatwierdzeniem.",
@@ -14335,6 +14537,13 @@
                     "summary": "Usługa niedostępna",
                     "value": {
                       "error": "assistant_unavailable"
+                    }
+                  },
+                  "contentFiltered": {
+                    "summary": "Azure content filter blocked the request",
+                    "value": {
+                      "error": "assistant_content_filtered",
+                      "message": "Azure zablokował żądanie filtrem treści."
                     }
                   },
                   "stalePreview": {

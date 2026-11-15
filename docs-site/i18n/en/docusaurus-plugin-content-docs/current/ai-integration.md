@@ -126,3 +126,9 @@ Confirmation keeps the user in chat. **Zatwierdź wszystko** executes proposals 
 Settings → Personalizacja agenta stores an address form (up to 60 characters) and a neutral, friendly or formal tone. Preferences are stored on the device and sent with subsequent messages as optional `preferences: { addressAs, tone }`; API tone values are `neutral`, `friendly`, and `formal`. Style preferences cannot change permissions or confirmation requirements.
 
 Regenerating the Today card creates a fresh hidden internal conversation, preventing reuse of stale calendar tool results from an earlier summary. Unchanged calendar data uses the current app session's cache.
+
+### Azure filtering versus an interrupted response
+
+`assistant_content_filtered` means Azure blocked the input or output through content filtering; `assistant_refused` indicates an explicit model refusal. Both return 422 in JSON mode or an `error` event after streaming starts. The UI clears provisional refusal text and displays a Polish explanation instead of labeling it as an interrupted transmission. The calendar remains unchanged.
+
+Safe diagnostics record the provider code and filtered category names without prompt text. Incorrect classification of an allowed request requires reviewing the assigned Foundry policy or reporting the issue to the provider. The application does not disable filters or automatically rewrite messages to avoid a block.

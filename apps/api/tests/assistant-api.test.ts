@@ -308,3 +308,27 @@ test('assistant does not persist an empty answer as a successful summary', async
     assert.equal(messages.some((message) => message.role === 'assistant'), false);
   } finally { await app.close(); }
 });
+
+test('assistant reports Azure filtering consistently for a blocked HTTP call and a filtered response stream', async () => {
+  const { AiContentFilterError, AiModelRefusalError } = await import('../src/ai/service.js');
+  for (const scenario of [
+    { error: new AiContentFilterError(['violence']), code: 'assistant_content_filtered' },
+    { error: Object.assign(new Error('synthetic provider error'), { status: 400, code: 'content_filter' }), code: 'assistant_content_filtered' },
+    { error: new AiModelRefusalError('assistant_refused'), code: 'assistant_refused' },
+  ]) {
+    const { app, messages } = streamingApi(async (_input, _tools, _context, _signal, delta) => {
+      delta?.('Synthetic partial refusal'); throw scenario.error;
+    });
+    const url = '/api/v1/assistant/conversations/stream-conversation/messages';
+    try {
+      const json = await app.inject({ method: 'POST', url, payload: { content: 'Przygotuj podgląd wydarzenia' } });
+      assert.equal(json.statusCode, 422, json.body); assert.equal(json.json().error, scenario.code);
+      const stream = await app.inject({ method: 'POST', url: `${url}?stream=true`, payload: { content: 'Przygotuj podgląd wydarzenia' } });
+      assert.equal(stream.statusCode, 200);
+      const events = stream.body.trim().split('\n').map((line) => JSON.parse(line));
+      assert.deepEqual(events.at(-1), { type: 'error', error: scenario.code });
+      assert.equal(events.some((event) => event.type === 'done'), false);
+      assert.equal(messages.some((message) => message.role === 'assistant'), false);
+    } finally { await app.close(); }
+  }
+});

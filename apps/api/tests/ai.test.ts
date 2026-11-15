@@ -194,3 +194,14 @@ test('assistant rejects exhausted reasoning output and empty responses instead o
     await assert.rejects(service.sendAssistantMessage([{ role: 'user', content: 'Podsumuj dzień' }], []), AiIncompleteResponseError);
   }
 });
+
+test('assistant distinguishes Azure content filtering and model refusal from exhausted or empty output', async () => {
+  const { AiContentFilterError, AiModelRefusalError } = await import('../src/ai/service.js');
+  const filtered = new AiService({ respond: async () => ({ ...response("I'm sorry, but I cannot assist with that request."), status: 'incomplete',
+    incomplete_details: { reason: 'content_filter' }, content_filters: [{ blocked: true, content_filter_results: { violence: { filtered: true, severity: 'high' }, hate: { filtered: false } } }], output: [] } as unknown as OpenAIResponse) });
+  await assert.rejects(filtered.sendAssistantMessage([{ role: 'user', content: 'Przygotuj podgląd zajęć' }], []), (error: unknown) => {
+    assert.ok(error instanceof AiContentFilterError); assert.deepEqual(error.categories, ['violence']); return true;
+  });
+  const refused = new AiService({ respond: async () => ({ ...response(''), status: 'completed', output: [{ type: 'message', content: [{ type: 'refusal', refusal: 'Synthetic model refusal' }] }] } as unknown as OpenAIResponse) });
+  await assert.rejects(refused.sendAssistantMessage([{ role: 'user', content: 'Przygotuj podgląd zajęć' }], []), AiModelRefusalError);
+});

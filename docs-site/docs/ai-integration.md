@@ -126,3 +126,9 @@ Zatwierdzanie pozostawia użytkownika w czacie. **Zatwierdź wszystko** wykonuje
 W Ustawieniach → Personalizacja agenta można zapisać formę zwracania się (do 60 znaków) i ton: rzeczowy, przyjazny lub formalny. Preferencje są przechowywane na urządzeniu i dołączane do kolejnych wiadomości jako opcjonalne `preferences: { addressAs, tone }`; API akceptuje `tone` równy `neutral`, `friendly` lub `formal`. To preferencje stylu, które nie zmieniają uprawnień ani wymogu potwierdzania akcji.
 
 Przy regeneracji karty Dziś powstaje świeża, ukryta rozmowa techniczna. Nie odziedziczy ona wyniku odczytu kalendarza z wcześniejszego podsumowania. Niezmieniony stan kalendarza korzysta z cache w bieżącej sesji aplikacji.
+
+### Blokada Azure a przerwana odpowiedź
+
+`assistant_content_filtered` oznacza, że Azure zablokował wejście lub odpowiedź filtrem treści; `assistant_refused` oznacza jawną odmowę modelu. Oba przypadki zwracają 422 w trybie JSON albo zdarzenie `error` po rozpoczęciu streamingu. Interfejs usuwa wstępny tekst odmowy i pokazuje polski komunikat; nie oznacza go jako przerwanej transmisji. Kalendarz pozostaje bez zmian.
+
+Bezpieczna diagnostyka zapisuje kod dostawcy i nazwy kategorii filtrów, bez treści promptu. Błędna klasyfikacja dozwolonej prośby przez Azure wymaga weryfikacji przypisanej polityki w Foundry lub zgłoszenia dostawcy. Aplikacja nie wyłącza filtrów ani nie przepisuje automatycznie wiadomości w celu uniknięcia blokady.

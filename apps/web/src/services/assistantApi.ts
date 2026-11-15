@@ -46,6 +46,8 @@ const aiErrorText: Record<string, string> = {
   ai_action_expired: 'Ta propozycja wygasła. Poproś o nową.',
   action_confirmation_failed: 'Nie udało się potwierdzić wyniku zapisu. Ponów zatwierdzenie tej samej propozycji — nie utworzy to duplikatu.',
   assistant_incomplete_response: 'Model nie dokończył odpowiedzi. Spróbuj ponownie za chwilę.',
+  assistant_content_filtered: 'Azure zablokował tę wiadomość filtrem treści. Kalendarz nie został zmieniony.',
+  assistant_refused: 'Model odmówił realizacji prośby. Kalendarz nie został zmieniony.',
   assistant_stream_interrupted: 'Połączenie zostało przerwane przed zakończeniem odpowiedzi. Otwórz ponownie rozmowę, aby sprawdzić jej zapisany stan.',
 };
 

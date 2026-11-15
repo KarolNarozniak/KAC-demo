@@ -1,5 +1,11 @@
 export type AiProviderFailure = { status: 429 | 504 | 503; code: 'rate_limited' | 'timed_out' | 'unavailable' };
 
+export function isAiContentFilterFailure(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const value = error as { code?: unknown; error?: { code?: unknown; innererror?: { code?: unknown } } };
+  return value.code === 'content_filter' || value.error?.code === 'content_filter' || value.error?.innererror?.code === 'ResponsibleAIPolicyViolation';
+}
+
 export function classifyAiProviderFailure(error: unknown): AiProviderFailure {
   const value = error && typeof error === 'object' ? error as { status?: unknown; code?: unknown; name?: unknown } : {};
   const code = typeof value.code === 'string' ? value.code.toLowerCase() : '';

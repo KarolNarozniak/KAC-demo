@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { PassThrough } from 'node:stream';
-import { AiIncompleteResponseError } from '../../../ai/service.js';
+import { AiContentFilterError, AiIncompleteResponseError, AiModelRefusalError } from '../../../ai/service.js';
 import type { ResponseFunctionToolCall, ResponseInputItem } from 'openai/resources/responses/responses.js';
 import { CollisionError, EventNotFoundError, EventValidationError } from '../../../collisions.js';
 import { config } from '../../../config.js';
@@ -8,7 +8,7 @@ import type { ApiDependencies } from '../../contracts.js';
 import { AiActionConflictError, AiActionNotFoundError, AiActionStalePreviewError, AiConversationNotFoundError } from '../../../ai/repository.js';
 import { assistantTools, executeAssistantTool } from '../../../ai/tools.js';
 import { trustedTimeContext } from '../../../ai/context.js';
-import { classifyAiProviderFailure, safeAiProviderDiagnostics } from '../../../ai/provider-errors.js';
+import { classifyAiProviderFailure, isAiContentFilterFailure, safeAiProviderDiagnostics } from '../../../ai/provider-errors.js';
 import type { EventInput } from '../../../database.js';
 import type { AiMessage } from '../../../ai/repository.js';
 import { documented, withExamples } from '../../examples.js';
@@ -22,6 +22,7 @@ const errorResponse = documented({ type: 'object', required: ['error'], addition
   collisionToken: { type: 'string' }, statusCode: { type: 'integer' }, code: { type: 'string' },
   } }, 'Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika.', {
   unavailable: { summary: 'Usługa niedostępna', value: { error: 'assistant_unavailable' } },
+  contentFiltered: { summary: 'Azure content filter blocked the request', value: { error: 'assistant_content_filtered', message: 'Azure zablokował żądanie filtrem treści.' } },
   stalePreview: { summary: 'Nieaktualny podgląd', description: 'Przygotuj nową propozycję przed ponownym zatwierdzeniem.', value: { error: 'ai_action_stale_preview', message: 'Wydarzenie zmieniło się od czasu podglądu.' } },
 });
 const statusResponse = (status: 'cancelled' | 'deleted') => objectResponse('Wynik końcowej operacji.', ['status'], { status: { type: 'string', enum: [status] } }, { status });
@@ -140,7 +141,7 @@ export async function assistantRoutes(app: FastifyInstance, options: Pick<ApiDep
 
   app.post<{ Params: { id: string }; Body: { content: string; preferences?: { addressAs?: string; tone?: 'neutral' | 'friendly' | 'formal' } }; Querystring: { stream?: boolean } }>('/assistant/conversations/:id/messages', { schema: { tags: ['Assistant'], summary: 'Send a message to the assistant', description: 'Runs a bounded Responses turn with the server tool allow-list. Mutations only create pending previews; the user confirms them through a separate endpoint.', operationId: 'sendAssistantMessage', params: conversationParams, querystring: { type: 'object', additionalProperties: false, properties: { stream: { type: 'boolean', default: false, description: 'Stream NDJSON events instead of waiting for the final JSON response.' } } },
     body: withExamples({ type: 'object', required: ['content'], additionalProperties: false, properties: { content: { type: 'string', minLength: 1, maxLength: 6000 }, preferences: { type: 'object', additionalProperties: false, properties: { addressAs: { type: 'string', maxLength: 60, pattern: '^[^\\r\\n\\t]*$' }, tone: { type: 'string', enum: ['neutral', 'friendly', 'formal'] } } } } }, { request: { summary: 'Send a message', description: 'Synthetic example.', value: { content: 'Pokaż mój plan na jutro.' } } }),
-    response: { 200: { description: 'Assistant response as JSON or NDJSON events when stream=true.', content: { 'application/json': { schema: assistantTurnResponse, examples: assistantTurnResponse['x-examples'] }, 'application/x-ndjson': { schema: streamEventSchema, examples: streamEventSchema['x-examples'] } } }, 400: errorResponse, 404: errorResponse, 409: errorResponse, 429: errorResponse, 502: errorResponse, 503: errorResponse, 504: errorResponse },
+    response: { 200: { description: 'Assistant response as JSON or NDJSON events when stream=true.', content: { 'application/json': { schema: assistantTurnResponse, examples: assistantTurnResponse['x-examples'] }, 'application/x-ndjson': { schema: streamEventSchema, examples: streamEventSchema['x-examples'] } } }, 400: errorResponse, 404: errorResponse, 409: errorResponse, 422: errorResponse, 429: errorResponse, 502: errorResponse, 503: errorResponse, 504: errorResponse },
   } }, async (request, reply) => {
     const abortController = new AbortController();
     request.raw.once('aborted', () => abortController.abort());
@@ -223,12 +224,15 @@ export async function assistantRoutes(app: FastifyInstance, options: Pick<ApiDep
       if (abortController.signal.aborted) return;
       if (error instanceof AiConversationNotFoundError && stream) { emit({ type: 'error', error: 'conversation_not_found_or_expired' }); stream.end(); return reply; }
       if (error instanceof AiConversationNotFoundError) return reply.code(404).send({ error: 'conversation_not_found_or_expired' });
-      request.log.error({ ...safeAiProviderDiagnostics(error), ...(error instanceof AiIncompleteResponseError ? { incompleteReason: error.reason } : {}) }, 'Azure assistant turn failed');
+      request.log.error({ ...safeAiProviderDiagnostics(error), ...(error instanceof AiIncompleteResponseError ? { incompleteReason: error.reason } : {}),
+        ...(error instanceof AiContentFilterError ? { filterCategories: error.categories } : {}) }, 'Azure assistant turn failed');
       const failure = classifyAiProviderFailure(error);
-      const errorCode = error instanceof AiIncompleteResponseError ? 'assistant_incomplete_response' : failure.code === 'rate_limited' ? 'assistant_rate_limited' : failure.code === 'timed_out' ? 'assistant_timeout' : 'assistant_unavailable';
+      const filtered = error instanceof AiContentFilterError || isAiContentFilterFailure(error);
+      const refused = error instanceof AiModelRefusalError;
+      const errorCode = filtered ? 'assistant_content_filtered' : refused ? 'assistant_refused' : error instanceof AiIncompleteResponseError ? 'assistant_incomplete_response' : failure.code === 'rate_limited' ? 'assistant_rate_limited' : failure.code === 'timed_out' ? 'assistant_timeout' : 'assistant_unavailable';
       await aiRepository.logUsage(owner, 'assistant_chat', config.azureAi.modelDeployment, 0, 0, 0, 'error', errorCode).catch(() => undefined);
       if (stream) { emit({ type: 'error', error: errorCode }); stream.end(); return reply; }
-      return reply.code(error instanceof AiIncompleteResponseError ? 502 : failure.status).send({ error: errorCode });
+      return reply.code(filtered || refused ? 422 : error instanceof AiIncompleteResponseError ? 502 : failure.status).send({ error: errorCode });
     }
   });
 

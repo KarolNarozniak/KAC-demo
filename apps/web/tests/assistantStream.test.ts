@@ -63,3 +63,18 @@ test('saved personalization is normalized and sent with each chat request', asyn
   });
   try { await streamAssistantMessage('test', 'Hej', () => {}); } finally { restore(); }
 });
+
+test('chat preserves a content filter error as a Polish rejection message rather than an interrupted response', async () => {
+  const restore = streamingFetch((controller) => {
+    controller.enqueue(new TextEncoder().encode(`${JSON.stringify({ type: 'delta', text: 'Synthetic partial refusal' })}\n${JSON.stringify({ type: 'error', error: 'assistant_content_filtered' })}\n`));
+    controller.close();
+  });
+  try {
+    await assert.rejects(streamAssistantMessage('test', 'Przygotuj podgląd', () => {}), (error: unknown) => {
+      assert.ok(error instanceof AssistantApiError);
+      assert.equal(error.code, 'assistant_content_filtered');
+      assert.match(error.message, /Azure zablokował/); assert.match(error.message, /Kalendarz nie został zmieniony/);
+      return true;
+    });
+  } finally { restore(); }
+});

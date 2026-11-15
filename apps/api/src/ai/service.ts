@@ -12,6 +12,10 @@ export class AiInvalidOutputError extends Error {}
 export class AiIncompleteResponseError extends Error {
   constructor(readonly reason: string) { super('assistant_incomplete_response'); }
 }
+export class AiContentFilterError extends Error {
+  constructor(readonly categories: string[] = []) { super('assistant_content_filtered'); }
+}
+export class AiModelRefusalError extends Error {}
 
 const extractionSchema = {
   type: 'object', additionalProperties: false, required: ['rows'],
@@ -91,6 +95,15 @@ export class AiService {
       parallel_tool_calls: false,
       max_output_tokens: 4000,
     }, { signal, onTextDelta });
+    const filters = (response as unknown as { content_filters?: Array<{ blocked?: boolean; content_filter_results?: Record<string, { filtered?: boolean }> }> }).content_filters;
+    if (response.incomplete_details?.reason === 'content_filter' || filters?.some((filter) => filter.blocked)) {
+      const categories = [...new Set((filters ?? []).flatMap((filter) => Object.entries(filter.content_filter_results ?? {})
+        .filter(([category, result]) => ['hate', 'sexual', 'violence', 'self_harm', 'jailbreak'].includes(category) && result.filtered)
+        .map(([category]) => category)))];
+      throw new AiContentFilterError(categories);
+    }
+    if (response.output?.some((item) => item.type === 'message' && item.content.some((part) => part.type === 'refusal')))
+      throw new AiModelRefusalError('assistant_refused');
     if (response.status === 'incomplete') throw new AiIncompleteResponseError(response.incomplete_details?.reason ?? 'incomplete');
     if (response.status === 'failed' || (!response.output_text?.trim() && !response.output?.some((item) => item.type === 'function_call')))
       throw new AiIncompleteResponseError('empty_output');
