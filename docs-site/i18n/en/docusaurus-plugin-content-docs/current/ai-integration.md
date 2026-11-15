@@ -58,7 +58,7 @@ For a private endpoint, configure API App Service VNet Integration and private D
 - Responses requests explicitly use `store: false`; conversation context is reconstructed from application tables.
 - Every assistant turn receives trusted server context: UTC time, the calendar owner's current local date/time and IANA time zone. It is not derived from user content.
 - PostgreSQL stores conversations, messages, usage metrics and action previews. Conversations expire after 30 days of inactivity; pending actions expire after 15 minutes. The worker removes expired history. Prompts, completions, tokens and file bytes are not written to application logs.
-- Original PDF/JPG/PNG bytes are validated and sent inline to the request. Before upload, the UI states that the file is sent to Azure AI; cancellation aborts the API request and upstream Responses request. Bytes are not stored in `t_importy`, a cache or Azure Files API. The database stores only normalized import rows, a short source excerpt and page number for review.
+- Original PDF/JPG/PNG bytes are validated and sent inline to the request. Before upload, the UI states that the file is sent to Azure AI; cancellation aborts the API request and upstream Responses request. Original file bytes are not stored in the database, a cache or Azure Files API. Standard imports store normalized rows, a short excerpt and page number. Chat imports additionally retain a bounded derivative image preview as described below.
 - `store: false` disables persisted response state used for later Responses turns. It does not by itself guarantee that all safety/abuse-monitoring logs are disabled. Azure states customer prompts are not used to train models; exact service retention depends on feature and service policy. Choose a regional deployment when residency is required; do not assume the same for Global/Data Zone deployments.
 - Images are signature-checked, size/pixel limited and resized when needed. PDFs are limited to 5 MB and 10 pages; images to 20 MP. Failed calls do not automatically fall back to OCR/Document Intelligence.
 
@@ -145,8 +145,20 @@ A historical `awaiting_user_confirmation` result does not prove that a preview i
 
 The Assistant displays the actual pending proposal count beside batch confirmation. An earlier textual claim by the model does not establish that all proposals remain available for saving. Preview TTL remains 15 minutes.
 
-### Photo or file from the Assistant
+### Photos and completing an import in chat
 
-The camera icon beside the message input offers class timetable or work schedule import, then opens the existing import dialog. File selection, row correction, duplicate decisions and confirmation reuse the shared import workflow. Saving keeps the user in the Assistant and marks the calendar for refresh. The shortcut also works without an active chat; local reading remains available without Azure configuration.
+The camera icon offers a class timetable or work schedule, local OCR or Azure AI, and file or camera selection. The image appears immediately in the conversation. The review stays in chat, where the user can ask to correct times, dates, titles, employee selection, omitted rows and duplicate decisions. Clicking the image enlarges it.
 
-The import dialog offers local OCR (Tesseract plus a parser) and Azure AI (model interpretation of the image). Local OCR processes images on the API server; class imports support the recognized WAT table layout, while work imports use the shift parser. Azure receives the image and returns structured rows. Both methods lead to a preview requiring confirmation. The icon is an import shortcut; the original image is not attached to conversation history.
+The assistant uses `import_get_preview` and `import_prepare_changes` against a specific draft revision. A null `rowId` adds a missing row; other null fields leave values unchanged. There is no model confirmation tool. **Zatwierdź import** saves only the reviewed revision through the shared import workflow, including duplicates, overnight acknowledgement and transactional writes. Retrying a successful confirmation returns its receipt. Corrections renew the draft's 15-minute validity. The image and draft survive reopening the conversation.
+
+Drafts extend the existing `t_importy` table through `016_chat_import_drafts.sql`, scoped to user, calendar and conversation. Original image/PDF bytes are not stored. Images retain a derivative JPEG up to 1600×1600 and 700,000 data URL characters, following conversation retention. The latest AI-mode preview may enter the model context during follow-up discussion. With local OCR, image pixels stay outside Azure context; the model discusses normalized rows. PDFs appear as file-name messages without page thumbnails.
+
+The existing timetable and work schedule forms are now **Szybki import** (Quick import). **Dokończ w czacie** transfers an image and available corrections to the AI workflow when recognition, validation or saving needs attention. An active session preserves corrected rows, selections and duplicate decisions. Recognition errors without a session trigger a new image read. Transfer never confirms calendar writes.
+
+#### Manual verification
+
+1. In the Assistant, select the camera, class timetable and Azure AI, then a synthetic photo. Verify its message preview and event draft without calendar writes.
+2. Ask “w pierwszym wierszu koniec 10:30”. Check the new revision and time. Add a missing row, omit an unwanted row and resolve duplicates in chat.
+3. Reload and reopen the conversation; the image and draft should remain available.
+4. Confirm the import; retrying the same revision must not add copies. Also test cancellation and rejection of an old revision after corrections.
+5. Trigger an incomplete row or error in Quick import. Select Dokończ w czacie and verify the image and earlier corrections are retained.

@@ -86,7 +86,7 @@ test('assistant tool registry creates a pending proposal but never writes a cale
 
 test('tool registry only exposes the reviewed calendar and profile operations', () => {
   assert.deepEqual(assistantTools.map((tool) => tool.name), [
-    'calendar_search_events', 'work_profile_get', 'calendar_prepare_event_create',
+    'import_get_preview', 'import_prepare_changes', 'calendar_search_events', 'work_profile_get', 'calendar_prepare_event_create',
     'calendar_prepare_event_update', 'calendar_prepare_event_delete',
   ]);
   assert.ok(assistantTools.every((tool) => tool.strict));

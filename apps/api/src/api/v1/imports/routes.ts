@@ -78,7 +78,7 @@ export async function importRoutes(app: FastifyInstance, options: ApiDependencie
 
   app.post<{ Params: { id: string }; Body: { rows: ImportRow[] } }>('/import/sessions/:id/confirm', { schema: { ...confirmSchema, body: withExamples(confirmSchema.body, confirmInputExamples),
     tags: ['Imports'], summary: 'Confirm reviewed import rows', description: 'Revalidates the accepted rows and writes the whole accepted batch atomically. Duplicate decisions must be explicit.', operationId: 'confirmImportSession', response: { 201: ok('Zapisane wydarzenia i podsumowanie (wszystkie albo żadne).', confirmExamples),
-      404: errorExamples('Sesja importu nie istnieje.', { import_session_not_found: 'Brak sesji' }), 409: errorExamples('Sesja jest już zamknięta.', { import_session_closed: 'Sesja zamknięta' }),
+      404: errorExamples('Sesja importu nie istnieje.', { import_session_not_found: 'Brak sesji' }), 409: errorExamples('Sesja jest zamknięta albo szkic czatu wymaga potwierdzenia właściwej rewizji przez endpoint Asystenta.', { import_session_closed: 'Sesja zamknięta', chat_import_revision_conflict: 'Potwierdź aktualny podgląd przez endpoint importu Asystenta.' }),
       410: errorExamples('Sesja wygasła po 15 minutach bez akcji.', { import_session_expired: 'Sesja wygasła' }),
       422: ok('Błędne wiersze, niepotwierdzona zmiana nocna, brak decyzji o duplikatach albo wiersze spoza sesji.', confirmRejectedExamples), 503: unavailable() },
   } }, async (request, reply) => {
@@ -95,6 +95,7 @@ export async function importRoutes(app: FastifyInstance, options: ApiDependencie
       const owner = scope(request);
       const result = await repository.confirmImportSession(request.params.id, accepted, owner.userId, owner.calendarId);
       if (result.kind === 'not-found') return reply.code(404).send({ error: 'import_session_not_found' });
+      if (result.kind === 'revision-conflict') return reply.code(409).send({ error: 'chat_import_revision_conflict' });
       if (result.kind === 'closed') return reply.code(409).send({ error: 'import_session_closed' });
       if (result.kind === 'expired') return reply.code(410).send({ error: 'import_session_expired' });
       if (result.kind === 'unknown-rows') return reply.code(422).send({ error: 'unknown_rows', rowIds: result.rowIds });

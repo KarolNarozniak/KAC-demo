@@ -9713,12 +9713,12 @@
             }
           },
           "409": {
-            "description": "Sesja jest już zamknięta.",
+            "description": "Sesja jest zamknięta albo szkic czatu wymaga potwierdzenia właściwej rewizji przez endpoint Asystenta.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Sesja jest już zamknięta.",
+                  "description": "Sesja jest zamknięta albo szkic czatu wymaga potwierdzenia właściwej rewizji przez endpoint Asystenta.",
                   "required": [
                     "error"
                   ],
@@ -9727,7 +9727,8 @@
                     "error": {
                       "type": "string",
                       "enum": [
-                        "import_session_closed"
+                        "import_session_closed",
+                        "chat_import_revision_conflict"
                       ]
                     }
                   }
@@ -9738,6 +9739,12 @@
                     "description": "Ten import został już zatwierdzony albo anulowany – nie można go zatwierdzić drugi raz.",
                     "value": {
                       "error": "import_session_closed"
+                    }
+                  },
+                  "chat_import_revision_conflict": {
+                    "summary": "Potwierdź aktualny podgląd przez endpoint importu Asystenta.",
+                    "value": {
+                      "error": "chat_import_revision_conflict"
                     }
                   }
                 }
@@ -11346,6 +11353,2467 @@
         }
       }
     },
+    "/api/v1/assistant/conversations/{id}/attachments": {
+      "post": {
+        "operationId": "attachAssistantImport",
+        "summary": "Attach a timetable to a conversation",
+        "tags": [
+          "Assistant"
+        ],
+        "description": "Validates the image or PDF, stores a bounded derivative image preview, reads events through Azure or local OCR and binds an existing import session to this conversation. Optional sessionId and rows transfer corrections from Quick import. No calendar write is performed.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "fileName",
+                  "dataBase64",
+                  "source",
+                  "reader"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "fileName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  },
+                  "dataBase64": {
+                    "type": "string",
+                    "maxLength": 7000000
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "classes",
+                      "work"
+                    ]
+                  },
+                  "reader": {
+                    "type": "string",
+                    "enum": [
+                      "ai",
+                      "local"
+                    ]
+                  },
+                  "sessionId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "rows": {
+                    "type": "array",
+                    "maxItems": 300,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "id",
+                        "title",
+                        "date",
+                        "startTime",
+                        "endTime",
+                        "selected"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 64
+                        },
+                        "title": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "date": {
+                          "type": "string",
+                          "maxLength": 10
+                        },
+                        "startTime": {
+                          "type": "string",
+                          "maxLength": 5
+                        },
+                        "endTime": {
+                          "type": "string",
+                          "maxLength": 5
+                        },
+                        "endDate": {
+                          "type": "string",
+                          "maxLength": 10
+                        },
+                        "category": {
+                          "type": "string",
+                          "enum": [
+                            "Class",
+                            "Work",
+                            "Personal"
+                          ]
+                        },
+                        "location": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "employee": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "confidence": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "sourcePage": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "sourceSnippet": {
+                          "type": "string",
+                          "maxLength": 160
+                        },
+                        "unresolvedFields": {
+                          "type": "array",
+                          "maxItems": 20,
+                          "items": {
+                            "type": "string",
+                            "maxLength": 80
+                          }
+                        },
+                        "selected": {
+                          "type": "boolean"
+                        },
+                        "overnightConfirmed": {
+                          "type": "boolean"
+                        },
+                        "duplicateDecision": {
+                          "type": "string",
+                          "enum": [
+                            "skip",
+                            "replace",
+                            "keepBoth"
+                          ]
+                        },
+                        "replacementId": {
+                          "type": "string",
+                          "maxLength": 200
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "examples": {
+                "image": {
+                  "summary": "Synthetic image request",
+                  "value": {
+                    "fileName": "plan.png",
+                    "dataBase64": "U1lOVEhFVElD",
+                    "source": "classes",
+                    "reader": "ai"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Conversation-owned import draft, including its current revision and persisted image preview.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "conversationId",
+                    "fileName",
+                    "mimeType",
+                    "thumbnailDataUrl",
+                    "reader",
+                    "source",
+                    "rows",
+                    "revision",
+                    "status",
+                    "expiresAt",
+                    "summary"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "conversationId": {
+                      "type": "string"
+                    },
+                    "fileName": {
+                      "type": "string"
+                    },
+                    "mimeType": {
+                      "type": "string"
+                    },
+                    "thumbnailDataUrl": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "reader": {
+                      "type": "string",
+                      "enum": [
+                        "ai",
+                        "local"
+                      ]
+                    },
+                    "source": {
+                      "type": "string",
+                      "enum": [
+                        "classes",
+                        "work"
+                      ]
+                    },
+                    "rows": {
+                      "type": "array",
+                      "maxItems": 300,
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "title",
+                          "date",
+                          "startTime",
+                          "endTime",
+                          "selected"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 64
+                          },
+                          "title": {
+                            "type": "string",
+                            "maxLength": 200
+                          },
+                          "date": {
+                            "type": "string",
+                            "maxLength": 10
+                          },
+                          "startTime": {
+                            "type": "string",
+                            "maxLength": 5
+                          },
+                          "endTime": {
+                            "type": "string",
+                            "maxLength": 5
+                          },
+                          "endDate": {
+                            "type": "string",
+                            "maxLength": 10
+                          },
+                          "category": {
+                            "type": "string",
+                            "enum": [
+                              "Class",
+                              "Work",
+                              "Personal"
+                            ]
+                          },
+                          "location": {
+                            "type": "string",
+                            "maxLength": 200
+                          },
+                          "employee": {
+                            "type": "string",
+                            "maxLength": 200
+                          },
+                          "confidence": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                          },
+                          "sourcePage": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "sourceSnippet": {
+                            "type": "string",
+                            "maxLength": 160
+                          },
+                          "unresolvedFields": {
+                            "type": "array",
+                            "maxItems": 20,
+                            "items": {
+                              "type": "string",
+                              "maxLength": 80
+                            }
+                          },
+                          "selected": {
+                            "type": "boolean"
+                          },
+                          "overnightConfirmed": {
+                            "type": "boolean"
+                          },
+                          "duplicateDecision": {
+                            "type": "string",
+                            "enum": [
+                              "skip",
+                              "replace",
+                              "keepBoth"
+                            ]
+                          },
+                          "replacementId": {
+                            "type": "string",
+                            "maxLength": 200
+                          }
+                        }
+                      }
+                    },
+                    "revision": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "confirmed",
+                        "cancelled",
+                        "expired"
+                      ]
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "summary": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "added",
+                            "replaced",
+                            "skipped",
+                            "rejected"
+                          ],
+                          "properties": {
+                            "added": {
+                              "type": "integer"
+                            },
+                            "replaced": {
+                              "type": "integer"
+                            },
+                            "skipped": {
+                              "type": "integer"
+                            },
+                            "rejected": {
+                              "type": "integer"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "description": "Conversation-owned import draft, including its current revision and persisted image preview."
+                },
+                "examples": {
+                  "draft": {
+                    "summary": "Synthetic draft",
+                    "value": {
+                      "id": "synthetic-import",
+                      "conversationId": "synthetic-chat",
+                      "fileName": "plan.png",
+                      "mimeType": "image/png",
+                      "thumbnailDataUrl": null,
+                      "reader": "ai",
+                      "source": "classes",
+                      "rows": [],
+                      "revision": 1,
+                      "status": "pending",
+                      "expiresAt": "2035-01-01T00:00:00Z",
+                      "summary": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Import request failed without confirming calendar changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Import request failed without confirming calendar changes."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Synthetic import error",
+                    "value": {
+                      "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Import request failed without confirming calendar changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Import request failed without confirming calendar changes."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Synthetic import error",
+                    "value": {
+                      "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Import request failed without confirming calendar changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Import request failed without confirming calendar changes."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Synthetic import error",
+                    "value": {
+                      "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Import request failed without confirming calendar changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Import request failed without confirming calendar changes."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Synthetic import error",
+                    "value": {
+                      "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Import request failed without confirming calendar changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Import request failed without confirming calendar changes."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Synthetic import error",
+                    "value": {
+                      "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Import request failed without confirming calendar changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Import request failed without confirming calendar changes."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Synthetic import error",
+                    "value": {
+                      "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Import request failed without confirming calendar changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Import request failed without confirming calendar changes."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Synthetic import error",
+                    "value": {
+                      "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Import request failed without confirming calendar changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Import request failed without confirming calendar changes."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Synthetic import error",
+                    "value": {
+                      "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Import request failed without confirming calendar changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Import request failed without confirming calendar changes."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Synthetic import error",
+                    "value": {
+                      "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Import request failed without confirming calendar changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Import request failed without confirming calendar changes."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Synthetic import error",
+                    "value": {
+                      "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/assistant/conversations/{id}/imports": {
+      "get": {
+        "operationId": "listAssistantImports",
+        "summary": "List chat import drafts",
+        "tags": [
+          "Assistant"
+        ],
+        "description": "Returns conversation-scoped drafts and the current session status. Original file bytes are not returned.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Chat imports.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "imports"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "imports": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "conversationId",
+                          "fileName",
+                          "mimeType",
+                          "thumbnailDataUrl",
+                          "reader",
+                          "source",
+                          "rows",
+                          "revision",
+                          "status",
+                          "expiresAt",
+                          "summary"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "conversationId": {
+                            "type": "string"
+                          },
+                          "fileName": {
+                            "type": "string"
+                          },
+                          "mimeType": {
+                            "type": "string"
+                          },
+                          "thumbnailDataUrl": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "reader": {
+                            "type": "string",
+                            "enum": [
+                              "ai",
+                              "local"
+                            ]
+                          },
+                          "source": {
+                            "type": "string",
+                            "enum": [
+                              "classes",
+                              "work"
+                            ]
+                          },
+                          "rows": {
+                            "type": "array",
+                            "maxItems": 300,
+                            "items": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "id",
+                                "title",
+                                "date",
+                                "startTime",
+                                "endTime",
+                                "selected"
+                              ],
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 64
+                                },
+                                "title": {
+                                  "type": "string",
+                                  "maxLength": 200
+                                },
+                                "date": {
+                                  "type": "string",
+                                  "maxLength": 10
+                                },
+                                "startTime": {
+                                  "type": "string",
+                                  "maxLength": 5
+                                },
+                                "endTime": {
+                                  "type": "string",
+                                  "maxLength": 5
+                                },
+                                "endDate": {
+                                  "type": "string",
+                                  "maxLength": 10
+                                },
+                                "category": {
+                                  "type": "string",
+                                  "enum": [
+                                    "Class",
+                                    "Work",
+                                    "Personal"
+                                  ]
+                                },
+                                "location": {
+                                  "type": "string",
+                                  "maxLength": 200
+                                },
+                                "employee": {
+                                  "type": "string",
+                                  "maxLength": 200
+                                },
+                                "confidence": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 1
+                                },
+                                "sourcePage": {
+                                  "type": "integer",
+                                  "minimum": 1
+                                },
+                                "sourceSnippet": {
+                                  "type": "string",
+                                  "maxLength": 160
+                                },
+                                "unresolvedFields": {
+                                  "type": "array",
+                                  "maxItems": 20,
+                                  "items": {
+                                    "type": "string",
+                                    "maxLength": 80
+                                  }
+                                },
+                                "selected": {
+                                  "type": "boolean"
+                                },
+                                "overnightConfirmed": {
+                                  "type": "boolean"
+                                },
+                                "duplicateDecision": {
+                                  "type": "string",
+                                  "enum": [
+                                    "skip",
+                                    "replace",
+                                    "keepBoth"
+                                  ]
+                                },
+                                "replacementId": {
+                                  "type": "string",
+                                  "maxLength": 200
+                                }
+                              }
+                            }
+                          },
+                          "revision": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "confirmed",
+                              "cancelled",
+                              "expired"
+                            ]
+                          },
+                          "expiresAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "summary": {
+                            "anyOf": [
+                              {
+                                "type": "null"
+                              },
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "added",
+                                  "replaced",
+                                  "skipped",
+                                  "rejected"
+                                ],
+                                "properties": {
+                                  "added": {
+                                    "type": "integer"
+                                  },
+                                  "replaced": {
+                                    "type": "integer"
+                                  },
+                                  "skipped": {
+                                    "type": "integer"
+                                  },
+                                  "rejected": {
+                                    "type": "integer"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "description": "Chat imports."
+                },
+                "examples": {
+                  "empty": {
+                    "summary": "No imports",
+                    "value": {
+                      "imports": []
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Import request failed without confirming calendar changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Import request failed without confirming calendar changes."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Synthetic import error",
+                    "value": {
+                      "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Import request failed without confirming calendar changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Import request failed without confirming calendar changes."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Synthetic import error",
+                    "value": {
+                      "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Import request failed without confirming calendar changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Import request failed without confirming calendar changes."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Synthetic import error",
+                    "value": {
+                      "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Import request failed without confirming calendar changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Import request failed without confirming calendar changes."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Synthetic import error",
+                    "value": {
+                      "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Import request failed without confirming calendar changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Import request failed without confirming calendar changes."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Synthetic import error",
+                    "value": {
+                      "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Import request failed without confirming calendar changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Import request failed without confirming calendar changes."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Synthetic import error",
+                    "value": {
+                      "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Import request failed without confirming calendar changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Import request failed without confirming calendar changes."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Synthetic import error",
+                    "value": {
+                      "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Import request failed without confirming calendar changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Import request failed without confirming calendar changes."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Synthetic import error",
+                    "value": {
+                      "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Import request failed without confirming calendar changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Import request failed without confirming calendar changes."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Synthetic import error",
+                    "value": {
+                      "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Import request failed without confirming calendar changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Import request failed without confirming calendar changes."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Synthetic import error",
+                    "value": {
+                      "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/assistant/imports/{id}/confirm": {
+      "post": {
+        "operationId": "confirmAssistantImport",
+        "summary": "Confirm the reviewed chat import revision",
+        "tags": [
+          "Assistant"
+        ],
+        "description": "Validates the selected current draft, overnight acknowledgements and duplicate decisions, then uses the shared transactional import mechanism. Repeating a successful confirmation returns its saved receipt. The model has no confirmation tool.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "conversationId",
+                  "revision"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "conversationId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "revision": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              },
+              "examples": {
+                "confirm": {
+                  "summary": "Confirm reviewed revision",
+                  "value": {
+                    "conversationId": "synthetic-chat",
+                    "revision": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Confirmed import with receipt.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "import"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "status": {
+                      "enum": [
+                        "confirmed"
+                      ]
+                    },
+                    "import": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "id",
+                        "conversationId",
+                        "fileName",
+                        "mimeType",
+                        "thumbnailDataUrl",
+                        "reader",
+                        "source",
+                        "rows",
+                        "revision",
+                        "status",
+                        "expiresAt",
+                        "summary"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "conversationId": {
+                          "type": "string"
+                        },
+                        "fileName": {
+                          "type": "string"
+                        },
+                        "mimeType": {
+                          "type": "string"
+                        },
+                        "thumbnailDataUrl": {
+                          "type": [
+                            "null",
+                            "string"
+                          ]
+                        },
+                        "reader": {
+                          "type": "string",
+                          "enum": [
+                            "ai",
+                            "local"
+                          ]
+                        },
+                        "source": {
+                          "type": "string",
+                          "enum": [
+                            "classes",
+                            "work"
+                          ]
+                        },
+                        "rows": {
+                          "type": "array",
+                          "maxItems": 300,
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "id",
+                              "title",
+                              "date",
+                              "startTime",
+                              "endTime",
+                              "selected"
+                            ],
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 64
+                              },
+                              "title": {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              "date": {
+                                "type": "string",
+                                "maxLength": 10
+                              },
+                              "startTime": {
+                                "type": "string",
+                                "maxLength": 5
+                              },
+                              "endTime": {
+                                "type": "string",
+                                "maxLength": 5
+                              },
+                              "endDate": {
+                                "type": "string",
+                                "maxLength": 10
+                              },
+                              "category": {
+                                "type": "string",
+                                "enum": [
+                                  "Class",
+                                  "Work",
+                                  "Personal"
+                                ]
+                              },
+                              "location": {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              "employee": {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              "confidence": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1
+                              },
+                              "sourcePage": {
+                                "type": "integer",
+                                "minimum": 1
+                              },
+                              "sourceSnippet": {
+                                "type": "string",
+                                "maxLength": 160
+                              },
+                              "unresolvedFields": {
+                                "type": "array",
+                                "maxItems": 20,
+                                "items": {
+                                  "type": "string",
+                                  "maxLength": 80
+                                }
+                              },
+                              "selected": {
+                                "type": "boolean"
+                              },
+                              "overnightConfirmed": {
+                                "type": "boolean"
+                              },
+                              "duplicateDecision": {
+                                "type": "string",
+                                "enum": [
+                                  "skip",
+                                  "replace",
+                                  "keepBoth"
+                                ]
+                              },
+                              "replacementId": {
+                                "type": "string",
+                                "maxLength": 200
+                              }
+                            }
+                          }
+                        },
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "pending",
+                            "confirmed",
+                            "cancelled",
+                            "expired"
+                          ]
+                        },
+                        "expiresAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "summary": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "added",
+                                "replaced",
+                                "skipped",
+                                "rejected"
+                              ],
+                              "properties": {
+                                "added": {
+                                  "type": "integer"
+                                },
+                                "replaced": {
+                                  "type": "integer"
+                                },
+                                "skipped": {
+                                  "type": "integer"
+                                },
+                                "rejected": {
+                                  "type": "integer"
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "description": "Confirmed import with receipt."
+                },
+                "examples": {
+                  "confirmed": {
+                    "summary": "Synthetic result",
+                    "value": {
+                      "status": "confirmed",
+                      "import": {
+                        "id": "synthetic-import",
+                        "conversationId": "synthetic-chat",
+                        "fileName": "plan.png",
+                        "mimeType": "image/png",
+                        "thumbnailDataUrl": null,
+                        "reader": "ai",
+                        "source": "classes",
+                        "rows": [],
+                        "revision": 1,
+                        "status": "confirmed",
+                        "expiresAt": "2035-01-01T00:00:00Z",
+                        "summary": {
+                          "added": 0,
+                          "replaced": 0,
+                          "skipped": 0,
+                          "rejected": 0
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Import request failed without confirming calendar changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Import request failed without confirming calendar changes."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Synthetic import error",
+                    "value": {
+                      "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Import request failed without confirming calendar changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Import request failed without confirming calendar changes."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Synthetic import error",
+                    "value": {
+                      "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Import request failed without confirming calendar changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Import request failed without confirming calendar changes."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Synthetic import error",
+                    "value": {
+                      "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Import request failed without confirming calendar changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Import request failed without confirming calendar changes."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Synthetic import error",
+                    "value": {
+                      "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Import request failed without confirming calendar changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Import request failed without confirming calendar changes."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Synthetic import error",
+                    "value": {
+                      "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Import request failed without confirming calendar changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Import request failed without confirming calendar changes."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Synthetic import error",
+                    "value": {
+                      "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Import request failed without confirming calendar changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Import request failed without confirming calendar changes."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Synthetic import error",
+                    "value": {
+                      "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Import request failed without confirming calendar changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Import request failed without confirming calendar changes."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Synthetic import error",
+                    "value": {
+                      "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Import request failed without confirming calendar changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Import request failed without confirming calendar changes."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Synthetic import error",
+                    "value": {
+                      "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Import request failed without confirming calendar changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Import request failed without confirming calendar changes."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Synthetic import error",
+                    "value": {
+                      "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/assistant/imports/{id}/preview": {
+      "get": {
+        "operationId": "getAssistantImportPreview",
+        "summary": "Inspect a chat import preview",
+        "tags": [
+          "Assistant"
+        ],
+        "description": "Returns current validation, duplicates and collisions for the selected rows in a conversation-owned draft.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "query",
+            "name": "conversationId",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current draft and validation diagnostics.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "conversationId",
+                    "fileName",
+                    "mimeType",
+                    "thumbnailDataUrl",
+                    "reader",
+                    "source",
+                    "rows",
+                    "revision",
+                    "status",
+                    "expiresAt",
+                    "summary",
+                    "preview",
+                    "collisions"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "conversationId": {
+                      "type": "string"
+                    },
+                    "fileName": {
+                      "type": "string"
+                    },
+                    "mimeType": {
+                      "type": "string"
+                    },
+                    "thumbnailDataUrl": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "reader": {
+                      "type": "string",
+                      "enum": [
+                        "ai",
+                        "local"
+                      ]
+                    },
+                    "source": {
+                      "type": "string",
+                      "enum": [
+                        "classes",
+                        "work"
+                      ]
+                    },
+                    "rows": {
+                      "type": "array",
+                      "maxItems": 300,
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "title",
+                          "date",
+                          "startTime",
+                          "endTime",
+                          "selected"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 64
+                          },
+                          "title": {
+                            "type": "string",
+                            "maxLength": 200
+                          },
+                          "date": {
+                            "type": "string",
+                            "maxLength": 10
+                          },
+                          "startTime": {
+                            "type": "string",
+                            "maxLength": 5
+                          },
+                          "endTime": {
+                            "type": "string",
+                            "maxLength": 5
+                          },
+                          "endDate": {
+                            "type": "string",
+                            "maxLength": 10
+                          },
+                          "category": {
+                            "type": "string",
+                            "enum": [
+                              "Class",
+                              "Work",
+                              "Personal"
+                            ]
+                          },
+                          "location": {
+                            "type": "string",
+                            "maxLength": 200
+                          },
+                          "employee": {
+                            "type": "string",
+                            "maxLength": 200
+                          },
+                          "confidence": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                          },
+                          "sourcePage": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "sourceSnippet": {
+                            "type": "string",
+                            "maxLength": 160
+                          },
+                          "unresolvedFields": {
+                            "type": "array",
+                            "maxItems": 20,
+                            "items": {
+                              "type": "string",
+                              "maxLength": 80
+                            }
+                          },
+                          "selected": {
+                            "type": "boolean"
+                          },
+                          "overnightConfirmed": {
+                            "type": "boolean"
+                          },
+                          "duplicateDecision": {
+                            "type": "string",
+                            "enum": [
+                              "skip",
+                              "replace",
+                              "keepBoth"
+                            ]
+                          },
+                          "replacementId": {
+                            "type": "string",
+                            "maxLength": 200
+                          }
+                        }
+                      }
+                    },
+                    "revision": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "confirmed",
+                        "cancelled",
+                        "expired"
+                      ]
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "summary": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "added",
+                            "replaced",
+                            "skipped",
+                            "rejected"
+                          ],
+                          "properties": {
+                            "added": {
+                              "type": "integer"
+                            },
+                            "replaced": {
+                              "type": "integer"
+                            },
+                            "skipped": {
+                              "type": "integer"
+                            },
+                            "rejected": {
+                              "type": "integer"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "preview": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true,
+                        "required": [
+                          "id",
+                          "status",
+                          "issues",
+                          "overnight",
+                          "duplicateOfEvents",
+                          "duplicateOfRows"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "ok",
+                              "error"
+                            ]
+                          },
+                          "issues": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "start": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "end": {
+                            "type": [
+                              "null",
+                              "string"
+                            ]
+                          },
+                          "overnight": {
+                            "type": "boolean"
+                          },
+                          "duplicateOfEvents": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "required": [
+                                "id",
+                                "title",
+                                "start"
+                              ],
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "title": {
+                                  "type": "string"
+                                },
+                                "start": {
+                                  "type": "string"
+                                },
+                                "repeatWeekly": {
+                                  "type": "boolean"
+                                }
+                              }
+                            }
+                          },
+                          "duplicateOfRows": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "collisions": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "id",
+                            "title",
+                            "category",
+                            "mandatory",
+                            "start",
+                            "end"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "title": {
+                              "type": "string"
+                            },
+                            "category": {
+                              "type": "string"
+                            },
+                            "mandatory": {
+                              "type": "boolean"
+                            },
+                            "start": {
+                              "type": "string"
+                            },
+                            "end": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "description": "Current draft and validation diagnostics."
+                },
+                "examples": {
+                  "preview": {
+                    "summary": "Synthetic preview",
+                    "value": {
+                      "id": "synthetic-import",
+                      "conversationId": "synthetic-chat",
+                      "fileName": "plan.png",
+                      "mimeType": "image/png",
+                      "thumbnailDataUrl": null,
+                      "reader": "ai",
+                      "source": "classes",
+                      "rows": [],
+                      "revision": 1,
+                      "status": "pending",
+                      "expiresAt": "2035-01-01T00:00:00Z",
+                      "summary": null,
+                      "preview": [],
+                      "collisions": {}
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Import request failed without confirming calendar changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Import request failed without confirming calendar changes."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Synthetic import error",
+                    "value": {
+                      "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Import request failed without confirming calendar changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Import request failed without confirming calendar changes."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Synthetic import error",
+                    "value": {
+                      "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Import request failed without confirming calendar changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Import request failed without confirming calendar changes."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Synthetic import error",
+                    "value": {
+                      "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Import request failed without confirming calendar changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Import request failed without confirming calendar changes."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Synthetic import error",
+                    "value": {
+                      "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Import request failed without confirming calendar changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Import request failed without confirming calendar changes."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Synthetic import error",
+                    "value": {
+                      "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Import request failed without confirming calendar changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Import request failed without confirming calendar changes."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Synthetic import error",
+                    "value": {
+                      "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Import request failed without confirming calendar changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Import request failed without confirming calendar changes."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Synthetic import error",
+                    "value": {
+                      "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Import request failed without confirming calendar changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Import request failed without confirming calendar changes."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Synthetic import error",
+                    "value": {
+                      "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Import request failed without confirming calendar changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Import request failed without confirming calendar changes."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Synthetic import error",
+                    "value": {
+                      "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Import request failed without confirming calendar changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Import request failed without confirming calendar changes."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Synthetic import error",
+                    "value": {
+                      "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/assistant/config": {
       "get": {
         "operationId": "getAssistantConfig",
@@ -11750,6 +14218,50 @@
                           },
                           "content": {
                             "oneOf": [
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "text",
+                                  "attachment"
+                                ],
+                                "properties": {
+                                  "text": {
+                                    "type": "string"
+                                  },
+                                  "attachment": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "fileName",
+                                      "mimeType",
+                                      "thumbnailDataUrl",
+                                      "reader"
+                                    ],
+                                    "properties": {
+                                      "fileName": {
+                                        "type": "string"
+                                      },
+                                      "mimeType": {
+                                        "type": "string"
+                                      },
+                                      "thumbnailDataUrl": {
+                                        "type": [
+                                          "string",
+                                          "null"
+                                        ]
+                                      },
+                                      "reader": {
+                                        "type": "string",
+                                        "enum": [
+                                          "ai",
+                                          "local"
+                                        ]
+                                      }
+                                    }
+                                  }
+                                }
+                              },
                               {
                                 "type": "object",
                                 "additionalProperties": false,
@@ -12723,6 +15235,50 @@
                             },
                             "content": {
                               "oneOf": [
+                                {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "required": [
+                                    "text",
+                                    "attachment"
+                                  ],
+                                  "properties": {
+                                    "text": {
+                                      "type": "string"
+                                    },
+                                    "attachment": {
+                                      "type": "object",
+                                      "additionalProperties": false,
+                                      "required": [
+                                        "fileName",
+                                        "mimeType",
+                                        "thumbnailDataUrl",
+                                        "reader"
+                                      ],
+                                      "properties": {
+                                        "fileName": {
+                                          "type": "string"
+                                        },
+                                        "mimeType": {
+                                          "type": "string"
+                                        },
+                                        "thumbnailDataUrl": {
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ]
+                                        },
+                                        "reader": {
+                                          "type": "string",
+                                          "enum": [
+                                            "ai",
+                                            "local"
+                                          ]
+                                        }
+                                      }
+                                    }
+                                  }
+                                },
                                 {
                                   "type": "object",
                                   "additionalProperties": false,

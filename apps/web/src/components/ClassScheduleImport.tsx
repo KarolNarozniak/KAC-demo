@@ -3,6 +3,8 @@ import { Modal, ScrollView, Text, View } from 'react-native';
 import { Button, Field, useTheme } from './ui';
 import DateField from './DateField';
 import TimeField from './TimeField';
+import type { ChatImportHandoff } from '../services/chatImportApi';
+import type { PickedPdf } from '../services/readPickedTimetable';
 import { pickPdf } from '../services/pickPdf';
 import { cancelImport, confirmImport, invalidFields, previewImport, readClassSchedule, readAiClassSchedule,
   type ClassReadResult, type ClassRow, type DuplicateDecision, type ImportIssue, type ImportPreviewRow, type ImportRowInput, type ImportSummary } from '../services/importApi';
@@ -29,8 +31,8 @@ const rowInput = (row: ClassRow): ImportRowInput => ({ id: row.id, title: row.ti
   sourcePage: row.sourcePage, sourceSnippet: row.sourceSnippet, unresolvedFields: row.unresolvedFields,
   duplicateDecision: row.duplicateDecision, replacementId: row.replacementId });
 
-export default function ClassScheduleImport({ visible, onClose, onImported }: {
-  visible: boolean; onClose: () => void; onImported: () => void;
+export default function ClassScheduleImport({ visible, onClose, onImported, onContinueInChat }: {
+  visible: boolean; onClose: () => void; onImported: () => void; onContinueInChat?: (handoff: ChatImportHandoff) => void;
 }) {
   const { styles, palette } = useTheme();
   const [session, setSession] = useState<ClassReadResult | null>(null);
@@ -46,6 +48,7 @@ export default function ClassScheduleImport({ visible, onClose, onImported }: {
   const [summary, setSummary] = useState<ImportSummary | null>(null);
   // Status importu (S23KC2S1P2-20): zakończony, nieudany albo anulowany.
   const [status, setStatus] = useState<'' | 'failed' | 'cancelled'>('');
+  const [pickedFile, setPickedFile] = useState<PickedPdf|null>(null);
   const [fileName, setFileName] = useState('');
   const [readerMode, setReaderMode] = useState<'ai' | 'local'>('ai');
   const [page, setPage] = useState(0);
@@ -77,6 +80,7 @@ export default function ClassScheduleImport({ visible, onClose, onImported }: {
   const choose = () => run(async () => {
     const file = await pickPdf();
     if (!file) return;
+    setPickedFile(file); setFileName(file.name);
     setStatus('');
     const useAi = !/\.(ics|csv)$/i.test(file.name) && readerMode === 'ai';
     let result: ClassReadResult;
@@ -93,7 +97,7 @@ export default function ClassScheduleImport({ visible, onClose, onImported }: {
   const cancelAiRead = () => aiReadController.current?.abort();
   const close = () => run(async () => {
     if (session) await cancelImport(session.importSessionId);
-    setSession(null); setRows([]); setPreview([]); setSummary(null); setFileName(''); setStatus(''); onClose();
+    setSession(null); setRows([]); setPreview([]); setSummary(null); setFileName(''); setPickedFile(null); setStatus(''); onClose();
   });
   // „Anuluj import” kończy sesję bez zapisu, ale zostawia okno z informacją o wyniku (7a).
   const cancel = () => run(async () => {
@@ -135,7 +139,8 @@ export default function ClassScheduleImport({ visible, onClose, onImported }: {
   return <Modal visible={visible} transparent animationType="fade" onRequestClose={() => { if (!busy) void close(); }}>
     <View style={{ flex: 1, backgroundColor: palette.scrim, alignItems: 'center', justifyContent: 'center', padding: 16 }}>
       <ScrollView style={{ backgroundColor: palette.surface, borderRadius: 18, width: '100%', maxWidth: 760, maxHeight: '92%' }} contentContainerStyle={{ padding: 20 }}>
-        <Text style={styles.heading}>Importuj plan zajęć</Text>
+        <Text style={styles.heading}>Szybki import — plan zajęć</Text>
+        {onContinueInChat&&<Text style={styles.muted}>Przycisk „Dokończ w czacie” przekaże zdjęcie i poprawki do Azure AI.</Text>}
         <Text style={styles.subtitle}>Plik ICS (np. eksport z USOS, Google Calendar, Outlooka), PDF planu WAT (do 10 stron) albo zrzut ekranu Miniatura WAT w PNG/JPG. Maks. 5 MB.</Text>
         {!session && <View style={[styles.row, { flexWrap: 'wrap', marginVertical: 8 }]}>
           <Text style={styles.label}>ODCZYT PDF / ZDJĘCIA</Text>
@@ -146,6 +151,10 @@ export default function ClassScheduleImport({ visible, onClose, onImported }: {
         </View>}
         {!!fileName && <Text style={styles.body}>{fileName}</Text>}
         {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
+        {(Boolean(error)||preview.some(item=>item.status==='error'||item.duplicateOfEvents.length||item.duplicateOfRows.length)||rows.some(row=>row.reviewRequired)) && !busy && pickedFile && /\.(png|jpe?g|pdf)$/i.test(pickedFile.name) && onContinueInChat && <Button title="Dokończ w czacie" accessibilityLabel="Dokończ w czacie — przekaż zdjęcie i dane do Azure AI" primary onPress={()=>{
+          onContinueInChat({file:pickedFile,source:'classes',reader:'ai',...(session?{sessionId:session.importSessionId,rows:rows.map(row=>({...rowInput(row),selected:selected.has(row.id)}))}:{})});
+          setSession(null);setRows([]);setPickedFile(null);setError('');onClose();
+        }}/>}
         {busy && <View style={styles.row}><Text accessibilityLiveRegion="polite" style={styles.body}>Przetwarzanie…</Text>{aiReading && <Button title="Anuluj odczyt AI" onPress={cancelAiRead} />}</View>}
         {summary && <Text accessibilityLiveRegion="polite" style={styles.body}>Import zakończony. Zaimportowano: {summary.added + summary.replaced} (dodano: {summary.added} · zastąpiono: {summary.replaced}) · Pominięto duplikaty: {summary.skipped} · Niewybrane: {summary.rejected}</Text>}
         {status === 'cancelled' && <Text accessibilityLiveRegion="polite" style={styles.body}>Import anulowany. Kalendarz pozostał bez zmian.</Text>}

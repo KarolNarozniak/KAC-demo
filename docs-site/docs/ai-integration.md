@@ -58,7 +58,7 @@ Przy private endpoint wymagane są VNet Integration API App Service i poprawne p
 - Responses API requesty jawnie ustawiają `store: false`; kontekst rozmowy jest odtwarzany z tabel aplikacji.
 - Każda tura asystenta otrzymuje zaufany kontekst serwera: bieżący czas UTC, datę/czas w strefie IANA właściciela kalendarza oraz nazwę tej strefy. Nie jest on wyliczany z treści użytkownika.
 - Rozmowy, wiadomości, metryki tokenów i podglądy akcji przechowuje PostgreSQL. Rozmowy wygasają po 30 dniach nieaktywności; podgląd akcji po 15 minutach. Worker usuwa wygasłą historię. Nie logujemy promptów, odpowiedzi, tokenów ani bajtów dokumentu.
-- Oryginalny PDF/JPG/PNG jest walidowany i przekazywany inline do requestu. Interfejs informuje przed wysłaniem o przekazaniu pliku do Azure AI; anulowanie przerywa request do API i upstream Responses. Bajty nie trafiają do `t_importy`, cache ani Azure Files API. Baza przechowuje wyłącznie znormalizowane wiersze importu, krótki fragment źródłowy i numer strony do korekty.
+- Oryginalny PDF/JPG/PNG jest walidowany i przekazywany inline do requestu. Interfejs informuje przed wysłaniem o przekazaniu pliku do Azure AI; anulowanie przerywa request do API i upstream Responses. Oryginalne bajty nie trafiają do bazy, cache ani Azure Files API. Zwykły import zapisuje znormalizowane wiersze, fragment źródłowy i numer strony. Import w czacie przechowuje ponadto ograniczoną miniaturę obrazu, opisaną poniżej.
 - `store: false` wyłącza trwały stan odpowiedzi używany do kolejnych Responses turns. Nie jest samo w sobie gwarancją wyłączenia wszystkich logów bezpieczeństwa/abuse monitoring. Azure deklaruje brak trenowania modeli na danych klienta; szczegóły retencji zależą od funkcji i polityki usługi. Dla wymogu rezydencji wybierz deployment regionalny, nie zakładaj tego samego dla globalnego/Data Zone.
 - W obrazie najpierw sprawdzamy format, rozmiar, piksele i zmniejszamy duże dane URI. PDF ma limit 5 MB i 10 stron; obrazy limit 20 MP. Nieudane wywołanie nie przełącza się automatycznie na OCR/Document Intelligence.
 
@@ -145,8 +145,20 @@ Historyczny wynik `awaiting_user_confirmation` nie oznacza, że podgląd nadal j
 
 Asystent pokazuje liczbę faktycznie oczekujących propozycji obok przycisku zbiorczego zatwierdzania. Dawna deklaracja tekstowa modelu nie jest potwierdzeniem, że wszystkie propozycje nadal są dostępne do zapisu. TTL podglądu pozostaje równy 15 minut.
 
-### Zdjęcie lub plik z Asystenta
+### Zdjęcie i dokończenie importu w rozmowie
 
-Ikona aparatu obok pola wiadomości otwiera wybór planu zajęć albo grafiku pracy, a następnie dotychczasowe okno importu. Wybór pliku, korekta wierszy, decyzje o duplikatach i zatwierdzenie korzystają ze wspólnych mechanizmów importu. Po zapisie użytkownik pozostaje w Asystencie, a kalendarz zostaje oznaczony do odświeżenia. Skrót działa również bez aktywnego czatu; lokalny odczyt pozostaje dostępny bez konfiguracji Azure.
+Ikona aparatu obok wiadomości pozwala wybrać plan zajęć lub grafik pracy, lokalny OCR lub Azure AI, a następnie plik albo aparat. Zdjęcie pojawia się od razu w rozmowie. Po odczycie podgląd pozostaje w czacie: można poprosić o poprawienie godzin, daty, tytułu, wybór pracownika, pominięcie wierszy lub rozstrzygnięcie duplikatów. Kliknięcie zdjęcia powiększa podgląd.
 
-W oknie importu są dwie metody: lokalny OCR (Tesseract i parser rozpoznanego tekstu) oraz Azure AI (interpretacja obrazu przez model). Lokalny OCR przetwarza obraz na serwerze API; dla zajęć obsługuje rozpoznawany układ tabeli WAT, a dla grafiku pracy korzysta z parsera zmian. Azure otrzymuje obraz i zwraca uporządkowane wiersze. Obie metody prowadzą do podglądu wymagającego potwierdzenia. Ikona jest skrótem do importu, a sam obraz nie staje się załącznikiem historii rozmowy.
+Agent korzysta z `import_get_preview` i `import_prepare_changes`. Poprawki dotyczą wskazanej rewizji szkicu; `rowId: null` dodaje brakujący wiersz, a pozostałe wartości null pozostawiają pole bez zmian. Model nie ma narzędzia zatwierdzania. Przycisk **Zatwierdź import** zapisuje wyłącznie przejrzaną rewizję przez wspólny mechanizm importu, z walidacją duplikatów, zmian nocnych i transakcyjnym zapisem. Ponowienie skutecznego potwierdzenia zwraca ten sam wynik. Poprawki przedłużają ważność szkicu o 15 minut. Stan i zdjęcie pozostają dostępne po ponownym otwarciu rozmowy.
+
+Backend przechowuje szkic w istniejącym `t_importy` (migracja `016_chat_import_drafts.sql`), związany z użytkownikiem, kalendarzem i rozmową. Oryginalne bajty obrazu/PDF nie są zapisywane. Dla obrazu powstaje pochodny JPEG do 1600×1600 i maks. 700 tys. znaków data URL; miniatura podlega retencji rozmowy. Najnowsza miniatura wybrana do odczytu AI może trafić do kontekstu modelu przy dalszej rozmowie. W trybie lokalnego OCR obraz pozostaje poza kontekstem Azure; model omawia odczytane wiersze. PDF ma wiadomość z nazwą pliku bez miniatury strony.
+
+Formularze planu i grafiku noszą nazwę **Szybki import**. Gdy odczyt, walidacja lub zapis wymaga poprawy, dostępny jest **Dokończ w czacie**. Po wybraniu przycisku zdjęcie i dane zostają przekazane do przepływu AI. Istniejąca aktywna sesja zachowuje poprawione wiersze, zaznaczenia i decyzje o duplikatach; przy błędzie rozpoznawania bez sesji zdjęcie jest ponownie odczytywane. Przekazanie nie zatwierdza wydarzeń.
+
+#### Sprawdzenie ręczne
+
+1. W Asystencie kliknij aparat, wybierz plan zajęć i Azure AI, a następnie syntetyczne zdjęcie. Sprawdź miniaturę w wiadomości i podgląd wydarzeń bez zmian w kalendarzu.
+2. Napisz „w pierwszym wierszu koniec 10:30”. Sprawdź zmianę rewizji i godziny. Dodaj brakujący wiersz, pomiń niepotrzebny i rozstrzygnij duplikaty w rozmowie.
+3. Odśwież stronę i otwórz rozmowę ponownie — zdjęcie i szkic powinny pozostać dostępne.
+4. Zatwierdź import. Ponowienie tej samej rewizji nie powinno dodać kolejnych kopii. Sprawdź też anulowanie i odrzucenie starej rewizji po poprawkach.
+5. W Szybkim imporcie doprowadź do błędu/niekompletnego wiersza. Wybierz Dokończ w czacie i sprawdź zachowanie zdjęcia oraz wcześniejszych poprawek.

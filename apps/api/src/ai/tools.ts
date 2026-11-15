@@ -3,6 +3,8 @@ import type { UserScope } from '../api/scope.js';
 import type { CalendarRepository } from '../api/contracts.js';
 import type { WorkProfileRepository } from '../profile/repository.js';
 import { AiRepository } from './repository.js';
+import { patchSchema } from '../import/chat.js';
+import { executeChatImportTool } from './chat-import.js';
 
 const objectSchema = (properties: Record<string, unknown>, required: string[]) => ({
   type: 'object', additionalProperties: false, properties, required,
@@ -16,6 +18,8 @@ const eventProperties = {
 };
 
 export const assistantTools: FunctionTool[] = [
+  { type:'function', name:'import_get_preview', strict:true, description:'Read the current conversation-owned image import draft, selected rows, missing fields, duplicates and collisions. No calendar writes.', parameters:objectSchema({importId:{type:'string',minLength:1,maxLength:100}},['importId']) },
+  { type:'function', name:'import_prepare_changes', strict:true, description:'Correct or select imported rows by row ID and current revision. A null rowId adds a missing row; other null fields mean leave unchanged. This only updates the draft; the user confirms import with the application button.', parameters:objectSchema({importId:{type:'string',minLength:1,maxLength:100},revision:{type:'integer',minimum:1},changes:{type:'array',minItems:1,maxItems:300,items:patchSchema}},['importId','revision','changes']) },
   { type: 'function', name: 'calendar_search_events', strict: true,
     description: 'Search the current user calendar in a bounded date range. Read-only.',
     parameters: objectSchema({ from: { type: 'string', format: 'date' }, to: { type: 'string', format: 'date' }, query: { type: ['string', 'null'], maxLength: 120 } }, ['from', 'to', 'query']) },
@@ -69,6 +73,8 @@ export async function executeAssistantTool(name: string, rawArguments: string, c
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return { error: 'invalid_tool_arguments' };
     args = parsed as Record<string, unknown>;
   } catch { return { error: 'invalid_tool_arguments' }; }
+
+  if (name === 'import_get_preview' || name === 'import_prepare_changes') return executeChatImportTool(name,args,context.calendar,context.scope,context.conversationId);
 
   if (name === 'calendar_search_events') {
     if (!onlyKeys(args, ['from', 'to', 'query'])) return { error: 'invalid_tool_arguments' };

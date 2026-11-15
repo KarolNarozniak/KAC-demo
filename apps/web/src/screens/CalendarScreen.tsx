@@ -12,14 +12,15 @@ import type { DueNotification } from '../services/notificationsApi';
 import { resolveNotificationTarget } from '../domain/notifications';
 import { getDailySummaryForCalendar } from '../services/assistantApi';
 import { dailySummaryContext, dayGreeting } from '../domain/dailySummary';
+import type { ChatImportHandoff } from '../services/chatImportApi';
 import ClassScheduleImport from '../components/ClassScheduleImport';
 import WorkScheduleImport from '../components/WorkScheduleImport';
 import GoogleCalendarImport from '../components/GoogleCalendarImport';
 const categories: Category[] = ['Class', 'Work', 'Personal'];
 const labels: Record<Category, string> = { Class: 'Zajęcia', Work: 'Praca', Personal: 'Prywatne' };
-type Props = { refreshVersion?: number; week: Date; setWeek: (value: Date) => void; todayOnly?: boolean; weekLayout: WeekLayout; now: Date; active: boolean; draftSchedule?: WeeklySchedule | null;
+type Props = { onContinueInChat?: (handoff:ChatImportHandoff)=>void; refreshVersion?: number; week: Date; setWeek: (value: Date) => void; todayOnly?: boolean; weekLayout: WeekLayout; now: Date; active: boolean; draftSchedule?: WeeklySchedule | null;
   notificationTarget?: DueNotification | null; onNotificationResolved?: () => void };
-export default function CalendarScreen({ refreshVersion = 0, week, setWeek, todayOnly = false, weekLayout, now, active, draftSchedule, notificationTarget, onNotificationResolved }: Props) {
+export default function CalendarScreen({ onContinueInChat, refreshVersion = 0, week, setWeek, todayOnly = false, weekLayout, now, active, draftSchedule, notificationTarget, onNotificationResolved }: Props) {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [dailySummary, setDailySummary] = useState<{ key: string; text: string } | null>(null);
@@ -140,8 +141,8 @@ export default function CalendarScreen({ refreshVersion = 0, week, setWeek, toda
     {!!loadError && <View><Text accessibilityRole="alert" style={styles.error}>{loadError}</Text><Button title="Spróbuj ponownie" onPress={() => void reload()} /></View>}
     {!todayOnly && <View style={[styles.row, { justifyContent: 'space-between', paddingVertical: 6, flexWrap: 'wrap' }]}>
       <Text numberOfLines={1} style={[styles.heading, { flex: 1, minWidth: compact ? '100%' : 160, fontSize: compact ? 14 : 17 }]}>{selectedWeek}</Text>
-      <Button title="Importuj plan" onPress={() => setClassImportOpen(true)} />
-      <Button title="Grafik pracy" accessibilityLabel="Importuj grafik pracy" onPress={() => setImportOpen(true)} />
+      <Button title="Szybki import planu" onPress={() => setClassImportOpen(true)} />
+      <Button title="Szybki import grafiku" accessibilityLabel="Szybki import grafiku pracy" onPress={() => setImportOpen(true)} />
       <Button title="Google" accessibilityLabel="Importuj z Google Calendar" onPress={() => setGoogleImportOpen(true)} />
       <Button title="+" accessibilityLabel="Dodaj wydarzenie" primary onPress={() => newEvent(todayOnly ? new Date() : weekDays.some((date) => localDateKey(date) === localDateKey(new Date())) ? new Date() : monday)} />
     </View>}
@@ -199,8 +200,8 @@ export default function CalendarScreen({ refreshVersion = 0, week, setWeek, toda
       </>}
 
     </ScrollView></View></Modal>
-    <ClassScheduleImport visible={classImportOpen} onClose={() => setClassImportOpen(false)} onImported={() => void reload()} />
-    <WorkScheduleImport visible={importOpen} onClose={() => setImportOpen(false)} onImported={() => void reload()} />
+    <ClassScheduleImport onContinueInChat={onContinueInChat} visible={classImportOpen} onClose={() => setClassImportOpen(false)} onImported={() => void reload()} />
+    <WorkScheduleImport onContinueInChat={onContinueInChat} visible={importOpen} onClose={() => setImportOpen(false)} onImported={() => void reload()} />
     <GoogleCalendarImport visible={googleImportOpen} onClose={() => setGoogleImportOpen(false)} onImported={() => void reload()} />
   </View>;
 }

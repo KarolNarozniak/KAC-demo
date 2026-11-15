@@ -52,3 +52,13 @@ Zapis bazy wykazał, że trzy propozycje z 15:54 wygasły o 16:09 (czas Europe/W
 Backend odświeża teraz status każdej historycznej propozycji przed turą modelu, z uwzględnieniem zakresu użytkownika i rozmowy. Rozróżnia ważne, potwierdzone, wygasłe, anulowane, błędne, przetwarzane i niedostępne akcje. Interfejs pokazuje liczbę rzeczywiście oczekujących podglądów. Nie zmieniano ręcznie wydarzeń użytkownika ani nie zatwierdzano za niego brakujących zmian.
 
 Weryfikacja odświeżania statusów: 36 testów web i 171 API zaliczone, w tym regresja trzech wygasłych i dwóch potwierdzonych propozycji oraz izolacja akcji obcej rozmowy. Sprawdzanie typów, OpenAPI, dokumentacja PL/EN i pełny build zaliczone.
+
+## Import zdjęcia wewnątrz rozmowy i Szybki import
+
+Ikona aparatu dodaje teraz obraz do rozmowy. Odczytane dane są trwałym, wersjonowanym szkicem istniejącej sesji importu; agent poprawia je narzędziami import_get_preview i import_prepare_changes, łącznie z dodawaniem pominiętych wierszy. Zapis jest osobnym zatwierdzeniem aktualnej rewizji przez wspólny mechanizm importu. Wynik jest przechowywany w tej samej transakcji, co zapis wydarzeń, co pozwala bezpiecznie ponowić potwierdzenie. Migracja: 016_chat_import_drafts.sql.
+
+Dotychczasowe formularze planu i grafiku to Szybki import. Przycisk Dokończ w czacie przekazuje zdjęcie i istniejące poprawki do Asystenta; nie zapisuje wydarzeń. Oryginalny plik nie jest przechowywany, a ograniczony podgląd JPEG pozostaje w historii. Tryb lokalnego OCR nie przekazuje pikseli do modelu; tryb AI umożliwia dalszą rozmowę z podglądem obrazu.
+
+Test z rzeczywistym Azure i syntetycznym zdjęciem na osobnym kalendarzu przeszedł: odczyt jednej pozycji, poprawka końca do 10:30 przez narzędzia rozmowy, zero wydarzeń przed potwierdzeniem i jedno po zatwierdzeniu. Syntetyczne dane testowe zostały usunięte.
+
+Weryfikacja: 37 testów web i 178 API zaliczonych, dodatkowy test integracyjny na PostgreSQL zaliczony. Sprawdzanie typów, zgodność OpenAPI, dokumentacja PL/EN i pełny build zaliczone. Regresje obejmują kontrolę rewizji, równoległe potwierdzenia bez duplikatów, izolację rozmów, dodawanie brakujących wierszy, zachowanie poprawek przy przekazaniu ze Szybkiego importu i niewysyłanie pikseli lokalnego OCR w dalszej rozmowie.

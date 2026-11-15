@@ -9,6 +9,7 @@ import ScheduleScreen from './src/screens/ScheduleScreen';
 import { BlocksScreen } from './src/screens/BlocksScreen';
 import AssistantScreen from './src/screens/AssistantScreen';
 import { acknowledgeNotification, claimDueNotifications, getNotificationSettings, getWebPushConfig, registerWebPushSubscription, removeWebPushSubscription, updateNotificationSettings, type DueNotification, type NotificationSettings } from './src/services/notificationsApi';
+import type { ChatImportHandoff } from './src/services/chatImportApi';
 import type { WeeklySchedule } from './src/services/scheduleApi';
 import { configureAssistantPreferences, defaultAssistantPreferences, normalizeAssistantPreferences, type AssistantPreferences } from './src/domain/assistantPreferences';
 import ScreenTransition from './src/components/ScreenTransition';
@@ -56,6 +57,7 @@ function CalendarApp() {
     } catch { setAgentPreferencesNotice('Nie udało się zapisać personalizacji. Spróbuj ponownie.'); }
     finally { setAgentPreferencesSaving(false); }
   };
+  const [importHandoff, setImportHandoff] = useState<ChatImportHandoff|null>(null);
   const [calendarRevision, setCalendarRevision] = useState(0);
   const [schedulePreview, setSchedulePreview] = useState<WeeklySchedule | null>(null);
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings | null>(null);
@@ -248,11 +250,11 @@ function CalendarApp() {
     <ScreenTransition screenIndex={tabs.indexOf(tab)} renderScreen={(index, active) => {
       const route = tabs[index];
       return (
-        route === 'Dziś' || route === 'Tydzień' ? <CalendarScreen refreshVersion={calendarRevision} active={active} now={now} weekLayout={weekLayout} todayOnly={route === 'Dziś'} week={week} setWeek={setWeek} draftSchedule={schedulePreview}
+        route === 'Dziś' || route === 'Tydzień' ? <CalendarScreen onContinueInChat={(handoff)=>{setImportHandoff(handoff);setTab('Asystent');}} refreshVersion={calendarRevision} active={active} now={now} weekLayout={weekLayout} todayOnly={route === 'Dziś'} week={week} setWeek={setWeek} draftSchedule={schedulePreview}
           notificationTarget={route === 'Tydzień' ? notificationTarget : null} onNotificationResolved={() => setNotificationTarget(null)} /> :
         route === 'Grafik' ? <ScheduleScreen active={active} now={now} week={week} setWeek={setWeek} onPreview={setSchedulePreview} onApproved={() => setTab('Tydzień')} onUnsavedChange={onUnsavedChange} discardSignal={discardSignal} /> :
         route === 'Blokady' ? <BlocksScreen /> :
-        route === 'Asystent' ? <AssistantScreen active={active} onCalendarChange={() => setCalendarRevision((value) => value + 1)} /> :
+        route === 'Asystent' ? <AssistantScreen importHandoff={importHandoff} onHandoffConsumed={()=>setImportHandoff(null)} active={active} onCalendarChange={() => setCalendarRevision((value) => value + 1)} /> :
         route === 'Ustawienia' ? <ScrollView style={{ flex: 1, minHeight: 0 }} contentContainerStyle={[styles.content, { padding: 16, paddingBottom: 32 }]} keyboardShouldPersistTaps="handled">
           <View style={[styles.row, { justifyContent: 'space-between', marginBottom: 20 }]}><Text style={styles.heading}>Motyw</Text><ThemeToggle /></View>
            <Text style={[styles.heading, { marginBottom: 12 }]}>Układ tygodnia</Text>
