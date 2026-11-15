@@ -188,7 +188,6 @@ export default function AssistantScreen({ active, onCalendarChange }: Props) {
           </View>
         </View>}
         {pendingActions.length > 0 && <Text style={styles.heading}>Gotowe propozycje do zatwierdzenia: {pendingActions.length}</Text>}
-        {pendingActions.length > 1 && <Button title="Zatwierdź wszystko" primary disabled={sending} onPress={() => void confirmActions(pendingActions)} />}
         {pendingActions.map((action) => <View key={action.id} style={[styles.card, { borderColor: palette.amber }]}>
           <Text style={styles.heading}>Propozycja do potwierdzenia</Text><Text style={styles.body}>{actionSummary(action)}</Text>
           {!!action.payload.event && <Text style={styles.body}>{eventDetails(action.payload.event as Record<string, unknown>)}</Text>}
@@ -201,6 +200,7 @@ export default function AssistantScreen({ active, onCalendarChange }: Props) {
           <Text style={styles.muted}>Ważna do: {new Date(action.expiresAt).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}. Kalendarz nie zmieni się bez potwierdzenia.</Text>
           <View style={[styles.row, { flexWrap: 'wrap', marginTop: 8 }]}><Button title="Zatwierdź" primary disabled={sending} onPress={() => void confirmAction(action)} /><Button title="Odrzuć" danger disabled={sending} onPress={() => void cancelAction(action)} /></View>
         </View>)}
+        {pendingActions.length > 1 && <Button title="Zatwierdź wszystko" primary disabled={sending} onPress={() => void confirmActions(pendingActions)} />}
         {loading && <Text accessibilityLiveRegion="polite" style={styles.muted}>Wczytywanie…</Text>}
       </ScrollView>
       <View style={[styles.row, { alignItems: 'flex-end' }]}>
