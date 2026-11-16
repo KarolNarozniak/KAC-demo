@@ -34,11 +34,23 @@ The work profile has two limits: `maximumHours` (weekly) and `maxHoursPerDay` (d
 
 | Code | When | `details` |
 |---|---|---|
-| `maximum_hours` | saved + proposed shifts in the week > `maximumHours` | `maximumMinutes`, `totalMinutes` |
-| `daily_maximum_hours` | work on a single day > `maxHoursPerDay` | `date`, `maximumMinutes`, `totalMinutes` |
-| `existing_work_exceeds_maximum` | already saved shifts alone exceed `maximumHours` | `maximumMinutes`, `existingWorkMinutes` |
+| `maximum_hours` | saved + proposed shifts in the week > `maximumHours` | `period`, `periodRule`, `periodStartLocal`, `periodEndLocal`, `maximumMinutes`, `totalMinutes`, `existingWorkMinutes`, `proposedMinutes`, `exceededByMinutes` |
+| `daily_maximum_hours` | work on a single day > `maxHoursPerDay` | `period` (`day`), `date`, `maximumMinutes`, `totalMinutes`, `exceededByMinutes` |
+| `existing_work_exceeds_maximum` | already saved shifts alone exceed `maximumHours` | same as `maximum_hours`, with `proposedMinutes = 0` |
 
 All `details` values are in minutes.
+
+#### Accounting period and warning (S23KC2S1P2-301)
+
+- **The weekly period** runs from Monday 00:00 to the following Monday 00:00 in the profile time zone (`periodStartLocal`, `periodEndLocal`).
+- **Boundary rule** (`periodRule: shift_start`): a shift belongs entirely to the week in which it starts. This applies to new and already saved shifts, so a Sunday-to-Monday night shift is not counted again in the following week.
+- **The daily limit** counts each calendar day separately – a night shift is split at midnight.
+- **The comparison is strict**: a total equal to the limit is allowed; the warning appears only above it. Minutes are real elapsed time between instants, including the DST week.
+- A previously approved schedule of the same week that is being replaced is not added to “existing work”.
+
+In **Plan pracy** an excess is shown in a separate panel with the limit, the total and the excess (weekly and per day). **Rozumiem** only collapses the warning – it does not bypass the limit, and approval stays blocked. Any change of the totals invalidates the acknowledgement. This warning is about the maximum; exceeding the hour **target** (the “Praca w tym tygodniu względem celu” bar) is allowed.
+
+Open decisions: whether an acknowledged warning may allow saving above the limit (“soft override”) and whether a monthly limit is needed. Until decided, the limit is hard and the period is a week.
 
 ### Rest between shifts
 
@@ -46,8 +58,12 @@ All `details` values are in minutes.
 
 | Code | When | `details` |
 |---|---|---|
-| `shift_overlap_or_rest` | two proposed shifts overlap or the gap between them is too short | empty; shifts in `candidateIds` |
+| `shift_overlap_or_rest` | two proposed shifts overlap or the gap between them is too short | `kind` (`overlap`/`rest`), `gapMinutes`, `requiredMinutes`, `shifts` (both ranges); shifts also in `candidateIds` |
 | `commute_gap_too_short` | the gap between a shift and a neighbouring event is too short | `requiredMinutes`, `actualMinutes`, `leftId`, `rightId`, `leftTitle`, `rightTitle` |
+
+### Collisions with other events (S23KC2S1P2-302)
+
+`hard_conflict` lists **all** events and blocks a shift collides with (previously only the first ID). `details.conflicts` holds `id`, `title`, the real `startLocal`/`endLocal`, `bufferMinutes` and the shared part `overlapStartLocal`/`overlapEndLocal` for every item. The `optional_lecture_conflict` warning carries the same details. A collision with mandatory classes still uses the separate `class_collision` code.
 
 ## Blocks and compatibility
 

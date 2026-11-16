@@ -147,12 +147,13 @@ export const invalidScheduleExamples: NamedExamples = {
   },
   weeklyLimit: {
     summary: 'Przekroczony limit godzin',
-    description: 'Nic nie zostało zapisane. maximum_hours – profil pozwala na 20 h tygodniowo (maximumHours: 20 → 1200 min), a zmiany dałyby 22 h (1320 min). daily_maximum_hours – we wtorek wyszłoby 10 h przy limicie 8 h (maxHoursPerDay: 8 → 480 min).',
+    description: 'Nic nie zostało zapisane. maximum_hours – profil pozwala na 20 h tygodniowo (maximumHours: 20 → 1200 min), a zmiany dałyby 22 h (1320 min), czyli 120 min ponad limit (exceededByMinutes). Okres to tydzień od poniedziałku 00:00 do następnego poniedziałku 00:00; zmiana należy w całości do tygodnia, w którym się zaczyna (periodRule: shift_start). daily_maximum_hours – we wtorek wyszłoby 10 h przy limicie 8 h (maxHoursPerDay: 8 → 480 min). Suma równa limitowi nie jest błędem.',
     value: {
       error: 'invalid_schedule',
       errors: [
-        { code: 'maximum_hours', severity: 'error', message: 'Łączny czas pracy przekracza maksymalny limit tygodniowy.', candidateIds: ['X1', 'X2', 'X3'], eventIds: [], details: { maximumMinutes: 1200, totalMinutes: 1320 } },
-        { code: 'daily_maximum_hours', severity: 'error', message: 'Limit pracy na dzień 2026-11-17 wynosi 480 minut.', candidateIds: ['X2', 'X3'], eventIds: [], details: { date: '2026-11-17', maximumMinutes: 480, totalMinutes: 600 } },
+        { code: 'maximum_hours', severity: 'error', message: 'Łączny czas pracy w tygodniu (22 h) przekracza limit 20 h o 2 h.', candidateIds: ['X1', 'X2', 'X3'], eventIds: [],
+          details: { period: 'week', periodRule: 'shift_start', periodStartLocal: '2026-11-16T00:00', periodEndLocal: '2026-11-23T00:00', maximumMinutes: 1200, totalMinutes: 1320, existingWorkMinutes: 420, proposedMinutes: 900, exceededByMinutes: 120 } },
+        { code: 'daily_maximum_hours', severity: 'error', message: 'Praca w dniu 2026-11-17 (10 h) przekracza limit dzienny 8 h o 2 h.', candidateIds: ['X2', 'X3'], eventIds: [], details: { period: 'day', date: '2026-11-17', maximumMinutes: 480, totalMinutes: 600, exceededByMinutes: 120 } },
       ],
       warnings: [],
     },
@@ -165,7 +166,8 @@ export const invalidScheduleExamples: NamedExamples = {
       errors: [
         { code: 'commute_gap_too_short', severity: 'error', message: 'Za krótka przerwa między Zmiana pracy i Zmiana pracy: brakuje 60 min.', candidateIds: ['X1', 'X2'], eventIds: [],
           details: { error: 'commute_gap_too_short', requiredMinutes: 120, actualMinutes: 60, leftId: 'X1', rightId: 'X2', leftTitle: 'Zmiana pracy', rightTitle: 'Zmiana pracy' } },
-        { code: 'shift_overlap_or_rest', severity: 'error', message: 'Zmiany nakładają się lub nie zachowują bufora i odpoczynku.', candidateIds: ['X1', 'X2'], eventIds: [], details: {} },
+        { code: 'shift_overlap_or_rest', severity: 'error', message: 'Między zmianami 2026-11-16 08:00–12:00 i 2026-11-16 13:00–17:00 jest 60 min przerwy, wymagane 120 min.', candidateIds: ['X1', 'X2'], eventIds: [],
+          details: { kind: 'rest', gapMinutes: 60, requiredMinutes: 120, shifts: [{ candidateId: 'X1', startLocal: '2026-11-16T08:00', endLocal: '2026-11-16T12:00' }, { candidateId: 'X2', startLocal: '2026-11-16T13:00', endLocal: '2026-11-16T17:00' }] } },
       ],
       warnings: [],
     },

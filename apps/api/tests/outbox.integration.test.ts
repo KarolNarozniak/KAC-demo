@@ -141,3 +141,52 @@ test('configured Web Push worker delivers a due reminder with event navigation d
     await pool.query('delete from t_uzytkownicy where id_uzytkownika = $1', [userId]);
   }
 });
+
+// S23KC2S1P2-299 (N07): konsument zdarzeń tworzy jedno powiadomienie „Zmiana planu” z różnicą; ponowna dostawa i ten sam stan nie dublują.
+test('plan change consumer notifies about a new term once and ignores unchanged re-saves', { skip: !config.databaseUrl }, async () => {
+  assert.ok(pool);
+  const userId = `plan-change-test-${Date.now()}`;
+  const scope = { userId, calendarId: '' };
+  const calendar = new PostgresCalendarRepository(pool);
+  const notifications = new PostgresNotificationRepository(pool);
+  const runFor = async (eventId: string) => {
+    const latest = await pool!.query(`select id_outbox from t_event_outbox where id_agregatu = $1 order by wersja_agregatu desc limit 1`, [eventId]);
+    return new PostgresEventOutboxWorker(pool!, 5).runOnce(latest.rows[0].id_outbox);
+  };
+  try {
+    await pool.query(`insert into t_uzytkownicy (id_uzytkownika, imie, nazwisko, email, strefa_czasowa)
+      values ($1, 'Test', 'PlanChange', $2, 'Europe/Warsaw')`, [userId, `${userId}@example.invalid`]);
+    const createdCalendar = await pool.query(`insert into t_kalendarze (id_uzytkownika, nazwa, typ) values ($1, 'Synthetic', 'personal') returning id_kalendarza`, [userId]);
+    scope.calendarId = String(createdCalendar.rows[0].id_kalendarza);
+    await notifications.updateSettings(scope, { enabled: true, workRemindersEnabled: true, minutesBefore: 30 });
+    const base = { title: 'Synthetic lab', start: '2035-02-14T10:00', end: '2035-02-14T11:30', category: 'Class' as const, location: 's. 101', mandatory: false, repeatWeekly: false };
+    const created = await calendar.createEvent(base, userId, scope.calendarId);
+    await runFor(created.id);
+    await calendar.updateEvent(created.id, { ...base, start: '2035-02-15T12:00', end: '2035-02-15T13:30', location: 's. 204' }, userId, scope.calendarId);
+    await runFor(created.id);
+    const changes = await pool.query(`select tresc, status, szczegoly from t_powiadomienia where id_uzytkownika = $1 and typ = 'Zmiana planu'`, [userId]);
+    assert.equal(changes.rowCount, 1);
+    assert.match(changes.rows[0].tresc, /Synthetic lab.*2035-02-15 12:00–13:30.*było 2035-02-14 10:00–11:30/);
+    assert.deepEqual(changes.rows[0].szczegoly.fields, ['date', 'time', 'location']);
+
+    // Ponowna dostawa tej samej wersji nie tworzy drugiego powiadomienia.
+    await pool.query(`update t_event_outbox_delivery d set status = 'pending', available_at = now() from t_event_outbox o
+      where o.id_outbox = d.id_outbox and o.id_agregatu = $1 and d.consumer = 'notifications'`, [created.id]);
+    await runFor(created.id);
+    assert.equal((await pool.query(`select 1 from t_powiadomienia where id_uzytkownika = $1 and typ = 'Zmiana planu' and status = 'Zaplanowane'`, [userId])).rowCount, 1);
+
+    const due = await notifications.listDue(scope);
+    assert.equal(due[0]?.type, 'Zmiana planu');
+    assert.equal(due[0]?.change?.after.start, '2035-02-15T12:00');
+    assert.equal(due[0]?.eventStart, '2035-02-15T12:00');
+    assert.equal(await notifications.acknowledge(scope, due[0]!.id), true);
+
+    // Zapis tych samych danych (ponowny odczyt) nie jest zmianą planu.
+    await calendar.updateEvent(created.id, { ...base, start: '2035-02-15T12:00', end: '2035-02-15T13:30', location: 's. 204' }, userId, scope.calendarId);
+    await runFor(created.id);
+    assert.equal((await pool.query(`select 1 from t_powiadomienia where id_uzytkownika = $1 and typ = 'Zmiana planu'`, [userId])).rowCount, 1);
+  } finally {
+    await pool.query('delete from t_event_outbox where id_uzytkownika = $1', [userId]);
+    await pool.query('delete from t_uzytkownicy where id_uzytkownika = $1', [userId]);
+  }
+});

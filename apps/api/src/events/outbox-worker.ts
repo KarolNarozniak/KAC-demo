@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
-import { parseEventTime, reminderText, reminderTime } from '../notifications/schedule.js';
+import { deferForQuietHours, parseEventTime, reminderText, reminderTime } from '../notifications/schedule.js';
+import { detectPlanChange, mergePendingBefore, PLAN_CHANGE_TYPE, planChangeIdempotencyKey, type PlanChangeState } from '../notifications/plan-changes.js';
 
 type OutboxDelivery = {
   id_delivery: string; id_outbox: string; consumer: 'notifications' | 'google'; attempts: number;
@@ -90,12 +91,47 @@ export class PostgresEventOutboxWorker {
       where o.id_outbox = $1`, [outboxId]);
   }
 
+  /** S23KC2S1P2-299 (N07): powiadomienie o realnej zmianie daty, godziny albo miejsca – z poszanowaniem godzin ciszy. */
+  private async schedulePlanChange(client: PoolClient, item: OutboxDelivery, pendingBefore: PlanChangeState | null) {
+    const settings = await client.query(`select cisza_od::text as cisza_od, cisza_do::text as cisza_do
+      from t_ustaw_powiadomien where id_uzytkownika = $1 and wlaczone and zmiany_wlaczone
+      order by updated_at desc limit 1`, [item.id_uzytkownika]);
+    if (!settings.rowCount) return;
+    const now = new Date();
+    const change = detectPlanChange(item.typ_zdarzenia, mergePendingBefore(item.payload ?? {}, pendingBefore), now);
+    if (!change) return;
+    const timeZone = typeof item.payload?.timeZone === 'string' ? item.payload.timeZone : 'Europe/Warsaw';
+    const sendAt = deferForQuietHours(now, change.eventStart, timeZone, now, settings.rows[0].cisza_od, settings.rows[0].cisza_do);
+    const details = change.kind === 'changed'
+      ? { kind: change.kind, fields: change.fields, before: change.before, after: change.after, eventVersion: item.wersja_agregatu }
+      : { kind: change.kind, fields: [], before: null, after: change.after, eventVersion: item.wersja_agregatu };
+    await client.query(`insert into t_powiadomienia
+      (id_uzytkownika, id_wydarzenia, typ, tresc, planowana_data, status, idempotency_key, event_ref, szczegoly)
+      values ($1, $2, $3, $4, $5, 'Zaplanowane', $6, $2, $7::jsonb)
+      on conflict (idempotency_key) where idempotency_key is not null do nothing`,
+    [item.id_uzytkownika, item.id_agregatu, PLAN_CHANGE_TYPE, change.message.slice(0, 1000), sendAt.toISOString(),
+      planChangeIdempotencyKey(item.id_agregatu, item.wersja_agregatu), JSON.stringify(details)]);
+  }
+
   private async processCalendarEvent(client: PoolClient, item: OutboxDelivery) {
     const payload = item.payload ?? {};
     const after = payload.after as EventDetails | undefined;
     const timeZone = typeof payload.timeZone === 'string' ? payload.timeZone : 'Europe/Warsaw';
+    // N07: niedostarczone powiadomienie o wcześniejszej zmianie zostaje zastąpione jednym z pełną różnicą (od najstarszego stanu).
+    // Ponowna dostawa tej samej wersji (at-least-once) nie może anulować powiadomień, które ta wersja już utworzyła –
+    // insert z tym samym kluczem idempotencji nic by nie dodał i powiadomienie by zniknęło.
+    const currentVersionKeys = [planChangeIdempotencyKey(item.id_agregatu, item.wersja_agregatu), `work-reminder:${item.id_agregatu}:${item.wersja_agregatu}:%`];
+    const pendingChange = await client.query(`select szczegoly from t_powiadomienia
+      where event_ref = $1 and typ = $2 and status = 'Zaplanowane' and coalesce(idempotency_key, '') <> $3
+      order by planowana_data asc limit 1`, [item.id_agregatu, PLAN_CHANGE_TYPE, currentVersionKeys[0]]);
+    const pendingDetails = pendingChange.rows[0]?.szczegoly as { kind?: string; before?: PlanChangeState } | undefined;
     await client.query(`update t_powiadomienia set status = 'Anulowane', lease_until = null
-      where event_ref = $1 and status in ('Zaplanowane', 'Dostarczanie')`, [item.id_agregatu]);
+      where event_ref = $1 and status in ('Zaplanowane', 'Dostarczanie')
+        and coalesce(idempotency_key, '') <> $2 and coalesce(idempotency_key, '') not like $3`, [item.id_agregatu, ...currentVersionKeys]);
+    if (item.typ_zdarzenia === 'calendar_event.updated') {
+      const pendingBefore = pendingDetails?.kind === 'changed' && pendingDetails.before ? pendingDetails.before : null;
+      await this.schedulePlanChange(client, item, pendingBefore);
+    }
     if (item.typ_zdarzenia === 'calendar_event.deleted' || !after || after.category !== 'Work' || !after.start || !after.end) return;
 
     const settings = await client.query(`select min_przed, cisza_od::text as cisza_od, cisza_do::text as cisza_do

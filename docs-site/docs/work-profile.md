@@ -34,11 +34,23 @@ Profil pracy ma dwa limity: `maximumHours` (tygodniowy) i `maxHoursPerDay` (dzie
 
 | Kod | Kiedy | `details` |
 |---|---|---|
-| `maximum_hours` | suma zapisanych i proponowanych zmian w tygodniu > `maximumHours` | `maximumMinutes`, `totalMinutes` |
-| `daily_maximum_hours` | praca w jednym dniu > `maxHoursPerDay` | `date`, `maximumMinutes`, `totalMinutes` |
-| `existing_work_exceeds_maximum` | już zapisane zmiany same przekraczają `maximumHours` | `maximumMinutes`, `existingWorkMinutes` |
+| `maximum_hours` | suma zapisanych i proponowanych zmian w tygodniu > `maximumHours` | `period`, `periodRule`, `periodStartLocal`, `periodEndLocal`, `maximumMinutes`, `totalMinutes`, `existingWorkMinutes`, `proposedMinutes`, `exceededByMinutes` |
+| `daily_maximum_hours` | praca w jednym dniu > `maxHoursPerDay` | `period` (`day`), `date`, `maximumMinutes`, `totalMinutes`, `exceededByMinutes` |
+| `existing_work_exceeds_maximum` | już zapisane zmiany same przekraczają `maximumHours` | jak `maximum_hours`, z `proposedMinutes = 0` |
 
 Wartości w `details` są w minutach.
+
+#### Okres rozliczeniowy i ostrzeżenie (S23KC2S1P2-301)
+
+- **Okres tygodniowy** trwa od poniedziałku 00:00 do następnego poniedziałku 00:00 w strefie profilu (`periodStartLocal`, `periodEndLocal`).
+- **Reguła na granicy okresu** (`periodRule: shift_start`): zmiana należy w całości do tygodnia, w którym się zaczyna. Dotyczy to zarówno nowych, jak i już zapisanych zmian, więc nocna zmiana z niedzieli na poniedziałek nie jest liczona drugi raz w następnym tygodniu.
+- **Limit dzienny** liczy każdy dzień kalendarzowy osobno – zmiana nocna dzieli się o północy.
+- **Porównanie jest ostre**: suma równa limitowi jest dozwolona, ostrzeżenie pojawia się dopiero powyżej limitu. Minuty to rzeczywisty czas między instantami, także w tygodniu zmiany czasu.
+- Zastępowany, wcześniej zatwierdzony grafik tego samego tygodnia nie jest doliczany do „istniejącej pracy”.
+
+W **Planie pracy** przekroczenie pokazuje osobny panel z limitem, sumą i nadwyżką (tygodniowo i dla każdego dnia). Przycisk **Rozumiem** jedynie zwija ostrzeżenie – nie omija limitu, a zatwierdzenie grafiku pozostaje zablokowane. Każda zmiana sum unieważnia potwierdzenie. To ostrzeżenie dotyczy maksimum; przekroczenie **celu** godzin (pasek „Praca w tym tygodniu względem celu”) jest dozwolone.
+
+Otwarte decyzje: czy po potwierdzeniu można zapisać grafik ponad limit („soft override”) i czy limit ma być liczony także miesięcznie. Do czasu ustalenia limit jest twardy, a okresem jest tydzień.
 
 ### Odpoczynek między zmianami
 
@@ -46,8 +58,12 @@ Wartości w `details` są w minutach.
 
 | Kod | Kiedy | `details` |
 |---|---|---|
-| `shift_overlap_or_rest` | dwie proponowane zmiany nakładają się albo przerwa między nimi jest za krótka | puste; zmiany w `candidateIds` |
+| `shift_overlap_or_rest` | dwie proponowane zmiany nakładają się albo przerwa między nimi jest za krótka | `kind` (`overlap`/`rest`), `gapMinutes`, `requiredMinutes`, `shifts` (oba przedziały); zmiany także w `candidateIds` |
 | `commute_gap_too_short` | za krótka przerwa między zmianą a sąsiednim wydarzeniem | `requiredMinutes`, `actualMinutes`, `leftId`, `rightId`, `leftTitle`, `rightTitle` |
+
+### Kolizje z innymi wydarzeniami (S23KC2S1P2-302)
+
+`hard_conflict` wymienia **wszystkie** wydarzenia i blokady, z którymi koliduje zmiana (wcześniej tylko pierwsze ID). `details.conflicts` zawiera dla każdej pozycji `id`, `title`, rzeczywisty termin `startLocal`/`endLocal`, `bufferMinutes` i część wspólną `overlapStartLocal`/`overlapEndLocal`. Ostrzeżenie `optional_lecture_conflict` ma te same szczegóły. Kolizja z zajęciami obowiązkowymi nadal ma osobny kod `class_collision`.
 
 ## Blokady i zgodność
 

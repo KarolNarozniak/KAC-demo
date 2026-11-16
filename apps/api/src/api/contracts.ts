@@ -1,4 +1,5 @@
 import type { CalendarOverview, EventInput } from '../database.js';
+import type { CollisionCheck } from '../collisions.js';
 import type { ExistingEvent } from '../import/rules.js';
 import type { AcceptedRow, ConfirmResult, CreateSessionInput } from '../import/session.js';
 import type { GoogleImportOptions } from './v1/imports/google-routes.js';
@@ -19,6 +20,7 @@ export type CalendarRepository = {
   deleteEvent?: (eventId: string, userId?: string, calendarId?: string, assistantAction?: { actionId: string; expected?: Record<string, unknown> }) => Promise<string[] | null>;
   updateEvent?: (id: string, input: EventInput, userId?: string, calendarId?: string, assistantAction?: { actionId: string; expected?: Record<string, unknown> }) => Promise<EventInput & { id: string }>;
   createEvent?: (input: EventInput, userId?: string, calendarId?: string, aiActionId?: string) => Promise<EventInput & { id: string }>;
+  checkCollisions?: (input: EventInput, eventId?: string, userId?: string, calendarId?: string) => Promise<CollisionCheck>;
   checkConnection: () => Promise<void>;
   getOverview: (userId?: string, calendarId?: string) => Promise<CalendarOverview | null>;
   createImportSession?: (input: CreateSessionInput, userId?: string) => Promise<{ id: string; expiresAt: Date }>;

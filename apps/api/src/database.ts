@@ -1,4 +1,4 @@
-import { requireCollisionDecision, validateTimedEvent, EventNotFoundError, type TimedEvent } from './collisions.js';
+import { checkEventCollisions, requireCollisionDecision, validateTimedEvent, EventNotFoundError, type CollisionCheck, type TimedEvent } from './collisions.js';
 import { Pool, type PoolClient } from 'pg';
 import { config } from './config.js';
 import { CATEGORY_IDS, type ExistingEvent } from './import/rules.js';
@@ -77,6 +77,28 @@ export class PostgresCalendarRepository {
     return this.saveEvent(input, id, userId, calendarId, undefined, assistantAction);
   }
 
+  /**
+   * S23KC2S1P2-302 (N10): ponowne sprawdzenie kolizji szkicu bez zapisu – np. po korekcie terminu w formularzu.
+   * Używa tych samych danych i reguł co zapis, więc zwrócony token jest akceptowany przez POST/PUT, dopóki dane się nie zmienią.
+   */
+  async checkCollisions(input: EventInput, eventId: string | undefined, userId = config.demoUserId, calendarId = config.demoCalendarId): Promise<CollisionCheck> {
+    const owner = await this.connectionPool.query(`select u.strefa_czasowa from t_kalendarze c
+      join t_uzytkownicy u on u.id_uzytkownika = c.id_uzytkownika
+      where c.id_kalendarza = $1 and c.id_uzytkownika = $2 and c.aktywny = true`, [calendarId, userId]);
+    if (!owner.rowCount) throw new EventNotFoundError('calendar_not_found');
+    const timezone: string = owner.rows[0].strefa_czasowa;
+    validateTimedEvent(input, timezone);
+    const records = await this.connectionPool.query(`select e.id_wydarzenia, e.tytul, e.powtarzaj_co_tydzien, e.obowiazkowe, k.nazwa as kategoria,
+        to_char(e.rozpoczecie at time zone $2, 'YYYY-MM-DD"T"HH24:MI') as start,
+        to_char(e.zakonczenie at time zone $2, 'YYYY-MM-DD"T"HH24:MI') as end
+      from t_wydarzenia e join t_kategorie k on k.id_kategorii = e.id_kategorii
+      where e.id_kalendarza = $1 and e.status = 'Aktywne'`, [calendarId, timezone]);
+    if (eventId && !records.rows.some((row) => row.id_wydarzenia === eventId)) throw new EventNotFoundError('event_not_found');
+    const events: TimedEvent[] = records.rows.map((row) => ({ id: row.id_wydarzenia, title: row.tytul, start: row.start, end: row.end,
+      category: row.kategoria, repeatWeekly: row.powtarzaj_co_tydzien, mandatory: row.obowiazkowe === true }));
+    return checkEventCollisions(input, events, timezone, eventId);
+  }
+
   private async saveEvent(input: EventInput, eventId: string | undefined, userId: string, calendarId: string, aiActionId?: string,
     assistantAction?: { actionId: string; expected?: Record<string, unknown> }) {
     const client = await this.connectionPool.connect();
@@ -111,7 +133,7 @@ export class PostgresCalendarRepository {
       if (assistantAction?.expected && current && !this.matchesAssistantSnapshot(current, assistantAction.expected))
         throw new AiActionStalePreviewError('ai_action_stale_preview');
       const events: TimedEvent[] = records.rows.map(row => ({ id: row.id_wydarzenia, title: row.tytul, start: row.start, end: row.end,
-        category: row.kategoria, repeatWeekly: row.powtarzaj_co_tydzien }));
+        category: row.kategoria, repeatWeekly: row.powtarzaj_co_tydzien, mandatory: row.obowiazkowe === true }));
       requireCollisionDecision(input, events, timezone, eventId);
       let seriesId: string | null = current?.id_serii ?? null;
       if (input.repeatWeekly && !seriesId) {
@@ -138,7 +160,7 @@ export class PostgresCalendarRepository {
       const savedEventId = String(result.rows[0].id_wydarzenia);
       await enqueueDomainEvent(client, { userId, calendarId }, 'calendar_event', savedEventId, eventId ? 'calendar_event.updated' : 'calendar_event.created', {
         origin: aiActionId ? 'assistant' : 'calendar', timeZone: timezone, eventVersion: result.rows[0].event_version,
-        before: current ? { title: current.tytul, start: current.start, end: current.end, category: current.kategoria } : null,
+        before: current ? { title: current.tytul, start: current.start, end: current.end, category: current.kategoria, location: current.miejsce ?? '' } : null,
         after: { title: input.title.trim(), start: input.start, end: input.end, category: input.category, location: input.location ?? '' },
       });
       if (!input.repeatWeekly && seriesId) await client.query(`delete from t_serie where id_serii = $1
@@ -338,7 +360,7 @@ export class PostgresCalendarRepository {
       const { id_serii, rozpoczecie } = targetEvent.rows[0];
       const priorEvents = await client.query(`select e.id_wydarzenia, e.event_version, e.tytul,
         to_char(e.rozpoczecie at time zone $3, 'YYYY-MM-DD"T"HH24:MI') as local_start,
-        to_char(e.zakonczenie at time zone $3, 'YYYY-MM-DD"T"HH24:MI') as local_end, k.nazwa as kategoria
+        to_char(e.zakonczenie at time zone $3, 'YYYY-MM-DD"T"HH24:MI') as local_end, k.nazwa as kategoria, e.miejsce
         from t_wydarzenia e join t_kategorie k on k.id_kategorii = e.id_kategorii
         where e.id_kalendarza = $1 and (($2::text is not null and e.id_serii = $2) or ($2::text is null and e.id_wydarzenia = $4))
           and e.rozpoczecie >= $5 for update of e`, [calendarId, id_serii, timezone, eventId, rozpoczecie]);
@@ -389,7 +411,7 @@ export class PostgresCalendarRepository {
         const previous = previousById.get(updated.id_wydarzenia);
         await enqueueDomainEvent(client, { userId, calendarId }, 'calendar_event', String(updated.id_wydarzenia), 'calendar_event.updated', {
           origin: 'calendar_series', timeZone: timezone, eventVersion: updated.event_version,
-          before: previous ? { title: previous.tytul, start: previous.local_start, end: previous.local_end, category: previous.kategoria, version: previous.event_version } : null,
+          before: previous ? { title: previous.tytul, start: previous.local_start, end: previous.local_end, category: previous.kategoria, location: previous.miejsce ?? '', version: previous.event_version } : null,
           after: { title: input.title.trim(), start: updated.rozpoczecie.toISOString(), end: updated.zakonczenie.toISOString(), category: input.category, location: input.location ?? '' },
         });
       }
@@ -564,6 +586,9 @@ export class PostgresCalendarRepository {
             after: { title: row.title, start: row.start.toISOString(), end: row.end.toISOString(), category: row.category, location: row.location ?? '' },
           });
         } else if (action.kind === 'replace') {
+          // S23KC2S1P2-299: stan sprzed zamiany, żeby konsument zmian planu znał różnicę terminu i miejsca.
+          const previous = await client.query(`select tytul, rozpoczecie, zakonczenie, miejsce from t_wydarzenia
+            where id_wydarzenia = $1 and id_kalendarza = $2 for update`, [action.eventId, calendarId]);
           const updated = await client.query(
             `update t_wydarzenia
              set tytul = $3,
@@ -573,7 +598,7 @@ export class PostgresCalendarRepository {
                    else $5::timestamptz end,
                  id_kategorii = $6, opis = $7, miejsce = $8, event_version = event_version + 1, updated_at = now()
              where id_wydarzenia = $1 and id_kalendarza = $2
-             returning id_wydarzenia, event_version`,
+             returning id_wydarzenia, event_version, rozpoczecie, zakonczenie`,
             [action.eventId, calendarId, row.title, row.start, row.end, CATEGORY_IDS[row.category], description, row.location ?? '',
               owner.rows[0].strefa_czasowa],
           );
@@ -582,7 +607,9 @@ export class PostgresCalendarRepository {
           await enqueueDomainEvent(client, { userId, calendarId }, 'calendar_event', eventId, 'calendar_event.updated', {
             origin: current.zrodlo === SOURCE_LABELS.google ? 'google_import' : 'file_import', timeZone: owner.rows[0].strefa_czasowa,
             eventVersion: updated.rows[0].event_version,
-            after: { title: row.title, start: row.start.toISOString(), end: row.end.toISOString(), category: row.category, location: row.location ?? '' },
+            before: previous.rows[0] ? { title: previous.rows[0].tytul, start: new Date(previous.rows[0].rozpoczecie).toISOString(), end: new Date(previous.rows[0].zakonczenie).toISOString(), location: previous.rows[0].miejsce ?? '' } : null,
+            // Seria cotygodniowa zachowuje swój początek – „po” bierzemy z faktycznie zapisanych wartości.
+            after: { title: row.title, start: new Date(updated.rows[0].rozpoczecie).toISOString(), end: new Date(updated.rows[0].zakonczenie).toISOString(), category: row.category, location: row.location ?? '' },
           });
         }
         const status = action.kind === 'insert' ? 'Zatwierdzona' : action.kind === 'replace' ? 'Zastąpiła' : 'Pominięta (duplikat)';

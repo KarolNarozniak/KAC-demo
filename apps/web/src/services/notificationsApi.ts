@@ -1,5 +1,8 @@
 export type NotificationSettings = { enabled: boolean; workRemindersEnabled: boolean; eventChangesEnabled: boolean; minutesBefore: number; quietStart: string | null; quietEnd: string | null; pendingReminderCount: number };
-export type DueNotification = { id: string; eventId: string; type: string; message: string; scheduledAt: string; eventStart: string; eventEnd: string; title: string };
+export type PlanChangeState = { start: string; end: string; location: string | null };
+/** S23KC2S1P2-299: różnica terminu dla powiadomienia „Zmiana planu”. */
+export type PlanChangeDetails = { kind: 'changed' | 'unknown_previous'; fields: ('date' | 'time' | 'location')[]; before: PlanChangeState | null; after: PlanChangeState; eventVersion: number };
+export type DueNotification = { id: string; eventId: string; type: string; message: string; scheduledAt: string; eventStart: string; eventEnd: string; title: string; change?: PlanChangeDetails | null };
 export type WebPushConfig = { enabled: boolean; applicationServerKey: string | null };
 export type BrowserPushSubscription = { endpoint: string; keys: { p256dh: string; auth: string }; expirationTime?: number | null };
 

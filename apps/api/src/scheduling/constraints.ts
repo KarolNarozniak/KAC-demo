@@ -4,7 +4,8 @@
 import { addLocalDays, expandEventsForWeek, localDateTimeString, localInstant, weekBounds } from './time.js';
 import type { AvailabilityWindow, BlockedPeriod, BlockingOccurrence, FreeWindow, PlanningContext, ScheduleViolation } from './types.js';
 
-export type Interval = { id: string; title: string; start: Date; end: Date };
+/** eventStart/eventEnd: rzeczywisty termin wydarzenia, gdy start/end zawierają bufor dojazdu (S23KC2S1P2-302). */
+export type Interval = { id: string; title: string; start: Date; end: Date; eventStart?: Date; eventEnd?: Date; bufferMinutes?: number };
 export type BufferSettings = { commuteBufferMinutes: number; minimumRestMinutes: number };
 
 /** Warunek przecięcia przedziałów półotwartych [start, end): samo zetknięcie końca z początkiem nie jest kolizją. */
@@ -51,7 +52,8 @@ export function listBlockingOccurrences(context: PlanningContext, weekStart: str
 export function paddedInterval(occurrence: BlockingOccurrence): Interval {
   const pad = occurrence.bufferMinutes * 60_000;
   return { id: occurrence.eventId, title: occurrence.title,
-    start: new Date(new Date(occurrence.start).getTime() - pad), end: new Date(new Date(occurrence.end).getTime() + pad) };
+    start: new Date(new Date(occurrence.start).getTime() - pad), end: new Date(new Date(occurrence.end).getTime() + pad),
+    eventStart: new Date(occurrence.start), eventEnd: new Date(occurrence.end), bufferMinutes: occurrence.bufferMinutes };
 }
 
 export function blockedPeriodIntervals(periods: BlockedPeriod[]): Interval[] {

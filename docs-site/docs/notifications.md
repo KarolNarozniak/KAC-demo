@@ -29,11 +29,24 @@ npx web-push generate-vapid-keys
 
 Ustaw `WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_PUSH_VAPID_PRIVATE_KEY` i `WEB_PUSH_VAPID_SUBJECT` w konfiguracji API/worker'a. Klucz prywatny jest sekretem i nie może być ustawiony we frontendzie.
 
+## Zmiany planu (S23KC2S1P2-299)
+
+Konsument zdarzeń outboxa tworzy powiadomienie typu **„Zmiana planu”**, gdy zmieni się data, godzina albo miejsce przyszłego wydarzenia – niezależnie od źródła: edycja w kalendarzu, korekta serii, import z zamianą istniejącego wydarzenia. Treść zawiera nazwę, nowy termin i poprzedni termin, np. „Zmiana planu: „Laboratorium” – nowy termin 2026-11-20 12:00–13:30 (było 2026-11-19 10:00–11:30)”.
+
+- Ponowny zapis tych samych danych (także w innym formacie czasu) oraz zmiana samego tytułu nie są zmianą planu.
+- Jedna wersja wydarzenia daje najwyżej jedno powiadomienie (klucz idempotencji `plan-change:{id}:{wersja}`), więc ponowna dostawa zdarzenia nie tworzy duplikatu.
+- Kilka szybkich zmian przed dostarczeniem łączy się w jedno powiadomienie z różnicą od pierwotnego terminu; powrót do pierwotnego terminu nie wysyła nic.
+- Gdy zdarzenie nie zawiera stanu „przed”, powiadomienie nie zgaduje różnicy – prosi o otwarcie kalendarza i pokazuje aktualny termin.
+- Obowiązują ustawienia `wlaczone` i `zmiany_wlaczone` oraz godziny ciszy (wysyłka przesuwa się na ich koniec).
+- Kliknięcie najpierw ponownie wczytuje kalendarz, potem otwiera wydarzenie z ramką „Zmiana planu” (było → jest). Jeśli wydarzenie zmieniło się jeszcze raz po wysłaniu powiadomienia, aplikacja to zaznacza.
+
+Szczegóły różnicy są zapisywane w kolumnie `t_powiadomienia.szczegoly` (migracja `016_plan_change_notifications.sql`) i zwracane jako pole `change` w `GET /api/v1/notifications/due`. Zmiany z Google (pobieranie zmian, G05) i zastąpienie zatwierdzonego grafiku są poza zakresem – nie generują jeszcze zdarzenia `calendar_event.updated` z różnicą.
+
 ## API
 
 - `GET /api/v1/notifications/settings` zwraca zapisane preferencje i liczbę oczekujących przypomnień.
 - `PUT /api/v1/notifications/settings` zapisuje ustawienie aktywności i wyprzedzenie oraz ponownie planuje oczekujące pozycje.
-- `GET /api/v1/notifications/due` atomowo przejmuje gotowe przypomnienia na ograniczony czas.
+- `GET /api/v1/notifications/due` atomowo przejmuje gotowe przypomnienia na ograniczony czas; dla typu „Zmiana planu” pole `change` zawiera `kind`, `fields`, `before`, `after` i `eventVersion`.
 - `POST /api/v1/notifications/{id}/ack` oznacza przypomnienie jako wyświetlone po potwierdzeniu klienta; nie oznacza przeczytania.
 - `GET /api/v1/notifications/push-config` zwraca stan konfiguracji oraz wyłącznie publiczny klucz VAPID.
 - `POST /api/v1/notifications/subscriptions` zapisuje subskrypcję bieżącego zakresu; `DELETE` usuwa tylko subskrypcję tego zakresu.
