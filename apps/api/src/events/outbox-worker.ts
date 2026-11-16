@@ -118,11 +118,16 @@ export class PostgresEventOutboxWorker {
     const after = payload.after as EventDetails | undefined;
     const timeZone = typeof payload.timeZone === 'string' ? payload.timeZone : 'Europe/Warsaw';
     // N07: niedostarczone powiadomienie o wcześniejszej zmianie zostaje zastąpione jednym z pełną różnicą (od najstarszego stanu).
+    // Ponowna dostawa tej samej wersji (at-least-once) nie może anulować powiadomień, które ta wersja już utworzyła –
+    // insert z tym samym kluczem idempotencji nic by nie dodał i powiadomienie by zniknęło.
+    const currentVersionKeys = [planChangeIdempotencyKey(item.id_agregatu, item.wersja_agregatu), `work-reminder:${item.id_agregatu}:${item.wersja_agregatu}:%`];
     const pendingChange = await client.query(`select szczegoly from t_powiadomienia
-      where event_ref = $1 and typ = $2 and status = 'Zaplanowane' order by planowana_data asc limit 1`, [item.id_agregatu, PLAN_CHANGE_TYPE]);
+      where event_ref = $1 and typ = $2 and status = 'Zaplanowane' and coalesce(idempotency_key, '') <> $3
+      order by planowana_data asc limit 1`, [item.id_agregatu, PLAN_CHANGE_TYPE, currentVersionKeys[0]]);
     const pendingDetails = pendingChange.rows[0]?.szczegoly as { kind?: string; before?: PlanChangeState } | undefined;
     await client.query(`update t_powiadomienia set status = 'Anulowane', lease_until = null
-      where event_ref = $1 and status in ('Zaplanowane', 'Dostarczanie')`, [item.id_agregatu]);
+      where event_ref = $1 and status in ('Zaplanowane', 'Dostarczanie')
+        and coalesce(idempotency_key, '') <> $2 and coalesce(idempotency_key, '') not like $3`, [item.id_agregatu, ...currentVersionKeys]);
     if (item.typ_zdarzenia === 'calendar_event.updated') {
       const pendingBefore = pendingDetails?.kind === 'changed' && pendingDetails.before ? pendingDetails.before : null;
       await this.schedulePlanChange(client, item, pendingBefore);
