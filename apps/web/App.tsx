@@ -11,6 +11,7 @@ import AssistantScreen from './src/screens/AssistantScreen';
 import { acknowledgeNotification, claimDueNotifications, getNotificationSettings, getWebPushConfig, registerWebPushSubscription, removeWebPushSubscription, updateNotificationSettings, type DueNotification, type NotificationSettings } from './src/services/notificationsApi';
 import type { WeeklySchedule } from './src/services/scheduleApi';
 import ScreenTransition from './src/components/ScreenTransition';
+import GoogleIntegrationPanel from './src/components/GoogleIntegrationPanel';
 import { Button, ThemeProvider, ThemeToggle, useTheme, type ThemeMode } from './src/components/ui';
 
 const tabs = ['Dziś', 'Tydzień', 'Grafik', 'Blokady', 'Ustawienia', 'Asystent'] as const;
@@ -252,6 +253,8 @@ function CalendarApp() {
               </View>
              {!!notificationError && <Text accessibilityRole="alert" style={styles.error}>{notificationError}</Text>}
            </View>
+          {/* Trwałe połączenie z Google Calendar (S23KC2S1P2-12) */}
+          <GoogleIntegrationPanel />
           {!!storageError && <Text accessibilityRole="alert" style={styles.error}>{storageError}</Text>}
          </ScrollView> : <View style={[styles.content,{padding:16}]}><Text style={styles.heading}>Niedostępna sekcja</Text></View>
       );
