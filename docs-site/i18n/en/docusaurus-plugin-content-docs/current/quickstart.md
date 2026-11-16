@@ -55,6 +55,8 @@ Main settings are in `.env`; the web client reads `EXPO_PUBLIC_API_URL` from `ap
 | `EXPO_PUBLIC_API_URL` | Base API address for the web client |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Optional Google OAuth; demo account is available without them |
 | `GOOGLE_REDIRECT_URI` | OAuth callback, defaults to `http://localhost:4000/api/v1/import/google/callback` |
+| `GOOGLE_INTEGRATION_REDIRECT_URI` | Persistent connection callback, defaults to `http://localhost:4000/api/v1/integrations/google/callback` |
+| `GOOGLE_TOKEN_ENCRYPTION_KEY` | Google token encryption key (32 bytes in base64); without it the real connection is disabled |
 | `OPENAPI_SERVER_URL` | Base server written to exported OpenAPI |
 | `API_ORIGIN`, `API_OPENAPI_URL` | Public API host used by Docusaurus Swagger and specification links |
 | `DOCUSAURUS_URL`, `DOCUSAURUS_BASE_URL` | Public docs URL and base path at deployment |

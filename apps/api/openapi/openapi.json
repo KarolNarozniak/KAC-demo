@@ -16841,6 +16841,1765 @@
           }
         }
       }
+    },
+    "/api/v1/integrations/google": {
+      "get": {
+        "operationId": "getGoogleIntegration",
+        "summary": "Get Google connection state",
+        "tags": [
+          "Google integration"
+        ],
+        "description": "Shows whether a Google account is connected, which access the app asks for (read calendars, read and write events) and which access the user actually granted. Tokens and their ciphertexts are never returned.",
+        "responses": {
+          "200": {
+            "description": "Stan połączenia z Google.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "mode",
+                    "ready",
+                    "problem",
+                    "status",
+                    "account",
+                    "requestedAccess",
+                    "demoAccounts"
+                  ],
+                  "properties": {
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "google",
+                        "demo"
+                      ],
+                      "description": "google – prawdziwe OAuth; demo – makieta, gdy serwer nie ma klienta Google."
+                    },
+                    "ready": {
+                      "type": "boolean",
+                      "description": "false, gdy serwer nie może bezpiecznie zapisać tokenów (brak albo zły klucz szyfrowania)."
+                    },
+                    "problem": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "token_key_missing",
+                            "token_key_invalid"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "not_connected",
+                        "connected",
+                        "reconnect_required"
+                      ]
+                    },
+                    "account": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "email",
+                            "connectedAt",
+                            "grantedScopes",
+                            "access"
+                          ],
+                          "properties": {
+                            "email": {
+                              "type": "string"
+                            },
+                            "connectedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "format": "date-time"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "grantedScopes": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              },
+                              "description": "Zakresy faktycznie przyznane przez użytkownika w Google."
+                            },
+                            "access": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "calendarsRead",
+                                "eventsWrite"
+                              ],
+                              "properties": {
+                                "calendarsRead": {
+                                  "type": "boolean",
+                                  "description": "Odczyt listy kalendarzy i wydarzeń."
+                                },
+                                "eventsWrite": {
+                                  "type": "boolean",
+                                  "description": "Dodawanie i zmiana wydarzeń (np. publikacja grafiku)."
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "requestedAccess": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "calendarsRead",
+                        "eventsWrite"
+                      ],
+                      "properties": {
+                        "calendarsRead": {
+                          "type": "boolean",
+                          "description": "Odczyt listy kalendarzy i wydarzeń."
+                        },
+                        "eventsWrite": {
+                          "type": "boolean",
+                          "description": "Dodawanie i zmiana wydarzeń (np. publikacja grafiku)."
+                        }
+                      }
+                    },
+                    "demoAccounts": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Konta makiety do wyboru (5b); puste w trybie google."
+                    }
+                  },
+                  "description": "Stan połączenia z Google."
+                },
+                "examples": {
+                  "notConnected": {
+                    "summary": "Niepołączone (makieta)",
+                    "description": "Serwer bez klienta Google OAuth: logowanie jest symulowane, a demoAccounts to konta do wyboru (5b). requestedAccess to dostęp, o który aplikacja poprosi (krok 2).",
+                    "value": {
+                      "mode": "demo",
+                      "ready": true,
+                      "problem": null,
+                      "status": "not_connected",
+                      "account": null,
+                      "requestedAccess": {
+                        "calendarsRead": true,
+                        "eventsWrite": true
+                      },
+                      "demoAccounts": [
+                        "student.kac.demo@gmail.com",
+                        "praca.kac.demo@gmail.com"
+                      ]
+                    }
+                  },
+                  "connected": {
+                    "summary": "Połączone, bez zapisu wydarzeń",
+                    "description": "Użytkownik odznaczył w Google zapis wydarzeń: account.access pokazuje realnie przyznany dostęp, który może być węższy niż requestedAccess.",
+                    "value": {
+                      "mode": "google",
+                      "ready": true,
+                      "problem": null,
+                      "status": "connected",
+                      "account": {
+                        "email": "student@example.com",
+                        "connectedAt": "2026-11-16T18:00:00.000Z",
+                        "grantedScopes": [
+                          "openid",
+                          "email",
+                          "https://www.googleapis.com/auth/calendar.readonly"
+                        ],
+                        "access": {
+                          "calendarsRead": true,
+                          "eventsWrite": false
+                        }
+                      },
+                      "requestedAccess": {
+                        "calendarsRead": true,
+                        "eventsWrite": true
+                      },
+                      "demoAccounts": []
+                    }
+                  },
+                  "reconnect": {
+                    "summary": "Wymagane ponowne logowanie",
+                    "description": "Google odrzucił zapisany token odświeżania (wygasł albo cofnięto zgodę). Konto zostaje przypisane, dane lokalne są bez zmian.",
+                    "value": {
+                      "mode": "google",
+                      "ready": true,
+                      "problem": null,
+                      "status": "reconnect_required",
+                      "account": {
+                        "email": "student@example.com",
+                        "connectedAt": "2026-11-16T18:00:00.000Z",
+                        "grantedScopes": [
+                          "openid",
+                          "email",
+                          "https://www.googleapis.com/auth/calendar.readonly"
+                        ],
+                        "access": {
+                          "calendarsRead": true,
+                          "eventsWrite": false
+                        }
+                      },
+                      "requestedAccess": {
+                        "calendarsRead": true,
+                        "eventsWrite": true
+                      },
+                      "demoAccounts": []
+                    }
+                  },
+                  "noKey": {
+                    "summary": "Brak klucza szyfrowania",
+                    "description": "Serwer ma klienta Google, ale nie ma GOOGLE_TOKEN_ENCRYPTION_KEY: nie zapisze tokenów, więc nie rozpoczyna logowania (ready: false).",
+                    "value": {
+                      "mode": "google",
+                      "ready": false,
+                      "problem": "token_key_missing",
+                      "status": "not_connected",
+                      "account": null,
+                      "requestedAccess": {
+                        "calendarsRead": true,
+                        "eventsWrite": true
+                      },
+                      "demoAccounts": []
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Integracja niedostępna.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Integracja niedostępna.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "integration_not_configured"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "integration_not_configured": {
+                    "summary": "Serwer bez bazy danych",
+                    "description": "API działa bez bazy danych, więc nie może zapisać połączenia z Google.",
+                    "value": {
+                      "error": "integration_not_configured"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/integrations/google/connect": {
+      "post": {
+        "operationId": "startGoogleIntegration",
+        "summary": "Start Google sign-in",
+        "tags": [
+          "Google integration"
+        ],
+        "description": "Creates a single-use sign-in attempt valid for 10 minutes. In google mode the response has authUrl (Google account choice and consent, offline access, PKCE S256); in demo mode consent is simulated with demo-consent. change_account replaces the current account only after the new sign-in succeeds; cancelling keeps the current connection. Connecting never changes calendar events.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "purpose": {
+                    "type": "string",
+                    "enum": [
+                      "connect",
+                      "change_account",
+                      "reconnect"
+                    ],
+                    "default": "connect"
+                  }
+                }
+              },
+              "examples": {
+                "connect": {
+                  "summary": "Połącz",
+                  "description": "Pierwsze połączenie. Przy połączonym koncie kończy się 409 already_connected (1a).",
+                  "value": {
+                    "purpose": "connect"
+                  }
+                },
+                "change": {
+                  "summary": "Zmień konto",
+                  "description": "Obecne konto zostaje zastąpione dopiero po udanym zalogowaniu na inne; anulowanie zostawia obecne połączenie.",
+                  "value": {
+                    "purpose": "change_account"
+                  }
+                },
+                "reconnect": {
+                  "summary": "Połącz ponownie",
+                  "description": "Po „wymagane ponowne logowanie” albo by przyznać brakujący dostęp. Google podpowiada to samo konto.",
+                  "value": {
+                    "purpose": "reconnect"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Rozpoczęta próba połączenia.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "attemptId",
+                    "status",
+                    "errorCode",
+                    "purpose",
+                    "mode",
+                    "expiresAt"
+                  ],
+                  "properties": {
+                    "attemptId": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "processing",
+                        "connected",
+                        "denied",
+                        "error",
+                        "cancelled",
+                        "expired"
+                      ]
+                    },
+                    "errorCode": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "purpose": {
+                      "type": "string",
+                      "enum": [
+                        "connect",
+                        "change_account",
+                        "reconnect"
+                      ]
+                    },
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "google",
+                        "demo"
+                      ]
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "authUrl": {
+                      "type": "string",
+                      "description": "Tylko przy rozpoczęciu w trybie google: strona logowania i zgody Google."
+                    }
+                  },
+                  "description": "Rozpoczęta próba połączenia."
+                },
+                "examples": {
+                  "demo": {
+                    "summary": "Makieta",
+                    "description": "Bez authUrl – zgodę daje się przez demo-consent.",
+                    "value": {
+                      "attemptId": "b9f2d6a0-5c1e-4d7a-9f3b-2e8c4a6d1f00",
+                      "status": "pending",
+                      "errorCode": null,
+                      "purpose": "connect",
+                      "mode": "demo",
+                      "expiresAt": "2026-11-16T18:00:00.000Z"
+                    }
+                  },
+                  "google": {
+                    "summary": "Google",
+                    "description": "authUrl otwiera stronę wyboru konta i zgody Google (dostęp offline, PKCE S256). Aplikacja odpytuje stan próby, aż przestanie być pending.",
+                    "value": {
+                      "attemptId": "b9f2d6a0-5c1e-4d7a-9f3b-2e8c4a6d1f00",
+                      "status": "pending",
+                      "errorCode": null,
+                      "purpose": "connect",
+                      "mode": "google",
+                      "expiresAt": "2026-11-16T18:00:00.000Z",
+                      "authUrl": "https://accounts.google.com/o/oauth2/v2/auth?client_id=example.apps.googleusercontent.com&response_type=code&access_type=offline"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Brak konta do ponownego połączenia.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak konta do ponownego połączenia.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "not_connected"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "not_connected": {
+                    "summary": "Brak połączonego konta",
+                    "description": "Najpierw połącz konto Google.",
+                    "value": {
+                      "error": "not_connected"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Konto już połączone.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Konto już połączone.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "already_connected"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "already_connected": {
+                    "summary": "Konto już połączone",
+                    "description": "Konto Google jest już połączone (1a). Użyj „Zmień konto” (change_account) albo „Połącz ponownie” (reconnect).",
+                    "value": {
+                      "error": "already_connected"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Serwer nie może bezpiecznie zapisać połączenia.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Serwer nie może bezpiecznie zapisać połączenia.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "integration_not_configured",
+                        "token_key_missing",
+                        "token_key_invalid"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "integration_not_configured": {
+                    "summary": "Serwer bez bazy danych",
+                    "description": "API działa bez bazy danych, więc nie może zapisać połączenia z Google.",
+                    "value": {
+                      "error": "integration_not_configured"
+                    }
+                  },
+                  "token_key_missing": {
+                    "summary": "Brak klucza szyfrowania",
+                    "description": "Serwer ma klienta Google, ale nie ma GOOGLE_TOKEN_ENCRYPTION_KEY – nie zapisze tokenów, więc nie rozpoczyna logowania.",
+                    "value": {
+                      "error": "token_key_missing"
+                    }
+                  },
+                  "token_key_invalid": {
+                    "summary": "Zły klucz szyfrowania",
+                    "description": "GOOGLE_TOKEN_ENCRYPTION_KEY musi mieć 32 bajty zapisane w base64.",
+                    "value": {
+                      "error": "token_key_invalid"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/integrations/google/attempts/{id}": {
+      "get": {
+        "operationId": "getGoogleIntegrationAttempt",
+        "summary": "Get sign-in attempt state",
+        "tags": [
+          "Google integration"
+        ],
+        "description": "Polled by the app while the Google page is open in another tab. A pending attempt past expiresAt is reported as expired.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stan próby.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "attemptId",
+                    "status",
+                    "errorCode",
+                    "purpose",
+                    "mode",
+                    "expiresAt"
+                  ],
+                  "properties": {
+                    "attemptId": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "processing",
+                        "connected",
+                        "denied",
+                        "error",
+                        "cancelled",
+                        "expired"
+                      ]
+                    },
+                    "errorCode": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "purpose": {
+                      "type": "string",
+                      "enum": [
+                        "connect",
+                        "change_account",
+                        "reconnect"
+                      ]
+                    },
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "google",
+                        "demo"
+                      ]
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "authUrl": {
+                      "type": "string",
+                      "description": "Tylko przy rozpoczęciu w trybie google: strona logowania i zgody Google."
+                    }
+                  },
+                  "description": "Stan próby."
+                },
+                "examples": {
+                  "pending": {
+                    "summary": "Oczekuje",
+                    "description": "Użytkownik jeszcze nie zdecydował na stronie Google.",
+                    "value": {
+                      "attemptId": "b9f2d6a0-5c1e-4d7a-9f3b-2e8c4a6d1f00",
+                      "status": "pending",
+                      "errorCode": null,
+                      "purpose": "connect",
+                      "mode": "google",
+                      "expiresAt": "2026-11-16T18:00:00.000Z"
+                    }
+                  },
+                  "connected": {
+                    "summary": "Połączono",
+                    "value": {
+                      "attemptId": "b9f2d6a0-5c1e-4d7a-9f3b-2e8c4a6d1f00",
+                      "status": "connected",
+                      "errorCode": null,
+                      "purpose": "connect",
+                      "mode": "demo",
+                      "expiresAt": "2026-11-16T18:00:00.000Z"
+                    }
+                  },
+                  "denied": {
+                    "summary": "Odmowa (5a)",
+                    "description": "Nic nie zostało zapisane.",
+                    "value": {
+                      "attemptId": "b9f2d6a0-5c1e-4d7a-9f3b-2e8c4a6d1f00",
+                      "status": "denied",
+                      "errorCode": "access_denied",
+                      "purpose": "connect",
+                      "mode": "demo",
+                      "expiresAt": "2026-11-16T18:00:00.000Z"
+                    }
+                  },
+                  "error": {
+                    "summary": "Błąd autoryzacji (6a)",
+                    "description": "Google odrzucił kod (wygasł albo został użyty). Nic nie zostało zapisane.",
+                    "value": {
+                      "attemptId": "b9f2d6a0-5c1e-4d7a-9f3b-2e8c4a6d1f00",
+                      "status": "error",
+                      "errorCode": "authorization_code_invalid",
+                      "purpose": "connect",
+                      "mode": "google",
+                      "expiresAt": "2026-11-16T18:00:00.000Z"
+                    }
+                  },
+                  "expired": {
+                    "summary": "Wygasła",
+                    "description": "Próba nie doczekała się decyzji przed expiresAt.",
+                    "value": {
+                      "attemptId": "b9f2d6a0-5c1e-4d7a-9f3b-2e8c4a6d1f00",
+                      "status": "expired",
+                      "errorCode": null,
+                      "purpose": "connect",
+                      "mode": "google",
+                      "expiresAt": "2026-11-16T18:00:00.000Z"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Nie ma takiej próby.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Nie ma takiej próby.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "attempt_not_found"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "attempt_not_found": {
+                    "summary": "Nie ma takiej próby",
+                    "description": "Próba połączenia nie istnieje albo należy do innego użytkownika.",
+                    "value": {
+                      "error": "attempt_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Integracja niedostępna.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Integracja niedostępna.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "integration_not_configured"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "integration_not_configured": {
+                    "summary": "Serwer bez bazy danych",
+                    "description": "API działa bez bazy danych, więc nie może zapisać połączenia z Google.",
+                    "value": {
+                      "error": "integration_not_configured"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/integrations/google/attempts/{id}/cancel": {
+      "post": {
+        "operationId": "cancelGoogleIntegrationAttempt",
+        "summary": "Cancel sign-in attempt",
+        "tags": [
+          "Google integration"
+        ],
+        "description": "Cancels a pending attempt (closed window, 5a). A later return from Google for it saves nothing; an existing connection is kept. An attempt that already finished is returned unchanged.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stan próby po anulowaniu.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "attemptId",
+                    "status",
+                    "errorCode",
+                    "purpose",
+                    "mode",
+                    "expiresAt"
+                  ],
+                  "properties": {
+                    "attemptId": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "processing",
+                        "connected",
+                        "denied",
+                        "error",
+                        "cancelled",
+                        "expired"
+                      ]
+                    },
+                    "errorCode": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "purpose": {
+                      "type": "string",
+                      "enum": [
+                        "connect",
+                        "change_account",
+                        "reconnect"
+                      ]
+                    },
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "google",
+                        "demo"
+                      ]
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "authUrl": {
+                      "type": "string",
+                      "description": "Tylko przy rozpoczęciu w trybie google: strona logowania i zgody Google."
+                    }
+                  },
+                  "description": "Stan próby po anulowaniu."
+                },
+                "examples": {
+                  "cancelled": {
+                    "summary": "Anulowano",
+                    "description": "Późniejszy powrót z Google dla tej próby niczego nie zapisze.",
+                    "value": {
+                      "attemptId": "b9f2d6a0-5c1e-4d7a-9f3b-2e8c4a6d1f00",
+                      "status": "cancelled",
+                      "errorCode": null,
+                      "purpose": "change_account",
+                      "mode": "demo",
+                      "expiresAt": "2026-11-16T18:00:00.000Z"
+                    }
+                  },
+                  "alreadyFinished": {
+                    "summary": "Już zakończona",
+                    "description": "Próba zakończyła się przed anulowaniem – odpowiedź pokazuje jej prawdziwy wynik.",
+                    "value": {
+                      "attemptId": "b9f2d6a0-5c1e-4d7a-9f3b-2e8c4a6d1f00",
+                      "status": "connected",
+                      "errorCode": null,
+                      "purpose": "connect",
+                      "mode": "demo",
+                      "expiresAt": "2026-11-16T18:00:00.000Z"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Nie ma takiej próby.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Nie ma takiej próby.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "attempt_not_found"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "attempt_not_found": {
+                    "summary": "Nie ma takiej próby",
+                    "description": "Próba połączenia nie istnieje albo należy do innego użytkownika.",
+                    "value": {
+                      "error": "attempt_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Integracja niedostępna.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Integracja niedostępna.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "integration_not_configured"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "integration_not_configured": {
+                    "summary": "Serwer bez bazy danych",
+                    "description": "API działa bez bazy danych, więc nie może zapisać połączenia z Google.",
+                    "value": {
+                      "error": "integration_not_configured"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/integrations/google/attempts/{id}/demo-consent": {
+      "post": {
+        "operationId": "giveGoogleIntegrationDemoConsent",
+        "summary": "Record simulated Google consent",
+        "tags": [
+          "Google integration"
+        ],
+        "description": "Demo mode only: the user picks a demo account (5b) and allows or denies access (5a). Demo accounts have no tokens. A decision on a finished or expired attempt changes nothing.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "allow"
+                ],
+                "properties": {
+                  "allow": {
+                    "type": "boolean"
+                  },
+                  "account": {
+                    "type": "string",
+                    "maxLength": 200
+                  }
+                }
+              },
+              "examples": {
+                "allow": {
+                  "summary": "Zgoda",
+                  "description": "Wybrane konto makiety (5b) i zgoda na dostęp.",
+                  "value": {
+                    "allow": true,
+                    "account": "student.kac.demo@gmail.com"
+                  }
+                },
+                "deny": {
+                  "summary": "Odmowa",
+                  "description": "Odmowa dostępu (5a).",
+                  "value": {
+                    "allow": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Wynik decyzji.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "attemptId",
+                    "status",
+                    "errorCode",
+                    "purpose",
+                    "mode",
+                    "expiresAt"
+                  ],
+                  "properties": {
+                    "attemptId": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "processing",
+                        "connected",
+                        "denied",
+                        "error",
+                        "cancelled",
+                        "expired"
+                      ]
+                    },
+                    "errorCode": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "purpose": {
+                      "type": "string",
+                      "enum": [
+                        "connect",
+                        "change_account",
+                        "reconnect"
+                      ]
+                    },
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "google",
+                        "demo"
+                      ]
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "authUrl": {
+                      "type": "string",
+                      "description": "Tylko przy rozpoczęciu w trybie google: strona logowania i zgody Google."
+                    }
+                  },
+                  "description": "Wynik decyzji."
+                },
+                "examples": {
+                  "connected": {
+                    "summary": "Połączono",
+                    "value": {
+                      "attemptId": "b9f2d6a0-5c1e-4d7a-9f3b-2e8c4a6d1f00",
+                      "status": "connected",
+                      "errorCode": null,
+                      "purpose": "connect",
+                      "mode": "demo",
+                      "expiresAt": "2026-11-16T18:00:00.000Z"
+                    }
+                  },
+                  "denied": {
+                    "summary": "Odmowa",
+                    "value": {
+                      "attemptId": "b9f2d6a0-5c1e-4d7a-9f3b-2e8c4a6d1f00",
+                      "status": "denied",
+                      "errorCode": "access_denied",
+                      "purpose": "connect",
+                      "mode": "demo",
+                      "expiresAt": "2026-11-16T18:00:00.000Z"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Nieznane konto makiety.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Nieznane konto makiety.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "invalid_demo_account"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "invalid_demo_account": {
+                    "summary": "Nieznane konto makiety",
+                    "description": "Przy zgodzie wybierz jedno z kont z demoAccounts.",
+                    "value": {
+                      "error": "invalid_demo_account"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Nie ma takiej próby.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Nie ma takiej próby.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "attempt_not_found"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "attempt_not_found": {
+                    "summary": "Nie ma takiej próby",
+                    "description": "Próba połączenia nie istnieje albo należy do innego użytkownika.",
+                    "value": {
+                      "error": "attempt_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Serwer używa prawdziwego Google.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Serwer używa prawdziwego Google.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "demo_only"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "demo_only": {
+                    "summary": "Tylko w makiecie",
+                    "description": "Serwer używa prawdziwego Google – zgodę daje się na stronie authUrl, nie tym endpointem.",
+                    "value": {
+                      "error": "demo_only"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Integracja niedostępna.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Integracja niedostępna.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "integration_not_configured"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "integration_not_configured": {
+                    "summary": "Serwer bez bazy danych",
+                    "description": "API działa bez bazy danych, więc nie może zapisać połączenia z Google.",
+                    "value": {
+                      "error": "integration_not_configured"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/integrations/google/callback": {
+      "get": {
+        "operationId": "completeGoogleIntegration",
+        "summary": "Complete Google sign-in",
+        "tags": [
+          "Google integration"
+        ],
+        "description": "Google redirects the browser here. The state is single-use and expires; the code is exchanged with the PKCE verifier, tokens are encrypted before saving and never shown or logged. Denied consent, a missing calendar scope, expired codes and Google errors save nothing.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "in": "query",
+            "name": "state",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 2000
+            },
+            "in": "query",
+            "name": "code",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "in": "query",
+            "name": "error",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Strona HTML: połączono albo użytkownik odmówił zgody.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "description": "Strona HTML: połączono albo użytkownik odmówił zgody."
+                },
+                "examples": {
+                  "page": {
+                    "summary": "Połączono z Google",
+                    "description": "Konto student@example.com jest połączone z KAC. Możesz wrócić do aplikacji.",
+                    "value": "<!doctype html><html lang=\"pl\"><title>Połączono z Google</title><main><h1>Połączono z Google</h1><p>Konto student@example.com jest połączone z KAC. Możesz wrócić do aplikacji.</p></main></html>"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Strona HTML: nieznany, wygasły albo użyty state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "description": "Strona HTML: nieznany, wygasły albo użyty state."
+                },
+                "examples": {
+                  "page": {
+                    "summary": "Połączenie wygasło",
+                    "description": "Ten link logowania wygasł albo został już użyty. Rozpocznij łączenie ponownie w aplikacji.",
+                    "value": "<!doctype html><html lang=\"pl\"><title>Połączenie wygasło</title><main><h1>Połączenie wygasło</h1><p>Ten link logowania wygasł albo został już użyty. Rozpocznij łączenie ponownie w aplikacji.</p></main></html>"
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Strona HTML: konflikt kont albo brak trwałego dostępu; nic nie zapisano.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "description": "Strona HTML: konflikt kont albo brak trwałego dostępu; nic nie zapisano."
+                },
+                "examples": {
+                  "page": {
+                    "summary": "Nie połączono konta",
+                    "description": "Masz już połączone konto Google. Żeby połączyć inne, użyj w aplikacji „Zmień konto”.",
+                    "value": "<!doctype html><html lang=\"pl\"><title>Nie połączono konta</title><main><h1>Nie połączono konta</h1><p>Masz już połączone konto Google. Żeby połączyć inne, użyj w aplikacji „Zmień konto”.</p></main></html>"
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Strona HTML: błąd Google; nic nie zapisano.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "description": "Strona HTML: błąd Google; nic nie zapisano."
+                },
+                "examples": {
+                  "page": {
+                    "summary": "Nie udało się połączyć",
+                    "description": "Google nie potwierdził połączenia. Dane dostępu nie zostały zapisane – spróbuj ponownie w aplikacji.",
+                    "value": "<!doctype html><html lang=\"pl\"><title>Nie udało się połączyć</title><main><h1>Nie udało się połączyć</h1><p>Google nie potwierdził połączenia. Dane dostępu nie zostały zapisane – spróbuj ponownie w aplikacji.</p></main></html>"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Strona HTML: integracja niedostępna (serwer bez bazy danych).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "description": "Strona HTML: integracja niedostępna (serwer bez bazy danych)."
+                },
+                "examples": {
+                  "page": {
+                    "summary": "Integracja niedostępna",
+                    "description": "Serwer nie może zapisać połączenia z Google.",
+                    "value": "<!doctype html><html lang=\"pl\"><title>Integracja niedostępna</title><main><h1>Integracja niedostępna</h1><p>Serwer nie może zapisać połączenia z Google.</p></main></html>"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/integrations/google/calendars": {
+      "get": {
+        "operationId": "listGoogleIntegrationCalendars",
+        "summary": "List calendars of the connected account",
+        "tags": [
+          "Google integration"
+        ],
+        "description": "Reads all calendar list pages from Google with access roles and stores them for later calendar choice. An empty list keeps the connection (7a). A token rejected by Google is refreshed once before reporting reconnect_required; local events are never changed.",
+        "responses": {
+          "200": {
+            "description": "Kalendarze połączonego konta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "account",
+                    "calendars",
+                    "complete"
+                  ],
+                  "properties": {
+                    "account": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "email",
+                        "connectedAt",
+                        "grantedScopes",
+                        "access"
+                      ],
+                      "properties": {
+                        "email": {
+                          "type": "string"
+                        },
+                        "connectedAt": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "grantedScopes": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "Zakresy faktycznie przyznane przez użytkownika w Google."
+                        },
+                        "access": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "calendarsRead",
+                            "eventsWrite"
+                          ],
+                          "properties": {
+                            "calendarsRead": {
+                              "type": "boolean",
+                              "description": "Odczyt listy kalendarzy i wydarzeń."
+                            },
+                            "eventsWrite": {
+                              "type": "boolean",
+                              "description": "Dodawanie i zmiana wydarzeń (np. publikacja grafiku)."
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "calendars": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "name",
+                          "primary",
+                          "accessRole",
+                          "timeZone"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "primary": {
+                            "type": "boolean"
+                          },
+                          "accessRole": {
+                            "type": "string",
+                            "enum": [
+                              "owner",
+                              "writer",
+                              "reader",
+                              "freeBusyReader"
+                            ]
+                          },
+                          "timeZone": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    "complete": {
+                      "type": "boolean",
+                      "description": "false, gdy Google zwrócił więcej stron niż limit (20 stron po 250 kalendarzy)."
+                    }
+                  },
+                  "description": "Kalendarze połączonego konta."
+                },
+                "examples": {
+                  "calendars": {
+                    "summary": "Lista kalendarzy",
+                    "description": "Wszystkie strony listy z Google. accessRole: owner i writer pozwalają zapisywać wydarzenia, reader – tylko odczyt.",
+                    "value": {
+                      "account": {
+                        "email": "student@example.com",
+                        "connectedAt": "2026-11-16T18:00:00.000Z",
+                        "grantedScopes": [
+                          "openid",
+                          "email",
+                          "https://www.googleapis.com/auth/calendar.readonly"
+                        ],
+                        "access": {
+                          "calendarsRead": true,
+                          "eventsWrite": false
+                        }
+                      },
+                      "complete": true,
+                      "calendars": [
+                        {
+                          "id": "primary",
+                          "name": "Student",
+                          "primary": true,
+                          "accessRole": "owner",
+                          "timeZone": "Europe/Warsaw"
+                        },
+                        {
+                          "id": "praca@group.calendar.google.com",
+                          "name": "Grafik pracy",
+                          "primary": false,
+                          "accessRole": "writer",
+                          "timeZone": "Europe/Warsaw"
+                        },
+                        {
+                          "id": "kolo@group.calendar.google.com",
+                          "name": "Koło naukowe",
+                          "primary": false,
+                          "accessRole": "reader",
+                          "timeZone": null
+                        }
+                      ]
+                    }
+                  },
+                  "empty": {
+                    "summary": "Konto bez kalendarzy (7a)",
+                    "description": "Pusta lista nie rozłącza konta.",
+                    "value": {
+                      "account": {
+                        "email": "student@example.com",
+                        "connectedAt": "2026-11-16T18:00:00.000Z",
+                        "grantedScopes": [
+                          "openid",
+                          "email",
+                          "https://www.googleapis.com/auth/calendar.readonly"
+                        ],
+                        "access": {
+                          "calendarsRead": true,
+                          "eventsWrite": false
+                        }
+                      },
+                      "calendars": [],
+                      "complete": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Zgoda nie obejmuje odczytu kalendarzy.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Zgoda nie obejmuje odczytu kalendarzy.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "insufficient_permissions"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "insufficient_permissions": {
+                    "summary": "Brak uprawnień",
+                    "description": "Przyznana zgoda nie obejmuje odczytu kalendarzy. Trzeba połączyć ponownie i zaznaczyć dostęp do kalendarza.",
+                    "value": {
+                      "error": "insufficient_permissions"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Brak połączonego konta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak połączonego konta.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "not_connected"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "not_connected": {
+                    "summary": "Brak połączonego konta",
+                    "description": "Najpierw połącz konto Google.",
+                    "value": {
+                      "error": "not_connected"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Wymagane ponowne logowanie.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Wymagane ponowne logowanie.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "reconnect_required"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "reconnect_required": {
+                    "summary": "Wymagane ponowne logowanie",
+                    "description": "Google nie przyjął zapisanego dostępu (wygasł albo cofnięto zgodę). Dane w KAC są bez zmian.",
+                    "value": {
+                      "error": "reconnect_required"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Limit Google.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Limit Google.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "rate_limited"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "rate_limited": {
+                    "summary": "Limit zapytań Google",
+                    "description": "Google chwilowo ogranicza zapytania. Spróbuj ponownie za chwilę. Dane w KAC są bez zmian.",
+                    "value": {
+                      "error": "rate_limited"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Google nie odpowiada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Google nie odpowiada.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "google_unavailable",
+                        "google_error"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "google_unavailable": {
+                    "summary": "Google nie odpowiada",
+                    "description": "Brak połączenia z Google albo błąd po jego stronie. Spróbuj ponownie. Dane w KAC są bez zmian.",
+                    "value": {
+                      "error": "google_unavailable"
+                    }
+                  },
+                  "google_error": {
+                    "summary": "Błąd Google",
+                    "description": "Google odrzucił żądanie. Spróbuj ponownie albo połącz konto od nowa. Dane w KAC są bez zmian.",
+                    "value": {
+                      "error": "google_error"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Integracja niedostępna.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Integracja niedostępna.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "integration_not_configured"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "integration_not_configured": {
+                    "summary": "Serwer bez bazy danych",
+                    "description": "API działa bez bazy danych, więc nie może zapisać połączenia z Google.",
+                    "value": {
+                      "error": "integration_not_configured"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "servers": [
@@ -16873,6 +18632,10 @@
     {
       "name": "Google import",
       "description": "One-time, read-only Google Calendar import."
+    },
+    {
+      "name": "Google integration",
+      "description": "Persistent Google account connection: consent, encrypted tokens, granted access and calendar list."
     },
     {
       "name": "Blocks",

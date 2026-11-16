@@ -1,0 +1,75 @@
+---
+id: google-integration
+title: Połączenie z Google Calendar
+sidebar_label: Google Calendar
+description: Trwałe połączenie konta Google – zgoda, szyfrowane tokeny, przyznany dostęp i lista kalendarzy.
+---
+
+# Połączenie z Google Calendar
+
+Historyjka S23KC2S1P2-12 („Wykorzystanie istniejącego kalendarza Google”): podzadania G01 (S23KC2S1P2-284, backend) i G02 (S23KC2S1P2-286, panel w Ustawieniach). To połączenie jest **trwałe** – z niego korzystają synchronizacja, odłączanie i publikacja grafiku. Jednorazowy import (S23KC2S1P2-27, `/api/v1/import/google`) ma osobny kontrakt i działa bez zmian.
+
+## Przebieg w aplikacji
+
+**Ustawienia → Google Calendar** pokazuje stan połączenia i zakres dostępu, o który aplikacja poprosi: odczyt kalendarzy i wydarzeń oraz dodawanie i zmiana wydarzeń. „Zaloguj się przez Google” otwiera w nowej karcie stronę Google z wyborem konta i zgodą; panel co 2 sekundy pyta serwer o wynik i sam go pokazuje.
+
+| Krok historyjki | Zachowanie |
+| --- | --- |
+| 1a – konto już połączone | Widać konto, datę połączenia, przyznany dostęp, listę kalendarzy oraz „Zmień konto” (z potwierdzeniem). Zwykłe „Połącz” zwraca `409 already_connected`. |
+| 2a – brak internetu | Komunikat „Brak połączenia z internetem albo z serwerem KAC” i „Spróbuj ponownie”. |
+| 5a – odmowa albo zamknięte okno | „Odmów” albo „Anuluj” kończą próbę bez zapisu; dotychczasowe połączenie zostaje. Spóźniony powrót z Google dla anulowanej próby niczego nie zapisuje. |
+| 5b – wybór konta | Strona Google zawsze pokazuje wybór konta (`prompt=select_account consent`). W makiecie użytkownik wybiera jedno z dwóch kont demonstracyjnych. |
+| 6a – błąd autoryzacji | Wygasły lub użyty kod, błąd Google albo brak tokenu odświeżania kończą próbę komunikatem; nic nie jest zapisywane. |
+| 7a – brak kalendarzy | Konto bez kalendarzy zostaje połączone, a panel pokazuje pustą listę z wyjaśnieniem. |
+
+Zapisywany jest **realnie przyznany** dostęp. Gdy użytkownik odznaczy w Google zapis wydarzeń, panel pokazuje „Dodawanie i zmiana wydarzeń – nie przyznano” i proponuje „Połącz ponownie”. Zgoda bez dostępu do kalendarza nie łączy konta. Gdy Google odrzuci zapisany token odświeżania (wygasł albo cofnięto zgodę), konto przechodzi w stan „Wymaga ponownego logowania”; lokalne wydarzenia pozostają bez zmian. Samo połączenie nie tworzy, nie zmienia i nie usuwa żadnych wydarzeń.
+
+„Zmień konto” zastępuje poprzednie konto dopiero po udanym zalogowaniu na nowe. Poprzednie konto dostaje status „Niepołączone”, jego tokeny są usuwane, a licznik generacji rośnie – prace zaplanowane dla starego połączenia są odrzucane.
+
+## Bezpieczeństwo
+
+- OAuth 2.0 „authorization code” z PKCE (S256) i dostępem offline. `state` ma 32 losowe bajty, jest jednorazowy, ważny 10 minut i zapisany wyłącznie jako skrót SHA-256. Powrót z Google musi trafić do tego samego użytkownika, który rozpoczął próbę.
+- Tożsamością konta jest `sub` z `id_token` (adres e-mail może się zmienić). Konto bez potwierdzonego adresu e-mail jest odrzucane.
+- Tokeny są szyfrowane AES-256-GCM kluczem `GOOGLE_TOKEN_ENCRYPTION_KEY` spoza bazy. Dane dodatkowe szyfrogramu wiążą go z kontem i rodzajem tokenu, więc przeniesiony do innego wiersza nie da się odszyfrować. Weryfikator PKCE też jest szyfrowany i usuwany po użyciu.
+- Tokeny nie trafiają do odpowiedzi API, aplikacji ani logów. Log żądań zamazuje `code` i `state` w adresie powrotu; błędy są logowane tylko jako kod.
+- Token dostępu jest odświeżany pod blokadą wiersza konta i tokenów: równoległe żądania (także z kilku instancji API) wykonują jedno odświeżenie. Odpowiedź Google bez `refresh_token` zachowuje zapisany token; nowy token odświeżania zastępuje stary. Odpowiedź 401 z Calendar API wymusza jedno odświeżenie przed zgłoszeniem `reconnect_required`.
+
+## API
+
+| Metoda i ścieżka | Opis |
+| --- | --- |
+| `GET /api/v1/integrations/google` | Stan: `not_connected`, `connected`, `reconnect_required`; konto, przyznane zakresy, `requestedAccess`, tryb (`google`/`demo`) i problem konfiguracji. |
+| `POST /api/v1/integrations/google/connect` | Początek logowania; `purpose`: `connect`, `change_account` albo `reconnect`. W trybie `google` odpowiedź ma `authUrl`. |
+| `GET /api/v1/integrations/google/attempts/{id}` | Stan próby: `pending`, `connected`, `denied`, `error`, `cancelled`, `expired` i `errorCode`. |
+| `POST /api/v1/integrations/google/attempts/{id}/cancel` | Anulowanie próby. |
+| `POST /api/v1/integrations/google/attempts/{id}/demo-consent` | Tylko makieta: wybór konta i zgoda albo odmowa. |
+| `GET /api/v1/integrations/google/callback` | Adres powrotu z Google; zwraca stronę HTML. |
+| `GET /api/v1/integrations/google/calendars` | Lista kalendarzy (wszystkie strony) z rolą `owner`, `writer`, `reader` albo `freeBusyReader`. |
+
+Błędy Google mają stabilne kody: `reconnect_required` (409), `insufficient_permissions` (403), `rate_limited` (429), `google_unavailable` i `google_error` (502). Bez bazy danych endpointy zwracają `503 integration_not_configured`.
+
+## Konfiguracja
+
+| Zmienna | Znaczenie |
+| --- | --- |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Ten sam klient OAuth co w imporcie. Bez nich działa makieta z kontami `student.kac.demo@gmail.com` (cztery kalendarze) i `praca.kac.demo@gmail.com` (bez kalendarzy). |
+| `GOOGLE_INTEGRATION_REDIRECT_URI` | Adres powrotu, domyślnie `http://localhost:4000/api/v1/integrations/google/callback`. Dodaj go w Google Cloud Console jako „Authorized redirect URI” obok adresu importu. |
+| `GOOGLE_TOKEN_ENCRYPTION_KEY` | 32 losowe bajty w base64, poza bazą i repozytorium. Bez klucza (albo z kluczem złej długości) prawdziwe logowanie jest wyłączone, a panel wyjaśnia dlaczego. Zmiana klucza wymaga ponownego połączenia kont. |
+
+Klucz można wygenerować raz poleceniem:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
+
+Ekran zgody Google musi zawierać zakresy `openid`, `email`, `https://www.googleapis.com/auth/calendar.readonly` i `https://www.googleapis.com/auth/calendar.events`. W trybie testowym aplikacji Google tylko dodani testerzy mogą się zalogować.
+
+## Dane
+
+Migracja `017_google_integration.sql` rozszerza `t_konta_google` (stabilny `google_sub`, tryb, przyznane zakresy, generacja, daty połączenia i odłączenia) oraz `t_kalendarze_google` (rola dostępu, strefa, kalendarz główny). Nowe tabele: `t_google_tokeny` (tylko szyfrogramy) i `t_google_oauth_proby` (jednorazowe próby OAuth). Jeden użytkownik ma najwyżej jedno aktywne konto Google.
+
+## Testy
+
+- `apps/api/tests/google-integration.test.ts` – szyfrowanie, adres zgody, wymiana kodu, odświeżanie (jedno naraz, rotacja, `invalid_grant`), lista kalendarzy, konfiguracja klucza, logi bez kodu OAuth.
+- `apps/api/tests/google-integration.integration.test.ts` (PostgreSQL) – makieta (odmowa, 1a, zmiana konta, 7a, wygasła próba, cudza próba), udawany Google (jednorazowy i wygasły `state`, 6a, brak tokenu odświeżania, szyfrogramy w bazie, brak tokenów w odpowiedziach, ponowne logowanie) oraz równoległe odświeżanie z dwóch instancji. Każdy scenariusz sprawdza, że wydarzenia użytkownika się nie zmieniły.
+- `apps/web/tests/googleIntegration.test.ts` – stan panelu i komunikaty.
