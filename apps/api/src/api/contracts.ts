@@ -9,6 +9,7 @@ import type { ScheduleRepository } from '../scheduling/repository.js';
 import type { ScheduleReader } from '../import/work-schedule/reader.js';
 import type { WorkProfileRepository } from '../profile/repository.js';
 import type { PostgresNotificationRepository } from '../notifications/repository.js';
+import type { GoogleIntegrationService } from '../integrations/google/service.js';
 import type { ScopeResolver } from './scope.js';
 import type { AiService } from '../ai/service.js';
 import type { AiRepository } from '../ai/repository.js';
@@ -51,6 +52,8 @@ export type ApiOptions = {
   aiService?: AiServiceContract;
   aiRepository?: AiRepositoryContract;
   notificationRepository?: PostgresNotificationRepository;
+  /** Trwałe połączenie z Google Calendar (S23KC2S1P2-12, G01). Bez bazy danych – null (API zwraca integration_not_configured). */
+  googleIntegration?: GoogleIntegrationService | null;
 };
 
 export type ApiDependencies = {

@@ -17,8 +17,10 @@ test('calendar persists and deletes events and weekly series in PostgreSQL', { s
     const payload = response.json();
     assert.equal(payload.source, 'postgresql');
     assert.equal(payload.calendar.id, config.demoCalendarId);
+    // Termin daleko w przyszłości: lokalny kalendarz demo może mieć wydarzenia dodane ręcznie albo pobrane z Google
+    // (okno synchronizacji to około 4 tygodni wstecz i 26 tygodni naprzód), a test nie może od nich zależeć.
     const created = await app.inject({ method: 'POST', url: '/api/v1/calendar/events', payload: {
-      title: 'Persistence integration test', start: '2026-10-24T09:00', end: '2026-10-24T10:00',
+      title: 'Persistence integration test', start: '2036-10-25T09:00', end: '2036-10-25T10:00',
       category: 'Work', location: 'Test office', mandatory: false, repeatWeekly: true
     } });
     assert.equal(created.statusCode, 201);
@@ -29,7 +31,7 @@ test('calendar persists and deletes events and weekly series in PostgreSQL', { s
         const reread = await freshApp.inject({ method: 'GET', url: '/api/v1/calendar/overview' });
         const saved = reread.json().events.find((event: { id: string }) => event.id === id);
         assert.equal(saved.repeatWeekly, true);
-         assert.equal(saved.start, '2026-10-24T09:00');
+         assert.equal(saved.start, '2036-10-25T09:00');
         assert.equal(saved.location, 'Test office');
         const series = await pool.query('select s.* from t_serie s join t_wydarzenia e using (id_serii) where e.id_wydarzenia = $1', [id]);
         assert.equal(series.rows[0].bezterminowo, true);
@@ -46,7 +48,7 @@ test('calendar persists and deletes events and weekly series in PostgreSQL', { s
         assert.equal((await pool.query('select id_serii from t_serie where id_serii = $1', [series.rows[0].id_serii])).rowCount, 0);
         assert.equal((await freshApp.inject({ method: 'DELETE', url: `/api/v1/calendar/events/${id}` })).statusCode, 404);
         const single = await freshApp.inject({ method: 'POST', url: '/api/v1/calendar/events', payload: {
-          title: 'Single-event deletion test', start: '2026-10-24T11:00', end: '2026-10-24T12:00',
+          title: 'Single-event deletion test', start: '2036-10-25T11:00', end: '2036-10-25T12:00',
           category: 'Personal', location: '', mandatory: false, repeatWeekly: false,
         } });
         assert.equal(single.statusCode, 201);

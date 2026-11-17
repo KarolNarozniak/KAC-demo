@@ -16,6 +16,8 @@ import {
   forgetGoogleConnection, giveDemoConsent, googleConnectionStatus, GoogleImportError, listGoogleCalendars, readGoogleEvents, startGoogleConnection,
   type GoogleCalendar, type GoogleReadResult, type GoogleRow,
 } from '../services/googleImportApi';
+import { getGoogleIntegration } from '../services/googleIntegrationApi';
+import { importLinkedAccountHint } from '../domain/googleIntegration';
 
 type Props = { visible: boolean; onClose: () => void; onImported: () => void };
 type Step = 'start' | 'consent' | 'waiting' | 'denied' | 'choose' | 'preview' | 'done';
@@ -48,6 +50,15 @@ export default function GoogleCalendarImport({ visible, onClose, onImported }: P
 
   const stopPolling = () => { if (polling.current) clearInterval(polling.current); polling.current = null; };
   useEffect(() => stopPolling, []);
+  // Trwałe połączenie z Ustawień (S23KC2S1P2-12) nie jest używane przez import jednorazowy – mówimy o tym, żeby ponowna zgoda nie dziwiła.
+  const [linkedAccount, setLinkedAccount] = useState<string | null>(null);
+  useEffect(() => {
+    if (!visible) return;
+    let alive = true;
+    getGoogleIntegration().then((current) => { if (alive) setLinkedAccount(current.status !== 'not_connected' ? current.account?.email ?? null : null); })
+      .catch(() => { if (alive) setLinkedAccount(null); });
+    return () => { alive = false; };
+  }, [visible]);
 
   const reset = () => {
     stopPolling();
@@ -196,6 +207,7 @@ export default function GoogleCalendarImport({ visible, onClose, onImported }: P
 
 
           {step === 'start' && <View style={{ marginTop: 14 }}>
+            {!!linkedAccount && <Text style={[styles.muted, { marginBottom: 10 }]}>{importLinkedAccountHint(linkedAccount)}</Text>}
             <Button title="Połącz z kontem Google" primary disabled={busy} onPress={() => void connect()} />
             <Text style={[styles.muted, { marginTop: 8 }]}>Aplikacja poprosi tylko o odczyt kalendarzy i wydarzeń. Dostęp wygasa po imporcie.</Text>
           </View>}

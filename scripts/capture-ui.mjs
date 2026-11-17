@@ -22,7 +22,7 @@ for (const [device,viewport] of [['desktop',{width:1440,height:1000}],['mobile',
  const calendarEvents=structuredClone(events);
  const page=await context.newPage();
  page.on('pageerror',e=>{errors.push(`${device}: ${e.message}`);console.log('PAGE ERROR',e.message);});
- await page.clock.install({time:new Date('2026-11-17T08:15:00Z')}); 
+ await page.clock.install({time:new Date('2026-11-17T08:15:00Z')});
  await page.route('**/api/v1/**', async route=>{
   const p=new URL(route.request().url()).pathname; let body={};let status=200;
   if(p.endsWith('/calendar/overview')) body={events:calendarEvents};
@@ -31,6 +31,9 @@ for (const [device,viewport] of [['desktop',{width:1440,height:1000}],['mobile',
   else if(p.endsWith('/blocks')) body=[{id:'block1',userId:'synthetic',title:'Weekend poza miastem',type:'vacation',startTime:'2026-11-21T08:00:00Z',endTime:'2026-11-22T20:00:00Z'}];
   else if(p.endsWith('/notifications/settings')) body={enabled:false,workRemindersEnabled:true,classReminders:true,privateReminders:true,minutesBefore:30,pendingReminderCount:0};
   else if(p.endsWith('/notifications/push-config')) body={enabled:false};
+  else if(p==='/api/v1/integrations/google') body={mode:'demo',ready:true,problem:null,status:'not_connected',account:null,requestedAccess:{calendarsRead:true,eventsWrite:true},demoAccounts:['student@example.invalid']};
+  else if(p.startsWith('/api/v1/integrations/google/imported-events/')){status=404;body={error:'not_imported'};}
+  else if(p.startsWith('/api/v1/integrations/google/publications/')) body={items:[]};
   else if(p.endsWith('/assistant/config')) body={enabled:true};
   else if(p.endsWith('/import/google/status')) body={configured:false,connected:false};
   else if(p.endsWith('/assistant/conversations')) body=route.request().method()==='POST'?conv:{conversations:[conv,...['Nauka przed kolokwium','Plan pracy na weekend','Wydarzenia na środę','Czas na odpoczynek','Przygotowanie do zajęć','Praca w piątek','Przerwa między zajęciami','Planowanie nauki','Wolne popołudnie','Dojazd do pracy','Podsumowanie dnia','Terminy zaliczeń'].map((title,i)=>({...conv,id:`demo-chat-${i+2}`,title}))]};

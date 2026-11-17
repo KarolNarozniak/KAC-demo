@@ -27,6 +27,7 @@ Opis wszystkich operacji generujemy z OpenAPI w [referencji endpointów](./api/o
 | Planowanie | `/api/v1/schedules` | Generowanie, lista, wersje, walidacja i akceptacja |
 | Importy | `/api/v1/import` | Pliki klas/grafików, podgląd, sesje, potwierdzanie |
 | Google | `/api/v1/import/google` | Jednorazowy odczyt i podgląd wydarzeń |
+| Połączenie Google | `/api/v1/integrations/google` | Trwałe połączenie konta: zgoda, przyznany dostęp, lista kalendarzy ([opis](google-integration.md)) |
 
 Wszystkie ścieżki są pod jedną domeną serwera API. OpenAPI pokazuje pełne ścieżki wraz z prefiksem wersji.
 

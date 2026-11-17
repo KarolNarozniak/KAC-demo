@@ -27,6 +27,7 @@ All operations are generated from OpenAPI in the [endpoint reference](./api/open
 | Scheduling | `/api/v1/schedules` | Generation, listing, versions, validation and approval |
 | Imports | `/api/v1/import` | Timetables, previews, sessions and confirmation |
 | Google | `/api/v1/import/google` | One-time read and event preview |
+| Google connection | `/api/v1/integrations/google` | Persistent account connection: consent, granted access, calendar list ([details](google-integration.md)) |
 
 All paths are served from the same API host. OpenAPI lists full paths including the version prefix.
 
