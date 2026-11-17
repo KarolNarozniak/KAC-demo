@@ -124,11 +124,13 @@ export async function refreshAccessToken(config: GoogleIntegrationOAuthConfig, r
   return grantFrom(response.json);
 }
 
-/** Cofnięcie zgody w Google (do użycia przy odłączaniu, G03). true = Google potwierdził albo token był już nieważny. */
+/** Cofnięcie zgody w Google (odłączenie i zmiana konta, G03). Unieważnia cały grant konta dla KAC. true = Google potwierdził albo token był już nieważny. */
 export async function revokeToken(token: string, fetchImpl: FetchLike): Promise<boolean> {
   try {
-    const response = await fetchImpl(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(token)}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, signal: AbortSignal.timeout(15000),
+    // Token w treści żądania, nie w adresie – adresy częściej trafiają do logów pośredników.
+    const response = await fetchImpl('https://oauth2.googleapis.com/revoke', {
+      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ token }).toString(),
+      signal: AbortSignal.timeout(15000),
     });
     return response.ok || response.status === 400;
   } catch {

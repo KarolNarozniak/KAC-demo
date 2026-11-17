@@ -17117,6 +17117,141 @@
             }
           }
         }
+      },
+      "delete": {
+        "operationId": "disconnectGoogleIntegration",
+        "summary": "Disconnect Google account",
+        "tags": [
+          "Google integration"
+        ],
+        "description": "Disconnects the Google account in one transaction: status \"Niepołączone\", sync consent off, a new connection generation (work and token refreshes of the old generation are rejected), stored tokens deleted, open sign-in attempts cancelled (a late Google return saves nothing), running syncs finished and queued Google work stopped. Local events are never deleted. Afterwards the app asks Google to revoke its consent; remote is \"revoked\" only when Google confirmed it. Repeating the call is safe. The one-time import keeps its own DELETE on its connection resource (204).",
+        "responses": {
+          "200": {
+            "description": "Konto odłączone.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "status",
+                    "account",
+                    "alreadyDisconnected",
+                    "local",
+                    "remote"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "not_connected"
+                      ]
+                    },
+                    "account": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "description": "Adres odłączonego konta."
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "alreadyDisconnected": {
+                      "type": "boolean",
+                      "description": "true – konto było już odłączone (powtórne wywołanie)."
+                    },
+                    "local": {
+                      "type": "string",
+                      "enum": [
+                        "removed",
+                        "nothing_to_remove"
+                      ],
+                      "description": "Stan w KAC: dane dostępu usunięte albo nie było czego usuwać."
+                    },
+                    "remote": {
+                      "type": "string",
+                      "enum": [
+                        "revoked",
+                        "failed",
+                        "not_applicable"
+                      ],
+                      "description": "Stan w Google: zgoda cofnięta, nie udało się jej cofnąć albo nie dotyczy (makieta)."
+                    }
+                  },
+                  "description": "Konto odłączone."
+                },
+                "examples": {
+                  "revoked": {
+                    "summary": "Odłączono i cofnięto zgodę",
+                    "description": "Dane dostępu usunięte w KAC, Google potwierdził cofnięcie zgody.",
+                    "value": {
+                      "status": "not_connected",
+                      "account": "student@example.com",
+                      "alreadyDisconnected": false,
+                      "local": "removed",
+                      "remote": "revoked"
+                    }
+                  },
+                  "remoteFailed": {
+                    "summary": "Zgoda w Google nie cofnięta",
+                    "description": "KAC usunął dane dostępu, ale Google nie potwierdził cofnięcia zgody (np. brak internetu). Użytkownik może usunąć dostęp w ustawieniach konta Google.",
+                    "value": {
+                      "status": "not_connected",
+                      "account": "student@example.com",
+                      "alreadyDisconnected": false,
+                      "local": "removed",
+                      "remote": "failed"
+                    }
+                  },
+                  "again": {
+                    "summary": "Powtórne odłączenie",
+                    "value": {
+                      "status": "not_connected",
+                      "account": null,
+                      "alreadyDisconnected": true,
+                      "local": "nothing_to_remove",
+                      "remote": "not_applicable"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Integracja niedostępna.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Integracja niedostępna.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "integration_not_configured"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "integration_not_configured": {
+                    "summary": "Serwer bez bazy danych",
+                    "description": "API działa bez bazy danych, więc nie może zapisać połączenia z Google.",
+                    "value": {
+                      "error": "integration_not_configured"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/integrations/google/connect": {

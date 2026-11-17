@@ -143,3 +143,12 @@ export const syncRunExamples: NamedExamples = {
   success: { summary: 'Udana synchronizacja', value: { attempt: success, status: statusWith(success, '2026-11-17T08:30:02.000Z') } },
   error: { summary: 'Błąd sieci po ponowieniach', value: { attempt: networkError, status: statusWith(networkError, '2026-11-16T18:00:00.000Z') } },
 };
+
+// --- Odłączenie (G03) ---
+export const disconnectExamples: NamedExamples = {
+  revoked: { summary: 'Odłączono i cofnięto zgodę', description: 'Dane dostępu usunięte w KAC, Google potwierdził cofnięcie zgody.',
+    value: { status: 'not_connected', account: 'student@example.com', alreadyDisconnected: false, local: 'removed', remote: 'revoked' } },
+  remoteFailed: { summary: 'Zgoda w Google nie cofnięta', description: 'KAC usunął dane dostępu, ale Google nie potwierdził cofnięcia zgody (np. brak internetu). Użytkownik może usunąć dostęp w ustawieniach konta Google.',
+    value: { status: 'not_connected', account: 'student@example.com', alreadyDisconnected: false, local: 'removed', remote: 'failed' } },
+  again: { summary: 'Powtórne odłączenie', value: { status: 'not_connected', account: null, alreadyDisconnected: true, local: 'nothing_to_remove', remote: 'not_applicable' } },
+};

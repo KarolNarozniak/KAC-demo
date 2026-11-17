@@ -5,7 +5,7 @@
 // 3–5  „Zaloguj się przez Google” → strona zgody Google w nowej karcie (albo makieta: wybór konta 5b, zgoda albo odmowa 5a)
 // 6/6a zapis połączenia albo komunikat błędu; anulowanie i odmowa nie zmieniają dotychczasowego połączenia
 // 7/7a połączone konto, realnie przyznany dostęp i lista kalendarzy (także pusta – połączenie zostaje)
-// Odłączanie konta („Odłącz”) dodaje historyjka S23KC2S1P2-35 (G03). Synchronizację i jej błędy pokazuje GoogleSyncSection (S23KC2S1P2-17, G06).
+// „Odłącz konto Google” z potwierdzeniem i cofnięciem zgody w Google: S23KC2S1P2-35 (G03). Synchronizację i jej błędy pokazuje GoogleSyncSection (S23KC2S1P2-17, G06).
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Linking, Pressable, Text, View } from 'react-native';
@@ -13,11 +13,11 @@ import { Button, useTheme } from './ui';
 import GoogleSyncSection from './GoogleSyncSection';
 import {
   accessRoleLabel, apiErrorMessage, ATTEMPT_POLL_MS, attemptFinished, attemptNotice, attemptOverdue, calendarsSummary, canWriteTo, changeAccountWarning,
-  connectedAtLabel, grantedAccessLines, grantedAccessWarning, panelState, requestedAccessLines, sortCalendars, unavailableMessage,
+  connectedAtLabel, disconnectNotice, disconnectWarning, grantedAccessLines, grantedAccessWarning, panelState, requestedAccessLines, sortCalendars, unavailableMessage,
   type AttemptPurpose, type GoogleIntegrationStatus, type IntegrationAttempt, type IntegrationCalendar, type Notice, type PanelState,
 } from '../domain/googleIntegration';
 import {
-  cancelGoogleIntegrationAttempt, getGoogleIntegration, getGoogleIntegrationAttempt, giveGoogleIntegrationDemoConsent, GoogleIntegrationApiError,
+  cancelGoogleIntegrationAttempt, disconnectGoogleIntegration, getGoogleIntegration, getGoogleIntegrationAttempt, giveGoogleIntegrationDemoConsent, GoogleIntegrationApiError,
   listGoogleIntegrationCalendars, startGoogleIntegration,
 } from '../services/googleIntegrationApi';
 
@@ -37,6 +37,7 @@ export default function GoogleIntegrationPanel() {
   const [calendarError, setCalendarError] = useState('');
   const [notice, setNotice] = useState<Notice | null>(null);
   const [confirmChange, setConfirmChange] = useState(false);
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const [busy, setBusy] = useState(false);
   // „Połącz ponownie konto Google” z sekcji synchronizacji: po udanym połączeniu synchronizacja rusza sama (historyjka 17, krok 6).
   const [syncSignal, setSyncSignal] = useState(0);
@@ -123,7 +124,7 @@ export default function GoogleIntegrationPanel() {
 
   // Kroki 3–4: początek logowania (connect, change_account albo reconnect).
   const begin = (purpose: AttemptPurpose) => run(async () => {
-    setNotice(null); setConfirmChange(false);
+    setNotice(null); setConfirmChange(false); setConfirmDisconnect(false);
     if (purpose !== 'reconnect') syncAfterReconnect.current = false;
     let started: IntegrationAttempt;
     try {
@@ -162,10 +163,38 @@ export default function GoogleIntegrationPanel() {
     await finish(await giveGoogleIntegrationDemoConsent(attempt.attemptId, allow, allow ? demoAccount : undefined));
   });
 
+  // „Odłącz konto Google” po potwierdzeniu (historyjka 35). Wynik opisuje osobno stan w KAC i w Google.
+  const disconnect = () => run(async () => {
+    const result = await disconnectGoogleIntegration();
+    setConfirmDisconnect(false);
+    setNotice(disconnectNotice(result));
+    await refresh();
+  });
+
   const state = panelState({ status, loadError, attempt });
   const account = status?.account ?? null;
   const badge = BADGES[state];
   const tone = { success: palette.green, info: palette.ink, error: palette.red };
+
+  const confirmBox = (text: string, confirm: React.ReactNode, cancel: React.ReactNode) =>
+    <View style={{ marginTop: 14, padding: 14, borderRadius: 11, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.amberSoft }}>
+      <Text style={styles.body}>{text}</Text>
+      <View style={[styles.row, { marginTop: 10, flexWrap: 'wrap' }]}>{confirm}{cancel}</View>
+    </View>;
+  // Przyciski konta: zmiana (1a) i odłączenie (historyjka 35) zawsze z potwierdzeniem; „Anuluj” niczego nie zmienia.
+  const accountActions = (email: string, extra: React.ReactNode) => {
+    if (confirmChange) return confirmBox(changeAccountWarning(email),
+      <Button title="Zmień konto" primary disabled={busy} onPress={() => void begin('change_account')} />,
+      <Button title="Nie zmieniaj" disabled={busy} onPress={() => setConfirmChange(false)} />);
+    if (confirmDisconnect) return confirmBox(disconnectWarning(email, status?.mode ?? 'demo'),
+      <Button title="Potwierdź odłączenie" danger disabled={busy} onPress={() => void disconnect()} />,
+      <Button title="Anuluj" disabled={busy} onPress={() => setConfirmDisconnect(false)} />);
+    return <View style={[styles.row, { marginTop: 14, flexWrap: 'wrap' }]}>
+      {extra}
+      <Button title="Zmień konto" disabled={busy} onPress={() => { setNotice(null); setConfirmDisconnect(false); setConfirmChange(true); }} />
+      <Button title="Odłącz konto Google" danger disabled={busy} onPress={() => { setNotice(null); setConfirmChange(false); setConfirmDisconnect(true); }} />
+    </View>;
+  };
 
   const accessList = (lines: string[]) => lines.map((line) => <Text key={line} style={[styles.body, { marginTop: 4 }]}>•  {line}</Text>);
 
@@ -253,17 +282,10 @@ export default function GoogleIntegrationPanel() {
         <GoogleSyncSection mode={status?.mode ?? 'demo'} connection={state}
           connectionKey={`${account.email}|${state}|${account.connectedAt ?? ''}|${account.grantedScopes.join(' ')}`} autoRunSignal={syncSignal}
           onConnectionChange={() => void refresh()} onReconnect={() => { syncAfterReconnect.current = true; void begin('reconnect'); }} />
-        {confirmChange ? <View style={{ marginTop: 14, padding: 14, borderRadius: 11, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.amberSoft }}>
-          <Text style={styles.body}>{changeAccountWarning(account.email)}</Text>
-          <View style={[styles.row, { marginTop: 10, flexWrap: 'wrap' }]}>
-            <Button title="Zmień konto" primary disabled={busy} onPress={() => void begin('change_account')} />
-            <Button title="Nie zmieniaj" disabled={busy} onPress={() => setConfirmChange(false)} />
-          </View>
-        </View> : <View style={[styles.row, { marginTop: 14, flexWrap: 'wrap' }]}>
+        {accountActions(account.email, <>
           {account.access.calendarsRead && <Button title="Odśwież listę" disabled={busy} onPress={() => void run(refresh)} />}
           {(!account.access.calendarsRead || !account.access.eventsWrite) && <Button title="Połącz ponownie" disabled={busy} onPress={() => void begin('reconnect')} />}
-          <Button title="Zmień konto" disabled={busy} onPress={() => { setNotice(null); setConfirmChange(true); }} />
-        </View>}
+        </>)}
       </View>}
 
       {state === 'reconnect_required' && account && <View style={{ marginTop: 8 }}>
@@ -272,16 +294,8 @@ export default function GoogleIntegrationPanel() {
         <GoogleSyncSection mode={status?.mode ?? 'demo'} connection={state}
           connectionKey={`${account.email}|${state}|${account.connectedAt ?? ''}|${account.grantedScopes.join(' ')}`} autoRunSignal={syncSignal}
           onConnectionChange={() => void refresh()} onReconnect={() => { syncAfterReconnect.current = true; void begin('reconnect'); }} />
-        {confirmChange ? <View style={{ marginTop: 14, padding: 14, borderRadius: 11, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.amberSoft }}>
-          <Text style={styles.body}>{changeAccountWarning(account.email)}</Text>
-          <View style={[styles.row, { marginTop: 10, flexWrap: 'wrap' }]}>
-            <Button title="Zmień konto" primary disabled={busy} onPress={() => void begin('change_account')} />
-            <Button title="Nie zmieniaj" disabled={busy} onPress={() => setConfirmChange(false)} />
-          </View>
-        </View> : <View style={[styles.row, { marginTop: 12, flexWrap: 'wrap' }]}>
-          {/* „Połącz ponownie konto Google” jest w sekcji synchronizacji – po połączeniu od razu synchronizuje (historyjka 17, krok 6). */}
-          <Button title="Zmień konto" disabled={busy} onPress={() => { setNotice(null); setConfirmChange(true); }} />
-        </View>}
+        {/* „Połącz ponownie konto Google” jest w sekcji synchronizacji – po połączeniu od razu synchronizuje (historyjka 17, krok 6). */}
+        {accountActions(account.email, null)}
       </View>}
     </View>
   );

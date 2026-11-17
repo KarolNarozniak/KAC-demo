@@ -2,6 +2,7 @@
 //
 //  1–2  GET  /integrations/google                            stan połączenia, zakres dostępu i realnie przyznane uprawnienia
 //  3    POST /integrations/google/connect                    początek logowania: connect | change_account | reconnect
+// G03  DELETE /integrations/google                         odłączenie konta i cofnięcie zgody w Google (S23KC2S1P2-35)
 //  4–6  GET  /integrations/google/callback                   powrót ze strony zgody Google (strona HTML, state jednorazowy)
 //       POST /integrations/google/attempts/:id/demo-consent  makieta zgody, gdy serwer nie ma klienta Google OAuth
 //       GET  /integrations/google/attempts/:id               stan próby (aplikacja odpytuje po otwarciu strony Google)
@@ -19,7 +20,7 @@ import { GoogleIntegrationService, IntegrationFlowError } from '../../../integra
 import { SIMULATED_FAILURES, SyncFlowError, type SimulatedFailure } from '../../../integrations/google/sync.js';
 import {
   attemptExamples, calendarsExamples, callbackPage, cancelledExamples, connectBodyExamples, demoConsentBodyExamples, demoConsentExamples,
-  integrationErrors, startedExamples, statusExamples, syncBodyExamples, syncRunExamples, syncStatusExamples,
+  disconnectExamples, integrationErrors, startedExamples, statusExamples, syncBodyExamples, syncRunExamples, syncStatusExamples,
 } from './examples.js';
 
 const nullable = (schema: object) => ({ anyOf: [schema, { type: 'null' }] });
@@ -106,6 +107,21 @@ export function registerGoogleIntegration(app: FastifyInstance, service: GoogleI
     description: 'Shows whether a Google account is connected, which access the app asks for (read calendars, read and write events) and which access the user actually granted. Tokens and their ciphertexts are never returned.',
     response: { 200: documented(statusSchema, 'Stan połączenia z Google.', statusExamples), 503: fail('Integracja niedostępna.', ['integration_not_configured']) },
   } }, async (request, reply) => handle(reply, (google) => google.status(scope(request))));
+
+  app.delete('/integrations/google', { schema: {
+    tags: ['Google integration'], summary: 'Disconnect Google account', operationId: 'disconnectGoogleIntegration',
+    description: 'Disconnects the Google account in one transaction: status "Niepołączone", sync consent off, a new connection generation (work and token refreshes of the old generation are rejected), stored tokens deleted, open sign-in attempts cancelled (a late Google return saves nothing), running syncs finished and queued Google work stopped. Local events are never deleted. Afterwards the app asks Google to revoke its consent; remote is "revoked" only when Google confirmed it. Repeating the call is safe. The one-time import keeps its own DELETE on its connection resource (204).',
+    response: {
+      200: documented({ type: 'object', additionalProperties: false, required: ['status', 'account', 'alreadyDisconnected', 'local', 'remote'], properties: {
+        status: { type: 'string', enum: ['not_connected'] },
+        account: nullable({ type: 'string', description: 'Adres odłączonego konta.' }),
+        alreadyDisconnected: { type: 'boolean', description: 'true – konto było już odłączone (powtórne wywołanie).' },
+        local: { type: 'string', enum: ['removed', 'nothing_to_remove'], description: 'Stan w KAC: dane dostępu usunięte albo nie było czego usuwać.' },
+        remote: { type: 'string', enum: ['revoked', 'failed', 'not_applicable'], description: 'Stan w Google: zgoda cofnięta, nie udało się jej cofnąć albo nie dotyczy (makieta).' } } },
+      'Konto odłączone.', disconnectExamples),
+      503: fail('Integracja niedostępna.', ['integration_not_configured']),
+    },
+  } }, async (request, reply) => handle(reply, (google) => google.disconnect(scope(request))));
 
   app.post<{ Body: { purpose?: 'connect' | 'change_account' | 'reconnect' } }>('/integrations/google/connect', { schema: {
     tags: ['Google integration'], summary: 'Start Google sign-in', operationId: 'startGoogleIntegration',

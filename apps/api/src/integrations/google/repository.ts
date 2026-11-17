@@ -31,7 +31,7 @@ export type StoredTokens = EncryptedTokens & { accountId: string; generation: nu
 
 /** Konflikt przy zapisie połączenia – wynik jest kontrolowany, nic nie zostaje nadpisane. */
 export class ConnectionConflictError extends Error {
-  constructor(readonly code: 'already_connected' | 'reconnect_account_mismatch' | 'no_refresh_token' | 'not_connected') { super(code); }
+  constructor(readonly code: 'already_connected' | 'reconnect_account_mismatch' | 'no_refresh_token' | 'not_connected' | 'attempt_cancelled') { super(code); }
 }
 
 const STATUS_DB: Record<AccountStatus, string> = { connected: 'Połączone', reconnect_required: 'Wymaga ponownego logowania' };
@@ -136,19 +136,28 @@ export class PostgresGoogleIntegrationRepository {
    * Zapis udanego połączenia w jednej transakcji: konto, zgoda, przyznane zakresy i szyfrogramy tokenów.
    * Zmiana konta zastępuje poprzednie dopiero teraz – po udanym powrocie z Google – więc anulowanie zachowuje stare połączenie.
    */
-  async saveConnectionWith(scope: UserScope, input: { purpose: AttemptPurpose; mode: IntegrationMode; sub: string; email: string; grantedScopes: string[] },
-    tokensFor: ((accountId: string) => EncryptedTokens) | null): Promise<GoogleAccountRecord> {
+  async saveConnectionWith(scope: UserScope, input: { purpose: AttemptPurpose; mode: IntegrationMode; sub: string; email: string; grantedScopes: string[]; attemptId?: string },
+    tokensFor: ((accountId: string) => EncryptedTokens) | null): Promise<{ account: GoogleAccountRecord; replaced: { account: GoogleAccountRecord; refreshEnc: string | null } | null }> {
     return this.transaction(async (client) => {
-      // Blokada kont użytkownika – równoległe dokończenia logowania wykonują się po kolei.
+      // Blokada kont użytkownika – równoległe dokończenia logowania i odłączenie (G03) wykonują się po kolei.
       await client.query('select pg_advisory_xact_lock(hashtext($1))', [`google-account:${scope.userId}`]);
+      // G03: próba anulowana albo przerwana odłączeniem w trakcie powrotu z Google niczego już nie zapisze.
+      if (input.attemptId) {
+        const attempt = await client.query('select status from t_google_oauth_proby where id_proby = $1 for update', [input.attemptId]);
+        if (attempt.rows[0]?.status !== 'processing') throw new ConnectionConflictError('attempt_cancelled');
+      }
       const activeResult = await client.query(`select * from t_konta_google where id_uzytkownika = $1 and status_polaczenia <> 'Niepołączone' for update`, [scope.userId]);
       const active = activeResult.rows[0] ? accountFrom(activeResult.rows[0]) : null;
       const sameAccount = Boolean(active && active.sub === input.sub);
+      let replaced: { account: GoogleAccountRecord; refreshEnc: string | null } | null = null;
 
       if (active && !sameAccount) {
         if (input.purpose === 'connect') throw new ConnectionConflictError('already_connected');
         if (input.purpose === 'reconnect') throw new ConnectionConflictError('reconnect_account_mismatch');
         // change_account: poprzednie konto przestaje być aktywne, jego tokeny znikają, a generacja rośnie (stare prace są odrzucane).
+        // Szyfrogram tokenu odświeżania oddajemy wywołującemu, żeby po zapisie cofnął zgodę poprzedniego konta w Google (D03).
+        const oldTokens = await client.query('select refresh_token_enc from t_google_tokeny where id_konta = $1', [active.accountId]);
+        replaced = { account: active, refreshEnc: oldTokens.rows[0]?.refresh_token_enc ?? null };
         await client.query(`update t_konta_google set status_polaczenia = 'Niepołączone', zgoda_synchronizacja = false, generacja = generacja + 1,
           odlaczono_at = now(), updated_at = now() where id_konta = $1`, [active.accountId]);
         await client.query('delete from t_google_tokeny where id_konta = $1', [active.accountId]);
@@ -187,7 +196,7 @@ export class PostgresGoogleIntegrationRepository {
         [accountId, refreshEnc, tokens?.accessEnc ?? null, tokens?.accessExpiresAt ?? null, tokens?.keyId ?? '']);
       }
       const saved = await client.query('select * from t_konta_google where id_konta = $1', [accountId]);
-      return accountFrom(saved.rows[0]);
+      return { account: accountFrom(saved.rows[0]), replaced };
     });
   }
 
@@ -305,5 +314,32 @@ export class PostgresGoogleIntegrationRepository {
   async listSyncAttempts(accountId: string, limit = 10): Promise<SyncAttemptRecord[]> {
     const result = await this.pool.query(`select * from t_synchronizacje where id_konta = $1 order by data_proby desc, id_sync desc limit $2`, [accountId, limit]);
     return result.rows.map(syncAttemptFrom);
+  }
+
+  /**
+   * Odłączenie konta (S23KC2S1P2-35, G03) w jednej transakcji: status „Niepołączone”, zgoda wyłączona, nowa generacja
+   * (prace i odświeżenia ze starą generacją są odrzucane), tokeny usunięte, otwarte logowania anulowane (spóźniony powrót z Google
+   * niczego nie zapisze), trwające synchronizacje zakończone, zaplanowane prace Google zatrzymane. Wydarzenia lokalne zostają.
+   * Zwraca szyfrogramy tokenów, żeby wywołujący mógł po zatwierdzeniu cofnąć zgodę w Google. null – nic nie było połączone.
+   */
+  async disconnect(scope: UserScope): Promise<{ account: GoogleAccountRecord; refreshEnc: string | null; accessEnc: string | null } | null> {
+    return this.transaction(async (client) => {
+      await client.query('select pg_advisory_xact_lock(hashtext($1))', [`google-account:${scope.userId}`]);
+      await client.query(`update t_google_oauth_proby set status = 'cancelled', blad_kod = 'disconnected', code_verifier_enc = null, finished_at = now()
+        where id_uzytkownika = $1 and status in ('pending', 'processing')`, [scope.userId]);
+      const active = await client.query(`select * from t_konta_google where id_uzytkownika = $1 and status_polaczenia <> 'Niepołączone' for update`, [scope.userId]);
+      if (!active.rows[0]) return null;
+      const account = accountFrom(active.rows[0]);
+      const tokens = await client.query('select refresh_token_enc, access_token_enc from t_google_tokeny where id_konta = $1 for update', [account.accountId]);
+      await client.query('delete from t_google_tokeny where id_konta = $1', [account.accountId]);
+      await client.query(`update t_konta_google set status_polaczenia = 'Niepołączone', zgoda_synchronizacja = false, generacja = generacja + 1,
+        odlaczono_at = now(), updated_at = now() where id_konta = $1`, [account.accountId]);
+      await client.query(`update t_synchronizacje set status = 'Błąd', kod_bledu = 'disconnected', zakonczono_at = now(), komunikat = 'Konto odłączono w trakcie synchronizacji.'
+        where id_konta = $1 and status = 'W trakcie'`, [account.accountId]);
+      // Zaplanowane prace dla Google (outbox W02) tego użytkownika nie zostaną wykonane – bez konta nie ma dokąd ich wysłać.
+      await client.query(`update t_event_outbox_delivery d set status = 'dead', error_code = 'google_disconnected', lease_until = null, worker_id = null
+        from t_event_outbox o where o.id_outbox = d.id_outbox and o.id_uzytkownika = $1 and d.consumer = 'google' and d.status in ('pending', 'blocked')`, [scope.userId]);
+      return { account, refreshEnc: tokens.rows[0]?.refresh_token_enc ?? null, accessEnc: tokens.rows[0]?.access_token_enc ?? null };
+    });
   }
 }

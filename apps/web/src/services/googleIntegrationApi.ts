@@ -5,7 +5,7 @@
 import { apiBaseUrl } from './importApi';
 import {
   apiErrorMessage, type AttemptPurpose, type GoogleAccountView, type GoogleIntegrationStatus, type IntegrationAttempt, type IntegrationCalendar,
-  type SimulatedFailure, type SyncAttempt, type SyncStatus,
+  type DisconnectResult, type SimulatedFailure, type SyncAttempt, type SyncStatus,
 } from '../domain/googleIntegration';
 
 export class GoogleIntegrationApiError extends Error {
@@ -14,7 +14,7 @@ export class GoogleIntegrationApiError extends Error {
   }
 }
 
-async function call<T>(method: 'GET' | 'POST', path: string, body?: unknown, timeoutMs = 30000): Promise<T> {
+async function call<T>(method: 'GET' | 'POST' | 'DELETE', path: string, body?: unknown, timeoutMs = 30000): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`${apiBaseUrl()}${path}`, {
@@ -50,3 +50,6 @@ export const getGoogleSync = () => call<SyncStatus>('GET', '/api/v1/integrations
 export const runGoogleSync = (simulate?: SimulatedFailure) =>
   // Serwer może ponowić próbę kilka razy (każda do 15 s), więc czekamy dłużej niż przy zwykłych zapytaniach.
   call<{ attempt: SyncAttempt; status: SyncStatus }>('POST', '/api/v1/integrations/google/sync', simulate ? { simulate } : {}, 75000);
+
+/** „Odłącz konto Google” (S23KC2S1P2-35, G03): usuwa dane dostępu w KAC i prosi Google o cofnięcie zgody. Powtórzenie jest bezpieczne. */
+export const disconnectGoogleIntegration = () => call<DisconnectResult>('DELETE', '/api/v1/integrations/google');

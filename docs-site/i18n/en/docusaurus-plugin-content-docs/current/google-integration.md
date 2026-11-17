@@ -39,6 +39,20 @@ Story S23KC2S1P2-17, subtask G06 (S23KC2S1P2-290). Below the calendar list the p
 - An incomplete calendar list gives a "partial" result and does not delete calendars it did not cover.
 - In demo mode the next synchronization result can be forced (no internet, transient network error, expired login, server error, rate limit, partial result, no permissions) to show the flows without real Google.
 
+## Disconnecting and revoking consent (G03)
+
+Story S23KC2S1P2-35, subtask G03 (S23KC2S1P2-287). The "Odłącz konto Google" button shows a confirmation; "Anuluj" changes nothing. After confirmation `DELETE /api/v1/integrations/google` in one transaction:
+
+- sets the status to "Niepołączone", turns sync consent off and bumps the connection generation – work and token refreshes of the old generation no longer send any request to Google,
+- deletes stored tokens,
+- cancels open sign-in attempts, so a late return from Google saves nothing (including one already in progress),
+- finishes running synchronizations and stops queued Google work in the outbox (W02),
+- never deletes local events.
+
+Decision D03: after the local changes are committed KAC asks Google to revoke its consent (`revoke` endpoint, token in the request body). The response describes KAC (`local`) and Google (`remote`) separately: `revoked` only when Google confirmed it; with `failed` the panel says the access data was deleted but consent must be removed manually in the Google account settings. Disconnecting also works offline. Repeating it returns the same state. A request already sent to Google cannot be undone, and the panel does not promise that.
+
+"Zmień konto" also revokes the consent of the replaced account (best effort after the new connection is saved). The one-time import keeps its own `DELETE /api/v1/import/google/connections/{id}` (204), and its dialog says the Settings connection is not used there.
+
 ## Security
 
 - OAuth 2.0 authorization code flow with PKCE (S256) and offline access. The `state` has 32 random bytes, is single-use, valid for 10 minutes and stored only as a SHA-256 hash. The Google return must reach the same user who started the attempt.
@@ -58,6 +72,7 @@ Story S23KC2S1P2-17, subtask G06 (S23KC2S1P2-290). Below the calendar list the p
 | `POST /api/v1/integrations/google/attempts/{id}/demo-consent` | Demo mode only: account choice and consent or denial. |
 | `GET /api/v1/integrations/google/callback` | Google return URL; renders an HTML page. |
 | `GET /api/v1/integrations/google/calendars` | Calendar list (all pages) with role `owner`, `writer`, `reader` or `freeBusyReader`. |
+| `DELETE /api/v1/integrations/google` | Disconnects the account and revokes consent in Google; `local` and `remote` describe the result separately. |
 | `GET /api/v1/integrations/google/sync` | Sync state, last attempt, last successful read and publication, attempt history. |
 | `POST /api/v1/integrations/google/sync` | "Synchronize with Google" with limited retries. A Google error is the attempt result (200); `simulate` only in demo mode. |
 
@@ -88,4 +103,5 @@ Migration `018_google_sync_registry.sql` extends `t_synchronizacje` (scope, trie
 - `apps/api/tests/google-integration.test.ts` – encryption, consent URL, code exchange, refresh (single flight, rotation, `invalid_grant`), calendar list, key configuration, logs without OAuth codes.
 - `apps/api/tests/google-integration.integration.test.ts` (PostgreSQL) – demo mode (denial, 1a, account change, 7a, expired attempt, another user's attempt), simulated Google (single-use and expired `state`, 6a, missing refresh token, ciphertexts in the database, no tokens in responses, reconnect) and parallel refresh from two instances. Every scenario checks that the user's events did not change.
 - `apps/web/tests/googleIntegration.test.ts` – panel state and messages.
+- `apps/api/tests/google-disconnect.integration.test.ts` (PostgreSQL) – disconnecting in demo mode and with simulated Google, repeating, cancelled attempt, stopped outbox work, rejected old generation and late callback, failed revoke (network, 503), revoke on account change; `apps/web/tests/googleDisconnect.test.ts` – confirmation and result texts.
 - `apps/api/tests/google-sync.test.ts` and `google-sync.integration.test.ts` (PostgreSQL, fake clock) – error classes, retries, last success, partial result, expired login, denial disabling sync, one attempt at a time, 503/network/disabled Calendar API with simulated Google; `apps/web/tests/googleSync.test.ts` – states, buttons and messages.

@@ -24,6 +24,8 @@ export class FakeGoogle {
   /** Strony listy kalendarzy (calendarList), po kolei. */
   calendarPages: Record<string, unknown>[][] = [[{ id: 'primary', summary: 'Student', primary: true, accessRole: 'owner', timeZone: 'Europe/Warsaw' }]];
   calendarFailure: Reply | null = null;
+  /** Odpowiedź endpointu revoke: null – sukces, liczba – status błędu, 'network' – zerwane połączenie. */
+  revokeFailure: number | 'network' | null = null;
   /** Kolejne odpowiedzi listy kalendarzy przed zwykłą: błąd HTTP albo 'network' (zerwane połączenie). Zużywane po jednej. */
   calendarScript: Array<Reply | 'network'> = [];
   delayMs = 0;
@@ -63,8 +65,9 @@ export class FakeGoogle {
       return respond(reply.status ?? 200, reply.body);
     }
     if (url.startsWith('https://oauth2.googleapis.com/revoke')) {
-      this.revoked.push(new URL(url).searchParams.get('token') ?? '');
-      return respond(200, {});
+      if (this.revokeFailure === 'network') throw new TypeError('fetch failed');
+      this.revoked.push(new URLSearchParams(init?.body ?? '').get('token') ?? '');
+      return this.revokeFailure ? respond(this.revokeFailure, { error: 'server_error' }) : respond(200, {});
     }
     if (url.startsWith('https://www.googleapis.com/calendar/v3/users/me/calendarList')) {
       const token = String(init?.headers?.Authorization ?? '').replace(/^Bearer /, '');

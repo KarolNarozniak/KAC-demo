@@ -39,6 +39,20 @@ Historyjka S23KC2S1P2-17, podzadanie G06 (S23KC2S1P2-290). Pod listą kalendarzy
 - Niepełna lista kalendarzy daje wynik „Częściowo” i nie usuwa kalendarzy, których lista nie objęła.
 - W trybie demonstracyjnym można wymusić wynik następnej synchronizacji (brak internetu, chwilowy błąd sieci, wygasłe logowanie, błąd serwera, limit, wynik częściowy, brak uprawnień), żeby pokazać przebiegi bez prawdziwego Google.
 
+## Odłączenie konta i cofnięcie zgody (G03)
+
+Historyjka S23KC2S1P2-35, podzadanie G03 (S23KC2S1P2-287). Przycisk „Odłącz konto Google” pokazuje okno potwierdzenia; „Anuluj” niczego nie zmienia. Po potwierdzeniu `DELETE /api/v1/integrations/google` w jednej transakcji:
+
+- ustawia status „Niepołączone”, wyłącza zgodę na synchronizację i podnosi generację połączenia – prace i odświeżenia tokenu ze starą generacją nie wyślą już żadnego żądania do Google,
+- usuwa zapisane tokeny,
+- anuluje otwarte logowania, więc spóźniony powrót z Google niczego nie zapisze (także taki, który był już w trakcie),
+- kończy trwające synchronizacje i zatrzymuje zaplanowane prace dla Google w outboxie (W02),
+- nie usuwa żadnych wydarzeń lokalnych.
+
+Decyzja D03: po zatwierdzeniu lokalnych zmian KAC prosi Google o cofnięcie zgody (endpoint `revoke`, token w treści żądania). Odpowiedź opisuje osobno stan w KAC (`local`) i w Google (`remote`): `revoked` tylko wtedy, gdy Google to potwierdził; przy `failed` panel mówi, że dane dostępu usunięto, ale zgodę trzeba cofnąć ręcznie w ustawieniach konta Google. Odłączenie działa także bez internetu. Powtórne odłączenie zwraca ten sam stan. Już wysłanego żądania do Google nie da się cofnąć i panel tego nie obiecuje.
+
+„Zmień konto” również cofa zgodę zastępowanego konta (najlepsza próba po zapisaniu nowego połączenia). Jednorazowy import zachowuje własne `DELETE /api/v1/import/google/connections/{id}` (204), a jego okno informuje, że połączenie z Ustawień nie jest tam używane.
+
 ## Bezpieczeństwo
 
 - OAuth 2.0 „authorization code” z PKCE (S256) i dostępem offline. `state` ma 32 losowe bajty, jest jednorazowy, ważny 10 minut i zapisany wyłącznie jako skrót SHA-256. Powrót z Google musi trafić do tego samego użytkownika, który rozpoczął próbę.
@@ -58,6 +72,7 @@ Historyjka S23KC2S1P2-17, podzadanie G06 (S23KC2S1P2-290). Pod listą kalendarzy
 | `POST /api/v1/integrations/google/attempts/{id}/demo-consent` | Tylko makieta: wybór konta i zgoda albo odmowa. |
 | `GET /api/v1/integrations/google/callback` | Adres powrotu z Google; zwraca stronę HTML. |
 | `GET /api/v1/integrations/google/calendars` | Lista kalendarzy (wszystkie strony) z rolą `owner`, `writer`, `reader` albo `freeBusyReader`. |
+| `DELETE /api/v1/integrations/google` | Odłączenie konta i cofnięcie zgody w Google; `local` i `remote` opisują wynik osobno. |
 | `GET /api/v1/integrations/google/sync` | Stan synchronizacji, ostatnia próba, ostatni sukces odczytu i publikacji, historia prób. |
 | `POST /api/v1/integrations/google/sync` | „Synchronizuj z Google” z ograniczonymi ponowieniami. Błąd Google jest wynikiem próby (200); `simulate` tylko w makiecie. |
 
@@ -88,4 +103,5 @@ Migracja `018_google_sync_registry.sql` rozszerza `t_synchronizacje` (zakres, li
 - `apps/api/tests/google-integration.test.ts` – szyfrowanie, adres zgody, wymiana kodu, odświeżanie (jedno naraz, rotacja, `invalid_grant`), lista kalendarzy, konfiguracja klucza, logi bez kodu OAuth.
 - `apps/api/tests/google-integration.integration.test.ts` (PostgreSQL) – makieta (odmowa, 1a, zmiana konta, 7a, wygasła próba, cudza próba), udawany Google (jednorazowy i wygasły `state`, 6a, brak tokenu odświeżania, szyfrogramy w bazie, brak tokenów w odpowiedziach, ponowne logowanie) oraz równoległe odświeżanie z dwóch instancji. Każdy scenariusz sprawdza, że wydarzenia użytkownika się nie zmieniły.
 - `apps/web/tests/googleIntegration.test.ts` – stan panelu i komunikaty.
+- `apps/api/tests/google-disconnect.integration.test.ts` (PostgreSQL) – odłączenie w makiecie i z udawanym Google, powtórzenie, anulowana próba, zatrzymane prace outboxa, odrzucona stara generacja i spóźniony powrót, nieudane cofnięcie zgody (sieć, 503), cofnięcie zgody przy zmianie konta; `apps/web/tests/googleDisconnect.test.ts` – teksty potwierdzenia i wyniku.
 - `apps/api/tests/google-sync.test.ts` i `google-sync.integration.test.ts` (PostgreSQL, atrapa zegara) – klasy błędów, ponowienia, ostatni sukces, wynik częściowy, wygasłe logowanie, odmowa wyłączająca synchronizację, jedna próba naraz, 503/sieć/wyłączone Calendar API w udawanym Google; `apps/web/tests/googleSync.test.ts` – stany, przyciski i komunikaty.

@@ -6,7 +6,7 @@ import type { UserScope } from '../../api/scope.js';
 import { createPkce, type FetchLike } from '../../import/google/oauth.js';
 import { DEMO_GRANTED_SCOPES, DEMO_INTEGRATION_ACCOUNTS, demoIntegrationCalendars, demoSub, isDemoAccount } from './demo.js';
 import {
-  accessFromScopes, exchangeIntegrationCode, GoogleIntegrationError, INTEGRATION_SCOPES, integrationAuthorizationUrl, listIntegrationCalendars,
+  accessFromScopes, exchangeIntegrationCode, GoogleIntegrationError, INTEGRATION_SCOPES, integrationAuthorizationUrl, listIntegrationCalendars, revokeToken,
   type GoogleAccess, type GoogleIntegrationOAuthConfig, type IntegrationCalendar,
 } from './oauth-client.js';
 import type { Pool } from 'pg';
@@ -34,6 +34,11 @@ export type IntegrationStatus = {
   account: AccountView | null; requestedAccess: GoogleAccess; demoAccounts: string[];
 };
 export type CallbackPage = { httpStatus: number; title: string; message: string };
+/**
+ * Wynik odłączenia (G03). Stan lokalny i stan w Google są opisane osobno: „revoked” tylko wtedy, gdy Google potwierdził cofnięcie zgody;
+ * „failed”, gdy KAC usunął dane dostępu, ale Google nie potwierdził; „not_applicable” dla makiety albo konta bez zapisanych tokenów.
+ */
+export type DisconnectResult = { status: 'not_connected'; account: string | null; alreadyDisconnected: boolean; local: 'removed' | 'nothing_to_remove'; remote: 'revoked' | 'failed' | 'not_applicable' };
 
 const hashState = (state: string) => createHash('sha256').update(state).digest('hex');
 const accountView = (account: GoogleAccountRecord): AccountView => ({
@@ -170,12 +175,16 @@ export class GoogleIntegrationService {
   }): Promise<GoogleAccountRecord | null> {
     let account: GoogleAccountRecord;
     try {
-      account = await this.repository.saveConnectionWith(scope, { purpose: attempt.purpose, mode: input.mode, sub: input.sub, email: input.email, grantedScopes: input.grantedScopes },
+      const saved = await this.repository.saveConnectionWith(scope, {
+        purpose: attempt.purpose, mode: input.mode, sub: input.sub, email: input.email, grantedScopes: input.grantedScopes, attemptId: attempt.id },
         input.identity && this.options.cipher ? (accountId) => ({
           refreshEnc: input.identity!.refreshToken ? this.options.cipher!.encrypt(input.identity!.refreshToken, `${accountId}:refresh`) : null,
           accessEnc: this.options.cipher!.encrypt(input.identity!.accessToken, `${accountId}:access`),
           accessExpiresAt: input.identity!.expiresAt, keyId: this.options.cipher!.keyId,
         }) : null);
+      account = saved.account;
+      // D03: zastąpione konto traci też zgodę w Google (najlepsza próba – nowe połączenie jest już zapisane, błąd nie cofa zmiany).
+      if (saved.replaced) await this.revokeGrant(saved.replaced.account, saved.replaced.refreshEnc, null);
     } catch (error) {
       if (error instanceof ConnectionConflictError) {
         await this.repository.finishAttempt(attempt.id, 'error', error.code);
@@ -219,6 +228,31 @@ export class GoogleIntegrationService {
     return listed;
   }
 
+  /**
+   * „Odłącz konto Google” (S23KC2S1P2-35, G03). Najpierw lokalnie, w jednej transakcji, potem – poza nią – cofnięcie zgody w Google (D03),
+   * więc odłączenie działa także bez internetu. Powtórne odłączenie jest bezpieczne i zwraca ten sam stan.
+   */
+  async disconnect(scope: UserScope): Promise<DisconnectResult> {
+    const removed = await this.repository.disconnect(scope);
+    if (!removed) return { status: 'not_connected', account: null, alreadyDisconnected: true, local: 'nothing_to_remove', remote: 'not_applicable' };
+    const remote = await this.revokeGrant(removed.account, removed.refreshEnc, removed.accessEnc);
+    return { status: 'not_connected', account: removed.account.email, alreadyDisconnected: false, local: 'removed', remote };
+  }
+
+  /** Cofnięcie zgody w Google. Token odświeżania unieważnia cały grant; bez niego – token dostępu. Nie ujawnia tokenów w błędach. */
+  private async revokeGrant(account: GoogleAccountRecord, refreshEnc: string | null, accessEnc: string | null): Promise<DisconnectResult['remote']> {
+    if (account.mode === 'demo' || (!refreshEnc && !accessEnc)) return 'not_applicable';
+    const cipher = this.options.cipher;
+    if (!cipher) return 'failed';
+    let token: string;
+    try {
+      token = refreshEnc ? cipher.decrypt(refreshEnc, `${account.accountId}:refresh`) : cipher.decrypt(accessEnc!, `${account.accountId}:access`);
+    } catch {
+      return 'failed';
+    }
+    return (await revokeToken(token, this.fetchImpl)) ? 'revoked' : 'failed';
+  }
+
   /** Krok 7 / panel G02: aktualna lista kalendarzy połączonego konta. */
   async calendars(scope: UserScope): Promise<{ account: AccountView; calendars: IntegrationCalendar[]; complete: boolean }> {
     const account = await this.repository.getActiveAccount(scope.userId);
@@ -249,6 +283,7 @@ export function createGoogleIntegrationService(pool: Pool, settings: { oauth: Go
 function callbackConflictMessage(code: string | null | undefined): string {
   if (code === 'already_connected') return 'Masz już połączone konto Google. Żeby połączyć inne, użyj w aplikacji „Zmień konto”.';
   if (code === 'reconnect_account_mismatch') return 'Wybrano inne konto Google niż połączone. Żeby je zmienić, użyj w aplikacji „Zmień konto”.';
+  if (code === 'attempt_cancelled') return 'Łączenie zostało anulowane albo konto odłączono w międzyczasie. Nic nie zostało zapisane – połącz konto ponownie w aplikacji.';
   if (code === 'no_refresh_token') return 'Google nie wydał trwałego dostępu. Usuń dostęp KAC w ustawieniach konta Google (Bezpieczeństwo → Aplikacje innych firm) i połącz ponownie.';
   return 'Nie udało się zapisać połączenia. Spróbuj ponownie w aplikacji.';
 }

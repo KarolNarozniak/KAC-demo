@@ -233,3 +233,31 @@ export function syncResultNotice(attempt: SyncAttempt): Notice {
 }
 
 export const SYNC_DISABLED_TEXT = 'Synchronizacja jest wyłączona, bo przy ponownym logowaniu nie udzielono zgody. Lokalne wydarzenia pozostały bez zmian.';
+
+// --- Odłączenie konta i cofnięcie zgody (S23KC2S1P2-35, G03) ---
+
+export type DisconnectResult = {
+  status: 'not_connected'; account: string | null; alreadyDisconnected: boolean; local: 'removed' | 'nothing_to_remove'; remote: 'revoked' | 'failed' | 'not_applicable';
+};
+
+/** Treść okna potwierdzenia: co się stanie, a co zostanie bez zmian. */
+export const disconnectWarning = (email: string, mode: 'google' | 'demo') =>
+  `Odłączyć konto ${email}? KAC usunie zapisane dane dostępu i zatrzyma synchronizację${mode === 'google' ? ', a potem poprosi Google o cofnięcie zgody' : ''}. ` +
+  'Twoje wydarzenia w KAC zostaną bez zmian. Wysłanego już żądania do Google nie da się cofnąć.';
+
+/**
+ * Wynik odłączenia. Stan w KAC i stan w Google są opisane osobno – nie mówimy o cofnięciu zgody,
+ * jeśli Google go nie potwierdził (usunięto tylko dane lokalne).
+ */
+export function disconnectNotice(result: DisconnectResult): Notice {
+  if (result.alreadyDisconnected) return { tone: 'info', text: 'Konto Google było już odłączone. Nic się nie zmieniło.' };
+  const who = result.account ? `konto ${result.account}` : 'konto Google';
+  const local = `Odłączono ${who}: KAC usunął dane dostępu i zatrzymał synchronizację. Wydarzenia w KAC zostały bez zmian.`;
+  if (result.remote === 'revoked') return { tone: 'success', text: `${local} Google potwierdził cofnięcie zgody.` };
+  if (result.remote === 'failed') return { tone: 'error', text: `${local} Nie udało się jednak cofnąć zgody w Google – usuń dostęp KAC ręcznie w ustawieniach konta Google (Bezpieczeństwo → połączenia z aplikacjami innych firm).` };
+  return { tone: 'success', text: local };
+}
+
+/** Okno jednorazowego importu (S23KC2S1P2-27): informacja, że trwałe połączenie z Ustawień nie jest tu używane. */
+export const importLinkedAccountHint = (email: string) =>
+  `W Ustawieniach masz połączone konto ${email}. Import jednorazowy ma osobną zgodę – połączenie z Ustawień nie jest tu używane, więc Google poprosi o zgodę jeszcze raz.`;
