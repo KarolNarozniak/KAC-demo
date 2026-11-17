@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Modal, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import type { CalendarEvent, Category, Occurrence } from '../domain/model';
 import { addCalendarDays, localDateKey, occurrencesForRange, startOfWeek, validateEventInput } from '../domain/calendar';
+import { GoogleCorrectionNotice, GoogleEventSync, type CorrectionRequest } from '../components/GoogleCorrection';
 import { loadCalendar, createEvent, updateEvent, EventCollisionError, type EventCollision, deleteEvent, checkEventCollisions } from '../services/calendarApi';
 import { collisionSummary, describeCollision } from '../domain/collisions';
 import { Button, Field, useTheme } from '../components/ui';
@@ -112,6 +113,8 @@ export default function CalendarScreen({ week, setWeek, todayOnly = false, weekL
   const gridEvents = useMemo(() => [...list, ...previewEvents], [list, previewEvents]);
   const [collisionToken, setCollisionToken] = useState<string | undefined>();
   const [notice, setNotice] = useState('');
+  // G09: ostatni zapis albo usunięcie zmiany do zsynchronizowania z Google (symulacja).
+  const [correction, setCorrection] = useState<CorrectionRequest | null>(null);
   // S23KC2S1P2-302: wynik ponownego sprawdzenia dotyczy dokładnie tego szkicu – każda zmiana pola go unieważnia.
   const [recheck, setRecheck] = useState<{ draft: CalendarEvent; conflicts: EventCollision[] } | null>(null);
   const [checking, setChecking] = useState(false);
@@ -142,6 +145,8 @@ export default function CalendarScreen({ week, setWeek, todayOnly = false, weekL
       const token = force ? collisionToken : undefined;
       const saved = editId ? await updateEvent(editId, event, token) : await createEvent(event, token);
       setEvents((current) => editId ? current.map(item => item.id === editId ? saved : item) : [...current, saved]);
+      // G09: edycja opublikowanej zmiany – synchronizacja z Google od razu po zapisie lokalnym.
+      if (editId) setCorrection({ eventId: editId, kind: 'update', nonce: Date.now() });
       close();
       setNotice(force ? 'Zapisano mimo kolizji.' : 'Zapisano bez kolizji.');
     } catch (error) {
@@ -157,6 +162,7 @@ export default function CalendarScreen({ week, setWeek, todayOnly = false, weekL
     try {
       const deletedIds = new Set(await deleteEvent(selected.id));
       setEvents((current) => current.filter((event) => !deletedIds.has(event.id)));
+      if (selected.category === 'Work') setCorrection({ eventId: selected.id, kind: 'delete', nonce: Date.now() });
       close();
     } catch {
       setError('Nie udało się usunąć wydarzenia. Spróbuj ponownie.');
@@ -173,6 +179,7 @@ export default function CalendarScreen({ week, setWeek, todayOnly = false, weekL
   const changeTime = (field: 'start' | 'end', value: string) => setDraft((current) => current ? { ...current, [field]: `${current[field].split('T')[0]}T${value}` } : current);
   return <View style={{ flex: 1, minHeight: 0, width: '100%', maxWidth: 1440, alignSelf: 'center', paddingHorizontal: compact ? 8 : 16 }}>
     {!!notice && <Text accessibilityLiveRegion="polite" style={styles.muted}>{notice}</Text>}
+    <GoogleCorrectionNotice request={correction} />
     {loading && <Text accessibilityLiveRegion="polite" style={styles.muted}>Wczytywanie…</Text>}
     {!!loadError && <View><Text accessibilityRole="alert" style={styles.error}>{loadError}</Text><Button title="Spróbuj ponownie" onPress={() => void reload()} /></View>}
     {!todayOnly && <View style={[styles.row, { justifyContent: 'space-between', paddingVertical: 6, flexWrap: 'wrap' }]}>
@@ -220,7 +227,7 @@ export default function CalendarScreen({ week, setWeek, todayOnly = false, weekL
         <Text style={[styles.body, { fontWeight: '700' }]}>Zmiana planu</Text>
         {planChange.lines.map((line) => <Text key={line} style={styles.body}>{line}</Text>)}
         {planChange.outdated && <Text style={[styles.muted, { color: palette.amber }]}>Wydarzenie zmieniło się ponownie po wysłaniu powiadomienia – poniżej aktualny termin.</Text>}
-      </View>}<Text style={[styles.heading, { marginTop: 12 }]}>{selected.title}</Text><Text style={styles.subtitle}>{selected.occurrenceStart.toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' })} · {selected.occurrenceStart.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}–{selected.occurrenceEnd.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}</Text><Text style={[styles.subtitle, { marginTop: 8 }]}>{selected.location ? `Miejsce: ${selected.location}` : 'Nie podano miejsca.'}</Text><Text style={[styles.body, { marginTop: 12 }]}>{selected.repeatWeekly ? 'Seria cotygodniowa. Edycja zmienia całą serię.' : 'Wydarzenie jednorazowe.'} {selected.mandatory ? 'Zajęcia obowiązkowe.' : ''}</Text><View style={[styles.row, { justifyContent: 'flex-end', flexWrap: 'wrap', marginTop: 18 }]}><Button title="Edytuj" primary onPress={edit} /><Button title={selected.repeatWeekly ? 'Usuń serię' : 'Usuń wydarzenie'} danger onPress={() => { setError(''); setDialog('delete'); }} /><Button title="Zamknij" onPress={close} /></View></>}
+      </View>}<Text style={[styles.heading, { marginTop: 12 }]}>{selected.title}</Text><Text style={styles.subtitle}>{selected.occurrenceStart.toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' })} · {selected.occurrenceStart.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}–{selected.occurrenceEnd.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}</Text><Text style={[styles.subtitle, { marginTop: 8 }]}>{selected.location ? `Miejsce: ${selected.location}` : 'Nie podano miejsca.'}</Text><Text style={[styles.body, { marginTop: 12 }]}>{selected.repeatWeekly ? 'Seria cotygodniowa. Edycja zmienia całą serię.' : 'Wydarzenie jednorazowe.'} {selected.mandatory ? 'Zajęcia obowiązkowe.' : ''}</Text>{selected.category === 'Work' && <GoogleEventSync eventId={selected.id} />}<View style={[styles.row, { justifyContent: 'flex-end', flexWrap: 'wrap', marginTop: 18 }]}><Button title="Edytuj" primary onPress={edit} /><Button title={selected.repeatWeekly ? 'Usuń serię' : 'Usuń wydarzenie'} danger onPress={() => { setError(''); setDialog('delete'); }} /><Button title="Zamknij" onPress={close} /></View></>}
       {dialog === 'delete' && selected && <>
         <Text style={styles.heading}>{selected.repeatWeekly ? 'Usunąć całą serię?' : 'Usunąć wydarzenie?'}</Text>
         <Text style={styles.subtitle}>{selected.title}</Text>

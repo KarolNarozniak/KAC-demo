@@ -63,6 +63,24 @@ Historyjka S23KC2S1P2-30, podzadanie G07 (S23KC2S1P2-291). Pod zaakceptowanym gr
 - Wynik symulacji można wymusić (brak internetu, chwilowy błąd, wygasłe logowanie, brak prawa zapisu, limit, błąd serwera, wynik częściowy). Błąd nigdy nie jest pokazany jako sukces; „Spróbuj ponownie” działa bez wymuszonego błędu.
 - Prawdziwa publikacja podłączy się w API jako drugi `PublicationAdapter` z tym samym kontraktem. To zadanie samo nie odblokowuje korekt opublikowanych zmian (S23KC2S1P2-47).
 
+## Korekta i usunięcie opublikowanej zmiany (G09)
+
+Historyjka S23KC2S1P2-47, podzadanie G09 (S23KC2S1P2-292). Szczegóły opublikowanej zmiany w kalendarzu pokazują stan powiązanego wydarzenia w Google. „Edytuj” → „Zapisz” albo „Usuń” → potwierdzenie zapisuje zmianę lokalnie i od razu ją synchronizuje. **To symulacja – nic nie trafia do Google.** „Anuluj” w formularzu albo w potwierdzeniu usunięcia niczego nie zapisuje i niczego nie zleca.
+
+- Zapis lokalny obejmuje w jednej transakcji: wydarzenie, bieżący zaakceptowany grafik (korekta), oznaczenie pozycji publikacji i zlecenie w outboxie (W02).
+- Synchronizację wykonuje konsument „google” w workerze outboxa albo „Ponów synchronizację” (`POST …/publications/events/{eventId}/sync`), które aplikacja wywołuje też od razu po zapisie. Zawsze wysyłany jest najnowszy stan wydarzenia z bazy, nie treść starego zlecenia; pozycje są blokowane, więc dwa workery i kolejność edycja → edycja → usunięcie nie odtwarzają starego stanu.
+- Błąd Google nie cofa zmiany lokalnej: pozycja ma stan „Błąd” (albo „Do usunięcia” z kodem błędu) i można ją ponowić. Błędy przejściowe worker ponawia sam z rosnącą przerwą.
+- Aktualizacja wydarzenia, którego nie ma już w Google, kończy się stanem „Brak w Google” bez tworzenia nowego (6c). Usunięcie wydarzenia, którego w Google już nie ma, jest sukcesem.
+- Usunięcie zostawia nagrobek: `ref_wydarzenia`, kalendarz Google, zewnętrzne ID, migawka danych i stan próby zostają po wyzerowaniu FK wydarzenia, więc usunięcie da się ponowić także po restarcie. Ustawienia → Google Calendar pokazują listę rozbieżności z „Ponów synchronizację”.
+- Każda próba trafia do rejestru `t_synchronizacje` (kierunek „Publikacja”, zakres `event:{id}`). W makiecie wynik następnej próby można wymusić (brak internetu, błąd serwera, limit, brak prawa zapisu, brak wydarzenia w Google).
+
+Założenie D07 (do potwierdzenia w zespole):
+
+- Korekta dotyczy tylko bieżącego zaakceptowanego grafiku. Wersje zastąpione i odrzucone zostają bez zmian (historia).
+- Zmiana zachowuje stawkę z chwili zatwierdzenia: kwota po korekcie jest liczona tą stawką, nie bieżącą stawką profilu.
+- Każda korekta zapisuje wiersz w `t_korekty_grafiku` (przed/po). Usunięta zmiana zostaje w historii ze statusem „Usunięta”; sumy grafiku liczą tylko zmiany aktywne. Korekta nie tworzy nowej wersji grafiku.
+- Zastąpienie zaakceptowanego grafiku nową wersją działa jak dotąd: stare wydarzenia są usuwane, a ich publikacje usuwane w Google tą samą synchronizacją.
+
 ## Odłączenie konta i cofnięcie zgody (G03)
 
 Historyjka S23KC2S1P2-35, podzadanie G03 (S23KC2S1P2-287). Przycisk „Odłącz konto Google” pokazuje okno potwierdzenia; „Anuluj” niczego nie zmienia. Po potwierdzeniu `DELETE /api/v1/integrations/google` w jednej transakcji:
@@ -102,9 +120,13 @@ Decyzja D03: po zatwierdzeniu lokalnych zmian KAC prosi Google o cofnięcie zgod
 | `GET /api/v1/integrations/google/calendar-selection` | Wybór kalendarzy: źródła, kalendarz publikacji, wersja, `canPublish`, `targetProblem`. |
 | `PUT /api/v1/integrations/google/calendar-selection` | Atomowy zapis wyboru z wersją. |
 | `GET /api/v1/integrations/google/publications/{weekStart}/preview` | Podgląd symulowanej publikacji; opcjonalnie `calendarId`. |
+| `GET /api/v1/integrations/google/publications/events/{eventId}` | Stan publikacji wydarzenia (także po jego usunięciu). |
+| `POST /api/v1/integrations/google/publications/events/{eventId}/sync` | Synchronizacja korekty / „Ponów synchronizację”; wynik `nothing`, `success` albo `error` (200). |
+| `GET /api/v1/integrations/google/publications/divergences` | Rozbieżności KAC ↔ Google. |
+| `PUT /api/v1/integrations/google/publications/simulation` | Makieta: wynik następnej synchronizacji korekty. |
 | `POST /api/v1/integrations/google/publications/{weekStart}` | Potwierdzona publikacja (symulacja) z `expectedVersion`. Błąd Google jest wynikiem próby (200). |
 
-Błędy Google mają stabilne kody: `reconnect_required` (409), `insufficient_permissions` (403), `rate_limited` (429), `google_unavailable`, `google_error` i `api_not_enabled` (502), `network_error` (504). Synchronizacja zwraca też `sync_disabled`, `sync_in_progress` i `no_calendars_selected` (409). Wybór kalendarzy: `unknown_calendar` (400), `selection_conflict` i `calendar_unavailable` (409), `target_not_writable` i `write_access_missing` (422). Publikacja: `schedule_not_found` (404), `schedule_not_accepted`, `schedule_empty`, `schedule_version_conflict`, `no_publication_target` i `publication_in_progress` (409). Bez bazy danych endpointy zwracają `503 integration_not_configured`.
+Błędy Google mają stabilne kody: `reconnect_required` (409), `insufficient_permissions` (403), `rate_limited` (429), `google_unavailable`, `google_error` i `api_not_enabled` (502), `network_error` (504). Synchronizacja zwraca też `sync_disabled`, `sync_in_progress` i `no_calendars_selected` (409). Wybór kalendarzy: `unknown_calendar` (400), `selection_conflict` i `calendar_unavailable` (409), `target_not_writable` i `write_access_missing` (422). Publikacja: `schedule_not_found` (404), `schedule_not_accepted`, `schedule_empty`, `schedule_version_conflict`, `no_publication_target` i `publication_in_progress` (409). Korekty: `publication_not_found` (404); kod `event_not_found` w wyniku oznacza brak wydarzenia w Google. Bez bazy danych endpointy zwracają `503 integration_not_configured`.
 
 ## Konfiguracja
 
@@ -124,7 +146,7 @@ Ekran zgody Google musi zawierać zakresy `openid`, `email`, `https://www.google
 
 ## Dane
 
-Migracja `020_google_schedule_publication.sql` rozszerza `t_publikacje` o powiązanie per zmiana (właściciel, konto, zmiana, wydarzenie i jego wersja, tryb). Migracja `019_google_calendar_selection.sql` dodaje w `t_konta_google` kalendarz publikacji (`id_kal_publikacji`) i wersję wyboru (`wersja_wyboru`). Migracja `018_google_sync_registry.sql` rozszerza `t_synchronizacje` (zakres, liczba prób, kod błędu, czas zakończenia, generacja) i dodaje `ostatnia_publikacja` w `t_konta_google`. Migracja `017_google_integration.sql` rozszerza `t_konta_google` (stabilny `google_sub`, tryb, przyznane zakresy, generacja, daty połączenia i odłączenia) oraz `t_kalendarze_google` (rola dostępu, strefa, kalendarz główny). Nowe tabele: `t_google_tokeny` (tylko szyfrogramy) i `t_google_oauth_proby` (jednorazowe próby OAuth). Jeden użytkownik ma najwyżej jedno aktywne konto Google.
+Migracja `021_google_publication_corrections.sql` dodaje do `t_publikacje` nagrobek (`ref_wydarzenia`, `migawka`) i stan próby (`kod_bledu`, `proby`, `ostatnia_proba`), a do `t_konta_google` wymuszony wynik symulacji. Migracja `020_google_schedule_publication.sql` rozszerza `t_publikacje` o powiązanie per zmiana (właściciel, konto, zmiana, wydarzenie i jego wersja, tryb). Migracja `019_google_calendar_selection.sql` dodaje w `t_konta_google` kalendarz publikacji (`id_kal_publikacji`) i wersję wyboru (`wersja_wyboru`). Migracja `018_google_sync_registry.sql` rozszerza `t_synchronizacje` (zakres, liczba prób, kod błędu, czas zakończenia, generacja) i dodaje `ostatnia_publikacja` w `t_konta_google`. Migracja `017_google_integration.sql` rozszerza `t_konta_google` (stabilny `google_sub`, tryb, przyznane zakresy, generacja, daty połączenia i odłączenia) oraz `t_kalendarze_google` (rola dostępu, strefa, kalendarz główny). Nowe tabele: `t_google_tokeny` (tylko szyfrogramy) i `t_google_oauth_proby` (jednorazowe próby OAuth). Jeden użytkownik ma najwyżej jedno aktywne konto Google.
 
 ## Testy
 
@@ -132,6 +154,7 @@ Migracja `020_google_schedule_publication.sql` rozszerza `t_publikacje` o powią
 - `apps/api/tests/google-integration.integration.test.ts` (PostgreSQL) – makieta (odmowa, 1a, zmiana konta, 7a, wygasła próba, cudza próba), udawany Google (jednorazowy i wygasły `state`, 6a, brak tokenu odświeżania, szyfrogramy w bazie, brak tokenów w odpowiedziach, ponowne logowanie) oraz równoległe odświeżanie z dwóch instancji. Każdy scenariusz sprawdza, że wydarzenia użytkownika się nie zmieniły.
 - `apps/web/tests/googleIntegration.test.ts` – stan panelu i komunikaty.
 - `apps/api/tests/google-disconnect.integration.test.ts` (PostgreSQL) – odłączenie w makiecie i z udawanym Google, powtórzenie, anulowana próba, zatrzymane prace outboxa, odrzucona stara generacja i spóźniony powrót, nieudane cofnięcie zgody (sieć, 503), cofnięcie zgody przy zmianie konta; `apps/web/tests/googleDisconnect.test.ts` – teksty potwierdzenia i wyniku.
+- `apps/api/tests/google-corrections.integration.test.ts` (PostgreSQL) – korekta grafiku ze snapshotem stawki, zlecenie w tej samej transakcji, worker, błąd bez cofania zmiany i ponowienie, brak wydarzenia w Google bez tworzenia nowego, błąd przejściowy w workerze, nagrobek po usunięciu, usunięcie brakującego wydarzenia, edycja → edycja → usunięcie z dwoma workerami, restart z wygasłą dzierżawą; `apps/web/tests/googleCorrection.test.ts` – komunikaty i ponowienie.
 - `apps/api/tests/google-publication.integration.test.ts` (PostgreSQL, atrapa zegara) – warunki wejścia, podgląd bez zmian, konflikt wersji, błąd bez sukcesu, wynik częściowy i ponowienie bez duplikatów, aktualizacja po zmianie wydarzenia, brak ID Google w symulacji, cudzy grafik; `apps/web/tests/googlePublication.test.ts` – wejście, podgląd, komunikaty wyniku i ponowienie.
 - `apps/api/tests/google-calendar-selection.integration.test.ts` (PostgreSQL) – zapis atomowy z wersją, konflikt (także dwa równoległe zapisy), obcy kalendarz, kalendarz tylko do odczytu jako cel, brak zgody na zapis, utrata uprawnień, ponad 250 kalendarzy, synchronizacja bez wyboru; `apps/web/tests/googleCalendarSelection.test.ts` – szkic wyboru, kandydaci na cel, podsumowanie zmian.
 - `apps/api/tests/google-sync.test.ts` i `google-sync.integration.test.ts` (PostgreSQL, atrapa zegara) – klasy błędów, ponowienia, ostatni sukces, wynik częściowy, wygasłe logowanie, odmowa wyłączająca synchronizację, jedna próba naraz, 503/sieć/wyłączone Calendar API w udawanym Google; `apps/web/tests/googleSync.test.ts` – stany, przyciski i komunikaty.

@@ -20930,6 +20930,1117 @@
         }
       }
     },
+    "/api/v1/integrations/google/publications/events/{eventId}": {
+      "get": {
+        "operationId": "getGooglePublishedEvent",
+        "summary": "Get published event sync state",
+        "tags": [
+          "Google integration"
+        ],
+        "description": "Synchronization state of a published work shift in each calendar it was published to (simulation). Also works after the local event was deleted, because the publication record keeps a tombstone.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "in": "path",
+            "name": "eventId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stan publikacji wydarzenia.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "eventId",
+                    "items"
+                  ],
+                  "properties": {
+                    "eventId": {
+                      "type": "string"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "eventId",
+                          "calendar",
+                          "state",
+                          "simulated",
+                          "errorCode",
+                          "errorClass",
+                          "message",
+                          "tries",
+                          "lastTryAt",
+                          "publishedAt",
+                          "snapshot"
+                        ],
+                        "properties": {
+                          "eventId": {
+                            "type": "string",
+                            "description": "Lokalne ID wydarzenia (zostaje także po jego usunięciu)."
+                          },
+                          "calendar": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "id",
+                              "name"
+                            ],
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "synced",
+                              "pending",
+                              "error",
+                              "missing",
+                              "pending_delete",
+                              "deleted"
+                            ],
+                            "description": "synced – zgodne; pending – lokalna zmiana czeka; error – nieudana aktualizacja; missing – brak wydarzenia w Google (nie tworzymy nowego); pending_delete – usunięte lokalnie, czeka na usunięcie w Google; deleted – usunięte w obu."
+                          },
+                          "simulated": {
+                            "type": "boolean"
+                          },
+                          "errorCode": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "errorClass": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "network",
+                                  "reconnect",
+                                  "permissions",
+                                  "rate_limit",
+                                  "server",
+                                  "other"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "message": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "tries": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "lastTryAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "publishedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "snapshot": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "title",
+                                  "start",
+                                  "end"
+                                ],
+                                "properties": {
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "start": {
+                                    "type": "string"
+                                  },
+                                  "end": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "description": "Stan publikacji wydarzenia."
+                },
+                "examples": {
+                  "synced": {
+                    "summary": "Zgodne",
+                    "value": {
+                      "eventId": "e-1",
+                      "items": [
+                        {
+                          "eventId": "e-1",
+                          "calendar": {
+                            "id": "praca@group.calendar.google.com",
+                            "name": "Grafik pracy"
+                          },
+                          "state": "synced",
+                          "simulated": true,
+                          "errorCode": null,
+                          "errorClass": null,
+                          "message": null,
+                          "tries": 2,
+                          "lastTryAt": "2026-11-17T10:00:00.000Z",
+                          "publishedAt": "2026-11-17T09:00:00.000Z",
+                          "snapshot": {
+                            "title": "Zmiana pracy",
+                            "start": "2026-11-23T14:00:00.000Z",
+                            "end": "2026-11-23T19:00:00.000Z"
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "error": {
+                    "summary": "Błąd aktualizacji",
+                    "description": "Lokalna zmiana zapisana, Google nie zaktualizowany – „Ponów synchronizację”.",
+                    "value": {
+                      "eventId": "e-1",
+                      "items": [
+                        {
+                          "eventId": "e-1",
+                          "calendar": {
+                            "id": "praca@group.calendar.google.com",
+                            "name": "Grafik pracy"
+                          },
+                          "state": "error",
+                          "simulated": true,
+                          "errorCode": "network_error",
+                          "errorClass": "network",
+                          "message": "Brak połączenia z Google (brak internetu albo przekroczony czas).",
+                          "tries": 2,
+                          "lastTryAt": "2026-11-17T10:00:00.000Z",
+                          "publishedAt": "2026-11-17T09:00:00.000Z",
+                          "snapshot": {
+                            "title": "Zmiana pracy",
+                            "start": "2026-11-23T14:00:00.000Z",
+                            "end": "2026-11-23T19:00:00.000Z"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Wydarzenie nie było publikowane.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Wydarzenie nie było publikowane.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "publication_not_found"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "publication_not_found": {
+                    "summary": "Wydarzenie nie było publikowane",
+                    "description": "To wydarzenie nie ma powiązania z kalendarzem Google – nie ma czego synchronizować.",
+                    "value": {
+                      "error": "publication_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Integracja niedostępna.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Integracja niedostępna.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "integration_not_configured"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "integration_not_configured": {
+                    "summary": "Serwer bez bazy danych",
+                    "description": "API działa bez bazy danych, więc nie może zapisać połączenia z Google.",
+                    "value": {
+                      "error": "integration_not_configured"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/integrations/google/publications/events/{eventId}/sync": {
+      "post": {
+        "operationId": "syncGooglePublishedEvent",
+        "summary": "Sync published event correction",
+        "tags": [
+          "Google integration"
+        ],
+        "description": "Retry (\"Ponów synchronizację\") for an edited or deleted published shift; the app also calls it right after saving. Sends the latest local state, not an old job body: an update of a Google event that no longer exists reports missing without creating a new one, and deleting an already missing event succeeds. A Google error is the result (200) and never reverts the local change. Simulation: nothing is sent to Google.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "in": "path",
+            "name": "eventId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Wynik synchronizacji.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "eventId",
+                    "result",
+                    "errorCode",
+                    "items"
+                  ],
+                  "properties": {
+                    "eventId": {
+                      "type": "string"
+                    },
+                    "result": {
+                      "type": "string",
+                      "enum": [
+                        "nothing",
+                        "success",
+                        "error"
+                      ],
+                      "description": "nothing – wszystko już było zgodne."
+                    },
+                    "errorCode": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "eventId",
+                          "calendar",
+                          "state",
+                          "simulated",
+                          "errorCode",
+                          "errorClass",
+                          "message",
+                          "tries",
+                          "lastTryAt",
+                          "publishedAt",
+                          "snapshot"
+                        ],
+                        "properties": {
+                          "eventId": {
+                            "type": "string",
+                            "description": "Lokalne ID wydarzenia (zostaje także po jego usunięciu)."
+                          },
+                          "calendar": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "id",
+                              "name"
+                            ],
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "synced",
+                              "pending",
+                              "error",
+                              "missing",
+                              "pending_delete",
+                              "deleted"
+                            ],
+                            "description": "synced – zgodne; pending – lokalna zmiana czeka; error – nieudana aktualizacja; missing – brak wydarzenia w Google (nie tworzymy nowego); pending_delete – usunięte lokalnie, czeka na usunięcie w Google; deleted – usunięte w obu."
+                          },
+                          "simulated": {
+                            "type": "boolean"
+                          },
+                          "errorCode": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "errorClass": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "network",
+                                  "reconnect",
+                                  "permissions",
+                                  "rate_limit",
+                                  "server",
+                                  "other"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "message": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "tries": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "lastTryAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "publishedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "snapshot": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "title",
+                                  "start",
+                                  "end"
+                                ],
+                                "properties": {
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "start": {
+                                    "type": "string"
+                                  },
+                                  "end": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "description": "Wynik synchronizacji."
+                },
+                "examples": {
+                  "success": {
+                    "summary": "Zsynchronizowano",
+                    "value": {
+                      "eventId": "e-1",
+                      "result": "success",
+                      "errorCode": null,
+                      "items": [
+                        {
+                          "eventId": "e-1",
+                          "calendar": {
+                            "id": "praca@group.calendar.google.com",
+                            "name": "Grafik pracy"
+                          },
+                          "state": "synced",
+                          "simulated": true,
+                          "errorCode": null,
+                          "errorClass": null,
+                          "message": null,
+                          "tries": 2,
+                          "lastTryAt": "2026-11-17T10:00:00.000Z",
+                          "publishedAt": "2026-11-17T09:00:00.000Z",
+                          "snapshot": {
+                            "title": "Zmiana pracy",
+                            "start": "2026-11-23T14:00:00.000Z",
+                            "end": "2026-11-23T19:00:00.000Z"
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "missing": {
+                    "summary": "Brak wydarzenia w Google",
+                    "value": {
+                      "eventId": "e-1",
+                      "result": "error",
+                      "errorCode": "event_not_found",
+                      "items": [
+                        {
+                          "eventId": "e-1",
+                          "calendar": {
+                            "id": "praca@group.calendar.google.com",
+                            "name": "Grafik pracy"
+                          },
+                          "state": "missing",
+                          "simulated": true,
+                          "errorCode": "event_not_found",
+                          "errorClass": "other",
+                          "message": "Powiązane wydarzenie nie istnieje już w Google Calendar – nie można go zaktualizować. Lokalna zmiana została zachowana, nowe wydarzenie nie zostało utworzone.",
+                          "tries": 2,
+                          "lastTryAt": "2026-11-17T10:00:00.000Z",
+                          "publishedAt": "2026-11-17T09:00:00.000Z",
+                          "snapshot": {
+                            "title": "Zmiana pracy",
+                            "start": "2026-11-23T14:00:00.000Z",
+                            "end": "2026-11-23T19:00:00.000Z"
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "deleted": {
+                    "summary": "Usunięto w obu kalendarzach",
+                    "value": {
+                      "eventId": "e-1",
+                      "result": "success",
+                      "errorCode": null,
+                      "items": [
+                        {
+                          "eventId": "e-1",
+                          "calendar": {
+                            "id": "praca@group.calendar.google.com",
+                            "name": "Grafik pracy"
+                          },
+                          "state": "deleted",
+                          "simulated": true,
+                          "errorCode": null,
+                          "errorClass": null,
+                          "message": null,
+                          "tries": 2,
+                          "lastTryAt": "2026-11-17T10:00:00.000Z",
+                          "publishedAt": "2026-11-17T09:00:00.000Z",
+                          "snapshot": {
+                            "title": "Zmiana pracy",
+                            "start": "2026-11-23T14:00:00.000Z",
+                            "end": "2026-11-23T19:00:00.000Z"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Wydarzenie nie było publikowane.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Wydarzenie nie było publikowane.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "publication_not_found"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "publication_not_found": {
+                    "summary": "Wydarzenie nie było publikowane",
+                    "description": "To wydarzenie nie ma powiązania z kalendarzem Google – nie ma czego synchronizować.",
+                    "value": {
+                      "error": "publication_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Integracja niedostępna.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Integracja niedostępna.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "integration_not_configured"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "integration_not_configured": {
+                    "summary": "Serwer bez bazy danych",
+                    "description": "API działa bez bazy danych, więc nie może zapisać połączenia z Google.",
+                    "value": {
+                      "error": "integration_not_configured"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/integrations/google/publications/divergences": {
+      "get": {
+        "operationId": "listGooglePublicationDivergences",
+        "summary": "List differences between KAC and Google",
+        "tags": [
+          "Google integration"
+        ],
+        "description": "Published shifts whose Google copy is not in sync: pending, failed, missing in Google, or deleted locally but not yet in Google.",
+        "responses": {
+          "200": {
+            "description": "Rozbieżności.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "eventId",
+                          "calendar",
+                          "state",
+                          "simulated",
+                          "errorCode",
+                          "errorClass",
+                          "message",
+                          "tries",
+                          "lastTryAt",
+                          "publishedAt",
+                          "snapshot"
+                        ],
+                        "properties": {
+                          "eventId": {
+                            "type": "string",
+                            "description": "Lokalne ID wydarzenia (zostaje także po jego usunięciu)."
+                          },
+                          "calendar": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "id",
+                              "name"
+                            ],
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "synced",
+                              "pending",
+                              "error",
+                              "missing",
+                              "pending_delete",
+                              "deleted"
+                            ],
+                            "description": "synced – zgodne; pending – lokalna zmiana czeka; error – nieudana aktualizacja; missing – brak wydarzenia w Google (nie tworzymy nowego); pending_delete – usunięte lokalnie, czeka na usunięcie w Google; deleted – usunięte w obu."
+                          },
+                          "simulated": {
+                            "type": "boolean"
+                          },
+                          "errorCode": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "errorClass": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "network",
+                                  "reconnect",
+                                  "permissions",
+                                  "rate_limit",
+                                  "server",
+                                  "other"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "message": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "tries": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "lastTryAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "publishedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "snapshot": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "title",
+                                  "start",
+                                  "end"
+                                ],
+                                "properties": {
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "start": {
+                                    "type": "string"
+                                  },
+                                  "end": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "description": "Rozbieżności."
+                },
+                "examples": {
+                  "some": {
+                    "summary": "Rozbieżności",
+                    "value": {
+                      "items": [
+                        {
+                          "eventId": "e-1",
+                          "calendar": {
+                            "id": "praca@group.calendar.google.com",
+                            "name": "Grafik pracy"
+                          },
+                          "state": "error",
+                          "simulated": true,
+                          "errorCode": "network_error",
+                          "errorClass": "network",
+                          "message": "Brak połączenia z Google (brak internetu albo przekroczony czas).",
+                          "tries": 2,
+                          "lastTryAt": "2026-11-17T10:00:00.000Z",
+                          "publishedAt": "2026-11-17T09:00:00.000Z",
+                          "snapshot": {
+                            "title": "Zmiana pracy",
+                            "start": "2026-11-23T14:00:00.000Z",
+                            "end": "2026-11-23T19:00:00.000Z"
+                          }
+                        },
+                        {
+                          "eventId": "e-2",
+                          "calendar": {
+                            "id": "praca@group.calendar.google.com",
+                            "name": "Grafik pracy"
+                          },
+                          "state": "pending_delete",
+                          "simulated": true,
+                          "errorCode": "google_unavailable",
+                          "errorClass": "server",
+                          "message": "Google zwrócił błąd serwera.",
+                          "tries": 2,
+                          "lastTryAt": "2026-11-17T10:00:00.000Z",
+                          "publishedAt": "2026-11-17T09:00:00.000Z",
+                          "snapshot": {
+                            "title": "Zmiana pracy",
+                            "start": "2026-11-23T14:00:00.000Z",
+                            "end": "2026-11-23T19:00:00.000Z"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Integracja niedostępna.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Integracja niedostępna.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "integration_not_configured"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "integration_not_configured": {
+                    "summary": "Serwer bez bazy danych",
+                    "description": "API działa bez bazy danych, więc nie może zapisać połączenia z Google.",
+                    "value": {
+                      "error": "integration_not_configured"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/integrations/google/publications/simulation": {
+      "put": {
+        "operationId": "setGoogleCorrectionSimulation",
+        "summary": "Force next correction sync result (simulation)",
+        "tags": [
+          "Google integration"
+        ],
+        "description": "Demo helper: the next correction sync of this account returns the chosen error (used once). null clears it.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "simulate"
+                ],
+                "properties": {
+                  "simulate": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "network",
+                          "server",
+                          "rate_limit",
+                          "auth",
+                          "permissions",
+                          "missing"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              },
+              "examples": {
+                "missing": {
+                  "summary": "Następna aktualizacja: brak wydarzenia w Google",
+                  "value": {
+                    "simulate": "missing"
+                  }
+                },
+                "clear": {
+                  "summary": "Bez wymuszonego wyniku",
+                  "value": {
+                    "simulate": null
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Ustawiony wynik następnej synchronizacji.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "simulate"
+                  ],
+                  "properties": {
+                    "simulate": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "network",
+                            "server",
+                            "rate_limit",
+                            "auth",
+                            "permissions",
+                            "missing"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "description": "Ustawiony wynik następnej synchronizacji."
+                },
+                "examples": {
+                  "missing": {
+                    "summary": "Brak wydarzenia w Google",
+                    "value": {
+                      "simulate": "missing"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Brak połączonego konta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak połączonego konta.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "not_connected"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "not_connected": {
+                    "summary": "Brak połączonego konta",
+                    "description": "Najpierw połącz konto Google.",
+                    "value": {
+                      "error": "not_connected"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Integracja niedostępna.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Integracja niedostępna.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "integration_not_configured"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "integration_not_configured": {
+                    "summary": "Serwer bez bazy danych",
+                    "description": "API działa bez bazy danych, więc nie może zapisać połączenia z Google.",
+                    "value": {
+                      "error": "integration_not_configured"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/integrations/google/sync": {
       "get": {
         "operationId": "getGoogleSync",

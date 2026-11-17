@@ -76,6 +76,9 @@ const attemptFrom = (row: any): AuthAttempt => ({
 export class PostgresGoogleIntegrationRepository {
   constructor(private readonly pool: Pool) {}
 
+  /** Transakcja dla operacji integracji spoza repozytorium (korekty G09). */
+  runInTransaction<T>(work: (client: PoolClient) => Promise<T>): Promise<T> { return this.transaction(work); }
+
   private async transaction<T>(work: (client: PoolClient) => Promise<T>): Promise<T> {
     const client = await this.pool.connect();
     try {
@@ -422,7 +425,7 @@ export class PostgresGoogleIntegrationRepository {
   /** Udane publikacje zmian do kalendarza Google (po ID wiersza t_kalendarze_google). */
   async listPublished(targetRowId: string, shiftIds: string[]): Promise<Map<string, { eventVersion: number; publishedAt: string; mode: 'symulacja' | 'google' }>> {
     const result = await this.pool.query(`select id_zmiany, wersja_wydarzenia, opublikowano, tryb from t_publikacje
-      where id_kal_google = $1 and id_zmiany = any($2::text[]) and status = 'Opublikowano'`, [targetRowId, shiftIds]);
+      where id_kal_google = $1 and id_zmiany = any($2::text[]) and status in ('Opublikowano', 'Oczekuje', 'Błąd')`, [targetRowId, shiftIds]);
     return new Map(result.rows.map((row) => [String(row.id_zmiany),
       { eventVersion: Number(row.wersja_wydarzenia), publishedAt: new Date(row.opublikowano).toISOString(), mode: row.tryb }]));
   }
@@ -432,14 +435,16 @@ export class PostgresGoogleIntegrationRepository {
    * go nadpisuje, więc nie powstają duplikaty. Tryb „symulacja” nigdy nie ma zewnętrznego ID (pilnuje tego też ograniczenie w bazie).
    */
   async savePublication(input: { userId: string; accountId: string; targetRowId: string; scheduleId: string; shiftId: string; eventId: string;
-    eventVersion: number; syncId: string; operation: 'Utworzenie' | 'Aktualizacja'; mode: 'symulacja' | 'google'; externalId: string | null }): Promise<void> {
+    eventVersion: number; syncId: string; operation: 'Utworzenie' | 'Aktualizacja'; mode: 'symulacja' | 'google'; externalId: string | null;
+    snapshot?: { title: string; start: string; end: string } }): Promise<void> {
     await this.pool.query(`insert into t_publikacje (id_grafiku, id_kal_google, id_sync, status, opublikowano, zewnetrzne_id, operacja,
-        id_uzytkownika, id_konta, id_zmiany, id_wydarzenia, wersja_wydarzenia, tryb, zaktualizowano)
-      values ($1, $2, $3, 'Opublikowano', now(), $4, $5, $6, $7, $8, $9, $10, $11, now())
+        id_uzytkownika, id_konta, id_zmiany, id_wydarzenia, wersja_wydarzenia, tryb, zaktualizowano, ref_wydarzenia, migawka, proby, ostatnia_proba)
+      values ($1, $2, $3, 'Opublikowano', now(), $4, $5, $6, $7, $8, $9, $10, $11, now(), $9, $12::jsonb, 1, now())
       on conflict (id_zmiany, id_kal_google) where id_zmiany is not null do update set id_grafiku = excluded.id_grafiku, id_sync = excluded.id_sync,
         status = 'Opublikowano', opublikowano = now(), zewnetrzne_id = excluded.zewnetrzne_id, operacja = excluded.operacja, id_konta = excluded.id_konta,
-        id_wydarzenia = excluded.id_wydarzenia, wersja_wydarzenia = excluded.wersja_wydarzenia, tryb = excluded.tryb, zaktualizowano = now()`,
+        id_wydarzenia = excluded.id_wydarzenia, wersja_wydarzenia = excluded.wersja_wydarzenia, tryb = excluded.tryb, zaktualizowano = now(),
+        ref_wydarzenia = excluded.ref_wydarzenia, migawka = excluded.migawka, kod_bledu = null, proby = t_publikacje.proby + 1, ostatnia_proba = now()`,
     [input.scheduleId, input.targetRowId, input.syncId, input.mode === 'symulacja' ? null : input.externalId, input.operation, input.userId,
-      input.accountId, input.shiftId, input.eventId, input.eventVersion, input.mode]);
+      input.accountId, input.shiftId, input.eventId, input.eventVersion, input.mode, JSON.stringify(input.snapshot ?? null)]);
   }
 }

@@ -109,6 +109,7 @@ export const integrationErrors: Record<string, [string, string]> = {
   schedule_empty: ['Pusty grafik', 'Zaakceptowany grafik nie ma żadnej zmiany do opublikowania.'],
   no_publication_target: ['Brak kalendarza publikacji', 'Wybierz kalendarz publikacji w ustawieniach integracji albo podaj calendarId.'],
   publication_in_progress: ['Publikacja trwa', 'Inna publikacja dla tego konta jeszcze trwa. Poczekaj na jej wynik.'],
+  publication_not_found: ['Wydarzenie nie było publikowane', 'To wydarzenie nie ma powiązania z kalendarzem Google – nie ma czego synchronizować.'],
   no_calendars_selected: ['Nie wybrano kalendarzy', 'Synchronizacja dotyczy wybranych kalendarzy – wybierz co najmniej jeden w ustawieniach integracji. Konto zostaje połączone.'],
   selection_conflict: ['Wybór zmienił się w międzyczasie', 'Ktoś zapisał wybór w innym oknie (inna wersja). Nic nie zostało zmienione – wczytaj aktualny wybór.'],
   unknown_calendar: ['Nieznany kalendarz', 'Kalendarz nie należy do połączonego konta Google. Nic nie zostało zmienione.'],
@@ -213,4 +214,26 @@ export const publicationBodyExamples: NamedExamples = {
   publish: { summary: 'Publikacja do kalendarza z ustawień', value: { expectedVersion: 3 } },
   other: { summary: 'Inny kalendarz z prawem zapisu', value: { expectedVersion: 3, calendarId: 'primary' } },
   simulate: { summary: 'Wymuszony błąd', description: 'Pokazuje przebieg błędu – wynik nie jest sukcesem.', value: { expectedVersion: 3, simulate: 'network' } },
+};
+
+// --- Korekty opublikowanych zmian (G09) ---
+const correctionItem = (state: string, extra: Record<string, unknown> = {}) => ({
+  eventId: 'e-1', calendar: { id: 'praca@group.calendar.google.com', name: 'Grafik pracy' }, state, simulated: true, errorCode: null, errorClass: null,
+  message: null, tries: 2, lastTryAt: '2026-11-17T10:00:00.000Z', publishedAt: '2026-11-17T09:00:00.000Z',
+  snapshot: { title: 'Zmiana pracy', start: '2026-11-23T14:00:00.000Z', end: '2026-11-23T19:00:00.000Z' }, ...extra,
+});
+const correctionError = correctionItem('error', { errorCode: 'network_error', errorClass: 'network', message: 'Brak połączenia z Google (brak internetu albo przekroczony czas).' });
+const correctionMissing = correctionItem('missing', { errorCode: 'event_not_found', errorClass: 'other',
+  message: 'Powiązane wydarzenie nie istnieje już w Google Calendar – nie można go zaktualizować. Lokalna zmiana została zachowana, nowe wydarzenie nie zostało utworzone.' });
+export const correctionStatusExamples: NamedExamples = {
+  synced: { summary: 'Zgodne', value: { eventId: 'e-1', items: [correctionItem('synced')] } },
+  error: { summary: 'Błąd aktualizacji', description: 'Lokalna zmiana zapisana, Google nie zaktualizowany – „Ponów synchronizację”.', value: { eventId: 'e-1', items: [correctionError] } },
+};
+export const correctionSyncExamples: NamedExamples = {
+  success: { summary: 'Zsynchronizowano', value: { eventId: 'e-1', result: 'success', errorCode: null, items: [correctionItem('synced')] } },
+  missing: { summary: 'Brak wydarzenia w Google', value: { eventId: 'e-1', result: 'error', errorCode: 'event_not_found', items: [correctionMissing] } },
+  deleted: { summary: 'Usunięto w obu kalendarzach', value: { eventId: 'e-1', result: 'success', errorCode: null, items: [correctionItem('deleted')] } },
+};
+export const divergenceExamples: NamedExamples = {
+  some: { summary: 'Rozbieżności', value: { items: [correctionError, correctionItem('pending_delete', { eventId: 'e-2', errorCode: 'google_unavailable', errorClass: 'server', message: 'Google zwrócił błąd serwera.' })] } },
 };

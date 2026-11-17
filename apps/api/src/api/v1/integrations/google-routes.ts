@@ -20,9 +20,10 @@ import { GoogleIntegrationService, IntegrationFlowError } from '../../../integra
 import { SIMULATED_FAILURES, SyncFlowError, type SimulatedFailure } from '../../../integrations/google/sync.js';
 import { SelectionError } from '../../../integrations/google/selection.js';
 import { PUBLICATION_SIMULATIONS, PublicationError, type PublicationSimulation } from '../../../integrations/google/publication.js';
+import { CORRECTION_SIMULATIONS, CorrectionError, type CorrectionSimulation } from '../../../integrations/google/corrections.js';
 import {
   attemptExamples, calendarsExamples, callbackPage, cancelledExamples, connectBodyExamples, demoConsentBodyExamples, demoConsentExamples,
-  disconnectExamples, integrationErrors, publicationBodyExamples, publicationPreviewExamples, publicationResultExamples, selectionBodyExamples, selectionExamples, startedExamples, statusExamples, syncBodyExamples, syncRunExamples, syncStatusExamples,
+  correctionStatusExamples, correctionSyncExamples, disconnectExamples, divergenceExamples, integrationErrors, publicationBodyExamples, publicationPreviewExamples, publicationResultExamples, selectionBodyExamples, selectionExamples, startedExamples, statusExamples, syncBodyExamples, syncRunExamples, syncStatusExamples,
 } from './examples.js';
 
 const nullable = (schema: object) => ({ anyOf: [schema, { type: 'null' }] });
@@ -108,6 +109,25 @@ const publicationResultSchema = { type: 'object', additionalProperties: false, r
   items: { type: 'array', items: { ...publicationItemSchema, required: [...publicationItemSchema.required, 'result'], properties: { ...publicationItemSchema.properties,
     result: { type: 'string', enum: ['published', 'unchanged', 'failed', 'skipped'] } } } },
   preview: publicationPreviewSchema } } as const;
+const correctionItemSchema = { type: 'object', additionalProperties: false,
+  required: ['eventId', 'calendar', 'state', 'simulated', 'errorCode', 'errorClass', 'message', 'tries', 'lastTryAt', 'publishedAt', 'snapshot'], properties: {
+    eventId: { type: 'string', description: 'Lokalne ID wydarzenia (zostaje także po jego usunięciu).' },
+    calendar: { type: 'object', additionalProperties: false, required: ['id', 'name'], properties: { id: { type: 'string' }, name: { type: 'string' } } },
+    state: { type: 'string', enum: ['synced', 'pending', 'error', 'missing', 'pending_delete', 'deleted'],
+      description: 'synced – zgodne; pending – lokalna zmiana czeka; error – nieudana aktualizacja; missing – brak wydarzenia w Google (nie tworzymy nowego); pending_delete – usunięte lokalnie, czeka na usunięcie w Google; deleted – usunięte w obu.' },
+    simulated: { type: 'boolean' }, errorCode: nullable({ type: 'string' }),
+    errorClass: nullable({ type: 'string', enum: ['network', 'reconnect', 'permissions', 'rate_limit', 'server', 'other'] }),
+    message: nullable({ type: 'string' }), tries: { type: 'integer', minimum: 0 },
+    lastTryAt: nullable({ type: 'string', format: 'date-time' }), publishedAt: nullable({ type: 'string', format: 'date-time' }),
+    snapshot: nullable({ type: 'object', additionalProperties: false, required: ['title', 'start', 'end'],
+      properties: { title: { type: 'string' }, start: { type: 'string' }, end: { type: 'string' } } }) } } as const;
+const correctionStatusSchema = { type: 'object', additionalProperties: false, required: ['eventId', 'items'], properties: {
+  eventId: { type: 'string' }, items: { type: 'array', items: correctionItemSchema } } } as const;
+const correctionSyncSchema = { type: 'object', additionalProperties: false, required: ['eventId', 'result', 'errorCode', 'items'], properties: {
+  eventId: { type: 'string' }, result: { type: 'string', enum: ['nothing', 'success', 'error'], description: 'nothing – wszystko już było zgodne.' },
+  errorCode: nullable({ type: 'string' }), items: { type: 'array', items: correctionItemSchema } } } as const;
+const eventParams = { type: 'object', additionalProperties: false, required: ['eventId'], properties: { eventId: { type: 'string', minLength: 1, maxLength: 200 } } } as const;
+
 const weekParams = { type: 'object', additionalProperties: false, required: ['weekStart'], properties: { weekStart: { type: 'string', format: 'date' } } } as const;
 const publicationBlocked = ['schedule_version_conflict', 'schedule_not_accepted', 'schedule_empty', 'no_publication_target', 'calendar_unavailable', 'reconnect_required'];
 
@@ -138,7 +158,7 @@ export function registerGoogleIntegration(app: FastifyInstance, service: GoogleI
     try {
       return await work(service);
     } catch (error) {
-      if (error instanceof IntegrationFlowError || error instanceof SyncFlowError || error instanceof SelectionError || error instanceof PublicationError) return reply.code(error.status).send({ error: error.code });
+      if (error instanceof IntegrationFlowError || error instanceof SyncFlowError || error instanceof SelectionError || error instanceof PublicationError || error instanceof CorrectionError) return reply.code(error.status).send({ error: error.code });
       if (error instanceof GoogleIntegrationError) return reply.code(GOOGLE_ERROR_STATUS[error.code] ?? 502).send({ error: error.code });
       throw error;
     }
@@ -305,6 +325,39 @@ export function registerGoogleIntegration(app: FastifyInstance, service: GoogleI
       503: fail('Integracja niedostępna.', ['integration_not_configured']),
     },
   } }, async (request, reply) => handle(reply, (google) => google.publication.publish(scope(request), request.params.weekStart, request.body)));
+
+  app.get<{ Params: { eventId: string } }>('/integrations/google/publications/events/:eventId', { schema: {
+    tags: ['Google integration'], summary: 'Get published event sync state', operationId: 'getGooglePublishedEvent',
+    description: 'Synchronization state of a published work shift in each calendar it was published to (simulation). Also works after the local event was deleted, because the publication record keeps a tombstone.',
+    params: eventParams,
+    response: { 200: documented(correctionStatusSchema, 'Stan publikacji wydarzenia.', correctionStatusExamples),
+      404: fail('Wydarzenie nie było publikowane.', ['publication_not_found']), 503: fail('Integracja niedostępna.', ['integration_not_configured']) },
+  } }, async (request, reply) => handle(reply, (google) => google.corrections.status(scope(request), request.params.eventId)));
+
+  app.post<{ Params: { eventId: string } }>('/integrations/google/publications/events/:eventId/sync', { schema: {
+    tags: ['Google integration'], summary: 'Sync published event correction', operationId: 'syncGooglePublishedEvent',
+    description: 'Retry ("Ponów synchronizację") for an edited or deleted published shift; the app also calls it right after saving. Sends the latest local state, not an old job body: an update of a Google event that no longer exists reports missing without creating a new one, and deleting an already missing event succeeds. A Google error is the result (200) and never reverts the local change. Simulation: nothing is sent to Google.',
+    params: eventParams,
+    response: { 200: documented(correctionSyncSchema, 'Wynik synchronizacji.', correctionSyncExamples),
+      404: fail('Wydarzenie nie było publikowane.', ['publication_not_found']), 503: fail('Integracja niedostępna.', ['integration_not_configured']) },
+  } }, async (request, reply) => handle(reply, (google) => google.corrections.sync(scope(request), request.params.eventId)));
+
+  app.get('/integrations/google/publications/divergences', { schema: {
+    tags: ['Google integration'], summary: 'List differences between KAC and Google', operationId: 'listGooglePublicationDivergences',
+    description: 'Published shifts whose Google copy is not in sync: pending, failed, missing in Google, or deleted locally but not yet in Google.',
+    response: { 200: documented({ type: 'object', additionalProperties: false, required: ['items'], properties: { items: { type: 'array', items: correctionItemSchema } } },
+      'Rozbieżności.', divergenceExamples), 503: fail('Integracja niedostępna.', ['integration_not_configured']) },
+  } }, async (request, reply) => handle(reply, (google) => google.corrections.divergences(scope(request))));
+
+  app.put<{ Body: { simulate: CorrectionSimulation | null } }>('/integrations/google/publications/simulation', { schema: {
+    tags: ['Google integration'], summary: 'Force next correction sync result (simulation)', operationId: 'setGoogleCorrectionSimulation',
+    description: 'Demo helper: the next correction sync of this account returns the chosen error (used once). null clears it.',
+    body: withExamples({ type: 'object', additionalProperties: false, required: ['simulate'], properties: { simulate: nullable({ type: 'string', enum: [...CORRECTION_SIMULATIONS] }) } },
+      { missing: { summary: 'Następna aktualizacja: brak wydarzenia w Google', value: { simulate: 'missing' } }, clear: { summary: 'Bez wymuszonego wyniku', value: { simulate: null } } }),
+    response: { 200: documented({ type: 'object', additionalProperties: false, required: ['simulate'], properties: { simulate: nullable({ type: 'string', enum: [...CORRECTION_SIMULATIONS] }) } },
+      'Ustawiony wynik następnej synchronizacji.', { missing: { summary: 'Brak wydarzenia w Google', value: { simulate: 'missing' } } }),
+      404: fail('Brak połączonego konta.', ['not_connected']), 503: fail('Integracja niedostępna.', ['integration_not_configured']) },
+  } }, async (request, reply) => handle(reply, (google) => google.corrections.simulateNext(scope(request), request.body.simulate)));
 
   app.get('/integrations/google/sync', { schema: {
     tags: ['Google integration'], summary: 'Get Google sync state', operationId: 'getGoogleSync',

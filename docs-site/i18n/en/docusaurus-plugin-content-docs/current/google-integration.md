@@ -63,6 +63,24 @@ Story S23KC2S1P2-30, subtask G07 (S23KC2S1P2-291). Below an accepted schedule in
 - The simulation result can be forced (no internet, transient error, expired login, no write permission, rate limit, server error, partial result). An error is never shown as success; "Spróbuj ponownie" runs without a forced error.
 - Real publication will plug into the API as a second `PublicationAdapter` with the same contract. This task alone does not unblock corrections of published shifts (S23KC2S1P2-47).
 
+## Correcting and deleting a published shift (G09)
+
+Story S23KC2S1P2-47, subtask G09 (S23KC2S1P2-292). The details of a published shift in the calendar show the state of the linked Google event. "Edytuj" → "Zapisz" or "Usuń" → confirmation saves the change locally and syncs it right away. **This is a simulation – nothing is sent to Google.** "Anuluj" in the form or in the delete confirmation saves nothing and queues nothing.
+
+- The local save covers, in one transaction: the event, the current accepted schedule (correction), the publication records and the outbox job (W02).
+- Sync runs in the outbox worker's "google" consumer or via "Ponów synchronizację" (`POST …/publications/events/{eventId}/sync`), which the app also calls right after saving. The latest event state from the database is always sent, not an old job body; records are locked, so two workers and the edit → edit → delete sequence never restore an old state.
+- A Google error never reverts the local change: the record becomes "Błąd" (or "Do usunięcia" with an error code) and can be retried. The worker retries transient errors itself with growing delays.
+- Updating an event that no longer exists in Google ends as "Brak w Google" without creating a new one (6c). Deleting an event that is already gone in Google succeeds.
+- Deletion leaves a tombstone: `ref_wydarzenia`, the Google calendar, external ID, data snapshot and attempt state survive the event FK being cleared, so the deletion can be retried even after a restart. Settings → Google Calendar lists differences with "Ponów synchronizację".
+- Every attempt is recorded in `t_synchronizacje` (direction "publish", scope `event:{id}`). In demo mode the next attempt result can be forced (no internet, server error, rate limit, no write permission, event missing in Google).
+
+Assumption D07 (to be confirmed by the team):
+
+- A correction applies only to the current accepted schedule. Superseded and rejected versions stay unchanged (history).
+- A shift keeps the rate from approval time: the corrected amount uses that rate, not the current profile rate.
+- Every correction writes a row to `t_korekty_grafiku` (before/after). A deleted shift stays in history with status "Usunięta"; schedule totals count active shifts only. A correction does not create a new schedule version.
+- Replacing the accepted schedule with a new version works as before: old events are deleted, and their publications are deleted in Google by the same sync.
+
 ## Disconnecting and revoking consent (G03)
 
 Story S23KC2S1P2-35, subtask G03 (S23KC2S1P2-287). The "Odłącz konto Google" button shows a confirmation; "Anuluj" changes nothing. After confirmation `DELETE /api/v1/integrations/google` in one transaction:
@@ -102,9 +120,13 @@ Decision D03: after the local changes are committed KAC asks Google to revoke it
 | `GET /api/v1/integrations/google/calendar-selection` | Calendar selection: sources, publication calendar, version, `canPublish`, `targetProblem`. |
 | `PUT /api/v1/integrations/google/calendar-selection` | Atomic selection save with version. |
 | `GET /api/v1/integrations/google/publications/{weekStart}/preview` | Simulated publication preview; optional `calendarId`. |
+| `GET /api/v1/integrations/google/publications/events/{eventId}` | Publication state of an event (also after it was deleted). |
+| `POST /api/v1/integrations/google/publications/events/{eventId}/sync` | Correction sync / "Ponów synchronizację"; result `nothing`, `success` or `error` (200). |
+| `GET /api/v1/integrations/google/publications/divergences` | Differences between KAC and Google. |
+| `PUT /api/v1/integrations/google/publications/simulation` | Demo: result of the next correction sync. |
 | `POST /api/v1/integrations/google/publications/{weekStart}` | Confirmed publication (simulation) with `expectedVersion`. A Google error is the attempt result (200). |
 
-Google errors have stable codes: `reconnect_required` (409), `insufficient_permissions` (403), `rate_limited` (429), `google_unavailable`, `google_error` and `api_not_enabled` (502), `network_error` (504). Synchronization also returns `sync_disabled`, `sync_in_progress` and `no_calendars_selected` (409). Calendar selection: `unknown_calendar` (400), `selection_conflict` and `calendar_unavailable` (409), `target_not_writable` and `write_access_missing` (422). Publication: `schedule_not_found` (404), `schedule_not_accepted`, `schedule_empty`, `schedule_version_conflict`, `no_publication_target` and `publication_in_progress` (409). Without a database the endpoints return `503 integration_not_configured`.
+Google errors have stable codes: `reconnect_required` (409), `insufficient_permissions` (403), `rate_limited` (429), `google_unavailable`, `google_error` and `api_not_enabled` (502), `network_error` (504). Synchronization also returns `sync_disabled`, `sync_in_progress` and `no_calendars_selected` (409). Calendar selection: `unknown_calendar` (400), `selection_conflict` and `calendar_unavailable` (409), `target_not_writable` and `write_access_missing` (422). Publication: `schedule_not_found` (404), `schedule_not_accepted`, `schedule_empty`, `schedule_version_conflict`, `no_publication_target` and `publication_in_progress` (409). Corrections: `publication_not_found` (404); the `event_not_found` code in a result means the event is missing in Google. Without a database the endpoints return `503 integration_not_configured`.
 
 ## Configuration
 
@@ -124,7 +146,7 @@ The Google consent screen must list the scopes `openid`, `email`, `https://www.g
 
 ## Data
 
-Migration `020_google_schedule_publication.sql` extends `t_publikacje` with a per-shift binding (owner, account, shift, event and its version, mode). Migration `019_google_calendar_selection.sql` adds the publication calendar (`id_kal_publikacji`) and selection version (`wersja_wyboru`) to `t_konta_google`. Migration `018_google_sync_registry.sql` extends `t_synchronizacje` (scope, tries, error code, finish time, generation) and adds `ostatnia_publikacja` to `t_konta_google`. Migration `017_google_integration.sql` extends `t_konta_google` (stable `google_sub`, mode, granted scopes, generation, connect and disconnect dates) and `t_kalendarze_google` (access role, time zone, primary calendar). New tables: `t_google_tokeny` (ciphertexts only) and `t_google_oauth_proby` (single-use OAuth attempts). A user has at most one active Google account.
+Migration `021_google_publication_corrections.sql` adds a tombstone (`ref_wydarzenia`, `migawka`) and attempt state (`kod_bledu`, `proby`, `ostatnia_proba`) to `t_publikacje`, and the forced simulation result to `t_konta_google`. Migration `020_google_schedule_publication.sql` extends `t_publikacje` with a per-shift binding (owner, account, shift, event and its version, mode). Migration `019_google_calendar_selection.sql` adds the publication calendar (`id_kal_publikacji`) and selection version (`wersja_wyboru`) to `t_konta_google`. Migration `018_google_sync_registry.sql` extends `t_synchronizacje` (scope, tries, error code, finish time, generation) and adds `ostatnia_publikacja` to `t_konta_google`. Migration `017_google_integration.sql` extends `t_konta_google` (stable `google_sub`, mode, granted scopes, generation, connect and disconnect dates) and `t_kalendarze_google` (access role, time zone, primary calendar). New tables: `t_google_tokeny` (ciphertexts only) and `t_google_oauth_proby` (single-use OAuth attempts). A user has at most one active Google account.
 
 ## Tests
 
@@ -132,6 +154,7 @@ Migration `020_google_schedule_publication.sql` extends `t_publikacje` with a pe
 - `apps/api/tests/google-integration.integration.test.ts` (PostgreSQL) – demo mode (denial, 1a, account change, 7a, expired attempt, another user's attempt), simulated Google (single-use and expired `state`, 6a, missing refresh token, ciphertexts in the database, no tokens in responses, reconnect) and parallel refresh from two instances. Every scenario checks that the user's events did not change.
 - `apps/web/tests/googleIntegration.test.ts` – panel state and messages.
 - `apps/api/tests/google-disconnect.integration.test.ts` (PostgreSQL) – disconnecting in demo mode and with simulated Google, repeating, cancelled attempt, stopped outbox work, rejected old generation and late callback, failed revoke (network, 503), revoke on account change; `apps/web/tests/googleDisconnect.test.ts` – confirmation and result texts.
+- `apps/api/tests/google-corrections.integration.test.ts` (PostgreSQL) – schedule correction with the rate snapshot, job in the same transaction, worker, error without reverting and retry, missing Google event without creating a new one, transient error in the worker, tombstone after deletion, deleting a missing event, edit → edit → delete with two workers, restart with an expired lease; `apps/web/tests/googleCorrection.test.ts` – messages and retry.
 - `apps/api/tests/google-publication.integration.test.ts` (PostgreSQL, fake clock) – entry conditions, preview without changes, version conflict, error never success, partial result and retry without duplicates, update after an event change, no Google ID in simulation, another user's schedule; `apps/web/tests/googlePublication.test.ts` – entry, preview, result messages and retry.
 - `apps/api/tests/google-calendar-selection.integration.test.ts` (PostgreSQL) – atomic save with version, conflict (including two parallel saves), foreign calendar, read-only calendar as target, missing write consent, lost permissions, more than 250 calendars, sync without selection; `apps/web/tests/googleCalendarSelection.test.ts` – selection draft, target candidates, change summary.
 - `apps/api/tests/google-sync.test.ts` and `google-sync.integration.test.ts` (PostgreSQL, fake clock) – error classes, retries, last success, partial result, expired login, denial disabling sync, one attempt at a time, 503/network/disabled Calendar API with simulated Google; `apps/web/tests/googleSync.test.ts` – states, buttons and messages.

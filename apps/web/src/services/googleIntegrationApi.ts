@@ -4,6 +4,7 @@
 
 import { apiBaseUrl } from './importApi';
 import type { PublicationPreview, PublicationResult, PublicationSimulation } from '../domain/googlePublication';
+import type { CorrectionItem, CorrectionSimulation, CorrectionSyncResult } from '../domain/googleCorrection';
 import {
   apiErrorMessage, type AttemptPurpose, type GoogleAccountView, type GoogleIntegrationStatus, type IntegrationAttempt, type IntegrationCalendar,
   type CalendarSelection, type DisconnectResult, type SimulatedFailure, type SyncAttempt, type SyncStatus,
@@ -66,3 +67,12 @@ export const previewGooglePublication = (weekStart: string, calendarId?: string)
 export const publishGoogleSchedule = (weekStart: string, expectedVersion: number, calendarId: string, simulate?: PublicationSimulation) =>
   call<PublicationResult>('POST', `/api/v1/integrations/google/publications/${encodeURIComponent(weekStart)}`,
     { expectedVersion, calendarId, ...(simulate ? { simulate } : {}) }, 75000);
+
+/** Korekty opublikowanych zmian (S23KC2S1P2-47, G09, symulacja). 404 publication_not_found – wydarzenie nie było publikowane. */
+const eventPath = (eventId: string) => `/api/v1/integrations/google/publications/events/${encodeURIComponent(eventId)}`;
+export const getPublishedEvent = (eventId: string) => call<{ eventId: string; items: CorrectionItem[] }>('GET', eventPath(eventId));
+/** Synchronizacja po zapisie albo „Ponów synchronizację”. Błąd Google jest wynikiem (200), nie wyjątkiem. */
+export const syncPublishedEvent = (eventId: string) => call<CorrectionSyncResult>('POST', `${eventPath(eventId)}/sync`, {});
+export const listGoogleDivergences = () => call<{ items: CorrectionItem[] }>('GET', '/api/v1/integrations/google/publications/divergences');
+export const setCorrectionSimulation = (simulate: CorrectionSimulation | null) =>
+  call<{ simulate: CorrectionSimulation | null }>('PUT', '/api/v1/integrations/google/publications/simulation', { simulate });

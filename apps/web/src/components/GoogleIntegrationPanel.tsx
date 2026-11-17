@@ -12,6 +12,7 @@ import { Linking, Pressable, Text, View } from 'react-native';
 import { Button, useTheme } from './ui';
 import GoogleSyncSection from './GoogleSyncSection';
 import GoogleCalendarSelection from './GoogleCalendarSelection';
+import { GoogleDivergences } from './GoogleCorrection';
 import {
   apiErrorMessage, ATTEMPT_POLL_MS, attemptFinished, attemptNotice, attemptOverdue, calendarsSummary, changeAccountWarning,
   connectedAtLabel, disconnectNotice, disconnectWarning, grantedAccessLines, grantedAccessWarning, panelState, requestedAccessLines, sortCalendars, unavailableMessage,
@@ -284,6 +285,8 @@ export default function GoogleIntegrationPanel() {
         <GoogleSyncSection mode={status?.mode ?? 'demo'} connection={state}
           connectionKey={`${account.email}|${state}|${account.connectedAt ?? ''}|${account.grantedScopes.join(' ')}|${selectionSaves}`} autoRunSignal={syncSignal}
           onConnectionChange={() => void refresh()} onReconnect={() => { syncAfterReconnect.current = true; void begin('reconnect'); }} />
+        {/* Rozbieżności po edycji albo usunięciu opublikowanych zmian (S23KC2S1P2-47, G09). */}
+        <GoogleDivergences reloadKey={`${account.email}|${calendarsLoads}|${selectionSaves}`} />
         {accountActions(account.email, <>
           {account.access.calendarsRead && <Button title="Odśwież listę" disabled={busy} onPress={() => void run(refresh)} />}
           {(!account.access.calendarsRead || !account.access.eventsWrite) && <Button title="Połącz ponownie" disabled={busy} onPress={() => void begin('reconnect')} />}

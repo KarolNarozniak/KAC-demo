@@ -111,7 +111,8 @@ export class GooglePublicationService {
           const published = await adapter.publish({ account, calendarId: target.id, item, index, total: pending.length, tries });
           await this.repository.savePublication({ userId: scope.userId, accountId: account.accountId, targetRowId: target.rowId, scheduleId,
             shiftId: item.shiftId, eventId: item.eventId, eventVersion: item.eventVersion, syncId: attempt.id,
-            operation: item.action === 'create' ? 'Utworzenie' : 'Aktualizacja', mode: adapter.mode, externalId: published.externalId });
+            operation: item.action === 'create' ? 'Utworzenie' : 'Aktualizacja', mode: adapter.mode, externalId: published.externalId,
+            snapshot: { title: item.title, start: item.start, end: item.end } });
           results.set(item.shiftId, 'published');
           break;
         } catch (error) {

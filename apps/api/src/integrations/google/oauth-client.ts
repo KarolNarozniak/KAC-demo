@@ -25,7 +25,7 @@ export function accessFromScopes(scopes: string[]): GoogleAccess {
 
 export type GoogleErrorCode =
   | 'network_error' | 'google_unavailable' | 'reconnect_required' | 'insufficient_permissions' | 'rate_limited' | 'api_not_enabled'
-  | 'authorization_code_invalid' | 'no_refresh_token' | 'missing_account_identity' | 'calendar_not_found' | 'calendar_not_writable' | 'google_error';
+  | 'authorization_code_invalid' | 'no_refresh_token' | 'missing_account_identity' | 'calendar_not_found' | 'calendar_not_writable' | 'event_not_found' | 'google_error';
 
 /** Błędy Google rozróżnione tak, żeby UI i ponowienia (G06) wiedziały, co dalej: ponowić, zalogować ponownie czy zmienić uprawnienia. */
 export class GoogleIntegrationError extends Error {
