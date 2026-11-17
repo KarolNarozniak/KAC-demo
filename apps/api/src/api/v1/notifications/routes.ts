@@ -277,7 +277,7 @@ export async function notificationRoutes(app: FastifyInstance, options: { reposi
             operationId: 'updateNotificationSettings',
             body: withExamples({
                 type: 'object',
-                required: ['enabled'],
+                required: ['enabled', 'classReminders', 'workRemindersEnabled', 'privateReminders'],
                 additionalProperties: false,
                 properties: {
                     enabled: { type: 'boolean' }, 
