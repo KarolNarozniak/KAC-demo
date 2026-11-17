@@ -1,0 +1,10 @@
+alter table t_importy add column if not exists ai_conversation_id text references t_ai_rozmowy(id_rozmowy) on delete cascade;
+alter table t_importy add column if not exists ai_calendar_id text references t_kalendarze(id_kalendarza) on delete cascade;
+alter table t_importy add column if not exists draft_rows jsonb;
+alter table t_importy add column if not exists draft_revision integer not null default 0;
+alter table t_importy add column if not exists attachment_thumbnail text;
+alter table t_importy add column if not exists attachment_mime text;
+alter table t_importy add column if not exists attachment_reader text;
+alter table t_importy add column if not exists attachment_source text;
+alter table t_importy add column if not exists confirm_result jsonb;
+create index if not exists idx_import_chat on t_importy(ai_conversation_id) where ai_conversation_id is not null;

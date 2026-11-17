@@ -53,7 +53,7 @@ export const config = {
     maxFileBytes: positiveInt(process.env.AZURE_AI_MAX_FILE_BYTES, 5 * 1024 * 1024, 20 * 1024 * 1024),
     maxPdfPages: positiveInt(process.env.AZURE_AI_MAX_PDF_PAGES, 10, 100),
     maxImagePixels: positiveInt(process.env.AZURE_AI_MAX_IMAGE_PIXELS, 20_000_000, 100_000_000),
-    maxToolRounds: positiveInt(process.env.AZURE_AI_MAX_TOOL_ROUNDS, 3, 8),
+    maxToolRounds: positiveInt(process.env.AZURE_AI_MAX_TOOL_ROUNDS, 8, 16),
     conversationRetentionDays: positiveInt(process.env.AI_CONVERSATION_RETENTION_DAYS, 30, 3650),
     pendingActionTtlMinutes: positiveInt(process.env.AI_ACTION_TTL_MINUTES, 15, 240),
   },

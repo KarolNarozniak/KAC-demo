@@ -9,6 +9,8 @@ description: Ustawienia, planowanie, dostarczanie i otwieranie przypomnień o zm
 
 ## Ustawienia
 
+Przed uruchomieniem API lub workera wykonaj `npm run db:migrate`. Migracja `017_notification_category_settings.sql` dodaje przełączniki kategorii `zajecia_wlaczone` i `prywatne_wlaczone` w tabeli `t_ustaw_powiadomien`. Dla istniejących i nowych ustawień oba pola domyślnie mają wartość `true`; migracja zachowuje dotychczasowe ustawienia aktywności, przypomnień o pracy i wyprzedzenia.
+
 W ustawieniach powiadomień można włączyć lub wyłączyć przypomnienia i określić dodatnie wyprzedzenie od 1 do 1440 minut. Zmiany są robocze do chwili wybrania „Zapisz ustawienia”; „Anuluj edycję” przywraca ostatnio zapisane wartości. Włączenie wymaga zgody przeglądarki. Interfejs pokazuje stan zgody i liczbę zaplanowanych przypomnień; zero oznacza, że obecnie nie ma nadchodzących, zatwierdzonych zmian.
 
 Zapis lub zmiana ustawień atomowo anuluje poprzednie oczekujące przypomnienia i planuje nowe dla istniejących, zatwierdzonych zmian w kategorii „Praca”. Późniejsze dodanie, zatwierdzenie, zmiana terminu lub usunięcie zmiany jest obsługiwane przez outbox. Zmiana ustawień przypomnień nie modyfikuje grafiku.

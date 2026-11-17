@@ -47,6 +47,7 @@ export type ConfirmResult =
   | { kind: 'not-found' }
   | { kind: 'expired' }
   | { kind: 'closed' }
+  | { kind: 'revision-conflict' }
   | { kind: 'unknown-rows'; rowIds: string[] };
 
 export type CreateSessionInput = { source: ImportSource; format: ImportFormat; rows: ImportRow[]; preview: PreviewRow[] };

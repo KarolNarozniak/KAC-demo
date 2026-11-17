@@ -14,6 +14,7 @@ import { registerGoogleImport } from './api/v1/imports/google-routes.js';
 import { DemoScheduleReader } from './import/work-schedule/reader.js';
 import { blockRoutes } from './api/v1/blocks/routes.js';
 import { aiImportRoutes } from './api/v1/imports/ai-routes.js';
+import { assistantImportRoutes } from './api/v1/assistant/import-routes.js';
 import { assistantRoutes } from './api/v1/assistant/routes.js';
 import { notificationRoutes } from './api/v1/notifications/routes.js';
 import { AiRepository } from './ai/repository.js';
@@ -94,6 +95,7 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
     await schedulingRoutes(v1, { repository: options.scheduleRepository, scope: options.userScope ?? demoScope });
     await importRoutes(v1, { repository, scheduleRepository: options.scheduleRepository, scheduleReader, google: options.google, scope: options.userScope ?? demoScope });
     await aiImportRoutes(v1, { repository, aiService, aiRepository: options.aiRepository, scope: options.userScope ?? demoScope });
+    await assistantImportRoutes(v1, { repository, aiService, aiRepository: options.aiRepository, scheduleReader, scope: options.userScope ?? demoScope });
     await assistantRoutes(v1, { repository, workProfileRepository: options.workProfileRepository, aiService, aiRepository: options.aiRepository, scope: options.userScope ?? demoScope });
     await notificationRoutes(v1, { repository: options.notificationRepository, scope: options.userScope ?? demoScope });
     await blockRoutes(v1,{repository,scope:options.userScope});

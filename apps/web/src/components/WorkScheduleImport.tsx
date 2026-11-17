@@ -24,10 +24,11 @@ import {
   type ImportSummary,
   type ScheduleRow,
 } from '../services/importApi';
+import type { ChatImportHandoff } from '../services/chatImportApi';
 import { pickPdf } from '../services/pickPdf';
 import { takePhoto } from '../services/takePhoto';
 
-type Props = { visible: boolean; onClose: () => void; onImported: () => void };
+type Props = { visible: boolean; onClose: () => void; onImported: () => void; onContinueInChat?: (handoff:ChatImportHandoff)=>void };
 
 /** Poniżej tej pewności odczytu wiersz jest dodatkowo oznaczony do sprawdzenia (historyjka 32). */
 const LOW_CONFIDENCE = 0.7;
@@ -66,7 +67,7 @@ type PickedFile = { name: string; size: number; base64: string };
 type Session = { id: string; readStatusLabel: string; readerIsDemo: boolean; readerProvider?: 'local' | 'azure-ai-foundry'; userName: string };
 type Phase = 'idle' | 'reading' | 'preview' | 'saving' | 'saveFailed';
 
-export default function WorkScheduleImport({ visible, onClose, onImported }: Props) {
+export default function WorkScheduleImport({ visible, onClose, onImported, onContinueInChat }: Props) {
   const { palette, styles } = useTheme();
   const [file, setFile] = useState<PickedFile | null>(null);
   const [readerMode, setReaderMode] = useState<'ai' | 'local'>('ai');
@@ -299,9 +300,10 @@ export default function WorkScheduleImport({ visible, onClose, onImported }: Pro
       <View style={{ flex: 1, backgroundColor: palette.scrim, alignItems: 'center', justifyContent: 'center', padding: 16 }}>
         <ScrollView style={{ backgroundColor: palette.surface, borderRadius: 18, width: '100%', maxWidth: 640, maxHeight: '92%' }} contentContainerStyle={{ padding: 21 }}>
           <View style={[styles.row, { justifyContent: 'space-between' }]}>
-            <Text style={[styles.heading, { flex: 1 }]}>Importuj grafik pracy</Text>
+            <Text style={[styles.heading, { flex: 1 }]}>Szybki import — grafik pracy</Text>
             <Button title="Zamknij" accessibilityLabel="Zamknij import" disabled={phase === 'saving'} onPress={() => void close()} />
           </View>
+          {onContinueInChat&&<Text style={styles.muted}>Przycisk „Dokończ w czacie” przekaże zdjęcie i poprawki do Azure AI.</Text>}
           <Text style={styles.subtitle}>Zdjęcie JPG/PNG albo plik PDF, maks. 5 MB i 10 stron. Na telefonie możesz od razu zrobić zdjęcie grafiku.</Text>
           <Text style={[styles.muted, { marginTop: 6 }]}>Najlepiej odczytywany jest grafik w formie listy lub tabeli: data, imię i nazwisko, godziny (np. 16:00-20:00). Zdjęcie rób prosto i bez cieni. Każdą odczytaną zmianę sprawdzisz przed zapisem.</Text>
 
@@ -326,6 +328,10 @@ export default function WorkScheduleImport({ visible, onClose, onImported }: Pro
           {phase === 'reading' && <View style={[styles.row, { marginTop: 14 }]}><Text accessibilityLiveRegion="polite" style={styles.body}>Sprawdzanie pliku i odczyt grafiku…</Text>{aiReadController.current && <Button title="Anuluj odczyt AI" onPress={cancelAiRead} />}</View>}
 
           {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
+          {(Boolean(error)||phase==='saveFailed'||Object.values(preview).some(item=>item.status==='error'||item.duplicateOfEvents.length||item.duplicateOfRows.length)||rows.some(row=>row.incomplete)) && phase!=='reading' && phase!=='saving' && file && onContinueInChat && <Button title="Dokończ w czacie" accessibilityLabel="Dokończ w czacie — przekaż zdjęcie i dane do Azure AI" primary onPress={()=>{
+            onContinueInChat({file,source:'work',reader:'ai',...(session?{sessionId:session.id,rows:rows.map(row=>({...toInput(row),selected:Boolean(selected[row.id]),overnightConfirmed:Boolean(overnightOk[row.id]),duplicateDecision:decisions[row.id],replacementId:replacementIds[row.id]}))}:{})});
+            reset();setFile(null);setError('');onClose();
+          }}/>}
           {!!notice && <Text style={[styles.body, { marginTop: 11 }]}>{notice}</Text>}
 
           {summary && (

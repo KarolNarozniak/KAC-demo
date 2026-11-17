@@ -1,5 +1,7 @@
 import { checkEventCollisions, requireCollisionDecision, validateTimedEvent, EventNotFoundError, type CollisionCheck, type TimedEvent } from './collisions.js';
 import { Pool, type PoolClient } from 'pg';
+import { applyImportPatches, type ChatImport, type ChatImportBinding, type ChatImportPatch } from './import/chat.js';
+import type { UserScope } from './api/scope.js';
 import { config } from './config.js';
 import { CATEGORY_IDS, type ExistingEvent } from './import/rules.js';
 import { planImport, type PlanAction } from './import/plan.js';
@@ -470,6 +472,56 @@ export class PostgresCalendarRepository {
     }
   }
 
+  private chatImport(row: Record<string, any>): ChatImport {
+    return { id: row.id_importu, conversationId: row.ai_conversation_id, fileName: row.nazwa_pliku, mimeType: row.attachment_mime,
+      thumbnailDataUrl: row.attachment_thumbnail, reader: row.attachment_reader, source: row.attachment_source, rows: row.draft_rows,
+      revision: row.draft_revision, status: row.status === 'Zakończony' ? 'confirmed' : row.status === 'Anulowany' ? 'cancelled' : row.expired || row.status === 'Wygasła' ? 'expired' : 'pending',
+      expiresAt: new Date(new Date(row.data_importu).getTime() + IMPORT_SESSION_TTL_MINUTES * 60_000).toISOString(), summary: row.confirm_result?.summary ?? null };
+  }
+
+  async bindChatImport(id: string, input: ChatImportBinding, scope: UserScope): Promise<ChatImport> {
+    const client = await this.connectionPool.connect();
+    try {
+      await client.query('begin');
+      const owned = await client.query(`select i.id_importu from t_importy i join t_ai_rozmowy c on c.id_rozmowy=$2
+        where i.id_importu=$1 and i.id_uzytkownika=$3 and c.id_uzytkownika=$3 and c.id_kalendarza=$4 and c.status='active' and c.expires_at>now()
+        and i.status='Podgląd' and i.data_importu>=now()-make_interval(mins=>$5) and i.ai_conversation_id is null for update of i,c`,
+        [id,input.conversationId,scope.userId,scope.calendarId,IMPORT_SESSION_TTL_MINUTES]);
+      if (!owned.rowCount) throw new Error('chat_import_not_found');
+      const known = await client.query('select id_pozycji from t_pozycje_importu where id_importu=$1',[id]);
+      const ids=new Set(known.rows.map(row=>row.id_pozycji));
+      if (new Set(input.rows.map(row=>row.id)).size!==input.rows.length || input.rows.some(row=>!ids.has(positionId(id,row.id)))) throw new Error('unknown_import_rows');
+      const result=await client.query(`update t_importy set ai_conversation_id=$2,ai_calendar_id=$3,nazwa_pliku=$4,attachment_mime=$5,attachment_thumbnail=$6,
+        attachment_reader=$7,attachment_source=$8,draft_rows=$9::jsonb,draft_revision=1,data_importu=now() where id_importu=$1 returning *`,
+        [id,input.conversationId,scope.calendarId,input.fileName,input.mimeType,input.thumbnailDataUrl,input.reader,input.source,JSON.stringify(input.rows)]);
+      await client.query('commit'); return this.chatImport(result.rows[0]);
+    } catch(error) { await client.query('rollback'); throw error; } finally { client.release(); }
+  }
+
+  async listChatImports(scope: UserScope, conversationId: string): Promise<ChatImport[]> {
+    const result=await this.connectionPool.query(`select i.*,i.data_importu<now()-make_interval(mins=>$4) as expired from t_importy i
+      join t_ai_rozmowy c on c.id_rozmowy=i.ai_conversation_id where i.ai_conversation_id=$1 and i.id_uzytkownika=$2 and i.ai_calendar_id=$3
+      and c.status='active' and c.expires_at>now() order by i.data_importu desc limit 30`,[conversationId,scope.userId,scope.calendarId,IMPORT_SESSION_TTL_MINUTES]);
+    return result.rows.map(row=>this.chatImport(row));
+  }
+
+  async updateChatImport(scope: UserScope, id: string, conversationId: string, revision: number, patches: ChatImportPatch[]): Promise<ChatImport> {
+    const client=await this.connectionPool.connect();
+    try {
+      await client.query('begin');
+      const selected=await client.query(`select i.* from t_importy i join t_ai_rozmowy c on c.id_rozmowy=i.ai_conversation_id
+        where i.id_importu=$1 and i.id_uzytkownika=$2 and i.ai_calendar_id=$3 and i.ai_conversation_id=$4 and c.status='active' and c.expires_at>now() for update of i`,[id,scope.userId,scope.calendarId,conversationId]);
+      const row=selected.rows[0]; if(!row) throw new Error('chat_import_not_found');
+      if(row.status!=='Podgląd' || new Date(row.data_importu).getTime()+IMPORT_SESSION_TTL_MINUTES*60_000<=Date.now()) throw new Error('chat_import_closed_or_expired');
+      if(row.draft_revision!==revision) throw new Error('chat_import_revision_conflict');
+      const rows=applyImportPatches(row.draft_rows,patches,row.attachment_source==='work'?'Work':'Class');
+      const previousIds=new Set((row.draft_rows as ChatImport['rows']).map(item=>item.id));
+      for(const added of rows.filter(item=>!previousIds.has(item.id)))await client.query(`insert into t_pozycje_importu(id_pozycji,id_importu,tytul_odczyt,id_kategorii,status_kontroli)values($1,$2,$3,$4,'Do kontroli')`,[positionId(id,added.id),id,added.title,CATEGORY_IDS[added.category??'Class']]);
+      const result=await client.query(`update t_importy set draft_rows=$2::jsonb,draft_revision=draft_revision+1,data_importu=now(),liczba_rekordow=$3 where id_importu=$1 returning *`,[id,JSON.stringify(rows),rows.length]);
+      await client.query('commit'); return this.chatImport(result.rows[0]);
+    } catch(error) {await client.query('rollback');throw error;} finally {client.release();}
+  }
+
   async touchImportSession(sessionId: string, userId = config.demoUserId): Promise<void> {
     await this.connectionPool.query(
       `update t_importy set data_importu = now()
@@ -509,6 +561,7 @@ export class PostgresCalendarRepository {
     rows: AcceptedRow[],
     userId = config.demoUserId,
     calendarId = config.demoCalendarId,
+    chatRevision?: number,
   ): Promise<ConfirmResult> {
     const client = await this.connectionPool.connect();
     try {
@@ -521,7 +574,7 @@ export class PostgresCalendarRepository {
         await client.query('rollback'); return { kind: 'unknown-rows', rowIds: rows.map(row => row.id) };
       }
       const session = await client.query(
-        `select status, zrodlo, data_importu < now() - make_interval(mins => $3) as wygasla
+        `select status, zrodlo, ai_conversation_id, ai_calendar_id, draft_revision, confirm_result, data_importu < now() - make_interval(mins => $3) as wygasla
          from t_importy where id_importu = $1 and id_uzytkownika = $2
          for update`,
         [sessionId, userId, IMPORT_SESSION_TTL_MINUTES],
@@ -530,6 +583,10 @@ export class PostgresCalendarRepository {
       if (!current) {
         await client.query('rollback');
         return { kind: 'not-found' };
+      }
+      if (current.ai_conversation_id) {
+        if(current.ai_calendar_id!==calendarId || current.draft_revision!==chatRevision) { await client.query('rollback'); return {kind:'revision-conflict'}; }
+        if(current.status==='Zakończony' && current.confirm_result) { await client.query('commit'); return current.confirm_result as ConfirmResult; }
       }
       if (current.status !== 'Podgląd') {
         await client.query('rollback');
@@ -642,7 +699,7 @@ export class PostgresCalendarRepository {
         skipped: saved.filter((item) => item.action === 'skipped').length,
         rejected: rejected.rowCount ?? 0,
       };
-      await client.query(`update t_importy set status = 'Zakończony', liczba_rekordow = $2 where id_importu = $1`, [sessionId, summary.added + summary.replaced]);
+      await client.query(`update t_importy set status = 'Zakończony', liczba_rekordow = $2, confirm_result=$3::jsonb where id_importu = $1`, [sessionId, summary.added + summary.replaced, current.ai_conversation_id ? JSON.stringify({kind:'ok',saved,summary}) : null]);
       await client.query('commit');
       return { kind: 'ok', saved, summary };
     } catch (error) {
