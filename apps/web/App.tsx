@@ -15,6 +15,8 @@ import AssistantScreen from './src/screens/AssistantScreen';
 import { acknowledgeNotification, claimDueNotifications, getNotificationSettings, getWebPushConfig, registerWebPushSubscription, removeWebPushSubscription, updateNotificationSettings, type DueNotification, type NotificationSettings } from './src/services/notificationsApi';
 import type { WeeklySchedule } from './src/services/scheduleApi';
 import NavigationIcon from './src/components/NavigationIcon';
+import KeyboardFrame from './src/components/KeyboardFrame';
+import { useKeyboardVisible } from './src/components/keyboardVisibility';
 import ScreenTransition from './src/components/ScreenTransition';
 import GoogleIntegrationPanel from './src/components/GoogleIntegrationPanel';
 import { Button, ThemeProvider, ThemeToggle, useTheme, type ThemeMode } from './src/components/ui';
@@ -46,12 +48,13 @@ export default function App() {
         setMode(next);
         void AsyncStorage.setItem('kac-theme', next).catch(() => { });
     };
-    return <SafeAreaProvider><ThemeProvider mode={mode} toggleMode={toggleMode}><StatusBar style={mode === 'dark' ? 'light' : 'dark'} /><CalendarApp /></ThemeProvider></SafeAreaProvider>;
+    return <SafeAreaProvider><ThemeProvider mode={mode} toggleMode={toggleMode}><StatusBar style={mode === 'dark' ? 'light' : 'dark'} /><KeyboardFrame><CalendarApp /></KeyboardFrame></ThemeProvider></SafeAreaProvider>;
 }
 
 function CalendarApp() {
     const { palette, styles } = useTheme();
     const desktop = useWindowDimensions().width >= 1000;
+    const keyboardVisible = useKeyboardVisible();
     const [menuOpen, setMenuOpen] = useState(false);
     const [tab, setTab] = useState<typeof tabs[number]>('Dziś');
     const [week, setWeek] = useState(new Date());
@@ -462,7 +465,7 @@ function CalendarApp() {
             );
         }} />
 
-        {!desktop && <View accessibilityRole="tablist" style={{ flexDirection: 'row', backgroundColor: palette.surface, borderTopWidth: 1, borderColor: palette.line, paddingTop: 6, paddingBottom: 6 }}>
+        {!desktop && !keyboardVisible && <View accessibilityRole="tablist" style={{ flexDirection: 'row', backgroundColor: palette.surface, borderTopWidth: 1, borderColor: palette.line, paddingTop: 6, paddingBottom: 6 }}>
             {tabs.filter(item => item !== 'Blokady' && item !== 'Ustawienia').map(item => <Pressable key={item} accessibilityRole="tab" accessibilityState={{ selected: tab === item }} onPress={() => openTab(item)} style={{ flex: 1, minWidth: 0, minHeight: 48, justifyContent: 'center', alignItems: 'center', gap: 4 }}><View style={{ width: 28, height: 24, alignItems: 'center', justifyContent: 'center' }}><NavigationIcon index={tabIcons[item]} color={tab === item ? palette.blue : palette.muted} /></View><Text style={{ width: '100%', height: 16, lineHeight: 16, includeFontPadding: false, textAlign: 'center', fontSize: 12, fontWeight: '700', color: tab === item ? palette.blue : palette.muted }}>{item}</Text></Pressable>)}
         </View>}
 

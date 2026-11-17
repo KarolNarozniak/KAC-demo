@@ -178,7 +178,7 @@ export default function CalendarScreen({ onContinueInChat, refreshVersion = 0, w
   const changeDraft = (field: 'title' | 'location', value: string) => setDraft((current) => current ? { ...current, [field]: value } : current);
   const changeDate = (value: string) => setDraft((current) => current ? { ...current, start: `${value}T${current.start.split('T')[1]}`, end: `${value}T${current.end.split('T')[1]}` } : current);
   const changeTime = (field: 'start' | 'end', value: string) => setDraft((current) => current ? { ...current, [field]: `${current[field].split('T')[0]}T${value}` } : current);
-  return <View style={{ flex: 1, minHeight: 0, width: '100%', maxWidth: todayOnly ? 1120 : 1440, alignSelf: 'center', paddingHorizontal: compact ? 16 : 28, paddingTop: compact ? 12 : 24, paddingBottom: compact ? 80 : 0 }}>
+  return <View style={{ flex: 1, minHeight: 0, width: '100%', maxWidth: todayOnly ? 1120 : 1440, alignSelf: 'center', paddingHorizontal: compact ? 16 : 28, paddingTop: compact ? 12 : 24, paddingBottom: 0 }}>
     {!!notice && <Text accessibilityLiveRegion="polite" style={styles.muted}>{notice}</Text>}
     <GoogleCorrectionNotice request={correction} />
     {loading && <Text accessibilityLiveRegion="polite" style={styles.muted}>Wczytywanie…</Text>}

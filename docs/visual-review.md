@@ -32,3 +32,7 @@ Use a fresh reviewer with no inherited conversation or earlier reports for every
 ## Zakończenie przeglądu
 
 Na prośbę użytkownika zakończono iteracje przed osiągnięciem zakładanego progu 8,5/10. Ostatnia niezależna ocena: **8,0/10** (desktop **8,1**, mobile **7,9**). Raport: [visual-review-report.md](visual-review-report.md). Przykładowe zrzuty sześciu ekranów dla obu rozmiarów znajdują się w [ui-screenshots](ui-screenshots/). Pełne 74 zrzuty, galeria i archiwum ZIP są w lokalnym katalogu `artifacts/ui-review/`.
+
+## Poprawki z telefonu
+
+Czat uwzględnia klawiaturę ekranową na Androidzie/iOS, a w przeglądarce dopasowuje wysokość do visual viewport. Nawigacja dolna chowa się podczas pisania. Test `npm run ui:capture -- artifacts/ui-review/mobile-keyboard-fix assistant,assistant-keyboard-visual,assistant-keyboard-resized chat` sprawdza oba sposoby zmiany viewportu, powrót nawigacji, kolor podpowiedzi oraz wyśrodkowanie plusa do zdjęć. Są to symulacje przeglądarkowe; eksport Androida potwierdza budowanie kodu natywnego, bez testu na fizycznym telefonie.

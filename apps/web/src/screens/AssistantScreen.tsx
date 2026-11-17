@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Modal, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Image, Modal, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions, Platform } from 'react-native';
 import { Button, useTheme } from '../components/ui';
 import ChatImportCard from '../components/ChatImportCard';
 import { attachChatImport, listChatImports, type ChatImportDraft, type ChatImportHandoff } from '../services/chatImportApi';
@@ -230,7 +230,7 @@ export default function AssistantScreen({ active, onCalendarChange, importHandof
       <View style={[styles.row, { justifyContent: 'space-between', flexWrap: 'wrap' }]}><View>{!compact && <Text style={styles.heading}>Asystent Aura</Text>}<Text style={styles.muted}>Kalendarz i planowanie pracy · zmiany wymagają zatwierdzenia</Text></View></View>
       {enabled === false && <View style={[styles.card, { borderColor: palette.amber, marginTop: 12 }]}><Text style={styles.heading}>Asystent jest teraz niedostępny</Text><Text style={styles.body}>Możesz nadal korzystać z kalendarza i planować pracę. Spróbuj ponownie później.</Text></View>}
       {!!error && <Text accessibilityRole="alert" style={[styles.error, { marginTop: 8 }]}>{error}</Text>}
-      <ScrollView ref={scrollRef} onContentSizeChange={() => { if (followReply.current) scrollRef.current?.scrollToEnd({ animated: false }); }}
+      <ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'web' ? 'none' : 'on-drag'} onLayout={() => { if (followReply.current) scrollRef.current?.scrollToEnd({ animated: false }); }} onContentSizeChange={() => { if (followReply.current) scrollRef.current?.scrollToEnd({ animated: false }); }}
         onScroll={({ nativeEvent }) => { followReply.current = nativeEvent.contentOffset.y + nativeEvent.layoutMeasurement.height >= nativeEvent.contentSize.height - 80; }} scrollEventThrottle={100} style={{ flex: 1, marginVertical: 10 }} contentContainerStyle={{ gap: 10, paddingBottom: 16 }}>
         {messages.filter((message) => message.role !== 'tool' && textOf(message)).map((message) => <View key={message.id} style={{ alignSelf: message.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: compact ? '95%' : 720, padding: 16, borderRadius: 12, backgroundColor: message.role === 'user' ? palette.blueSoft : palette.surface }}>
           {!!(message.content.attachment as {thumbnailDataUrl?:string}|undefined)?.thumbnailDataUrl && <Pressable accessibilityRole="button" accessibilityLabel="Powiększ zdjęcie" onPress={()=>setImagePreview(String((message.content.attachment as {thumbnailDataUrl:string}).thumbnailDataUrl))}>
@@ -269,9 +269,9 @@ export default function AssistantScreen({ active, onCalendarChange, importHandof
         <Pressable accessibilityRole="button" accessibilityLabel="Importuj zdjęcie lub plik" accessibilityHint="Wybierz plan zajęć albo grafik pracy i sprawdź dane przed zapisem."
           accessibilityState={{ disabled: sending || loading }} disabled={sending || loading} onPress={() => setAttachmentMenuOpen(true)}
           style={[styles.button, { width: 44, height: 48, paddingHorizontal: 0, alignItems: 'center', justifyContent: 'center' }, (sending || loading) && { opacity: 0.5 }]}>
-          <Text style={{ fontSize: 24, color: palette.ink }}>+</Text>
+          <View testID="attachment-add-icon" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ width: 20, height: 20 }}><View style={{ position: 'absolute', left: 1, top: 9, width: 18, height: 2, borderRadius: 1, backgroundColor: palette.ink }} /><View style={{ position: 'absolute', left: 9, top: 1, width: 2, height: 18, borderRadius: 1, backgroundColor: palette.ink }} /></View>
         </Pressable>
-        <TextInput value={input} onChangeText={setInput} placeholder={enabled ? 'Napisz wiadomość…' : 'Asystent jest niedostępny'} multiline blurOnSubmit editable={Boolean(enabled) && !sending}
+        <TextInput placeholderTextColor={palette.placeholder} value={input} onChangeText={setInput} placeholder={enabled ? 'Napisz wiadomość…' : 'Asystent jest niedostępny'} multiline blurOnSubmit editable={Boolean(enabled) && !sending}
           accessibilityLabel="Wiadomość do asystenta" onSubmitEditing={() => void send()} style={[styles.input, { flex: 1, minHeight: 48, height: 48, maxHeight: 120, paddingVertical: 12 }]} />
         <Pressable accessibilityRole="button" accessibilityLabel="Wyślij wiadomość" disabled={!enabled || sending || loading || !conversationId || !input.trim()} onPress={() => void send()} style={[styles.button, styles.primary, { height: 48, paddingHorizontal: 14 }, (!enabled || sending || loading || !conversationId || !input.trim()) && { opacity: 0.5 }]}><Text style={[styles.buttonText, styles.primaryText]}>{sending ? '…' : 'Wyślij'}</Text></Pressable>
       </View>
