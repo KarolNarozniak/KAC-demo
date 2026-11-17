@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Text, View, Pressable, Image, Modal, ScrollView, TextInput } from 'react-native';
+import { Text, View, Pressable, Image, Modal, ScrollView, TextInput, Platform } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
 import type { WeekLayout } from './src/components/WeekGrid';
 import CalendarScreen from './src/screens/CalendarScreen';
 import ScheduleScreen from './src/screens/ScheduleScreen';
@@ -12,6 +13,15 @@ import { acknowledgeNotification, claimDueNotifications, getNotificationSettings
 import type { WeeklySchedule } from './src/services/scheduleApi';
 import ScreenTransition from './src/components/ScreenTransition';
 import { Button, ThemeProvider, ThemeToggle, useTheme, type ThemeMode } from './src/components/ui';
+
+// Konfiguracja obsługi powiadomień w tle / na pierwszym planie dla Expo (Mobile)
+Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldBadge: false,
+    }),
+});
 
 const tabs = ['Dziś', 'Tydzień', 'Grafik', 'Blokady', 'Ustawienia', 'Asystent'] as const;
 
@@ -82,25 +92,55 @@ function CalendarApp() {
         window.history?.replaceState?.(null, '', `${url.pathname}${url.search}${url.hash}`);
     }, []);
 
+    // Obsługa kliknięcia w powiadomienie natywne na urządzeniach mobilnych (Expo)
     useEffect(() => {
-        if (!notificationSettings?.enabled || typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+        const subscription = Notifications.addNotificationResponseReceivedListener(response => {
+            const data = response.notification.request.content.data as { eventStart?: string; notificationItem?: DueNotification };
+            if (data?.eventStart) {
+                const [year, month, day] = String(data.eventStart).slice(0, 10).split('-').map(Number);
+                setWeek(new Date(year, month - 1, day, 12));
+                if (data.notificationItem) setNotificationTarget(data.notificationItem);
+                setTab('Tydzień');
+            }
+        });
+        return () => subscription.remove();
+    }, []);
+
+    // Cykliczne sprawdzanie i wywoływanie powiadomień (obsługuje zarówno Expo Mobile, jak i Web)
+    useEffect(() => {
+        if (!notificationSettings?.enabled) return;
         let alive = true;
         const checkDue = async () => {
             try {
                 const due = await claimDueNotifications();
                 if (!alive) return;
                 for (const item of due) {
-                    const notification = new Notification(item.title || 'Przypomnienie KAC', { body: item.message, tag: item.id });
-                    notification.onclick = () => {
-                        const [year, month, day] = item.eventStart.slice(0, 10).split('-').map(Number);
-                        setWeek(new Date(year, month - 1, day, 12));
-                        setNotificationTarget(item);
-                        setTab('Tydzień');
-                        globalThis.window?.focus();
-                    };
+                    // 1. Próba wysłania przez powiadomienia natywne Expo (Mobile / Android / iOS)
+                    try {
+                        await Notifications.scheduleNotificationAsync({
+                            content: {
+                                title: item.title || 'Przypomnienie KAC',
+                                body: item.message,
+                                data: { eventStart: item.eventStart, notificationItem: item },
+                            },
+                            trigger: null, // Wyślij natychmiast
+                        });
+                    } catch {
+                        // 2. Fallback do przeglądarki Web, jeśli jesteśmy w środowisku webowym z uprawnieniami
+                        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+                            const notification = new Notification(item.title || 'Przypomnienie KAC', { body: item.message, tag: item.id });
+                            notification.onclick = () => {
+                                const [year, month, day] = item.eventStart.slice(0, 10).split('-').map(Number);
+                                setWeek(new Date(year, month - 1, day, 12));
+                                setNotificationTarget(item);
+                                setTab('Tydzień');
+                                globalThis.window?.focus();
+                            };
+                        }
+                    }
                     await acknowledgeNotification(item.id);
                 }
-            } catch { /* Notification delivery must not interrupt calendar use. */ }
+            } catch { /* Błędy dostarczenia nie przerywają działania kalendarza. */ }
         };
         void checkDue();
         const timer = setInterval(() => void checkDue(), 30_000);
@@ -183,11 +223,30 @@ function CalendarApp() {
                 setNotificationError('Wybierz co najmniej jeden rodzaj wydarzeń (Zajęcia, Praca lub Prywatne).');
                 return;
             }
-            if (typeof Notification === 'undefined') { setNotificationError('Ta przeglądarka nie obsługuje powiadomień systemowych.'); return; }
             try {
-                const permission = Notification.permission === 'default' ? await Notification.requestPermission() : Notification.permission;
-                if (permission !== 'granted') { setNotificationError('Powiadomienia są zablokowane w ustawieniach przeglądarki.'); return; }
-            } catch (error) { setNotificationError(error instanceof Error ? error.message : 'Nie udało się uzyskać zgody na powiadomienia.'); return; }
+                // Sprawdzenie i prośba o uprawnienia Expo (Mobile) oraz przeglądarkowe (Web)
+                const { status: existingStatus } = await Notifications.getPermissionsAsync().catch(() => ({ status: 'denied' }));
+                let finalStatus = existingStatus;
+                if (existingStatus !== 'granted') {
+                    const { status } = await Notifications.requestPermissionsAsync().catch(() => ({ status: 'denied' }));
+                    finalStatus = status;
+                }
+                if (finalStatus !== 'granted') {
+                    if (typeof Notification !== 'undefined') {
+                        const permission = Notification.permission === 'default' ? await Notification.requestPermission() : Notification.permission;
+                        if (permission !== 'granted') {
+                            setNotificationError('Powiadomienia są zablokowane w ustawieniach urządzenia lub przeglądarki.');
+                            return;
+                        }
+                    } else {
+                        setNotificationError('Powiadomienia są zablokowane w ustawieniach urządzenia.');
+                        return;
+                    }
+                }
+            } catch (error) {
+                setNotificationError(error instanceof Error ? error.message : 'Nie udało się uzyskać zgody na powiadomienia.');
+                return;
+            }
         }
         const saved = await updateReminderSettings(remindersEnabledDraft, value, classRemindersDraft, workRemindersDraft, privateRemindersDraft);
         if (saved) await syncWebPushSubscription(remindersEnabledDraft);
@@ -271,10 +330,10 @@ function CalendarApp() {
                                     <View style={[styles.card, { marginTop: 20 }]}>
                                         <Text style={styles.heading}>Przypomnienia i powiadomienia</Text>
                                         <Text style={[styles.muted, { marginVertical: 8 }]}>
-                                            Przypomnienia dotyczą zatwierdzonych zmian oraz zaplanowanych wydarzeń. Powiadomienia systemowe wymagają zgody przeglądarki.
+                                            Przypomnienia dotyczą zatwierdzonych zmian oraz zaplanowanych wydarzeń. Powiadomienia systemowe wymagają zgody urządzenia.
                                         </Text>
                                         <Text style={styles.muted}>
-                                            Uprawnienie przeglądarki: {typeof Notification === 'undefined' ? 'niedostępne' : Notification.permission === 'granted' ? 'przyznane' : Notification.permission === 'denied' ? 'odmówione' : 'nieustalone'}.
+                                            Uprawnienia: {typeof Notification === 'undefined' ? 'systemowe (Expo)' : Notification.permission === 'granted' ? 'przyznane (Web)' : 'odmówione/nieustalone'}
                                         </Text>
                                         {notificationSettings?.enabled && (
                                             <Text style={styles.muted}>
