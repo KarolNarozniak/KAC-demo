@@ -8,16 +8,16 @@ const settingsResponse = documented({
     type: 'object',
     additionalProperties: false,
     required: ['enabled', 'classReminders', 'workRemindersEnabled', 'privateReminders', 'eventChangesEnabled', 'minutesBefore', 'quietStart', 'quietEnd', 'pendingReminderCount'],
-    properties: {
-        enabled: { type: 'boolean' },
+    properties: { 
+        enabled: { type: 'boolean' }, 
         classReminders: { type: 'boolean' },
-        workRemindersEnabled: { type: 'boolean' },
+        workRemindersEnabled: { type: 'boolean' }, 
         privateReminders: { type: 'boolean' },
-        eventChangesEnabled: { type: 'boolean' },
-        minutesBefore: { type: 'integer', minimum: 1, maximum: 1440 },
-        quietStart: { type: ['string', 'null'] },
-        quietEnd: { type: ['string', 'null'] },
-        pendingReminderCount: { type: 'integer', minimum: 0 }
+        eventChangesEnabled: { type: 'boolean' }, 
+        minutesBefore: { type: 'integer', minimum: 1, maximum: 1440 }, 
+        quietStart: { type: ['string', 'null'] }, 
+        quietEnd: { type: ['string', 'null'] }, 
+        pendingReminderCount: { type: 'integer', minimum: 0 } 
     },
 }, 'Preferencje i liczba zaplanowanych przypomnień dla bieżącego zakresu.', {
     settings: {
@@ -280,9 +280,9 @@ export async function notificationRoutes(app: FastifyInstance, options: { reposi
                 required: ['enabled'],
                 additionalProperties: false,
                 properties: {
-                    enabled: { type: 'boolean' },
+                    enabled: { type: 'boolean' }, 
                     classReminders: { type: 'boolean' },
-                    workRemindersEnabled: { type: 'boolean' },
+                    workRemindersEnabled: { type: 'boolean' }, 
                     privateReminders: { type: 'boolean' },
                     minutesBefore: { type: 'integer', minimum: 1, maximum: 1440 },
                 }
