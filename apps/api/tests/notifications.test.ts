@@ -72,4 +72,4 @@ test('Web Push endpoints expose only public VAPID data and scope subscription ch
     config.webPush.publicKey = original.publicKey; config.webPush.privateKey = original.privateKey; config.webPush.subject = original.subject;
     await app.close();
   }
-});
+});"" 
