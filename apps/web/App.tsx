@@ -20,6 +20,9 @@ Notifications.setNotificationHandler({
         shouldShowAlert: true,
         shouldPlaySound: true,
         shouldBadge: false,
+        shouldShowBanner: true,
+        shouldShowList: true,
+        shouldSetBadge: true,
     }),
 });
 
@@ -153,8 +156,8 @@ function CalendarApp() {
             const settings = await updateNotificationSettings({
                 enabled,
                 workRemindersEnabled: workReminders,
-                classRemindersEnabled: classReminders,
-                privateRemindersEnabled: privateReminders,
+                classReminders,
+                privateReminders,
                 minutesBefore
             });
             setNotificationSettings(settings);
