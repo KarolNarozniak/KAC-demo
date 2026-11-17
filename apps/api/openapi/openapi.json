@@ -14708,7 +14708,10 @@
               "schema": {
                 "type": "object",
                 "required": [
-                  "enabled"
+                  "enabled",
+                  "classReminders",
+                  "workRemindersEnabled",
+                  "privateReminders"
                 ],
                 "additionalProperties": false,
                 "properties": {
