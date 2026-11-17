@@ -22,19 +22,19 @@ test('quiet hours defer a reminder to their end and notification text includes b
 test('notification API validates lead time, claims due reminders and acknowledges display', async () => {
   const calls: unknown[] = [];
   const app = buildApi(null, [], { notificationRepository: {
-    getSettings: async () => ({ enabled: true, classReminders: true, workRemindersEnabled: true, privateReminders: true, eventChangesEnabled: true, minutesBefore: 30, quietStart: null, quietEnd: null, pendingReminderCount: 1 }),
+    getSettings: async () => ({ enabled: true, workRemindersEnabled: true, eventChangesEnabled: true, minutesBefore: 30, quietStart: null, quietEnd: null, pendingReminderCount: 1 }),
     updateSettings: async (_scope, settings) => { calls.push(settings); },
     listDue: async () => [{ id: 'n1', eventId: 'e1', type: 'Przypomnienie pracy', message: 'Zmiana', scheduledAt: '2035-02-14T08:30:00Z', eventStart: '2035-02-14T09:00', eventEnd: '2035-02-14T17:00', title: 'Zmiana' }],
     acknowledge: async (_scope, id) => id === 'n1',
   } as never });
   try {
     for (const minutesBefore of [0, 1441]) {
-      const invalid = await app.inject({ method: 'PUT', url: '/api/v1/notifications/settings', payload: { enabled: true, classReminders: true, workRemindersEnabled: true, privateReminders: true, minutesBefore } });
+      const invalid = await app.inject({ method: 'PUT', url: '/api/v1/notifications/settings', payload: { enabled: true, workRemindersEnabled: true, minutesBefore } });
       assert.equal(invalid.statusCode, 400);
     }
-    const saved = await app.inject({ method: 'PUT', url: '/api/v1/notifications/settings', payload: { enabled: true, classReminders: true, workRemindersEnabled: true, privateReminders: true, minutesBefore: 45 } });
+    const saved = await app.inject({ method: 'PUT', url: '/api/v1/notifications/settings', payload: { enabled: true, workRemindersEnabled: true, minutesBefore: 45 } });
     assert.equal(saved.statusCode, 200);
-    assert.deepEqual(calls, [{ enabled: true, classReminders: true, workRemindersEnabled: true, privateReminders: true, minutesBefore: 45 }]);
+    assert.deepEqual(calls, [{ enabled: true, workRemindersEnabled: true, minutesBefore: 45 }]);
     assert.equal((await app.inject({ method: 'GET', url: '/api/v1/notifications/settings' })).json().pendingReminderCount, 1);
     const due = await app.inject({ method: 'GET', url: '/api/v1/notifications/due' });
     assert.equal(due.statusCode, 200);
@@ -51,7 +51,7 @@ test('Web Push endpoints expose only public VAPID data and scope subscription ch
   config.webPush.privateKey = 'synthetic-private-vapid-key';
   config.webPush.subject = 'mailto:test@example.invalid';
   const app = buildApi(null, [], { userScope: () => ({ userId: 'user-one', calendarId: 'calendar-one' }), notificationRepository: {
-    getSettings: async () => ({ enabled: false, classReminders: true, workRemindersEnabled: true, privateReminders: true, eventChangesEnabled: true, minutesBefore: 30, quietStart: null, quietEnd: null, pendingReminderCount: 0 }),
+    getSettings: async () => ({ enabled: false, workRemindersEnabled: true, eventChangesEnabled: true, minutesBefore: 30, quietStart: null, quietEnd: null, pendingReminderCount: 0 }),
     updateSettings: async () => {}, listDue: async () => [], acknowledge: async () => true,
     savePushSubscription: async (scope, input) => { calls.push({ type: 'save', scope, input }); },
     deletePushSubscription: async (scope, endpoint) => { calls.push({ type: 'delete', scope, endpoint }); return true; },
@@ -72,4 +72,4 @@ test('Web Push endpoints expose only public VAPID data and scope subscription ch
     config.webPush.publicKey = original.publicKey; config.webPush.privateKey = original.privateKey; config.webPush.subject = original.subject;
     await app.close();
   }
-});"" 
+});
