@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, ScrollView } from 'react-native';
 import { fetchBlocks, createBlock, deleteBlock, type Block, type BlockType } from '../services/blockApi';
+import { Button, Field, useTheme } from '../components/ui';
 
 export function BlocksScreen() {
   const [blocks, setBlocks] = useState<Block[]>([]);
@@ -10,6 +11,8 @@ export function BlocksScreen() {
   const [endTime, setEndTime] = useState('');
   const [type, setType] = useState<BlockType>('exam_session');
   const [error, setError] = useState<string | null>(null);
+
+  const { palette, styles } = useTheme();
 
   const loadBlocks = async () => {
     try {
@@ -61,102 +64,87 @@ export function BlocksScreen() {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.header}>Blokady i Sesje Egzaminacyjne</Text>
-      <Text style={styles.subtitle}>Okresy te zostaną wykluczone z automatycznego generowania grafiku pracy.</Text>
+    <ScrollView contentContainerStyle={{ width: '100%', maxWidth: 1120, alignSelf: 'center', padding: 16, paddingBottom: 40 }}>
+      <Text style={[styles.title, { fontSize: 25 }]}>Blokady i Sesje Egzaminacyjne</Text>
+      <Text style={[styles.subtitle, { marginTop: 0, marginBottom: 14 }]}>Okresy te zostaną wykluczone z automatycznego generowania grafiku pracy.</Text>
 
-      {error && <Text style={styles.errorText}>{error}</Text>}
+      {error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
 
-      <View style={styles.formCard}>
-        <Text style={styles.sectionTitle}>Dodaj nową blokadę</Text>
+      <View style={styles.card}>
+        <Text style={styles.heading}>Dodaj nową blokadę</Text>
 
-        <TextInput
-          placeholder="Tytuł (np. Sesja zimowa, Urlop)"
+        <Field
+          label="TYTUŁ (NP. SESJA ZIMOWA, URLOP)"
+          maxLength={200}
           value={title}
           onChangeText={setTitle}
-          style={styles.input}
+          placeholder="np. Sesja zimowa"
         />
 
-        <TextInput
-          placeholder="Od (np. 2026-02-01T08:00)"
+        <Field
+          label="OD (NP. 2026-02-01T08:00)"
+          maxLength={50}
           value={startTime}
           onChangeText={setStartTime}
-          style={styles.input}
+          placeholder="2026-02-01T08:00"
         />
 
-        <TextInput
-          placeholder="Do (np. 2026-02-15T20:00)"
+        <Field
+          label="DO (NP. 2026-02-15T20:00)"
+          maxLength={50}
           value={endTime}
           onChangeText={setEndTime}
-          style={styles.input}
+          placeholder="2026-02-15T20:00"
         />
 
-        <View style={styles.typeSelector}>
-          {(['exam_session', 'vacation', 'day_off'] as BlockType[]).map((t) => (
-            <TouchableOpacity
-              key={t}
-              style={[styles.typeButton, type === t && styles.typeButtonActive]}
-              onPress={() => setType(t)}
-            >
-              <Text style={[styles.typeButtonText, type === t && styles.typeButtonTextActive]}>
-                {typeLabels[t]}
-              </Text>
-            </TouchableOpacity>
-          ))}
+        <Text style={styles.label}>RODZAJ BLOKADY</Text>
+        <View style={[styles.row, { flexWrap: 'wrap', marginBottom: 16, gap: 8 }]}>
+          {(['exam_session', 'vacation', 'day_off'] as BlockType[]).map((t) => {
+            const isSelected = type === t;
+            return (
+              <Pressable
+                key={t}
+                onPress={() => setType(t)}
+                style={{
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: isSelected ? palette.blue : palette.line,
+                  backgroundColor: isSelected ? palette.blueSoft : palette.surfaceAlt,
+                }}
+              >
+                <Text style={[styles.body, { fontWeight: '700', color: isSelected ? palette.blue : palette.text }]}>
+                  {typeLabels[t]}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
 
-        <TouchableOpacity style={styles.submitButton} onPress={handleCreate}>
-          <Text style={styles.submitButtonText}>Dodaj blokadę</Text>
-        </TouchableOpacity>
+        <Button title="Dodaj blokadę" primary onPress={handleCreate} />
       </View>
 
-      <Text style={styles.sectionTitle}>Aktywne blokady</Text>
+      <Text style={[styles.heading, { marginTop: 16, marginBottom: 8 }]}>Aktywne blokady</Text>
 
       {loading ? (
-        <ActivityIndicator size="small" color="#000" style={{ marginTop: 20 }} />
+        <Text accessibilityLiveRegion="polite" style={styles.muted}>Wczytywanie…</Text>
       ) : blocks.length === 0 ? (
-        <Text style={styles.emptyText}>Brak zaplanowanych blokad.</Text>
+        <Text style={styles.muted}>Brak zaplanowanych blokad.</Text>
       ) : (
         blocks.map((item) => (
-          <View key={item.id} style={styles.itemCard}>
+          <View key={item.id} style={[styles.card, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12, marginBottom: 8 }]}>
             <View style={{ flex: 1 }}>
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{typeLabels[item.type] || item.type}</Text>
+              <View style={{ alignSelf: 'flex-start', backgroundColor: palette.blueSoft, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4, marginBottom: 4 }}>
+                <Text style={{ fontSize: 11, color: palette.blue, fontWeight: '700' }}>{typeLabels[item.type] || item.type}</Text>
               </View>
-              <Text style={styles.itemTitle}>{item.title}</Text>
-              <Text style={styles.itemTime}>{item.startTime} do {item.endTime}</Text>
+              <Text style={[styles.body, { fontWeight: '700' }]}>{item.title}</Text>
+              <Text style={styles.muted}>{item.startTime} do {item.endTime}</Text>
             </View>
-            <TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.deleteButton}>
-              <Text style={styles.deleteButtonText}>Usuń</Text>
-            </TouchableOpacity>
+            <Button title="Usuń" danger onPress={() => handleDelete(item.id)} />
           </View>
         ))
       )}
     </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { padding: 20, maxWidth: 600, alignSelf: 'center', width: '100%', backgroundColor: '#0d131f' },
-  header: { fontSize: 24, fontWeight: 'bold', marginBottom: 4, color: '#fff' },
-  subtitle: { fontSize: 14, color: '#94a3b8', marginBottom: 20 },
-  errorText: { color: '#fca5a5', marginBottom: 12, backgroundColor: '#451a03', padding: 8, borderRadius: 4 },
-  formCard: { backgroundColor: '#151b22', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#212d3d', marginBottom: 24 },
-  sectionTitle: { fontSize: 18, fontWeight: '600', marginBottom: 12, color: '#fff' },
-  input: { backgroundColor: '#1b2432', borderWidth: 1, borderColor: '#2d3b50', padding: 10, marginBottom: 10, borderRadius: 6, color: '#fff' },
-  typeSelector: { flexDirection: 'row', gap: 8, marginBottom: 14, flexWrap: 'wrap' },
-  typeButton: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 16, borderWidth: 1, borderColor: '#2d3b50', backgroundColor: '#1b2432' },
-  typeButtonActive: { backgroundColor: '#3b82f6', borderColor: '#3b82f6' },
-  typeButtonText: { fontSize: 13, color: '#cbd5e1' },
-  typeButtonTextActive: { color: '#fff', fontWeight: '500' },
-  submitButton: { backgroundColor: '#3b82f6', padding: 12, borderRadius: 6, alignItems: 'center' },
-  submitButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
-  emptyText: { color: '#94a3b8', fontStyle: 'italic', marginTop: 10 },
-  itemCard: { flexDirection: 'row', backgroundColor: '#151b22', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#212d3d', alignItems: 'center', marginBottom: 8 },
-  badge: { alignSelf: 'flex-start', backgroundColor: '#1e293b', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4, marginBottom: 4 },
-  badgeText: { fontSize: 11, color: '#93c5fd', fontWeight: '500' },
-  itemTitle: { fontSize: 16, fontWeight: '600', color: '#fff' },
-  itemTime: { fontSize: 13, color: '#94a3b8', marginTop: 2 },
-  deleteButton: { padding: 8, justifyContent: 'center' },
-  deleteButtonText: { color: '#f87171', fontWeight: '600' },
-});
