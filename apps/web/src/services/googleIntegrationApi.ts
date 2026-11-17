@@ -5,7 +5,7 @@
 import { apiBaseUrl } from './importApi';
 import {
   apiErrorMessage, type AttemptPurpose, type GoogleAccountView, type GoogleIntegrationStatus, type IntegrationAttempt, type IntegrationCalendar,
-  type DisconnectResult, type SimulatedFailure, type SyncAttempt, type SyncStatus,
+  type CalendarSelection, type DisconnectResult, type SimulatedFailure, type SyncAttempt, type SyncStatus,
 } from '../domain/googleIntegration';
 
 export class GoogleIntegrationApiError extends Error {
@@ -14,7 +14,7 @@ export class GoogleIntegrationApiError extends Error {
   }
 }
 
-async function call<T>(method: 'GET' | 'POST' | 'DELETE', path: string, body?: unknown, timeoutMs = 30000): Promise<T> {
+async function call<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown, timeoutMs = 30000): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`${apiBaseUrl()}${path}`, {
@@ -53,3 +53,8 @@ export const runGoogleSync = (simulate?: SimulatedFailure) =>
 
 /** „Odłącz konto Google” (S23KC2S1P2-35, G03): usuwa dane dostępu w KAC i prosi Google o cofnięcie zgody. Powtórzenie jest bezpieczne. */
 export const disconnectGoogleIntegration = () => call<DisconnectResult>('DELETE', '/api/v1/integrations/google');
+
+/** Wybór kalendarzy (S23KC2S1P2-41, G04). Zapis jest atomowy; nieaktualna wersja kończy się błędem selection_conflict. */
+export const getGoogleCalendarSelection = () => call<CalendarSelection>('GET', '/api/v1/integrations/google/calendar-selection');
+export const saveGoogleCalendarSelection = (version: number, sourceCalendarIds: string[], publicationTargetCalendarId: string | null) =>
+  call<CalendarSelection>('PUT', '/api/v1/integrations/google/calendar-selection', { version, sourceCalendarIds, publicationTargetCalendarId });

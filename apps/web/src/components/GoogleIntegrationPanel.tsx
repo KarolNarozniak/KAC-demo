@@ -11,8 +11,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Linking, Pressable, Text, View } from 'react-native';
 import { Button, useTheme } from './ui';
 import GoogleSyncSection from './GoogleSyncSection';
+import GoogleCalendarSelection from './GoogleCalendarSelection';
 import {
-  accessRoleLabel, apiErrorMessage, ATTEMPT_POLL_MS, attemptFinished, attemptNotice, attemptOverdue, calendarsSummary, canWriteTo, changeAccountWarning,
+  apiErrorMessage, ATTEMPT_POLL_MS, attemptFinished, attemptNotice, attemptOverdue, calendarsSummary, changeAccountWarning,
   connectedAtLabel, disconnectNotice, disconnectWarning, grantedAccessLines, grantedAccessWarning, panelState, requestedAccessLines, sortCalendars, unavailableMessage,
   type AttemptPurpose, type GoogleIntegrationStatus, type IntegrationAttempt, type IntegrationCalendar, type Notice, type PanelState,
 } from '../domain/googleIntegration';
@@ -41,6 +42,9 @@ export default function GoogleIntegrationPanel() {
   const [busy, setBusy] = useState(false);
   // „Połącz ponownie konto Google” z sekcji synchronizacji: po udanym połączeniu synchronizacja rusza sama (historyjka 17, krok 6).
   const [syncSignal, setSyncSignal] = useState(0);
+  // Zapis wyboru kalendarzy (G04) zmienia liczbę źródeł w sekcji synchronizacji – licznik wymusza jej odświeżenie.
+  const [selectionSaves, setSelectionSaves] = useState(0);
+  const [calendarsLoads, setCalendarsLoads] = useState(0);
   const syncAfterReconnect = useRef(false);
   const mounted = useRef(true);
   const busyRef = useRef(false);
@@ -68,7 +72,7 @@ export default function GoogleIntegrationPanel() {
     if (next.status !== 'connected' || !next.ready || !next.account?.access.calendarsRead) { setCalendars(null); return; }
     try {
       const listed = await listGoogleIntegrationCalendars();
-      if (mounted.current) setCalendars({ list: sortCalendars(listed.calendars), complete: listed.complete });
+      if (mounted.current) { setCalendars({ list: sortCalendars(listed.calendars), complete: listed.complete }); setCalendarsLoads((value) => value + 1); }
     } catch (error) {
       if (!mounted.current) return;
       const code = codeOf(error);
@@ -273,14 +277,12 @@ export default function GoogleIntegrationPanel() {
           {!calendars && !calendarError && <Text accessibilityLiveRegion="polite" style={styles.muted}>Wczytywanie kalendarzy…</Text>}
           {!!calendarError && <Text accessibilityRole="alert" style={styles.error}>{calendarError}</Text>}
           {calendars && <Text style={[styles.muted, { marginBottom: 6 }]}>{calendarsSummary(calendars.list, calendars.complete)}</Text>}
-          {calendars?.list.map((calendar) => <View key={calendar.id} style={[styles.row, { paddingVertical: 9, borderTopWidth: 1, borderColor: palette.line }]}>
-            <Text numberOfLines={1} style={[styles.body, { flex: 1, minWidth: 0 }]}>{calendar.name}{calendar.primary ? '  · główny' : ''}</Text>
-            <Text style={[styles.muted, canWriteTo(calendar) && { color: palette.green, fontWeight: '700' }]}>{accessRoleLabel(calendar.accessRole)}</Text>
-          </View>)}
+          {/* Wybór kalendarzy do planowania i kalendarza publikacji (S23KC2S1P2-41, G04) – lista po odczycie z Google. */}
+          {calendars && <GoogleCalendarSelection reloadKey={`${account.email}|${calendarsLoads}`} onSaved={() => setSelectionSaves((value) => value + 1)} />}
         </>}
 
         <GoogleSyncSection mode={status?.mode ?? 'demo'} connection={state}
-          connectionKey={`${account.email}|${state}|${account.connectedAt ?? ''}|${account.grantedScopes.join(' ')}`} autoRunSignal={syncSignal}
+          connectionKey={`${account.email}|${state}|${account.connectedAt ?? ''}|${account.grantedScopes.join(' ')}|${selectionSaves}`} autoRunSignal={syncSignal}
           onConnectionChange={() => void refresh()} onReconnect={() => { syncAfterReconnect.current = true; void begin('reconnect'); }} />
         {accountActions(account.email, <>
           {account.access.calendarsRead && <Button title="Odśwież listę" disabled={busy} onPress={() => void run(refresh)} />}
@@ -292,7 +294,7 @@ export default function GoogleIntegrationPanel() {
         <Text style={styles.body}>Google nie przyjmuje już zapisanego dostępu do konta <Text style={{ fontWeight: '800' }}>{account.email}</Text> – wygasł albo cofnięto zgodę w ustawieniach Google.</Text>
         <Text style={[styles.muted, { marginTop: 6 }]}>Twoje wydarzenia w KAC są bez zmian. Po ponownym zalogowaniu połączenie znowu zacznie działać.</Text>
         <GoogleSyncSection mode={status?.mode ?? 'demo'} connection={state}
-          connectionKey={`${account.email}|${state}|${account.connectedAt ?? ''}|${account.grantedScopes.join(' ')}`} autoRunSignal={syncSignal}
+          connectionKey={`${account.email}|${state}|${account.connectedAt ?? ''}|${account.grantedScopes.join(' ')}|${selectionSaves}`} autoRunSignal={syncSignal}
           onConnectionChange={() => void refresh()} onReconnect={() => { syncAfterReconnect.current = true; void begin('reconnect'); }} />
         {/* „Połącz ponownie konto Google” jest w sekcji synchronizacji – po połączeniu od razu synchronizuje (historyjka 17, krok 6). */}
         {accountActions(account.email, null)}

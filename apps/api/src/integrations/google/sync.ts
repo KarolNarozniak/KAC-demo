@@ -22,6 +22,8 @@ export type SyncAttemptView = Omit<SyncAttemptRecord, 'accountId'> & { errorClas
 export type SyncStatusView = {
   connection: 'not_connected' | 'connected' | 'reconnect_required';
   enabled: boolean;
+  /** Liczba wybranych kalendarzy źródłowych (G04). Bez wyboru synchronizacja nie rusza, ale konto zostaje. */
+  sourcesSelected: number;
   state: SyncState;
   lastAttempt: SyncAttemptView | null;
   lastSuccess: { read: string | null; publish: string | null };
@@ -29,7 +31,7 @@ export type SyncStatusView = {
 };
 
 export class SyncFlowError extends Error {
-  constructor(readonly code: 'not_connected' | 'sync_disabled' | 'sync_in_progress' | 'demo_only', readonly status: number) { super(code); }
+  constructor(readonly code: 'not_connected' | 'sync_disabled' | 'sync_in_progress' | 'demo_only' | 'no_calendars_selected', readonly status: number) { super(code); }
 }
 
 const TRANSIENT = new Set<string>(['network_error', 'google_unavailable', 'rate_limited']);
@@ -91,12 +93,12 @@ export class GoogleSyncService {
 
   async status(scope: UserScope): Promise<SyncStatusView> {
     const account = await this.repository.getActiveAccount(scope.userId);
-    if (!account) return { connection: 'not_connected', enabled: false, state: 'never', lastAttempt: null, lastSuccess: { read: null, publish: null }, history: [] };
+    if (!account) return { connection: 'not_connected', enabled: false, sourcesSelected: 0, state: 'never', lastAttempt: null, lastSuccess: { read: null, publish: null }, history: [] };
     await this.repository.failStaleSyncAttempts(account.accountId);
     const history = (await this.repository.listSyncAttempts(account.accountId)).map(view);
     const last = history[0] ?? null;
     return {
-      connection: account.status, enabled: account.syncEnabled,
+      connection: account.status, enabled: account.syncEnabled, sourcesSelected: await this.repository.countSourceCalendars(account.accountId),
       state: last ? (last.status === 'running' ? 'running' : last.status) : 'never',
       lastAttempt: last, lastSuccess: { read: account.lastSyncAt, publish: account.lastPublishAt }, history,
     };
@@ -111,6 +113,8 @@ export class GoogleSyncService {
     if (!account) throw new SyncFlowError('not_connected', 404);
     if (options.simulate && account.mode !== 'demo') throw new SyncFlowError('demo_only', 409);
     if (!account.syncEnabled) throw new SyncFlowError('sync_disabled', 409);
+    // G04: synchronizacja dotyczy wybranych kalendarzy – bez wyboru nie rusza (konto i dane zostają).
+    if (await this.repository.countSourceCalendars(account.accountId) === 0) throw new SyncFlowError('no_calendars_selected', 409);
     await this.repository.failStaleSyncAttempts(account.accountId);
     const started = await this.repository.startSyncAttempt(account, { direction: 'read', scope: 'calendar_list', operation: 'Lista kalendarzy' });
     if (!started) throw new SyncFlowError('sync_in_progress', 409);

@@ -103,6 +103,12 @@ export const integrationErrors: Record<string, [string, string]> = {
   api_not_enabled: ['Calendar API wyłączone', 'W projekcie Google Cloud nie jest włączone Google Calendar API – to błąd konfiguracji, nie brak zgody użytkownika.'],
   sync_disabled: ['Synchronizacja wyłączona', `Użytkownik odmówił zgody przy ponownym logowaniu. Trzeba połączyć konto ponownie. ${keep}`],
   sync_in_progress: ['Synchronizacja trwa', 'Inna próba synchronizacji tego konta jeszcze trwa. Poczekaj na jej wynik.'],
+  no_calendars_selected: ['Nie wybrano kalendarzy', 'Synchronizacja dotyczy wybranych kalendarzy – wybierz co najmniej jeden w ustawieniach integracji. Konto zostaje połączone.'],
+  selection_conflict: ['Wybór zmienił się w międzyczasie', 'Ktoś zapisał wybór w innym oknie (inna wersja). Nic nie zostało zmienione – wczytaj aktualny wybór.'],
+  unknown_calendar: ['Nieznany kalendarz', 'Kalendarz nie należy do połączonego konta Google. Nic nie zostało zmienione.'],
+  calendar_unavailable: ['Kalendarz niedostępny', 'Konto Google straciło dostęp do tego kalendarza albo kalendarz usunięto.'],
+  target_not_writable: ['Brak prawa zapisu', 'Kalendarz publikacji musi pozwalać na dodawanie wydarzeń (właściciel albo odczyt i zapis).'],
+  write_access_missing: ['Brak zgody na zapis', 'Zgoda Google nie obejmuje dodawania wydarzeń. Połącz konto ponownie i zaznacz dostęp do wydarzeń.'],
 };
 
 /** Strona HTML zwracana przeglądarce po powrocie z Google. */
@@ -122,7 +128,7 @@ const networkError = syncAttempt('error', { tries: 3, errorCode: 'network_error'
 const reconnectError = syncAttempt('error', { errorCode: 'reconnect_required', errorClass: 'reconnect', retryable: false,
   message: 'Google nie przyjmuje zapisanego dostępu – trzeba ponownie połączyć konto.' });
 const statusWith = (last: Record<string, unknown> | null, lastRead: string | null, extra: Record<string, unknown> = {}) => ({
-  connection: 'connected', enabled: true, state: last ? last.status : 'never', lastAttempt: last,
+  connection: 'connected', enabled: true, sourcesSelected: 2, state: last ? last.status : 'never', lastAttempt: last,
   lastSuccess: { read: lastRead, publish: null }, history: last ? [last] : [], ...extra,
 });
 
@@ -151,4 +157,23 @@ export const disconnectExamples: NamedExamples = {
   remoteFailed: { summary: 'Zgoda w Google nie cofnięta', description: 'KAC usunął dane dostępu, ale Google nie potwierdził cofnięcia zgody (np. brak internetu). Użytkownik może usunąć dostęp w ustawieniach konta Google.',
     value: { status: 'not_connected', account: 'student@example.com', alreadyDisconnected: false, local: 'removed', remote: 'failed' } },
   again: { summary: 'Powtórne odłączenie', value: { status: 'not_connected', account: null, alreadyDisconnected: true, local: 'nothing_to_remove', remote: 'not_applicable' } },
+};
+
+// --- Wybór kalendarzy (G04) ---
+const selectionCalendars = [
+  { id: 'primary', name: 'Student', primary: true, accessRole: 'owner', timeZone: 'Europe/Warsaw', available: true, writable: true, source: true, publicationTarget: false },
+  { id: 'praca@group.calendar.google.com', name: 'Grafik pracy', primary: false, accessRole: 'writer', timeZone: 'Europe/Warsaw', available: true, writable: true, source: false, publicationTarget: true },
+  { id: 'kolo@group.calendar.google.com', name: 'Koło naukowe', primary: false, accessRole: 'reader', timeZone: null, available: true, writable: false, source: true, publicationTarget: false },
+];
+export const selectionExamples: NamedExamples = {
+  selected: { summary: 'Wybrane kalendarze', description: 'Dwa kalendarze do planowania i „Grafik pracy” jako kalendarz publikacji.',
+    value: { version: 3, calendars: selectionCalendars, sourceCalendarIds: ['primary', 'kolo@group.calendar.google.com'],
+      publicationTargetCalendarId: 'praca@group.calendar.google.com', canPublish: true, targetProblem: null } },
+  lostAccess: { summary: 'Utrata uprawnień', description: 'Kalendarz publikacji zniknął z konta Google – zostaje widoczny z problemem do rozwiązania.',
+    value: { version: 3, calendars: [selectionCalendars[0], { ...selectionCalendars[1], accessRole: null, available: false, writable: false }],
+      sourceCalendarIds: ['primary'], publicationTargetCalendarId: 'praca@group.calendar.google.com', canPublish: true, targetProblem: 'unavailable' } },
+};
+export const selectionBodyExamples: NamedExamples = {
+  save: { summary: 'Zapis wyboru', value: { version: 2, sourceCalendarIds: ['primary', 'kolo@group.calendar.google.com'], publicationTargetCalendarId: 'praca@group.calendar.google.com' } },
+  none: { summary: 'Bez kalendarza publikacji', value: { version: 2, sourceCalendarIds: ['primary'], publicationTargetCalendarId: null } },
 };

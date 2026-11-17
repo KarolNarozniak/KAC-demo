@@ -10,7 +10,7 @@ const attempt = (overrides: Partial<SyncAttempt> = {}): SyncAttempt => ({
   finishedAt: '2026-11-17T08:30:01.000Z', tries: 1, changes: 4, errorCode: null, message: 'Odczytane kalendarze: 4.', errorClass: null, retryable: false, ...overrides,
 });
 const status = (overrides: Partial<SyncStatus> = {}): SyncStatus => ({
-  connection: 'connected', enabled: true, state: 'never', lastAttempt: null, lastSuccess: { read: null, publish: null }, history: [], ...overrides,
+  connection: 'connected', enabled: true, sourcesSelected: 1, state: 'never', lastAttempt: null, lastSuccess: { read: null, publish: null }, history: [], ...overrides,
 });
 const networkError = attempt({ status: 'error', tries: 3, errorCode: 'network_error', errorClass: 'network', retryable: true, message: null });
 const authError = attempt({ status: 'error', errorCode: 'reconnect_required', errorClass: 'reconnect', retryable: false, message: null });

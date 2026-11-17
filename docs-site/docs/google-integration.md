@@ -39,6 +39,18 @@ Historyjka S23KC2S1P2-17, podzadanie G06 (S23KC2S1P2-290). Pod listą kalendarzy
 - Niepełna lista kalendarzy daje wynik „Częściowo” i nie usuwa kalendarzy, których lista nie objęła.
 - W trybie demonstracyjnym można wymusić wynik następnej synchronizacji (brak internetu, chwilowy błąd sieci, wygasłe logowanie, błąd serwera, limit, wynik częściowy, brak uprawnień), żeby pokazać przebiegi bez prawdziwego Google.
 
+## Wybór kalendarzy (G04)
+
+Historyjka S23KC2S1P2-41, podzadanie G04 (S23KC2S1P2-288). Lista kalendarzy w panelu pokazuje, które są uwzględniane przy planowaniu i synchronizacji, oraz kalendarz publikacji grafiku. „Zmień wybór kalendarzy” otwiera edycję: pola wyboru źródeł i jeden kalendarz publikacji. „Dalej” pokazuje podsumowanie zmian, „Zatwierdź” je zapisuje, „Anuluj” zostawia poprzedni wybór.
+
+- Zbiór źródeł (`t_kalendarze_google.wybrany`) i kalendarz publikacji (`t_konta_google.id_kal_publikacji`) zapisują się razem w jednej transakcji z kontrolą wersji (`wersja_wyboru`). Zapis ze starą wersją (np. z drugiego okna) kończy się `409 selection_conflict` bez żadnej zmiany; panel wczytuje wtedy aktualny wybór.
+- Kalendarz publikacji musi mieć rolę właściciela albo odczytu i zapisu, a zgoda Google musi obejmować dodawanie wydarzeń. Sprawdza to serwer (`422 target_not_writable`, `422 write_access_missing`), nie tylko filtr w interfejsie, który pokazuje wyłącznie kalendarze z prawem zapisu.
+- Obcy identyfikator kalendarza daje `400 unknown_calendar` i nic nie zapisuje.
+- Dopóki użytkownik nie zapisał własnego wyboru, źródłem jest kalendarz główny. Bez żadnego źródła synchronizacja zwraca `409 no_calendars_selected`, a konto zostaje połączone.
+- Utrata uprawnień: kalendarz, który zniknął z konta Google albo stracił dostęp, zostaje widoczny z oznaczeniem „brak dostępu”, dopóki jest wybrany albo jest kalendarzem publikacji. Panel pokazuje problem z kalendarzem publikacji (`targetProblem`). Niedostępnego kalendarza nie da się wybrać na nowo.
+- Założenie D04 (do potwierdzenia w zespole): odznaczenie kalendarza tylko wyłącza go z przyszłych synchronizacji, niczego nie usuwa z kalendarza KAC.
+- Lista ma wszystkie strony z Google (testowane na ponad 250 kalendarzach).
+
 ## Odłączenie konta i cofnięcie zgody (G03)
 
 Historyjka S23KC2S1P2-35, podzadanie G03 (S23KC2S1P2-287). Przycisk „Odłącz konto Google” pokazuje okno potwierdzenia; „Anuluj” niczego nie zmienia. Po potwierdzeniu `DELETE /api/v1/integrations/google` w jednej transakcji:
@@ -75,8 +87,10 @@ Decyzja D03: po zatwierdzeniu lokalnych zmian KAC prosi Google o cofnięcie zgod
 | `DELETE /api/v1/integrations/google` | Odłączenie konta i cofnięcie zgody w Google; `local` i `remote` opisują wynik osobno. |
 | `GET /api/v1/integrations/google/sync` | Stan synchronizacji, ostatnia próba, ostatni sukces odczytu i publikacji, historia prób. |
 | `POST /api/v1/integrations/google/sync` | „Synchronizuj z Google” z ograniczonymi ponowieniami. Błąd Google jest wynikiem próby (200); `simulate` tylko w makiecie. |
+| `GET /api/v1/integrations/google/calendar-selection` | Wybór kalendarzy: źródła, kalendarz publikacji, wersja, `canPublish`, `targetProblem`. |
+| `PUT /api/v1/integrations/google/calendar-selection` | Atomowy zapis wyboru z wersją. |
 
-Błędy Google mają stabilne kody: `reconnect_required` (409), `insufficient_permissions` (403), `rate_limited` (429), `google_unavailable`, `google_error` i `api_not_enabled` (502), `network_error` (504). Synchronizacja zwraca też `sync_disabled` i `sync_in_progress` (409). Bez bazy danych endpointy zwracają `503 integration_not_configured`.
+Błędy Google mają stabilne kody: `reconnect_required` (409), `insufficient_permissions` (403), `rate_limited` (429), `google_unavailable`, `google_error` i `api_not_enabled` (502), `network_error` (504). Synchronizacja zwraca też `sync_disabled`, `sync_in_progress` i `no_calendars_selected` (409). Wybór kalendarzy: `unknown_calendar` (400), `selection_conflict` i `calendar_unavailable` (409), `target_not_writable` i `write_access_missing` (422). Bez bazy danych endpointy zwracają `503 integration_not_configured`.
 
 ## Konfiguracja
 
@@ -96,7 +110,7 @@ Ekran zgody Google musi zawierać zakresy `openid`, `email`, `https://www.google
 
 ## Dane
 
-Migracja `018_google_sync_registry.sql` rozszerza `t_synchronizacje` (zakres, liczba prób, kod błędu, czas zakończenia, generacja) i dodaje `ostatnia_publikacja` w `t_konta_google`. Migracja `017_google_integration.sql` rozszerza `t_konta_google` (stabilny `google_sub`, tryb, przyznane zakresy, generacja, daty połączenia i odłączenia) oraz `t_kalendarze_google` (rola dostępu, strefa, kalendarz główny). Nowe tabele: `t_google_tokeny` (tylko szyfrogramy) i `t_google_oauth_proby` (jednorazowe próby OAuth). Jeden użytkownik ma najwyżej jedno aktywne konto Google.
+Migracja `019_google_calendar_selection.sql` dodaje w `t_konta_google` kalendarz publikacji (`id_kal_publikacji`) i wersję wyboru (`wersja_wyboru`). Migracja `018_google_sync_registry.sql` rozszerza `t_synchronizacje` (zakres, liczba prób, kod błędu, czas zakończenia, generacja) i dodaje `ostatnia_publikacja` w `t_konta_google`. Migracja `017_google_integration.sql` rozszerza `t_konta_google` (stabilny `google_sub`, tryb, przyznane zakresy, generacja, daty połączenia i odłączenia) oraz `t_kalendarze_google` (rola dostępu, strefa, kalendarz główny). Nowe tabele: `t_google_tokeny` (tylko szyfrogramy) i `t_google_oauth_proby` (jednorazowe próby OAuth). Jeden użytkownik ma najwyżej jedno aktywne konto Google.
 
 ## Testy
 
@@ -104,4 +118,5 @@ Migracja `018_google_sync_registry.sql` rozszerza `t_synchronizacje` (zakres, li
 - `apps/api/tests/google-integration.integration.test.ts` (PostgreSQL) – makieta (odmowa, 1a, zmiana konta, 7a, wygasła próba, cudza próba), udawany Google (jednorazowy i wygasły `state`, 6a, brak tokenu odświeżania, szyfrogramy w bazie, brak tokenów w odpowiedziach, ponowne logowanie) oraz równoległe odświeżanie z dwóch instancji. Każdy scenariusz sprawdza, że wydarzenia użytkownika się nie zmieniły.
 - `apps/web/tests/googleIntegration.test.ts` – stan panelu i komunikaty.
 - `apps/api/tests/google-disconnect.integration.test.ts` (PostgreSQL) – odłączenie w makiecie i z udawanym Google, powtórzenie, anulowana próba, zatrzymane prace outboxa, odrzucona stara generacja i spóźniony powrót, nieudane cofnięcie zgody (sieć, 503), cofnięcie zgody przy zmianie konta; `apps/web/tests/googleDisconnect.test.ts` – teksty potwierdzenia i wyniku.
+- `apps/api/tests/google-calendar-selection.integration.test.ts` (PostgreSQL) – zapis atomowy z wersją, konflikt (także dwa równoległe zapisy), obcy kalendarz, kalendarz tylko do odczytu jako cel, brak zgody na zapis, utrata uprawnień, ponad 250 kalendarzy, synchronizacja bez wyboru; `apps/web/tests/googleCalendarSelection.test.ts` – szkic wyboru, kandydaci na cel, podsumowanie zmian.
 - `apps/api/tests/google-sync.test.ts` i `google-sync.integration.test.ts` (PostgreSQL, atrapa zegara) – klasy błędów, ponowienia, ostatni sukces, wynik częściowy, wygasłe logowanie, odmowa wyłączająca synchronizację, jedna próba naraz, 503/sieć/wyłączone Calendar API w udawanym Google; `apps/web/tests/googleSync.test.ts` – stany, przyciski i komunikaty.

@@ -18,9 +18,10 @@ import { GoogleIntegrationError } from '../../../integrations/google/oauth-clien
 import type { AuthAttempt } from '../../../integrations/google/repository.js';
 import { GoogleIntegrationService, IntegrationFlowError } from '../../../integrations/google/service.js';
 import { SIMULATED_FAILURES, SyncFlowError, type SimulatedFailure } from '../../../integrations/google/sync.js';
+import { SelectionError } from '../../../integrations/google/selection.js';
 import {
   attemptExamples, calendarsExamples, callbackPage, cancelledExamples, connectBodyExamples, demoConsentBodyExamples, demoConsentExamples,
-  disconnectExamples, integrationErrors, startedExamples, statusExamples, syncBodyExamples, syncRunExamples, syncStatusExamples,
+  disconnectExamples, integrationErrors, selectionBodyExamples, selectionExamples, startedExamples, statusExamples, syncBodyExamples, syncRunExamples, syncStatusExamples,
 } from './examples.js';
 
 const nullable = (schema: object) => ({ anyOf: [schema, { type: 'null' }] });
@@ -60,14 +61,30 @@ const syncAttemptSchema = { type: 'object', additionalProperties: false,
     changes: { type: 'integer', minimum: 0 }, errorCode: nullable({ type: 'string' }), message: nullable({ type: 'string' }),
     errorClass: nullable({ type: 'string', enum: ['network', 'reconnect', 'permissions', 'rate_limit', 'server', 'other'] }),
     retryable: { type: 'boolean', description: 'Czy „Spróbuj ponownie” ma sens (false, gdy trzeba połączyć konto ponownie).' } } } as const;
-const syncStatusSchema = { type: 'object', additionalProperties: false, required: ['connection', 'enabled', 'state', 'lastAttempt', 'lastSuccess', 'history'], properties: {
+const syncStatusSchema = { type: 'object', additionalProperties: false, required: ['connection', 'enabled', 'sourcesSelected', 'state', 'lastAttempt', 'lastSuccess', 'history'], properties: {
   connection: { type: 'string', enum: ['not_connected', 'connected', 'reconnect_required'] },
   enabled: { type: 'boolean', description: 'Zgoda na synchronizację; odmowa przy ponownym logowaniu ją wyłącza.' },
+  sourcesSelected: { type: 'integer', minimum: 0, description: 'Liczba wybranych kalendarzy źródłowych (G04); przy 0 synchronizacja nie rusza.' },
   state: { type: 'string', enum: ['never', 'running', 'success', 'partial', 'error'] },
   lastAttempt: nullable(syncAttemptSchema),
   lastSuccess: { type: 'object', additionalProperties: false, required: ['read', 'publish'], properties: {
     read: nullable({ type: 'string', format: 'date-time' }), publish: nullable({ type: 'string', format: 'date-time' }) } },
   history: { type: 'array', items: syncAttemptSchema, description: 'Ostatnie próby, najnowsza pierwsza (najwyżej 10).' } } } as const;
+
+const selectionCalendarSchema = { type: 'object', additionalProperties: false,
+  required: ['id', 'name', 'primary', 'accessRole', 'timeZone', 'available', 'writable', 'source', 'publicationTarget'], properties: {
+    id: { type: 'string' }, name: { type: 'string' }, primary: { type: 'boolean' },
+    accessRole: nullable({ type: 'string', enum: ['owner', 'writer', 'reader', 'freeBusyReader'] }), timeZone: nullable({ type: 'string' }),
+    available: { type: 'boolean', description: 'false – kalendarz zniknął z konta Google albo konto straciło do niego dostęp.' },
+    writable: { type: 'boolean', description: 'Konto może dodawać wydarzenia (owner/writer).' },
+    source: { type: 'boolean', description: 'Uwzględniany przy planowaniu i synchronizacji.' },
+    publicationTarget: { type: 'boolean', description: 'Kalendarz docelowy publikacji grafiku.' } } } as const;
+const selectionSchema = { type: 'object', additionalProperties: false,
+  required: ['version', 'calendars', 'sourceCalendarIds', 'publicationTargetCalendarId', 'canPublish', 'targetProblem'], properties: {
+    version: { type: 'integer', minimum: 1 }, calendars: { type: 'array', items: selectionCalendarSchema },
+    sourceCalendarIds: { type: 'array', items: { type: 'string' } }, publicationTargetCalendarId: nullable({ type: 'string' }),
+    canPublish: { type: 'boolean', description: 'Czy zgoda Google obejmuje zapis wydarzeń.' },
+    targetProblem: nullable({ type: 'string', enum: ['unavailable', 'not_writable', 'write_access_missing'] }) } } as const;
 
 const idParams = { type: 'object', additionalProperties: false, required: ['id'], properties: { id: { type: 'string', minLength: 1, maxLength: 64 } } } as const;
 
@@ -96,7 +113,7 @@ export function registerGoogleIntegration(app: FastifyInstance, service: GoogleI
     try {
       return await work(service);
     } catch (error) {
-      if (error instanceof IntegrationFlowError || error instanceof SyncFlowError) return reply.code(error.status).send({ error: error.code });
+      if (error instanceof IntegrationFlowError || error instanceof SyncFlowError || error instanceof SelectionError) return reply.code(error.status).send({ error: error.code });
       if (error instanceof GoogleIntegrationError) return reply.code(GOOGLE_ERROR_STATUS[error.code] ?? 502).send({ error: error.code });
       throw error;
     }
@@ -205,6 +222,32 @@ export function registerGoogleIntegration(app: FastifyInstance, service: GoogleI
     },
   } }, async (request, reply) => handle(reply, (google) => google.calendars(scope(request))));
 
+  app.get('/integrations/google/calendar-selection', { schema: {
+    tags: ['Google integration'], summary: 'Get calendar selection', operationId: 'getGoogleCalendarSelection',
+    description: 'Calendars stored for the connected account with the user choice: source calendars used for planning and sync, and one publication target with write access. Calendars that disappeared from Google stay visible as unavailable while they are selected. Refresh the list from Google first with GET /integrations/google/calendars.',
+    response: {
+      200: documented(selectionSchema, 'Wybór kalendarzy.', selectionExamples),
+      404: fail('Brak połączonego konta.', ['not_connected']), 503: fail('Integracja niedostępna.', ['integration_not_configured']),
+    },
+  } }, async (request, reply) => handle(reply, (google) => google.selection.get(scope(request))));
+
+  app.put<{ Body: { version: number; sourceCalendarIds: string[]; publicationTargetCalendarId: string | null } }>('/integrations/google/calendar-selection', { schema: {
+    tags: ['Google integration'], summary: 'Save calendar selection', operationId: 'saveGoogleCalendarSelection',
+    description: 'Saves the whole selection atomically with version control: either all source calendars and the publication target change, or nothing does. The server rejects foreign calendar IDs, calendars without access and a publication target without write access (role owner/writer and the calendar.events consent). Unselecting a calendar only excludes it from future syncs; nothing is deleted from KAC.',
+    body: withExamples({ type: 'object', additionalProperties: false, required: ['version', 'sourceCalendarIds', 'publicationTargetCalendarId'], properties: {
+      version: { type: 'integer', minimum: 1, description: 'Wersja odczytana razem z wyborem.' },
+      sourceCalendarIds: { type: 'array', maxItems: 500, items: { type: 'string', minLength: 1, maxLength: 1024 } },
+      publicationTargetCalendarId: nullable({ type: 'string', minLength: 1, maxLength: 1024 }) } }, selectionBodyExamples),
+    response: {
+      200: documented(selectionSchema, 'Zapisany wybór (nowa wersja).', selectionExamples),
+      400: fail('Kalendarz nie należy do połączonego konta.', ['unknown_calendar']),
+      404: fail('Brak połączonego konta.', ['not_connected']),
+      409: fail('Wybór zmienił się w międzyczasie albo kalendarz jest niedostępny.', ['selection_conflict', 'calendar_unavailable']),
+      422: fail('Kalendarz publikacji bez prawa zapisu.', ['target_not_writable', 'write_access_missing']),
+      503: fail('Integracja niedostępna.', ['integration_not_configured']),
+    },
+  } }, async (request, reply) => handle(reply, (google) => google.selection.save(scope(request), request.body)));
+
   app.get('/integrations/google/sync', { schema: {
     tags: ['Google integration'], summary: 'Get Google sync state', operationId: 'getGoogleSync',
     description: 'Sync registry for the connected account: state of the last attempt (never, running, success, partial, error), error class, time of the last successful read and publication, and recent attempts. A failed attempt never overwrites the last success.',
@@ -220,7 +263,7 @@ export function registerGoogleIntegration(app: FastifyInstance, service: GoogleI
       200: documented({ type: 'object', additionalProperties: false, required: ['attempt', 'status'], properties: { attempt: syncAttemptSchema, status: syncStatusSchema } },
         'Wynik próby (także nieudanej) i aktualny stan synchronizacji.', syncRunExamples),
       404: fail('Brak połączonego konta.', ['not_connected']),
-      409: fail('Synchronizacja niemożliwa w tej chwili.', ['sync_disabled', 'sync_in_progress', 'demo_only']),
+      409: fail('Synchronizacja niemożliwa w tej chwili.', ['sync_disabled', 'sync_in_progress', 'demo_only', 'no_calendars_selected']),
       503: fail('Integracja niedostępna.', ['integration_not_configured']),
     },
   } }, async (request, reply) => handle(reply, (google) => google.sync.runRead(scope(request), { simulate: request.body?.simulate })));

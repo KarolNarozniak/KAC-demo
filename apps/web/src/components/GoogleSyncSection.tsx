@@ -11,7 +11,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Button, useTheme } from './ui';
 import {
-  apiErrorMessage, attemptTimeLabel, lastSuccessLabel, SIMULATIONS, SYNC_DISABLED_TEXT, syncActions, syncErrorLabel, syncResultNotice, syncStateLabel,
+  apiErrorMessage, attemptTimeLabel, lastSuccessLabel, NO_SOURCES_TEXT, SIMULATIONS, SYNC_DISABLED_TEXT, syncActions, syncErrorLabel, syncResultNotice, syncStateLabel,
   type Notice, type SimulatedFailure, type SyncStatus,
 } from '../domain/googleIntegration';
 import { getGoogleSync, GoogleIntegrationApiError, runGoogleSync } from '../services/googleIntegrationApi';
@@ -97,6 +97,8 @@ export default function GoogleSyncSection({ mode, connection, connectionKey, aut
       <Text style={styles.muted}>{lastSuccessLabel(status)}</Text>
 
       {!status.enabled && <Text style={[styles.body, { color: palette.amber, marginTop: 8 }]}>{SYNC_DISABLED_TEXT}</Text>}
+      {status.enabled && status.connection === 'connected' && status.sourcesSelected === 0 &&
+        <Text style={[styles.body, { color: palette.amber, marginTop: 8 }]}>{NO_SOURCES_TEXT}</Text>}
 
       {!!notice && <Text accessibilityRole={notice.tone === 'error' ? 'alert' : undefined} accessibilityLiveRegion="polite"
         style={[styles.body, { color: tone[notice.tone], marginTop: 8 }]}>{notice.text}</Text>}

@@ -14,6 +14,7 @@ import { ConnectionConflictError, PostgresGoogleIntegrationRepository, type Atte
 import { TokenCipher } from './token-cipher.js';
 import { GoogleTokenService } from './token-service.js';
 import { GoogleSyncService, type SyncOptions } from './sync.js';
+import { GoogleCalendarSelectionService } from './selection.js';
 
 export type KeyProblem = 'token_key_missing' | 'token_key_invalid' | null;
 export type IntegrationOptions = {
@@ -49,12 +50,15 @@ export class GoogleIntegrationService {
   readonly tokens: GoogleTokenService;
   /** Rejestr prób i ponowienia synchronizacji (S23KC2S1P2-17, G06). */
   readonly sync: GoogleSyncService;
+  /** Trwały wybór kalendarzy źródłowych i kalendarza publikacji (S23KC2S1P2-41, G04). */
+  readonly selection: GoogleCalendarSelectionService;
   private readonly fetchImpl: FetchLike;
 
   constructor(private readonly repository: PostgresGoogleIntegrationRepository, private readonly options: IntegrationOptions) {
     this.fetchImpl = options.fetch ?? ((url, init) => fetch(url, init));
     this.tokens = new GoogleTokenService(repository, options.cipher, options.oauth, this.fetchImpl);
     this.sync = new GoogleSyncService(repository, this, options.sync);
+    this.selection = new GoogleCalendarSelectionService(repository);
   }
 
   get mode(): 'google' | 'demo' { return this.options.oauth ? 'google' : 'demo'; }

@@ -156,6 +156,12 @@ export function apiErrorMessage(code: string): string {
     case 'api_not_enabled': return 'W projekcie Google Cloud nie jest włączone Google Calendar API. Włącz je w konsoli Google Cloud.';
     case 'sync_disabled': return SYNC_DISABLED_TEXT;
     case 'sync_in_progress': return 'Synchronizacja już trwa – poczekaj na jej wynik.';
+    case 'no_calendars_selected': return NO_SOURCES_TEXT;
+    case 'selection_conflict': return 'Wybór kalendarzy zmienił się w innym oknie. Nic nie zapisano – wczytaliśmy aktualny wybór, sprawdź go i zapisz ponownie.';
+    case 'unknown_calendar': return 'Kalendarza nie ma już na koncie Google. Odśwież listę i wybierz ponownie. Nic nie zapisano.';
+    case 'calendar_unavailable': return 'Konto Google straciło dostęp do tego kalendarza. Wybierz inny. Nic nie zapisano.';
+    case 'target_not_writable': return 'Do tego kalendarza nie można dodawać wydarzeń. Wybierz kalendarz z prawem zapisu. Nic nie zapisano.';
+    case 'write_access_missing': return 'Zgoda Google nie obejmuje dodawania wydarzeń. Połącz konto ponownie i zaznacz ten dostęp. Nic nie zapisano.';
     case 'google_unavailable':
     case 'google_error': return 'Google nie odpowiada. Spróbuj ponownie za chwilę.';
     default: return `Operacja nie powiodła się (${code}). Spróbuj ponownie.`;
@@ -176,7 +182,7 @@ export type SyncAttempt = {
   errorClass: SyncErrorClass | null; retryable: boolean;
 };
 export type SyncStatus = {
-  connection: 'not_connected' | 'connected' | 'reconnect_required'; enabled: boolean; state: SyncState;
+  connection: 'not_connected' | 'connected' | 'reconnect_required'; enabled: boolean; sourcesSelected: number; state: SyncState;
   lastAttempt: SyncAttempt | null; lastSuccess: { read: string | null; publish: string | null }; history: SyncAttempt[];
 };
 export type SimulatedFailure = 'network' | 'flaky' | 'auth' | 'server' | 'rate_limit' | 'partial' | 'permissions';
@@ -214,12 +220,14 @@ export const lastSuccessLabel = (status: Pick<SyncStatus, 'lastSuccess'>) =>
 export const attemptTimeLabel = (attempt: Pick<SyncAttempt, 'startedAt'>) => dateTime(attempt.startedAt);
 
 /** Które przyciski pokazać po próbie (krok 2 historyjki 17). Przy wygasłym logowaniu zwykłe ponowienie nic nie da. */
-export function syncActions(status: Pick<SyncStatus, 'enabled' | 'connection' | 'state' | 'lastAttempt'>): { sync: boolean; retry: boolean; reconnect: boolean } {
+export function syncActions(status: Pick<SyncStatus, 'enabled' | 'connection' | 'state' | 'lastAttempt'> & { sourcesSelected?: number }): { sync: boolean; retry: boolean; reconnect: boolean } {
   const needsLogin = !status.enabled || status.connection === 'reconnect_required' || status.lastAttempt?.errorClass === 'reconnect';
   const failed = status.state === 'error' || status.state === 'partial';
+  // G04: bez wybranych kalendarzy nie ma czego synchronizować – najpierw wybór (konto zostaje połączone).
+  const hasSources = (status.sourcesSelected ?? 1) > 0;
   return {
-    sync: status.enabled && !needsLogin && !failed && status.state !== 'running',
-    retry: status.enabled && !needsLogin && failed && Boolean(status.lastAttempt?.retryable),
+    sync: status.enabled && hasSources && !needsLogin && !failed && status.state !== 'running',
+    retry: status.enabled && hasSources && !needsLogin && failed && Boolean(status.lastAttempt?.retryable),
     reconnect: needsLogin || status.lastAttempt?.errorClass === 'permissions',
   };
 }
@@ -261,3 +269,75 @@ export function disconnectNotice(result: DisconnectResult): Notice {
 /** Okno jednorazowego importu (S23KC2S1P2-27): informacja, że trwałe połączenie z Ustawień nie jest tu używane. */
 export const importLinkedAccountHint = (email: string) =>
   `W Ustawieniach masz połączone konto ${email}. Import jednorazowy ma osobną zgodę – połączenie z Ustawień nie jest tu używane, więc Google poprosi o zgodę jeszcze raz.`;
+
+export const NO_SOURCES_TEXT = 'Nie wybrano kalendarzy do synchronizacji. Wybierz co najmniej jeden powyżej – konto Google zostaje połączone.';
+
+// --- Wybór kalendarzy (S23KC2S1P2-41, G04) ---
+
+export type SelectionCalendar = {
+  id: string; name: string; primary: boolean; accessRole: AccessRole | null; timeZone: string | null;
+  available: boolean; writable: boolean; source: boolean; publicationTarget: boolean;
+};
+export type TargetProblem = 'unavailable' | 'not_writable' | 'write_access_missing';
+export type CalendarSelection = {
+  version: number; calendars: SelectionCalendar[]; sourceCalendarIds: string[]; publicationTargetCalendarId: string | null;
+  canPublish: boolean; targetProblem: TargetProblem | null;
+};
+export type SelectionDraft = { sources: string[]; target: string | null };
+
+export const draftFrom = (selection: CalendarSelection): SelectionDraft =>
+  ({ sources: [...selection.sourceCalendarIds], target: selection.publicationTargetCalendarId });
+
+/** Krok 4: zaznaczenie kalendarza źródłowego. Niedostępnego nie da się dodać na nowo – można go tylko odznaczyć. */
+export function toggleSource(selection: CalendarSelection, draft: SelectionDraft, id: string): SelectionDraft {
+  if (draft.sources.includes(id)) return { ...draft, sources: draft.sources.filter((source) => source !== id) };
+  const calendar = selection.calendars.find((item) => item.id === id);
+  if (!calendar?.available) return draft;
+  return { ...draft, sources: [...draft.sources, id] };
+}
+
+/** Krok 5: kandydaci na kalendarz publikacji – tylko dostępne kalendarze z prawem zapisu (serwer sprawdza to jeszcze raz). */
+export const targetOptions = (selection: CalendarSelection) => selection.calendars.filter((calendar) => calendar.available && calendar.writable);
+
+/** Problem w szkicu, który blokuje zapis jeszcze przed wysłaniem (np. cel stracił prawo zapisu). */
+export function draftProblem(selection: CalendarSelection, draft: SelectionDraft): string | null {
+  if (draft.target === null) return null;
+  if (!selection.canPublish) return 'Zgoda Google nie obejmuje dodawania wydarzeń, więc nie można ustawić kalendarza publikacji. Połącz konto ponownie albo wybierz „Bez publikacji”.';
+  if (!targetOptions(selection).some((calendar) => calendar.id === draft.target)) return 'Wybrany kalendarz publikacji nie pozwala już na dodawanie wydarzeń. Wybierz inny albo „Bez publikacji”.';
+  return null;
+}
+
+const nameOf = (selection: CalendarSelection, id: string) => selection.calendars.find((calendar) => calendar.id === id)?.name ?? id;
+
+/** Krok 6: podsumowanie zmian przed zatwierdzeniem. Pusta lista – nic się nie zmieniło. */
+export function selectionChanges(selection: CalendarSelection, draft: SelectionDraft): string[] {
+  const lines: string[] = [];
+  const before = new Set(selection.sourceCalendarIds);
+  const after = new Set(draft.sources);
+  const added = selection.calendars.filter((calendar) => after.has(calendar.id) && !before.has(calendar.id)).map((calendar) => calendar.name);
+  const removed = selection.calendars.filter((calendar) => before.has(calendar.id) && !after.has(calendar.id)).map((calendar) => calendar.name);
+  if (added.length) lines.push(`Dodane do planowania i synchronizacji: ${added.join(', ')}.`);
+  if (removed.length) lines.push(`Wyłączone z przyszłych synchronizacji: ${removed.join(', ')}. Wydarzenia już zapisane w KAC zostają.`);
+  if (draft.target !== selection.publicationTargetCalendarId) {
+    lines.push(draft.target === null ? 'Bez kalendarza publikacji – grafik nie będzie publikowany w Google.' : `Kalendarz publikacji: ${nameOf(selection, draft.target)}.`);
+  }
+  if (lines.length && draft.sources.length === 0) lines.push(NO_SOURCES_TEXT);
+  return lines;
+}
+
+/** Krótkie podsumowanie zapisanego wyboru w widoku panelu. */
+export function selectionSummary(selection: CalendarSelection): string {
+  const count = selection.sourceCalendarIds.length;
+  const sources = count === 0 ? 'Brak kalendarzy do planowania' : count === 1 ? '1 kalendarz do planowania' : `${count} kalendarzy do planowania`;
+  const target = selection.publicationTargetCalendarId ? `publikacja: ${nameOf(selection, selection.publicationTargetCalendarId)}` : 'bez kalendarza publikacji';
+  return `${sources} · ${target}`;
+}
+
+export function targetProblemText(problem: TargetProblem | null): string | null {
+  switch (problem) {
+    case 'unavailable': return 'Konto Google straciło dostęp do kalendarza publikacji (albo kalendarz usunięto). Wybierz inny – do tego czasu grafik nie zostanie opublikowany.';
+    case 'not_writable': return 'Kalendarz publikacji nie pozwala już na dodawanie wydarzeń. Wybierz inny kalendarz z prawem zapisu.';
+    case 'write_access_missing': return 'Zgoda Google nie obejmuje dodawania wydarzeń, więc grafik nie zostanie opublikowany. Połącz konto ponownie i zaznacz ten dostęp.';
+    default: return null;
+  }
+}

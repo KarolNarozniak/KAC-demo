@@ -16,6 +16,12 @@ export type GoogleAccountRecord = {
   /** Zgoda na synchronizację (tKontaGoogle.Zgoda_Synchronizacja). Odmowa przy ponownym logowaniu ją wyłącza (G06, 5a). */
   syncEnabled: boolean; lastPublishAt: string | null;
 };
+/** Kalendarz zapisany przy koncie wraz z wyborem użytkownika (G04). available = false: kalendarz zniknął z konta Google („Brak dostępu”). */
+export type StoredCalendar = {
+  rowId: string; id: string; name: string; primary: boolean; accessRole: IntegrationCalendar['accessRole'] | null; timeZone: string | null;
+  available: boolean; source: boolean;
+};
+export type StoredSelection = { version: number; publicationTargetRowId: string | null; calendars: StoredCalendar[] };
 export type SyncDirection = 'read' | 'publish';
 export type SyncAttemptStatus = 'running' | 'success' | 'partial' | 'error';
 export type SyncAttemptRecord = {
@@ -250,12 +256,18 @@ export class PostgresGoogleIntegrationRepository {
             rola_dostepu = excluded.rola_dostepu, strefa = excluded.strefa, glowny = excluded.glowny, updated_at = now()`,
         [account.accountId, calendar.name, calendar.id, ACCESS_LABEL[calendar.accessRole], calendar.accessRole, calendar.timeZone, calendar.primary]);
       }
+      // G04: dopóki użytkownik nie zapisał własnego wyboru (wersja 1) i nic nie jest wybrane, źródłem jest kalendarz główny.
+      // Obejmuje konta połączone przed migracją 019 i ponowne połączenie po odłączeniu. Zapisany wybór (także pusty) nie jest ruszany.
+      await client.query(`update t_kalendarze_google g set wybrany = true, updated_at = now()
+        where g.id_konta = $1 and g.glowny and (select k.wersja_wyboru = 1 from t_konta_google k where k.id_konta = $1)
+          and not exists (select 1 from t_kalendarze_google w where w.id_konta = $1 and w.wybrany)`, [account.accountId]);
       if (!complete) return;
       const ids = calendars.map((calendar) => calendar.id);
       // Znikniętego kalendarza nie usuwamy, gdy użytkownik go wybrał albo opublikowano do niego grafik (historia publikacji, G07) –
       // zostaje z oznaczeniem „Brak dostępu”.
       await client.query(`delete from t_kalendarze_google g where g.id_konta = $1 and not (g.id_zewnetrzne = any($2::text[])) and not g.wybrany
-        and not exists (select 1 from t_publikacje p where p.id_kal_google = g.id_kal_google)`, [account.accountId, ids]);
+        and not exists (select 1 from t_publikacje p where p.id_kal_google = g.id_kal_google)
+        and not exists (select 1 from t_konta_google k where k.id_kal_publikacji = g.id_kal_google)`, [account.accountId, ids]);
       await client.query(`update t_kalendarze_google set uprawnienia = 'Brak dostępu', rola_dostepu = null, updated_at = now()
         where id_konta = $1 and not (id_zewnetrzne = any($2::text[]))`, [account.accountId, ids]);
     });
@@ -341,5 +353,45 @@ export class PostgresGoogleIntegrationRepository {
         from t_event_outbox o where o.id_outbox = d.id_outbox and o.id_uzytkownika = $1 and d.consumer = 'google' and d.status in ('pending', 'blocked')`, [scope.userId]);
       return { account, refreshEnc: tokens.rows[0]?.refresh_token_enc ?? null, accessEnc: tokens.rows[0]?.access_token_enc ?? null };
     });
+  }
+
+  // --- Wybór kalendarzy (S23KC2S1P2-41, G04) ---
+
+  async getSelection(accountId: string): Promise<StoredSelection> {
+    const client = await this.pool.connect();
+    try { return await this.getSelectionWith(client, accountId); } finally { client.release(); }
+  }
+
+  /**
+   * Zapis wyboru w jednej transakcji z kontrolą wersji: albo cały zbiór i kalendarz publikacji, albo nic.
+   * validate dostaje aktualny stan pod blokadą konta i rzuca błąd, gdy wybór jest niedozwolony.
+   */
+  async saveSelection(accountId: string, expectedVersion: number, apply: (current: StoredSelection) => { sourceRowIds: string[]; targetRowId: string | null }): Promise<StoredSelection | 'conflict'> {
+    return this.transaction(async (client) => {
+      const locked = await client.query('select wersja_wyboru from t_konta_google where id_konta = $1 for update', [accountId]);
+      if (Number(locked.rows[0]?.wersja_wyboru) !== expectedVersion) return 'conflict';
+      const next = apply(await this.getSelectionWith(client, accountId));
+      await client.query(`update t_kalendarze_google set wybrany = (id_kal_google = any($2::text[])), updated_at = now() where id_konta = $1`, [accountId, next.sourceRowIds]);
+      await client.query(`update t_konta_google set id_kal_publikacji = $2, wersja_wyboru = wersja_wyboru + 1, updated_at = now() where id_konta = $1`, [accountId, next.targetRowId]);
+      return this.getSelectionWith(client, accountId);
+    });
+  }
+
+  private async getSelectionWith(client: PoolClient, accountId: string): Promise<StoredSelection> {
+    const account = await client.query('select wersja_wyboru, id_kal_publikacji from t_konta_google where id_konta = $1', [accountId]);
+    const rows = await client.query(`select * from t_kalendarze_google where id_konta = $1 order by glowny desc, nazwa, id_zewnetrzne`, [accountId]);
+    return {
+      version: Number(account.rows[0]?.wersja_wyboru ?? 1), publicationTargetRowId: account.rows[0]?.id_kal_publikacji ?? null,
+      calendars: rows.rows.map((row) => ({
+        rowId: row.id_kal_google, id: row.id_zewnetrzne, name: row.nazwa, primary: Boolean(row.glowny), accessRole: row.rola_dostepu ?? null,
+        timeZone: row.strefa ?? null, available: row.uprawnienia !== 'Brak dostępu' && row.rola_dostepu !== null, source: Boolean(row.wybrany),
+      })),
+    };
+  }
+
+  /** Liczba wybranych, wciąż dostępnych kalendarzy źródłowych – bez nich synchronizacja nie rusza (G04). */
+  async countSourceCalendars(accountId: string): Promise<number> {
+    const result = await this.pool.query(`select count(*)::int as n from t_kalendarze_google where id_konta = $1 and wybrany and uprawnienia <> 'Brak dostępu'`, [accountId]);
+    return result.rows[0].n;
   }
 }
