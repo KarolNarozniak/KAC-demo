@@ -14595,7 +14595,9 @@
                   "additionalProperties": false,
                   "required": [
                     "enabled",
+                    "classReminders",
                     "workRemindersEnabled",
+                    "privateReminders",
                     "eventChangesEnabled",
                     "minutesBefore",
                     "quietStart",
@@ -14606,7 +14608,13 @@
                     "enabled": {
                       "type": "boolean"
                     },
+                    "classReminders": {
+                      "type": "boolean"
+                    },
                     "workRemindersEnabled": {
+                      "type": "boolean"
+                    },
+                    "privateReminders": {
                       "type": "boolean"
                     },
                     "eventChangesEnabled": {
@@ -14641,7 +14649,9 @@
                     "summary": "Ustawienia przypomnień",
                     "value": {
                       "enabled": true,
+                      "classReminders": true,
                       "workRemindersEnabled": true,
+                      "privateReminders": true,
                       "eventChangesEnabled": true,
                       "minutesBefore": 30,
                       "quietStart": null,
@@ -14690,7 +14700,7 @@
         "tags": [
           "Notifications"
         ],
-        "description": "Enables or disables reminder scheduling and selects a bounded lead time.",
+        "description": "Enables or disables reminder scheduling, category filters, and selects a bounded lead time.",
         "requestBody": {
           "required": true,
           "content": {
@@ -14699,15 +14709,22 @@
                 "type": "object",
                 "required": [
                   "enabled",
+                  "classReminders",
                   "workRemindersEnabled",
-                  "minutesBefore"
+                  "privateReminders"
                 ],
                 "additionalProperties": false,
                 "properties": {
                   "enabled": {
                     "type": "boolean"
                   },
+                  "classReminders": {
+                    "type": "boolean"
+                  },
                   "workRemindersEnabled": {
+                    "type": "boolean"
+                  },
+                  "privateReminders": {
                     "type": "boolean"
                   },
                   "minutesBefore": {
@@ -14723,7 +14740,9 @@
                   "description": "Synthetic settings; no real user data.",
                   "value": {
                     "enabled": true,
+                    "classReminders": true,
                     "workRemindersEnabled": true,
+                    "privateReminders": true,
                     "minutesBefore": 30
                   }
                 }
@@ -14741,7 +14760,9 @@
                   "additionalProperties": false,
                   "required": [
                     "enabled",
+                    "classReminders",
                     "workRemindersEnabled",
+                    "privateReminders",
                     "eventChangesEnabled",
                     "minutesBefore",
                     "quietStart",
@@ -14752,7 +14773,13 @@
                     "enabled": {
                       "type": "boolean"
                     },
+                    "classReminders": {
+                      "type": "boolean"
+                    },
                     "workRemindersEnabled": {
+                      "type": "boolean"
+                    },
+                    "privateReminders": {
                       "type": "boolean"
                     },
                     "eventChangesEnabled": {
@@ -14787,7 +14814,9 @@
                     "summary": "Ustawienia przypomnień",
                     "value": {
                       "enabled": true,
+                      "classReminders": true,
                       "workRemindersEnabled": true,
+                      "privateReminders": true,
                       "eventChangesEnabled": true,
                       "minutesBefore": 30,
                       "quietStart": null,
