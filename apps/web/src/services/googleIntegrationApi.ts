@@ -5,6 +5,7 @@
 import { apiBaseUrl } from './importApi';
 import {
   apiErrorMessage, type AttemptPurpose, type GoogleAccountView, type GoogleIntegrationStatus, type IntegrationAttempt, type IntegrationCalendar,
+  type SimulatedFailure, type SyncAttempt, type SyncStatus,
 } from '../domain/googleIntegration';
 
 export class GoogleIntegrationApiError extends Error {
@@ -13,14 +14,14 @@ export class GoogleIntegrationApiError extends Error {
   }
 }
 
-async function call<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
+async function call<T>(method: 'GET' | 'POST', path: string, body?: unknown, timeoutMs = 30000): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`${apiBaseUrl()}${path}`, {
       method,
       headers: { Accept: 'application/json', ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
       body: body !== undefined ? JSON.stringify(body) : undefined,
-      signal: AbortSignal.timeout(30000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
   } catch {
     // Brak internetu, serwer KAC wyłączony albo przekroczony czas (2a).
@@ -42,3 +43,10 @@ export const giveGoogleIntegrationDemoConsent = (id: string, allow: boolean, acc
   call<IntegrationAttempt>('POST', `${attemptPath(id)}/demo-consent`, { allow, ...(account ? { account } : {}) });
 export const listGoogleIntegrationCalendars = () =>
   call<{ account: GoogleAccountView; calendars: IntegrationCalendar[]; complete: boolean }>('GET', '/api/v1/integrations/google/calendars');
+
+/** Stan synchronizacji i rejestr ostatnich prób (S23KC2S1P2-17, G06). */
+export const getGoogleSync = () => call<SyncStatus>('GET', '/api/v1/integrations/google/sync');
+/** „Synchronizuj z Google”. Błąd Google jest wynikiem próby (200), nie wyjątkiem; simulate działa tylko w makiecie. */
+export const runGoogleSync = (simulate?: SimulatedFailure) =>
+  // Serwer może ponowić próbę kilka razy (każda do 15 s), więc czekamy dłużej niż przy zwykłych zapytaniach.
+  call<{ attempt: SyncAttempt; status: SyncStatus }>('POST', '/api/v1/integrations/google/sync', simulate ? { simulate } : {}, 75000);

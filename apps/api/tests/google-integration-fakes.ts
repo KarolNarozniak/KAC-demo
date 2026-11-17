@@ -24,6 +24,8 @@ export class FakeGoogle {
   /** Strony listy kalendarzy (calendarList), po kolei. */
   calendarPages: Record<string, unknown>[][] = [[{ id: 'primary', summary: 'Student', primary: true, accessRole: 'owner', timeZone: 'Europe/Warsaw' }]];
   calendarFailure: Reply | null = null;
+  /** Kolejne odpowiedzi listy kalendarzy przed zwykłą: błąd HTTP albo 'network' (zerwane połączenie). Zużywane po jednej. */
+  calendarScript: Array<Reply | 'network'> = [];
   delayMs = 0;
   private issued = 0;
   private readonly codes = new Map<string, Reply>();
@@ -68,6 +70,9 @@ export class FakeGoogle {
       const token = String(init?.headers?.Authorization ?? '').replace(/^Bearer /, '');
       this.calendarTokens.push(token);
       if (this.rejectedAccessTokens.has(token)) return respond(401, { error: { code: 401, status: 'UNAUTHENTICATED' } });
+      const scripted = this.calendarScript.shift();
+      if (scripted === 'network') throw new TypeError('fetch failed');
+      if (scripted) return respond(scripted.status ?? 500, scripted.body);
       if (this.calendarFailure) return respond(this.calendarFailure.status ?? 500, this.calendarFailure.body);
       const pageToken = new URL(url).searchParams.get('pageToken');
       const index = pageToken ? Number(pageToken.replace('page-', '')) : 0;

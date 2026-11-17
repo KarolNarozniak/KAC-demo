@@ -7,6 +7,8 @@
 //       GET  /integrations/google/attempts/:id               stan próby (aplikacja odpytuje po otwarciu strony Google)
 //       POST /integrations/google/attempts/:id/cancel        anulowanie – późniejszy powrót z Google niczego nie zapisze
 //  7    GET  /integrations/google/calendars                  lista kalendarzy połączonego konta
+// G06  GET  /integrations/google/sync                       stan synchronizacji: ostatnia próba, ostatni sukces, historia (S23KC2S1P2-17)
+//      POST /integrations/google/sync                       „Synchronizuj z Google” z ograniczonymi ponowieniami błędów przejściowych
 // Jednorazowy import (/import/google/*, S23KC2S1P2-27) ma osobny kontrakt i nie korzysta z tych endpointów.
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { ScopeResolver } from '../../scope.js';
@@ -14,9 +16,10 @@ import { documented, errorExamples, withExamples } from '../../examples.js';
 import { GoogleIntegrationError } from '../../../integrations/google/oauth-client.js';
 import type { AuthAttempt } from '../../../integrations/google/repository.js';
 import { GoogleIntegrationService, IntegrationFlowError } from '../../../integrations/google/service.js';
+import { SIMULATED_FAILURES, SyncFlowError, type SimulatedFailure } from '../../../integrations/google/sync.js';
 import {
   attemptExamples, calendarsExamples, callbackPage, cancelledExamples, connectBodyExamples, demoConsentBodyExamples, demoConsentExamples,
-  integrationErrors, startedExamples, statusExamples,
+  integrationErrors, startedExamples, statusExamples, syncBodyExamples, syncRunExamples, syncStatusExamples,
 } from './examples.js';
 
 const nullable = (schema: object) => ({ anyOf: [schema, { type: 'null' }] });
@@ -47,6 +50,24 @@ const attemptSchema = { type: 'object', additionalProperties: false, required: [
 const calendarSchema = { type: 'object', additionalProperties: false, required: ['id', 'name', 'primary', 'accessRole', 'timeZone'], properties: {
   id: { type: 'string' }, name: { type: 'string' }, primary: { type: 'boolean' },
   accessRole: { type: 'string', enum: ['owner', 'writer', 'reader', 'freeBusyReader'] }, timeZone: nullable({ type: 'string' }) } } as const;
+const syncAttemptSchema = { type: 'object', additionalProperties: false,
+  required: ['id', 'direction', 'scope', 'operation', 'status', 'startedAt', 'finishedAt', 'tries', 'changes', 'errorCode', 'message', 'errorClass', 'retryable'], properties: {
+    id: { type: 'string' }, direction: { type: 'string', enum: ['read', 'publish'] }, scope: nullable({ type: 'string' }), operation: { type: 'string' },
+    status: { type: 'string', enum: ['running', 'success', 'partial', 'error'] },
+    startedAt: { type: 'string', format: 'date-time' }, finishedAt: nullable({ type: 'string', format: 'date-time' }),
+    tries: { type: 'integer', minimum: 1, description: 'Liczba prób w tym uruchomieniu (pierwsza + automatyczne ponowienia).' },
+    changes: { type: 'integer', minimum: 0 }, errorCode: nullable({ type: 'string' }), message: nullable({ type: 'string' }),
+    errorClass: nullable({ type: 'string', enum: ['network', 'reconnect', 'permissions', 'rate_limit', 'server', 'other'] }),
+    retryable: { type: 'boolean', description: 'Czy „Spróbuj ponownie” ma sens (false, gdy trzeba połączyć konto ponownie).' } } } as const;
+const syncStatusSchema = { type: 'object', additionalProperties: false, required: ['connection', 'enabled', 'state', 'lastAttempt', 'lastSuccess', 'history'], properties: {
+  connection: { type: 'string', enum: ['not_connected', 'connected', 'reconnect_required'] },
+  enabled: { type: 'boolean', description: 'Zgoda na synchronizację; odmowa przy ponownym logowaniu ją wyłącza.' },
+  state: { type: 'string', enum: ['never', 'running', 'success', 'partial', 'error'] },
+  lastAttempt: nullable(syncAttemptSchema),
+  lastSuccess: { type: 'object', additionalProperties: false, required: ['read', 'publish'], properties: {
+    read: nullable({ type: 'string', format: 'date-time' }), publish: nullable({ type: 'string', format: 'date-time' }) } },
+  history: { type: 'array', items: syncAttemptSchema, description: 'Ostatnie próby, najnowsza pierwsza (najwyżej 10).' } } } as const;
+
 const idParams = { type: 'object', additionalProperties: false, required: ['id'], properties: { id: { type: 'string', minLength: 1, maxLength: 64 } } } as const;
 
 const fail = (description: string, codes: string[]) => errorExamples(description, Object.fromEntries(codes.map((code) => [code, integrationErrors[code]!])));
@@ -55,6 +76,7 @@ const html = (description: string, title: string, message: string) => documented
 /** Kody błędów Google → status HTTP odpowiedzi API. */
 const GOOGLE_ERROR_STATUS: Record<string, number> = {
   reconnect_required: 409, insufficient_permissions: 403, rate_limited: 429, calendar_not_found: 404, google_unavailable: 502, google_error: 502,
+  network_error: 504, api_not_enabled: 502,
 };
 
 const viewAttempt = (attempt: AuthAttempt, authUrl?: string | null) => ({
@@ -73,7 +95,7 @@ export function registerGoogleIntegration(app: FastifyInstance, service: GoogleI
     try {
       return await work(service);
     } catch (error) {
-      if (error instanceof IntegrationFlowError) return reply.code(error.status).send({ error: error.code });
+      if (error instanceof IntegrationFlowError || error instanceof SyncFlowError) return reply.code(error.status).send({ error: error.code });
       if (error instanceof GoogleIntegrationError) return reply.code(GOOGLE_ERROR_STATUS[error.code] ?? 502).send({ error: error.code });
       throw error;
     }
@@ -161,8 +183,29 @@ export function registerGoogleIntegration(app: FastifyInstance, service: GoogleI
       404: fail('Brak połączonego konta.', ['not_connected']),
       409: fail('Wymagane ponowne logowanie.', ['reconnect_required']),
       429: fail('Limit Google.', ['rate_limited']),
-      502: fail('Google nie odpowiada.', ['google_unavailable', 'google_error']),
+      502: fail('Google nie odpowiada albo projekt Google Cloud nie ma włączonego Calendar API.', ['google_unavailable', 'google_error', 'api_not_enabled']),
       503: fail('Integracja niedostępna.', ['integration_not_configured']),
+      504: fail('Brak połączenia z Google.', ['network_error']),
     },
   } }, async (request, reply) => handle(reply, (google) => google.calendars(scope(request))));
+
+  app.get('/integrations/google/sync', { schema: {
+    tags: ['Google integration'], summary: 'Get Google sync state', operationId: 'getGoogleSync',
+    description: 'Sync registry for the connected account: state of the last attempt (never, running, success, partial, error), error class, time of the last successful read and publication, and recent attempts. A failed attempt never overwrites the last success.',
+    response: { 200: documented(syncStatusSchema, 'Stan synchronizacji.', syncStatusExamples), 503: fail('Integracja niedostępna.', ['integration_not_configured']) },
+  } }, async (request, reply) => handle(reply, (google) => google.sync.status(scope(request))));
+
+  app.post<{ Body: { simulate?: SimulatedFailure } }>('/integrations/google/sync', { schema: {
+    tags: ['Google integration'], summary: 'Synchronize with Google now', operationId: 'runGoogleSync',
+    description: 'Runs a read synchronization (calendar list) and records the attempt. Network errors, rate limits and Google server errors are retried automatically a limited number of times with growing delays; a rejected login is not retried and asks for reconnecting. Google errors are part of the attempt result (200), local events are never changed. simulate is accepted only in demo mode.',
+    body: withExamples({ type: 'object', additionalProperties: false, properties: {
+      simulate: { type: 'string', enum: [...SIMULATED_FAILURES], description: 'Tylko makieta: wymuszony błąd albo wynik częściowy.' } } }, syncBodyExamples),
+    response: {
+      200: documented({ type: 'object', additionalProperties: false, required: ['attempt', 'status'], properties: { attempt: syncAttemptSchema, status: syncStatusSchema } },
+        'Wynik próby (także nieudanej) i aktualny stan synchronizacji.', syncRunExamples),
+      404: fail('Brak połączonego konta.', ['not_connected']),
+      409: fail('Synchronizacja niemożliwa w tej chwili.', ['sync_disabled', 'sync_in_progress', 'demo_only']),
+      503: fail('Integracja niedostępna.', ['integration_not_configured']),
+    },
+  } }, async (request, reply) => handle(reply, (google) => google.sync.runRead(scope(request), { simulate: request.body?.simulate })));
 }

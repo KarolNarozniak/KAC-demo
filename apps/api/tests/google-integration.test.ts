@@ -89,7 +89,7 @@ test('wymiana kodu: tożsamość z id_token, kod jednorazowy, błędy Google roz
   await assert.rejects(exchangeIntegrationCode(OAUTH, 'code-other-client', 'v', google.fetch), rejects('missing_account_identity'));
   // Brak internetu (2a) albo przekroczony czas: błąd przejściowy.
   const offline = await exchangeIntegrationCode(OAUTH, 'c', 'v', async () => { throw new TypeError('fetch failed'); }).catch((error) => error);
-  assert.ok(offline instanceof GoogleIntegrationError && offline.code === 'google_unavailable' && offline.transient);
+  assert.ok(offline instanceof GoogleIntegrationError && offline.code === 'network_error' && offline.transient);
   assert.equal(idToken({ sub: 'x' }).split('.').length, 3);
 });
 
@@ -128,6 +128,9 @@ test('lista kalendarzy: wszystkie strony, rola dostępu, limit stron i kody bł�
   await assert.rejects(failing(403, { error: { errors: [{ reason: 'insufficientPermissions' }] } }), rejects('insufficient_permissions'));
   await assert.rejects(failing(429, {}), rejects('rate_limited'));
   await assert.rejects(failing(500, {}), rejects('google_unavailable'));
+  // Calendar API wyłączone w projekcie – błąd konfiguracji, nie „brak uprawnień” użytkownika.
+  await assert.rejects(failing(403, { error: { code: 403, status: 'PERMISSION_DENIED', errors: [{ reason: 'accessNotConfigured' }] } }), rejects('api_not_enabled'));
+  await assert.rejects(listIntegrationCalendars('ya29.t', async () => { throw new TypeError('fetch failed'); }), rejects('network_error'));
   google.calendarFailure = null;
   google.rejectedAccessTokens.add('ya29.old');
   await assert.rejects(listIntegrationCalendars('ya29.old', google.fetch), rejects('reconnect_required'));

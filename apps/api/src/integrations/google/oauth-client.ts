@@ -24,14 +24,14 @@ export function accessFromScopes(scopes: string[]): GoogleAccess {
 }
 
 export type GoogleErrorCode =
-  | 'google_unavailable' | 'reconnect_required' | 'insufficient_permissions' | 'rate_limited'
+  | 'network_error' | 'google_unavailable' | 'reconnect_required' | 'insufficient_permissions' | 'rate_limited' | 'api_not_enabled'
   | 'authorization_code_invalid' | 'no_refresh_token' | 'missing_account_identity' | 'calendar_not_found' | 'google_error';
 
 /** Błędy Google rozróżnione tak, żeby UI i ponowienia (G06) wiedziały, co dalej: ponowić, zalogować ponownie czy zmienić uprawnienia. */
 export class GoogleIntegrationError extends Error {
   constructor(readonly code: GoogleErrorCode, readonly httpStatus?: number) { super(code); }
-  /** Błąd przejściowy – ma sens automatyczne, ograniczone ponowienie. */
-  get transient() { return this.code === 'google_unavailable' || this.code === 'rate_limited'; }
+  /** Błąd przejściowy – ma sens automatyczne, ograniczone ponowienie (G06). */
+  get transient() { return this.code === 'network_error' || this.code === 'google_unavailable' || this.code === 'rate_limited'; }
 }
 
 export type TokenGrant = {
@@ -69,7 +69,8 @@ async function post(fetchImpl: FetchLike, body: Record<string, string>): Promise
       body: new URLSearchParams(body).toString(), signal: AbortSignal.timeout(15000),
     });
   } catch {
-    throw new GoogleIntegrationError('google_unavailable');
+    // Brak sieci albo przekroczony czas – odróżniamy od błędu po stronie Google (G06).
+    throw new GoogleIntegrationError('network_error');
   }
   const json = await response.json().catch(() => ({}));
   return { status: response.status, ok: response.ok, json };
@@ -141,6 +142,8 @@ export async function calendarApiError(response: { status: number; json(): Promi
   const reason = String(body?.error?.errors?.[0]?.reason ?? body?.error?.status ?? '');
   if (response.status === 401) return new GoogleIntegrationError('reconnect_required', 401);
   if (response.status === 429 || /rateLimit|userRateLimit|quota/i.test(reason)) return new GoogleIntegrationError('rate_limited', response.status);
+  // Calendar API wyłączone w projekcie Google Cloud – błąd konfiguracji, nie brak zgody użytkownika.
+  if (response.status === 403 && /accessNotConfigured|SERVICE_DISABLED/.test(JSON.stringify(body ?? {}))) return new GoogleIntegrationError('api_not_enabled', 403);
   if (response.status === 403) return new GoogleIntegrationError('insufficient_permissions', 403);
   if (response.status === 404) return new GoogleIntegrationError('calendar_not_found', 404);
   if (response.status >= 500) return new GoogleIntegrationError('google_unavailable', response.status);
@@ -160,7 +163,7 @@ export async function listIntegrationCalendars(accessToken: string, fetchImpl: F
       response = await fetchImpl(`https://www.googleapis.com/calendar/v3/users/me/calendarList?${params}`,
         { headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(15000) });
     } catch {
-      throw new GoogleIntegrationError('google_unavailable');
+      throw new GoogleIntegrationError('network_error');
     }
     if (!response.ok) throw await calendarApiError(response);
     const body = await response.json();

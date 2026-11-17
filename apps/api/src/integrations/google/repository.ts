@@ -13,6 +13,14 @@ export type AttemptStatus = 'pending' | 'processing' | 'connected' | 'denied' | 
 export type GoogleAccountRecord = {
   accountId: string; userId: string; email: string; sub: string | null; mode: IntegrationMode; status: AccountStatus;
   grantedScopes: string[]; generation: number; connectedAt: string | null; lastSyncAt: string | null;
+  /** Zgoda na synchronizację (tKontaGoogle.Zgoda_Synchronizacja). Odmowa przy ponownym logowaniu ją wyłącza (G06, 5a). */
+  syncEnabled: boolean; lastPublishAt: string | null;
+};
+export type SyncDirection = 'read' | 'publish';
+export type SyncAttemptStatus = 'running' | 'success' | 'partial' | 'error';
+export type SyncAttemptRecord = {
+  id: string; accountId: string; direction: SyncDirection; scope: string | null; operation: string; status: SyncAttemptStatus;
+  startedAt: string; finishedAt: string | null; tries: number; changes: number; errorCode: string | null; message: string | null;
 };
 export type AuthAttempt = {
   id: string; userId: string; calendarId: string; purpose: AttemptPurpose; mode: IntegrationMode; codeVerifierEnc: string | null;
@@ -35,6 +43,18 @@ const accountFrom = (row: any): GoogleAccountRecord => ({
   grantedScopes: row.uprawnienia ?? [], generation: Number(row.generacja),
   connectedAt: row.polaczono_at ? new Date(row.polaczono_at).toISOString() : null,
   lastSyncAt: row.ostatnia_sync ? new Date(row.ostatnia_sync).toISOString() : null,
+  syncEnabled: row.zgoda_synchronizacja !== false,
+  lastPublishAt: row.ostatnia_publikacja ? new Date(row.ostatnia_publikacja).toISOString() : null,
+});
+
+const DIRECTION_DB: Record<SyncDirection, string> = { read: 'Odczyt', publish: 'Publikacja' };
+const SYNC_STATUS_DB: Record<SyncAttemptStatus, string> = { running: 'W trakcie', success: 'Sukces', partial: 'Częściowo', error: 'Błąd' };
+const fromDb = <T extends string>(map: Record<T, string>, value: string) => (Object.keys(map) as T[]).find((key) => map[key] === value)!;
+const syncAttemptFrom = (row: any): SyncAttemptRecord => ({
+  id: row.id_sync, accountId: row.id_konta, direction: fromDb(DIRECTION_DB, row.kierunek), scope: row.zakres, operation: row.operacja,
+  status: fromDb(SYNC_STATUS_DB, row.status), startedAt: new Date(row.data_proby).toISOString(),
+  finishedAt: row.zakonczono_at ? new Date(row.zakonczono_at).toISOString() : null, tries: Number(row.proby), changes: Number(row.liczba_zmian),
+  errorCode: row.kod_bledu, message: row.komunikat,
 });
 
 const attemptFrom = (row: any): AuthAttempt => ({
@@ -208,8 +228,11 @@ export class PostgresGoogleIntegrationRepository {
     await this.pool.query('update t_google_tokeny set access_token_enc = null, access_expires_at = null where id_konta = $1', [account.accountId]);
   }
 
-  /** Lista kalendarzy konta (krok 7). Wybór użytkownika (wybrany) zostaje; kalendarze, których już nie ma, tracą dostęp. */
-  async saveCalendars(account: Pick<GoogleAccountRecord, 'accountId'>, calendars: IntegrationCalendar[]): Promise<void> {
+  /**
+   * Lista kalendarzy konta (krok 7). Wybór użytkownika (wybrany) zostaje; kalendarze, których już nie ma, tracą dostęp.
+   * Niepełna lista (limit stron, G06 „częściowo”) tylko dopisuje i aktualizuje – nie usuwa kalendarzy, których mogła nie objąć.
+   */
+  async saveCalendars(account: Pick<GoogleAccountRecord, 'accountId'>, calendars: IntegrationCalendar[], complete = true): Promise<void> {
     await this.transaction(async (client) => {
       for (const calendar of calendars) {
         await client.query(`insert into t_kalendarze_google (id_konta, nazwa, id_zewnetrzne, uprawnienia, rola_dostepu, strefa, glowny)
@@ -218,6 +241,7 @@ export class PostgresGoogleIntegrationRepository {
             rola_dostepu = excluded.rola_dostepu, strefa = excluded.strefa, glowny = excluded.glowny, updated_at = now()`,
         [account.accountId, calendar.name, calendar.id, ACCESS_LABEL[calendar.accessRole], calendar.accessRole, calendar.timeZone, calendar.primary]);
       }
+      if (!complete) return;
       const ids = calendars.map((calendar) => calendar.id);
       // Znikniętego kalendarza nie usuwamy, gdy użytkownik go wybrał albo opublikowano do niego grafik (historia publikacji, G07) –
       // zostaje z oznaczeniem „Brak dostępu”.
@@ -226,5 +250,60 @@ export class PostgresGoogleIntegrationRepository {
       await client.query(`update t_kalendarze_google set uprawnienia = 'Brak dostępu', rola_dostepu = null, updated_at = now()
         where id_konta = $1 and not (id_zewnetrzne = any($2::text[]))`, [account.accountId, ids]);
     });
+  }
+
+  /** Odmowa zgody przy ponownym logowaniu (G06, 5a): synchronizacja wyłączona, konto i dane lokalne bez zmian. */
+  async disableSync(userId: string): Promise<void> {
+    await this.pool.query(`update t_konta_google set zgoda_synchronizacja = false, updated_at = now()
+      where id_uzytkownika = $1 and status_polaczenia <> 'Niepołączone'`, [userId]);
+  }
+
+  // --- Rejestr prób synchronizacji (G06) ---
+
+  /** Próba przerwana restartem serwera nie może wiecznie blokować kolejnych – po czasie jest kończona jako przerwana. */
+  async failStaleSyncAttempts(accountId: string, olderThanMinutes = 5): Promise<void> {
+    await this.pool.query(`update t_synchronizacje set status = 'Błąd', kod_bledu = 'sync_interrupted', zakonczono_at = now(),
+        komunikat = 'Próba została przerwana (np. restart serwera).'
+      where id_konta = $1 and status = 'W trakcie' and data_proby < now() - make_interval(mins => $2)`, [accountId, olderThanMinutes]);
+  }
+
+  /** Początek próby. null, gdy dla tego konta i kierunku trwa już inna (unikalny indeks „W trakcie”). */
+  async startSyncAttempt(account: Pick<GoogleAccountRecord, 'accountId' | 'generation'>,
+    input: { direction: SyncDirection; scope: string; operation: string }): Promise<SyncAttemptRecord | null> {
+    try {
+      const result = await this.pool.query(`insert into t_synchronizacje (id_konta, kierunek, operacja, status, zakres, proby, generacja)
+        values ($1, $2, $3, 'W trakcie', $4, 1, $5) returning *`,
+      [account.accountId, DIRECTION_DB[input.direction], input.operation, input.scope, account.generation]);
+      return syncAttemptFrom(result.rows[0]);
+    } catch (error) {
+      if ((error as { code?: string }).code === '23505') return null;
+      throw error;
+    }
+  }
+
+  async setSyncTries(id: string, tries: number): Promise<void> {
+    await this.pool.query(`update t_synchronizacje set proby = $2 where id_sync = $1 and status = 'W trakcie'`, [id, tries]);
+  }
+
+  /**
+   * Zakończenie próby. Sukces zapisuje też ostatni udany odczyt/publikację w koncie – w tej samej transakcji.
+   * Błąd i wynik częściowy nie zmieniają ostatniego sukcesu.
+   */
+  async finishSyncAttempt(id: string, input: { status: Exclude<SyncAttemptStatus, 'running'>; tries: number; changes: number; errorCode: string | null; message: string }): Promise<SyncAttemptRecord> {
+    return this.transaction(async (client) => {
+      const result = await client.query(`update t_synchronizacje set status = $2, proby = $3, liczba_zmian = $4, kod_bledu = $5, komunikat = $6, zakonczono_at = now()
+        where id_sync = $1 returning *`, [id, SYNC_STATUS_DB[input.status], input.tries, input.changes, input.errorCode, input.message]);
+      const attempt = syncAttemptFrom(result.rows[0]);
+      if (input.status === 'success') {
+        const column = attempt.direction === 'read' ? 'ostatnia_sync' : 'ostatnia_publikacja';
+        await client.query(`update t_konta_google set ${column} = now(), updated_at = now() where id_konta = $1`, [attempt.accountId]);
+      }
+      return attempt;
+    });
+  }
+
+  async listSyncAttempts(accountId: string, limit = 10): Promise<SyncAttemptRecord[]> {
+    const result = await this.pool.query(`select * from t_synchronizacje where id_konta = $1 order by data_proby desc, id_sync desc limit $2`, [accountId, limit]);
+    return result.rows.map(syncAttemptFrom);
   }
 }

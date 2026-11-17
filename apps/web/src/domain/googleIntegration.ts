@@ -110,6 +110,8 @@ export function attemptNotice(attempt: Pick<IntegrationAttempt, 'status' | 'erro
     case 'connected':
       return { tone: 'success', text: attempt.purpose === 'change_account' ? 'Zmieniono konto Google.' : 'Połączono z Google Calendar.' };
     case 'denied':
+      // Historyjka 17, 5a: odmowa przy ponownym logowaniu wyłącza synchronizację.
+      if (attempt.purpose === 'reconnect') return { tone: 'info', text: 'Nie udzielono zgody – synchronizacja z Google jest wyłączona. Lokalne wydarzenia pozostały bez zmian.' };
       return attempt.errorCode === 'calendar_scope_missing'
         ? { tone: 'error', text: `Zgoda nie obejmowała dostępu do kalendarza, więc konto nie zostało połączone. Spróbuj ponownie i zaznacz dostęp do kalendarza. ${keep}` }
         : { tone: 'info', text: `Nie udzielono zgody – konto Google nie zostało połączone. ${keep}` };
@@ -150,6 +152,10 @@ export function apiErrorMessage(code: string): string {
     case 'reconnect_required': return 'Google nie przyjął zapisanego dostępu – połącz konto ponownie. Twoje dane w KAC są bez zmian.';
     case 'insufficient_permissions': return 'Przyznany dostęp nie pozwala odczytać listy kalendarzy. Wybierz „Połącz ponownie” i zaznacz dostęp do kalendarza.';
     case 'rate_limited': return 'Google chwilowo ogranicza liczbę zapytań. Spróbuj ponownie za chwilę.';
+    case 'network_error': return 'Brak połączenia z Google – sprawdź internet i spróbuj ponownie.';
+    case 'api_not_enabled': return 'W projekcie Google Cloud nie jest włączone Google Calendar API. Włącz je w konsoli Google Cloud.';
+    case 'sync_disabled': return SYNC_DISABLED_TEXT;
+    case 'sync_in_progress': return 'Synchronizacja już trwa – poczekaj na jej wynik.';
     case 'google_unavailable':
     case 'google_error': return 'Google nie odpowiada. Spróbuj ponownie za chwilę.';
     default: return `Operacja nie powiodła się (${code}). Spróbuj ponownie.`;
@@ -159,3 +165,71 @@ export function apiErrorMessage(code: string): string {
 /** Problem z konfiguracją serwera pokazywany zamiast przycisku logowania. */
 export const unavailableMessage = (status: GoogleIntegrationStatus | null, loadError: string | null) =>
   apiErrorMessage(status?.problem ?? loadError ?? 'integration_not_configured');
+
+// --- Synchronizacja i błędy (S23KC2S1P2-17, G06) ---
+
+export type SyncErrorClass = 'network' | 'reconnect' | 'permissions' | 'rate_limit' | 'server' | 'other';
+export type SyncState = 'never' | 'running' | 'success' | 'partial' | 'error';
+export type SyncAttempt = {
+  id: string; direction: 'read' | 'publish'; scope: string | null; operation: string; status: 'running' | 'success' | 'partial' | 'error';
+  startedAt: string; finishedAt: string | null; tries: number; changes: number; errorCode: string | null; message: string | null;
+  errorClass: SyncErrorClass | null; retryable: boolean;
+};
+export type SyncStatus = {
+  connection: 'not_connected' | 'connected' | 'reconnect_required'; enabled: boolean; state: SyncState;
+  lastAttempt: SyncAttempt | null; lastSuccess: { read: string | null; publish: string | null }; history: SyncAttempt[];
+};
+export type SimulatedFailure = 'network' | 'flaky' | 'auth' | 'server' | 'rate_limit' | 'partial' | 'permissions';
+
+/** Makieta: przyciski wymuszające wynik, żeby pokazać przebiegi błędów bez prawdziwego Google. */
+export const SIMULATIONS: { id: SimulatedFailure | null; label: string }[] = [
+  { id: null, label: 'Bez błędu' }, { id: 'network', label: 'Brak internetu' }, { id: 'flaky', label: 'Chwilowy błąd sieci' },
+  { id: 'auth', label: 'Wygasłe logowanie' }, { id: 'server', label: 'Błąd serwera Google' }, { id: 'rate_limit', label: 'Limit zapytań' },
+  { id: 'partial', label: 'Wynik częściowy' }, { id: 'permissions', label: 'Brak uprawnień' },
+];
+
+const SYNC_STATE_LABELS: Record<SyncState, string> = {
+  never: 'Nigdy nie synchronizowano', running: 'W trakcie', success: 'Zsynchronizowano', partial: 'Częściowo', error: 'Błąd',
+};
+export const syncStateLabel = (state: SyncState) => SYNC_STATE_LABELS[state];
+
+const ERROR_CLASS_LABELS: Record<SyncErrorClass, string> = {
+  network: 'Brak połączenia – brak internetu albo Google nie odpowiedział na czas',
+  reconnect: 'Wygasłe logowanie – Google nie przyjmuje zapisanego dostępu',
+  permissions: 'Brak uprawnień do kalendarza',
+  rate_limit: 'Limit zapytań Google – spróbuj za chwilę',
+  server: 'Błąd po stronie Google',
+  other: 'Inny błąd',
+};
+export const syncErrorLabel = (attempt: Pick<SyncAttempt, 'errorClass' | 'errorCode'>) =>
+  attempt.errorCode === 'api_not_enabled' ? 'W projekcie Google Cloud nie jest włączone Google Calendar API' : ERROR_CLASS_LABELS[attempt.errorClass ?? 'other'];
+
+const dateTime = (iso: string) => {
+  const date = new Date(iso);
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()}, ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
+export const lastSuccessLabel = (status: Pick<SyncStatus, 'lastSuccess'>) =>
+  status.lastSuccess.read ? `Ostatnia udana synchronizacja: ${dateTime(status.lastSuccess.read)}` : 'Ostatnia udana synchronizacja: jeszcze nie było';
+export const attemptTimeLabel = (attempt: Pick<SyncAttempt, 'startedAt'>) => dateTime(attempt.startedAt);
+
+/** Które przyciski pokazać po próbie (krok 2 historyjki 17). Przy wygasłym logowaniu zwykłe ponowienie nic nie da. */
+export function syncActions(status: Pick<SyncStatus, 'enabled' | 'connection' | 'state' | 'lastAttempt'>): { sync: boolean; retry: boolean; reconnect: boolean } {
+  const needsLogin = !status.enabled || status.connection === 'reconnect_required' || status.lastAttempt?.errorClass === 'reconnect';
+  const failed = status.state === 'error' || status.state === 'partial';
+  return {
+    sync: status.enabled && !needsLogin && !failed && status.state !== 'running',
+    retry: status.enabled && !needsLogin && failed && Boolean(status.lastAttempt?.retryable),
+    reconnect: needsLogin || status.lastAttempt?.errorClass === 'permissions',
+  };
+}
+
+/** Komunikat po próbie: sukces (2a), wynik częściowy albo błąd z przyczyną i zapewnieniem o danych lokalnych. */
+export function syncResultNotice(attempt: SyncAttempt): Notice {
+  if (attempt.status === 'success') return { tone: 'success', text: `Synchronizacja zakończona. ${attempt.message ?? ''}`.trim() };
+  if (attempt.status === 'partial') return { tone: 'info', text: `Synchronizacja częściowa – ${attempt.message ?? 'nie wszystko udało się odczytać.'} Lokalne wydarzenia pozostały bez zmian.` };
+  const retries = attempt.tries > 1 ? ` (próby: ${attempt.tries})` : '';
+  return { tone: 'error', text: `Synchronizacja nie powiodła się${retries}: ${syncErrorLabel(attempt)}. Lokalne wydarzenia pozostały bez zmian.` };
+}
+
+export const SYNC_DISABLED_TEXT = 'Synchronizacja jest wyłączona, bo przy ponownym logowaniu nie udzielono zgody. Lokalne wydarzenia pozostały bez zmian.';

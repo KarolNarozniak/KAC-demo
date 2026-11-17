@@ -13,10 +13,13 @@ import type { Pool } from 'pg';
 import { ConnectionConflictError, PostgresGoogleIntegrationRepository, type AttemptPurpose, type AuthAttempt, type GoogleAccountRecord } from './repository.js';
 import { TokenCipher } from './token-cipher.js';
 import { GoogleTokenService } from './token-service.js';
+import { GoogleSyncService, type SyncOptions } from './sync.js';
 
 export type KeyProblem = 'token_key_missing' | 'token_key_invalid' | null;
 export type IntegrationOptions = {
   oauth: GoogleIntegrationOAuthConfig | null; cipher: TokenCipher | null; keyProblem?: KeyProblem; fetch?: FetchLike; attemptTtlMinutes?: number;
+  /** Ponowienia synchronizacji (G06) – w testach atrapa zegara. */
+  sync?: SyncOptions;
 };
 
 /** Błędy przebiegu połączenia zwracane przez API (kod → status HTTP w trasach). */
@@ -39,11 +42,14 @@ const accountView = (account: GoogleAccountRecord): AccountView => ({
 
 export class GoogleIntegrationService {
   readonly tokens: GoogleTokenService;
+  /** Rejestr prób i ponowienia synchronizacji (S23KC2S1P2-17, G06). */
+  readonly sync: GoogleSyncService;
   private readonly fetchImpl: FetchLike;
 
   constructor(private readonly repository: PostgresGoogleIntegrationRepository, private readonly options: IntegrationOptions) {
     this.fetchImpl = options.fetch ?? ((url, init) => fetch(url, init));
     this.tokens = new GoogleTokenService(repository, options.cipher, options.oauth, this.fetchImpl);
+    this.sync = new GoogleSyncService(repository, this, options.sync);
   }
 
   get mode(): 'google' | 'demo' { return this.options.oauth ? 'google' : 'demo'; }
@@ -106,6 +112,7 @@ export class GoogleIntegrationService {
     if (!attempt) return this.attempt(scope, id);
     if (!allow) {
       await this.repository.finishAttempt(attempt.id, 'denied', 'access_denied');
+      await this.afterDenial(attempt);
       return this.attempt(scope, id);
     }
     await this.finishConnection(scope, attempt, { mode: 'demo', sub: demoSub(email!), email: email!, grantedScopes: DEMO_GRANTED_SCOPES });
@@ -122,6 +129,7 @@ export class GoogleIntegrationService {
       return { httpStatus: 400, title: 'Połączenie wygasło', message: 'Ten link logowania wygasł albo został już użyty. Rozpocznij łączenie ponownie w aplikacji.' };
     if (query.error || !query.code) {
       await this.repository.finishAttempt(attempt.id, 'denied', query.error === 'access_denied' || !query.error ? 'access_denied' : 'google_error');
+      await this.afterDenial(attempt);
       return { httpStatus: 200, title: 'Brak zgody', message: 'Bez zgody na dostęp nie można połączyć kalendarza Google. Twoje wydarzenia w KAC pozostały bez zmian.' };
     }
     try {
@@ -130,6 +138,7 @@ export class GoogleIntegrationService {
       const identity = await exchangeIntegrationCode(this.options.oauth!, query.code, verifier, this.fetchImpl);
       if (!accessFromScopes(identity.grantedScopes).calendarsRead) {
         await this.repository.finishAttempt(attempt.id, 'denied', 'calendar_scope_missing');
+        await this.afterDenial(attempt);
         return { httpStatus: 200, title: 'Brak dostępu do kalendarza', message: 'Zgoda nie obejmuje dostępu do kalendarza, więc konto nie zostało połączone. Spróbuj ponownie i zaznacz dostęp do kalendarza.' };
       }
       const owner = { userId: attempt.userId, calendarId: attempt.calendarId };
@@ -175,12 +184,18 @@ export class GoogleIntegrationService {
       throw error;
     }
     // Lista kalendarzy nie decyduje o połączeniu: pusta lista (7a) albo chwilowy błąd Google nie rozłącza konta.
-    await this.refreshCalendars(account).catch(() => undefined);
+    await this.readCalendars(account).catch(() => undefined);
     await this.repository.finishAttempt(attempt.id, 'connected');
     return account;
   }
 
-  private async refreshCalendars(account: GoogleAccountRecord): Promise<{ calendars: IntegrationCalendar[]; complete: boolean }> {
+  /** Historyjka 17, 5a: odmowa przy ponownym logowaniu wyłącza synchronizację; konto i lokalne wydarzenia zostają bez zmian. */
+  private async afterDenial(attempt: AuthAttempt) {
+    if (attempt.purpose === 'reconnect') await this.repository.disableSync(attempt.userId);
+  }
+
+  /** Odczyt listy kalendarzy z Google (albo makiety) i zapis w t_kalendarze_google. Używany przez panel (krok 7) i synchronizację (G06). */
+  async readCalendars(account: GoogleAccountRecord): Promise<{ calendars: IntegrationCalendar[]; complete: boolean }> {
     if (account.mode === 'demo') {
       const calendars = demoIntegrationCalendars(account.email);
       await this.repository.saveCalendars(account, calendars);
@@ -200,7 +215,7 @@ export class GoogleIntegrationService {
         throw retryError;
       });
     }
-    await this.repository.saveCalendars(account, listed.calendars);
+    await this.repository.saveCalendars(account, listed.calendars, listed.complete);
     return listed;
   }
 
@@ -210,7 +225,7 @@ export class GoogleIntegrationService {
     if (!account) throw new IntegrationFlowError('not_connected', 404);
     if (account.status === 'reconnect_required') throw new GoogleIntegrationError('reconnect_required');
     if (!accessFromScopes(account.grantedScopes).calendarsRead) throw new GoogleIntegrationError('insufficient_permissions');
-    const listed = await this.refreshCalendars(account);
+    const listed = await this.readCalendars(account);
     return { account: accountView(account), ...listed };
   }
 }

@@ -26,6 +26,19 @@ The **actually granted** access is stored. If the user unticks event writing on 
 
 "Zmień konto" replaces the previous account only after the new sign-in succeeds. The previous account becomes "Niepołączone", its tokens are deleted and its generation counter grows, so work queued for the old connection is rejected.
 
+## Synchronization and errors (G06)
+
+Story S23KC2S1P2-17, subtask G06 (S23KC2S1P2-290). Below the calendar list the panel has a **Synchronization** section: state ("never synchronized", "running", "synchronized", "partial", "error"), time of the last successful synchronization and a "Synchronizuj z Google" button. For now synchronization reads the calendar list; event import (G05), publishing (G07) and corrections (G09) are meant to record their attempts in the same registry.
+
+- Every attempt is stored in `t_synchronizacje`: direction (read/publish), scope, operation, number of tries, number of changes, result, error code and time. The last successful read and publication are stored separately in the account, so a failed attempt never overwrites them.
+- Transient errors – no network or timeout, rate limit, Google server error – are retried automatically at most 3 times, with 0.5 s and 1 s pauses. Missing consent, missing permissions and a disabled Calendar API are not retried.
+- The cause is distinguished: no connection, expired login, no permission for the calendar, rate limit, Google-side error (with a dedicated message for a disabled Calendar API).
+- On error the panel shows the cause, the time of the last success and "Spróbuj ponownie" or "Połącz ponownie konto Google". An expired login does not offer a plain retry. After a successful reconnect, synchronization starts automatically.
+- Denying consent during reconnect (5a) disables synchronization (`Zgoda_Synchronizacja`); the account and local events stay unchanged. Granting consent on a later sign-in enables it again.
+- At most one attempt per direction runs per account. An attempt interrupted e.g. by a server restart is marked as an "interrupted" error after 5 minutes.
+- An incomplete calendar list gives a "partial" result and does not delete calendars it did not cover.
+- In demo mode the next synchronization result can be forced (no internet, transient network error, expired login, server error, rate limit, partial result, no permissions) to show the flows without real Google.
+
 ## Security
 
 - OAuth 2.0 authorization code flow with PKCE (S256) and offline access. The `state` has 32 random bytes, is single-use, valid for 10 minutes and stored only as a SHA-256 hash. The Google return must reach the same user who started the attempt.
@@ -45,8 +58,10 @@ The **actually granted** access is stored. If the user unticks event writing on 
 | `POST /api/v1/integrations/google/attempts/{id}/demo-consent` | Demo mode only: account choice and consent or denial. |
 | `GET /api/v1/integrations/google/callback` | Google return URL; renders an HTML page. |
 | `GET /api/v1/integrations/google/calendars` | Calendar list (all pages) with role `owner`, `writer`, `reader` or `freeBusyReader`. |
+| `GET /api/v1/integrations/google/sync` | Sync state, last attempt, last successful read and publication, attempt history. |
+| `POST /api/v1/integrations/google/sync` | "Synchronize with Google" with limited retries. A Google error is the attempt result (200); `simulate` only in demo mode. |
 
-Google errors have stable codes: `reconnect_required` (409), `insufficient_permissions` (403), `rate_limited` (429), `google_unavailable` and `google_error` (502). Without a database the endpoints return `503 integration_not_configured`.
+Google errors have stable codes: `reconnect_required` (409), `insufficient_permissions` (403), `rate_limited` (429), `google_unavailable`, `google_error` and `api_not_enabled` (502), `network_error` (504). Synchronization also returns `sync_disabled` and `sync_in_progress` (409). Without a database the endpoints return `503 integration_not_configured`.
 
 ## Configuration
 
@@ -66,10 +81,11 @@ The Google consent screen must list the scopes `openid`, `email`, `https://www.g
 
 ## Data
 
-Migration `017_google_integration.sql` extends `t_konta_google` (stable `google_sub`, mode, granted scopes, generation, connect and disconnect dates) and `t_kalendarze_google` (access role, time zone, primary calendar). New tables: `t_google_tokeny` (ciphertexts only) and `t_google_oauth_proby` (single-use OAuth attempts). A user has at most one active Google account.
+Migration `018_google_sync_registry.sql` extends `t_synchronizacje` (scope, tries, error code, finish time, generation) and adds `ostatnia_publikacja` to `t_konta_google`. Migration `017_google_integration.sql` extends `t_konta_google` (stable `google_sub`, mode, granted scopes, generation, connect and disconnect dates) and `t_kalendarze_google` (access role, time zone, primary calendar). New tables: `t_google_tokeny` (ciphertexts only) and `t_google_oauth_proby` (single-use OAuth attempts). A user has at most one active Google account.
 
 ## Tests
 
 - `apps/api/tests/google-integration.test.ts` – encryption, consent URL, code exchange, refresh (single flight, rotation, `invalid_grant`), calendar list, key configuration, logs without OAuth codes.
 - `apps/api/tests/google-integration.integration.test.ts` (PostgreSQL) – demo mode (denial, 1a, account change, 7a, expired attempt, another user's attempt), simulated Google (single-use and expired `state`, 6a, missing refresh token, ciphertexts in the database, no tokens in responses, reconnect) and parallel refresh from two instances. Every scenario checks that the user's events did not change.
 - `apps/web/tests/googleIntegration.test.ts` – panel state and messages.
+- `apps/api/tests/google-sync.test.ts` and `google-sync.integration.test.ts` (PostgreSQL, fake clock) – error classes, retries, last success, partial result, expired login, denial disabling sync, one attempt at a time, 503/network/disabled Calendar API with simulated Google; `apps/web/tests/googleSync.test.ts` – states, buttons and messages.

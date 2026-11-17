@@ -18527,12 +18527,12 @@
             }
           },
           "502": {
-            "description": "Google nie odpowiada.",
+            "description": "Google nie odpowiada albo projekt Google Cloud nie ma włączonego Calendar API.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Google nie odpowiada.",
+                  "description": "Google nie odpowiada albo projekt Google Cloud nie ma włączonego Calendar API.",
                   "required": [
                     "error"
                   ],
@@ -18542,7 +18542,8 @@
                       "type": "string",
                       "enum": [
                         "google_unavailable",
-                        "google_error"
+                        "google_error",
+                        "api_not_enabled"
                       ]
                     }
                   }
@@ -18560,6 +18561,1303 @@
                     "description": "Google odrzucił żądanie. Spróbuj ponownie albo połącz konto od nowa. Dane w KAC są bez zmian.",
                     "value": {
                       "error": "google_error"
+                    }
+                  },
+                  "api_not_enabled": {
+                    "summary": "Calendar API wyłączone",
+                    "description": "W projekcie Google Cloud nie jest włączone Google Calendar API – to błąd konfiguracji, nie brak zgody użytkownika.",
+                    "value": {
+                      "error": "api_not_enabled"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Integracja niedostępna.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Integracja niedostępna.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "integration_not_configured"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "integration_not_configured": {
+                    "summary": "Serwer bez bazy danych",
+                    "description": "API działa bez bazy danych, więc nie może zapisać połączenia z Google.",
+                    "value": {
+                      "error": "integration_not_configured"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Brak połączenia z Google.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak połączenia z Google.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "network_error"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "network_error": {
+                    "summary": "Brak połączenia z Google",
+                    "description": "Brak internetu albo przekroczony czas odpowiedzi. Spróbuj ponownie. Dane w KAC są bez zmian.",
+                    "value": {
+                      "error": "network_error"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/integrations/google/sync": {
+      "get": {
+        "operationId": "getGoogleSync",
+        "summary": "Get Google sync state",
+        "tags": [
+          "Google integration"
+        ],
+        "description": "Sync registry for the connected account: state of the last attempt (never, running, success, partial, error), error class, time of the last successful read and publication, and recent attempts. A failed attempt never overwrites the last success.",
+        "responses": {
+          "200": {
+            "description": "Stan synchronizacji.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "connection",
+                    "enabled",
+                    "state",
+                    "lastAttempt",
+                    "lastSuccess",
+                    "history"
+                  ],
+                  "properties": {
+                    "connection": {
+                      "type": "string",
+                      "enum": [
+                        "not_connected",
+                        "connected",
+                        "reconnect_required"
+                      ]
+                    },
+                    "enabled": {
+                      "type": "boolean",
+                      "description": "Zgoda na synchronizację; odmowa przy ponownym logowaniu ją wyłącza."
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "never",
+                        "running",
+                        "success",
+                        "partial",
+                        "error"
+                      ]
+                    },
+                    "lastAttempt": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "id",
+                            "direction",
+                            "scope",
+                            "operation",
+                            "status",
+                            "startedAt",
+                            "finishedAt",
+                            "tries",
+                            "changes",
+                            "errorCode",
+                            "message",
+                            "errorClass",
+                            "retryable"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "direction": {
+                              "type": "string",
+                              "enum": [
+                                "read",
+                                "publish"
+                              ]
+                            },
+                            "scope": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "operation": {
+                              "type": "string"
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "running",
+                                "success",
+                                "partial",
+                                "error"
+                              ]
+                            },
+                            "startedAt": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "finishedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "format": "date-time"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "tries": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "description": "Liczba prób w tym uruchomieniu (pierwsza + automatyczne ponowienia)."
+                            },
+                            "changes": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "errorCode": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "message": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "errorClass": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "network",
+                                    "reconnect",
+                                    "permissions",
+                                    "rate_limit",
+                                    "server",
+                                    "other"
+                                  ]
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "retryable": {
+                              "type": "boolean",
+                              "description": "Czy „Spróbuj ponownie” ma sens (false, gdy trzeba połączyć konto ponownie)."
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "lastSuccess": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "read",
+                        "publish"
+                      ],
+                      "properties": {
+                        "read": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "publish": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    "history": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "direction",
+                          "scope",
+                          "operation",
+                          "status",
+                          "startedAt",
+                          "finishedAt",
+                          "tries",
+                          "changes",
+                          "errorCode",
+                          "message",
+                          "errorClass",
+                          "retryable"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "direction": {
+                            "type": "string",
+                            "enum": [
+                              "read",
+                              "publish"
+                            ]
+                          },
+                          "scope": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "operation": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "running",
+                              "success",
+                              "partial",
+                              "error"
+                            ]
+                          },
+                          "startedAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "finishedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "tries": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "description": "Liczba prób w tym uruchomieniu (pierwsza + automatyczne ponowienia)."
+                          },
+                          "changes": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "errorCode": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "message": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "errorClass": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "network",
+                                  "reconnect",
+                                  "permissions",
+                                  "rate_limit",
+                                  "server",
+                                  "other"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "retryable": {
+                            "type": "boolean",
+                            "description": "Czy „Spróbuj ponownie” ma sens (false, gdy trzeba połączyć konto ponownie)."
+                          }
+                        }
+                      },
+                      "description": "Ostatnie próby, najnowsza pierwsza (najwyżej 10)."
+                    }
+                  },
+                  "description": "Stan synchronizacji."
+                },
+                "examples": {
+                  "never": {
+                    "summary": "Nigdy",
+                    "description": "Konto połączone, synchronizacji jeszcze nie było.",
+                    "value": {
+                      "connection": "connected",
+                      "enabled": true,
+                      "state": "never",
+                      "lastAttempt": null,
+                      "lastSuccess": {
+                        "read": null,
+                        "publish": null
+                      },
+                      "history": []
+                    }
+                  },
+                  "success": {
+                    "summary": "Sukces",
+                    "value": {
+                      "connection": "connected",
+                      "enabled": true,
+                      "state": "success",
+                      "lastAttempt": {
+                        "id": "c1d2e3f4-0000-4000-8000-000000000006",
+                        "direction": "read",
+                        "scope": "calendar_list",
+                        "operation": "Lista kalendarzy",
+                        "status": "success",
+                        "startedAt": "2026-11-17T08:30:00.000Z",
+                        "finishedAt": "2026-11-17T08:30:02.000Z",
+                        "tries": 1,
+                        "changes": 4,
+                        "errorCode": null,
+                        "message": "Odczytane kalendarze: 4.",
+                        "errorClass": null,
+                        "retryable": false
+                      },
+                      "lastSuccess": {
+                        "read": "2026-11-17T08:30:02.000Z",
+                        "publish": null
+                      },
+                      "history": [
+                        {
+                          "id": "c1d2e3f4-0000-4000-8000-000000000006",
+                          "direction": "read",
+                          "scope": "calendar_list",
+                          "operation": "Lista kalendarzy",
+                          "status": "success",
+                          "startedAt": "2026-11-17T08:30:00.000Z",
+                          "finishedAt": "2026-11-17T08:30:02.000Z",
+                          "tries": 1,
+                          "changes": 4,
+                          "errorCode": null,
+                          "message": "Odczytane kalendarze: 4.",
+                          "errorClass": null,
+                          "retryable": false
+                        }
+                      ]
+                    }
+                  },
+                  "error": {
+                    "summary": "Błąd po ponowieniach",
+                    "description": "Trzy próby nie dotarły do Google. Ostatni sukces pozostaje z wcześniejszej synchronizacji.",
+                    "value": {
+                      "connection": "connected",
+                      "enabled": true,
+                      "state": "error",
+                      "lastAttempt": {
+                        "id": "c1d2e3f4-0000-4000-8000-000000000006",
+                        "direction": "read",
+                        "scope": "calendar_list",
+                        "operation": "Lista kalendarzy",
+                        "status": "error",
+                        "startedAt": "2026-11-17T08:30:00.000Z",
+                        "finishedAt": "2026-11-17T08:30:02.000Z",
+                        "tries": 3,
+                        "changes": 0,
+                        "errorCode": "network_error",
+                        "message": "Brak połączenia z Google (brak internetu albo przekroczony czas).",
+                        "errorClass": "network",
+                        "retryable": true
+                      },
+                      "lastSuccess": {
+                        "read": "2026-11-16T18:00:00.000Z",
+                        "publish": null
+                      },
+                      "history": [
+                        {
+                          "id": "c1d2e3f4-0000-4000-8000-000000000006",
+                          "direction": "read",
+                          "scope": "calendar_list",
+                          "operation": "Lista kalendarzy",
+                          "status": "error",
+                          "startedAt": "2026-11-17T08:30:00.000Z",
+                          "finishedAt": "2026-11-17T08:30:02.000Z",
+                          "tries": 3,
+                          "changes": 0,
+                          "errorCode": "network_error",
+                          "message": "Brak połączenia z Google (brak internetu albo przekroczony czas).",
+                          "errorClass": "network",
+                          "retryable": true
+                        }
+                      ]
+                    }
+                  },
+                  "reconnect": {
+                    "summary": "Wymagane ponowne logowanie",
+                    "value": {
+                      "connection": "reconnect_required",
+                      "enabled": true,
+                      "state": "error",
+                      "lastAttempt": {
+                        "id": "c1d2e3f4-0000-4000-8000-000000000006",
+                        "direction": "read",
+                        "scope": "calendar_list",
+                        "operation": "Lista kalendarzy",
+                        "status": "error",
+                        "startedAt": "2026-11-17T08:30:00.000Z",
+                        "finishedAt": "2026-11-17T08:30:02.000Z",
+                        "tries": 1,
+                        "changes": 0,
+                        "errorCode": "reconnect_required",
+                        "message": "Google nie przyjmuje zapisanego dostępu – trzeba ponownie połączyć konto.",
+                        "errorClass": "reconnect",
+                        "retryable": false
+                      },
+                      "lastSuccess": {
+                        "read": "2026-11-16T18:00:00.000Z",
+                        "publish": null
+                      },
+                      "history": [
+                        {
+                          "id": "c1d2e3f4-0000-4000-8000-000000000006",
+                          "direction": "read",
+                          "scope": "calendar_list",
+                          "operation": "Lista kalendarzy",
+                          "status": "error",
+                          "startedAt": "2026-11-17T08:30:00.000Z",
+                          "finishedAt": "2026-11-17T08:30:02.000Z",
+                          "tries": 1,
+                          "changes": 0,
+                          "errorCode": "reconnect_required",
+                          "message": "Google nie przyjmuje zapisanego dostępu – trzeba ponownie połączyć konto.",
+                          "errorClass": "reconnect",
+                          "retryable": false
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Integracja niedostępna.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Integracja niedostępna.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "integration_not_configured"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "integration_not_configured": {
+                    "summary": "Serwer bez bazy danych",
+                    "description": "API działa bez bazy danych, więc nie może zapisać połączenia z Google.",
+                    "value": {
+                      "error": "integration_not_configured"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "runGoogleSync",
+        "summary": "Synchronize with Google now",
+        "tags": [
+          "Google integration"
+        ],
+        "description": "Runs a read synchronization (calendar list) and records the attempt. Network errors, rate limits and Google server errors are retried automatically a limited number of times with growing delays; a rejected login is not retried and asks for reconnecting. Google errors are part of the attempt result (200), local events are never changed. simulate is accepted only in demo mode.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "simulate": {
+                    "type": "string",
+                    "enum": [
+                      "network",
+                      "flaky",
+                      "auth",
+                      "server",
+                      "rate_limit",
+                      "partial",
+                      "permissions"
+                    ],
+                    "description": "Tylko makieta: wymuszony błąd albo wynik częściowy."
+                  }
+                }
+              },
+              "examples": {
+                "normal": {
+                  "summary": "Zwykła synchronizacja",
+                  "value": {}
+                },
+                "simulate": {
+                  "summary": "Makieta: brak internetu",
+                  "description": "Tylko w trybie demonstracyjnym – pokazuje przebieg błędu i ponowień.",
+                  "value": {
+                    "simulate": "network"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Wynik próby (także nieudanej) i aktualny stan synchronizacji.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "attempt",
+                    "status"
+                  ],
+                  "properties": {
+                    "attempt": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "id",
+                        "direction",
+                        "scope",
+                        "operation",
+                        "status",
+                        "startedAt",
+                        "finishedAt",
+                        "tries",
+                        "changes",
+                        "errorCode",
+                        "message",
+                        "errorClass",
+                        "retryable"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "direction": {
+                          "type": "string",
+                          "enum": [
+                            "read",
+                            "publish"
+                          ]
+                        },
+                        "scope": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "operation": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "running",
+                            "success",
+                            "partial",
+                            "error"
+                          ]
+                        },
+                        "startedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "finishedAt": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "tries": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "description": "Liczba prób w tym uruchomieniu (pierwsza + automatyczne ponowienia)."
+                        },
+                        "changes": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "errorCode": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "message": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "errorClass": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "network",
+                                "reconnect",
+                                "permissions",
+                                "rate_limit",
+                                "server",
+                                "other"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "retryable": {
+                          "type": "boolean",
+                          "description": "Czy „Spróbuj ponownie” ma sens (false, gdy trzeba połączyć konto ponownie)."
+                        }
+                      }
+                    },
+                    "status": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "connection",
+                        "enabled",
+                        "state",
+                        "lastAttempt",
+                        "lastSuccess",
+                        "history"
+                      ],
+                      "properties": {
+                        "connection": {
+                          "type": "string",
+                          "enum": [
+                            "not_connected",
+                            "connected",
+                            "reconnect_required"
+                          ]
+                        },
+                        "enabled": {
+                          "type": "boolean",
+                          "description": "Zgoda na synchronizację; odmowa przy ponownym logowaniu ją wyłącza."
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "never",
+                            "running",
+                            "success",
+                            "partial",
+                            "error"
+                          ]
+                        },
+                        "lastAttempt": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": [
+                                "id",
+                                "direction",
+                                "scope",
+                                "operation",
+                                "status",
+                                "startedAt",
+                                "finishedAt",
+                                "tries",
+                                "changes",
+                                "errorCode",
+                                "message",
+                                "errorClass",
+                                "retryable"
+                              ],
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "direction": {
+                                  "type": "string",
+                                  "enum": [
+                                    "read",
+                                    "publish"
+                                  ]
+                                },
+                                "scope": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "operation": {
+                                  "type": "string"
+                                },
+                                "status": {
+                                  "type": "string",
+                                  "enum": [
+                                    "running",
+                                    "success",
+                                    "partial",
+                                    "error"
+                                  ]
+                                },
+                                "startedAt": {
+                                  "type": "string",
+                                  "format": "date-time"
+                                },
+                                "finishedAt": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "format": "date-time"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "tries": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "description": "Liczba prób w tym uruchomieniu (pierwsza + automatyczne ponowienia)."
+                                },
+                                "changes": {
+                                  "type": "integer",
+                                  "minimum": 0
+                                },
+                                "errorCode": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "message": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "errorClass": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "network",
+                                        "reconnect",
+                                        "permissions",
+                                        "rate_limit",
+                                        "server",
+                                        "other"
+                                      ]
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "retryable": {
+                                  "type": "boolean",
+                                  "description": "Czy „Spróbuj ponownie” ma sens (false, gdy trzeba połączyć konto ponownie)."
+                                }
+                              }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "lastSuccess": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "read",
+                            "publish"
+                          ],
+                          "properties": {
+                            "read": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "format": "date-time"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "publish": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "format": "date-time"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        "history": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "id",
+                              "direction",
+                              "scope",
+                              "operation",
+                              "status",
+                              "startedAt",
+                              "finishedAt",
+                              "tries",
+                              "changes",
+                              "errorCode",
+                              "message",
+                              "errorClass",
+                              "retryable"
+                            ],
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "direction": {
+                                "type": "string",
+                                "enum": [
+                                  "read",
+                                  "publish"
+                                ]
+                              },
+                              "scope": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "operation": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "running",
+                                  "success",
+                                  "partial",
+                                  "error"
+                                ]
+                              },
+                              "startedAt": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "finishedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "format": "date-time"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "tries": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "description": "Liczba prób w tym uruchomieniu (pierwsza + automatyczne ponowienia)."
+                              },
+                              "changes": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "errorCode": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "message": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "errorClass": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "network",
+                                      "reconnect",
+                                      "permissions",
+                                      "rate_limit",
+                                      "server",
+                                      "other"
+                                    ]
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "retryable": {
+                                "type": "boolean",
+                                "description": "Czy „Spróbuj ponownie” ma sens (false, gdy trzeba połączyć konto ponownie)."
+                              }
+                            }
+                          },
+                          "description": "Ostatnie próby, najnowsza pierwsza (najwyżej 10)."
+                        }
+                      }
+                    }
+                  },
+                  "description": "Wynik próby (także nieudanej) i aktualny stan synchronizacji."
+                },
+                "examples": {
+                  "success": {
+                    "summary": "Udana synchronizacja",
+                    "value": {
+                      "attempt": {
+                        "id": "c1d2e3f4-0000-4000-8000-000000000006",
+                        "direction": "read",
+                        "scope": "calendar_list",
+                        "operation": "Lista kalendarzy",
+                        "status": "success",
+                        "startedAt": "2026-11-17T08:30:00.000Z",
+                        "finishedAt": "2026-11-17T08:30:02.000Z",
+                        "tries": 1,
+                        "changes": 4,
+                        "errorCode": null,
+                        "message": "Odczytane kalendarze: 4.",
+                        "errorClass": null,
+                        "retryable": false
+                      },
+                      "status": {
+                        "connection": "connected",
+                        "enabled": true,
+                        "state": "success",
+                        "lastAttempt": {
+                          "id": "c1d2e3f4-0000-4000-8000-000000000006",
+                          "direction": "read",
+                          "scope": "calendar_list",
+                          "operation": "Lista kalendarzy",
+                          "status": "success",
+                          "startedAt": "2026-11-17T08:30:00.000Z",
+                          "finishedAt": "2026-11-17T08:30:02.000Z",
+                          "tries": 1,
+                          "changes": 4,
+                          "errorCode": null,
+                          "message": "Odczytane kalendarze: 4.",
+                          "errorClass": null,
+                          "retryable": false
+                        },
+                        "lastSuccess": {
+                          "read": "2026-11-17T08:30:02.000Z",
+                          "publish": null
+                        },
+                        "history": [
+                          {
+                            "id": "c1d2e3f4-0000-4000-8000-000000000006",
+                            "direction": "read",
+                            "scope": "calendar_list",
+                            "operation": "Lista kalendarzy",
+                            "status": "success",
+                            "startedAt": "2026-11-17T08:30:00.000Z",
+                            "finishedAt": "2026-11-17T08:30:02.000Z",
+                            "tries": 1,
+                            "changes": 4,
+                            "errorCode": null,
+                            "message": "Odczytane kalendarze: 4.",
+                            "errorClass": null,
+                            "retryable": false
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "error": {
+                    "summary": "Błąd sieci po ponowieniach",
+                    "value": {
+                      "attempt": {
+                        "id": "c1d2e3f4-0000-4000-8000-000000000006",
+                        "direction": "read",
+                        "scope": "calendar_list",
+                        "operation": "Lista kalendarzy",
+                        "status": "error",
+                        "startedAt": "2026-11-17T08:30:00.000Z",
+                        "finishedAt": "2026-11-17T08:30:02.000Z",
+                        "tries": 3,
+                        "changes": 0,
+                        "errorCode": "network_error",
+                        "message": "Brak połączenia z Google (brak internetu albo przekroczony czas).",
+                        "errorClass": "network",
+                        "retryable": true
+                      },
+                      "status": {
+                        "connection": "connected",
+                        "enabled": true,
+                        "state": "error",
+                        "lastAttempt": {
+                          "id": "c1d2e3f4-0000-4000-8000-000000000006",
+                          "direction": "read",
+                          "scope": "calendar_list",
+                          "operation": "Lista kalendarzy",
+                          "status": "error",
+                          "startedAt": "2026-11-17T08:30:00.000Z",
+                          "finishedAt": "2026-11-17T08:30:02.000Z",
+                          "tries": 3,
+                          "changes": 0,
+                          "errorCode": "network_error",
+                          "message": "Brak połączenia z Google (brak internetu albo przekroczony czas).",
+                          "errorClass": "network",
+                          "retryable": true
+                        },
+                        "lastSuccess": {
+                          "read": "2026-11-16T18:00:00.000Z",
+                          "publish": null
+                        },
+                        "history": [
+                          {
+                            "id": "c1d2e3f4-0000-4000-8000-000000000006",
+                            "direction": "read",
+                            "scope": "calendar_list",
+                            "operation": "Lista kalendarzy",
+                            "status": "error",
+                            "startedAt": "2026-11-17T08:30:00.000Z",
+                            "finishedAt": "2026-11-17T08:30:02.000Z",
+                            "tries": 3,
+                            "changes": 0,
+                            "errorCode": "network_error",
+                            "message": "Brak połączenia z Google (brak internetu albo przekroczony czas).",
+                            "errorClass": "network",
+                            "retryable": true
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Brak połączonego konta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak połączonego konta.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "not_connected"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "not_connected": {
+                    "summary": "Brak połączonego konta",
+                    "description": "Najpierw połącz konto Google.",
+                    "value": {
+                      "error": "not_connected"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Synchronizacja niemożliwa w tej chwili.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Synchronizacja niemożliwa w tej chwili.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "sync_disabled",
+                        "sync_in_progress",
+                        "demo_only"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "sync_disabled": {
+                    "summary": "Synchronizacja wyłączona",
+                    "description": "Użytkownik odmówił zgody przy ponownym logowaniu. Trzeba połączyć konto ponownie. Dane w KAC są bez zmian.",
+                    "value": {
+                      "error": "sync_disabled"
+                    }
+                  },
+                  "sync_in_progress": {
+                    "summary": "Synchronizacja trwa",
+                    "description": "Inna próba synchronizacji tego konta jeszcze trwa. Poczekaj na jej wynik.",
+                    "value": {
+                      "error": "sync_in_progress"
+                    }
+                  },
+                  "demo_only": {
+                    "summary": "Tylko w makiecie",
+                    "description": "Serwer używa prawdziwego Google – zgodę daje się na stronie authUrl, nie tym endpointem.",
+                    "value": {
+                      "error": "demo_only"
                     }
                   }
                 }

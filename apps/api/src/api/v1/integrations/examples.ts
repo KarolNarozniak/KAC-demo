@@ -99,9 +99,47 @@ export const integrationErrors: Record<string, [string, string]> = {
   rate_limited: ['Limit zapytań Google', `Google chwilowo ogranicza zapytania. Spróbuj ponownie za chwilę. ${keep}`],
   google_unavailable: ['Google nie odpowiada', `Brak połączenia z Google albo błąd po jego stronie. Spróbuj ponownie. ${keep}`],
   google_error: ['Błąd Google', `Google odrzucił żądanie. Spróbuj ponownie albo połącz konto od nowa. ${keep}`],
+  network_error: ['Brak połączenia z Google', `Brak internetu albo przekroczony czas odpowiedzi. Spróbuj ponownie. ${keep}`],
+  api_not_enabled: ['Calendar API wyłączone', 'W projekcie Google Cloud nie jest włączone Google Calendar API – to błąd konfiguracji, nie brak zgody użytkownika.'],
+  sync_disabled: ['Synchronizacja wyłączona', `Użytkownik odmówił zgody przy ponownym logowaniu. Trzeba połączyć konto ponownie. ${keep}`],
+  sync_in_progress: ['Synchronizacja trwa', 'Inna próba synchronizacji tego konta jeszcze trwa. Poczekaj na jej wynik.'],
 };
 
 /** Strona HTML zwracana przeglądarce po powrocie z Google. */
 export const callbackPage = (title: string, message: string): NamedExamples => ({
   page: { summary: title, description: message, value: `<!doctype html><html lang="pl"><title>${title}</title><main><h1>${title}</h1><p>${message}</p></main></html>` },
 });
+
+// --- Synchronizacja (G06) ---
+const syncAttempt = (status: string, extra: Record<string, unknown> = {}) => ({
+  id: 'c1d2e3f4-0000-4000-8000-000000000006', direction: 'read', scope: 'calendar_list', operation: 'Lista kalendarzy', status,
+  startedAt: '2026-11-17T08:30:00.000Z', finishedAt: '2026-11-17T08:30:02.000Z', tries: 1, changes: 0, errorCode: null, message: null,
+  errorClass: null, retryable: false, ...extra,
+});
+const success = syncAttempt('success', { changes: 4, message: 'Odczytane kalendarze: 4.' });
+const networkError = syncAttempt('error', { tries: 3, errorCode: 'network_error', errorClass: 'network', retryable: true,
+  message: 'Brak połączenia z Google (brak internetu albo przekroczony czas).' });
+const reconnectError = syncAttempt('error', { errorCode: 'reconnect_required', errorClass: 'reconnect', retryable: false,
+  message: 'Google nie przyjmuje zapisanego dostępu – trzeba ponownie połączyć konto.' });
+const statusWith = (last: Record<string, unknown> | null, lastRead: string | null, extra: Record<string, unknown> = {}) => ({
+  connection: 'connected', enabled: true, state: last ? last.status : 'never', lastAttempt: last,
+  lastSuccess: { read: lastRead, publish: null }, history: last ? [last] : [], ...extra,
+});
+
+export const syncStatusExamples: NamedExamples = {
+  never: { summary: 'Nigdy', description: 'Konto połączone, synchronizacji jeszcze nie było.', value: statusWith(null, null) },
+  success: { summary: 'Sukces', value: statusWith(success, '2026-11-17T08:30:02.000Z') },
+  error: { summary: 'Błąd po ponowieniach', description: 'Trzy próby nie dotarły do Google. Ostatni sukces pozostaje z wcześniejszej synchronizacji.',
+    value: statusWith(networkError, '2026-11-16T18:00:00.000Z') },
+  reconnect: { summary: 'Wymagane ponowne logowanie', value: statusWith(reconnectError, '2026-11-16T18:00:00.000Z', { connection: 'reconnect_required' }) },
+};
+
+export const syncBodyExamples: NamedExamples = {
+  normal: { summary: 'Zwykła synchronizacja', value: {} },
+  simulate: { summary: 'Makieta: brak internetu', description: 'Tylko w trybie demonstracyjnym – pokazuje przebieg błędu i ponowień.', value: { simulate: 'network' } },
+};
+
+export const syncRunExamples: NamedExamples = {
+  success: { summary: 'Udana synchronizacja', value: { attempt: success, status: statusWith(success, '2026-11-17T08:30:02.000Z') } },
+  error: { summary: 'Błąd sieci po ponowieniach', value: { attempt: networkError, status: statusWith(networkError, '2026-11-16T18:00:00.000Z') } },
+};
