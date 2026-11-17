@@ -37,6 +37,39 @@ export class FakeCalendarEvents {
     this.entries.set(id, { item: { id, status: 'cancelled', ...(previous?.recurringEventId ? { recurringEventId: previous.recurringEventId } : {}) }, seq: ++this.seq });
   }
   get cursor() { return `fake-${this.seq}`; }
+  /** Aktualny stan wydarzenia (także usuniętego – status cancelled). */
+  get(id: string) { return this.entries.get(id)?.item; }
+  /** Wydarzenia, które nie są usunięte. */
+  active() { return [...this.entries.values()].map((entry) => entry.item).filter((item) => item.status !== 'cancelled'); }
+
+  /** Zapisy KAC (publikacja i korekty): metoda, ID wydarzenia i treść żądania. */
+  readonly writes: Array<{ method: string; id: string; body: Record<string, any> | null }> = [];
+  /**
+   * Wymuszone odpowiedzi kolejnych zapisów (zużywane po jednej): status HTTP, 'network' (nic nie zapisano)
+   * albo 'lost-response' (zapis się udał, ale odpowiedź nie dotarła – jak zerwane połączenie).
+   */
+  writeFailures: Array<number | 'network' | 'lost-response'> = [];
+
+  write(method: string, id: string | null, body: Record<string, any> | null): { status: number; body: Record<string, unknown> } | 'network' {
+    const eventId = id ?? String(body?.id ?? '');
+    this.writes.push({ method, id: eventId, body });
+    const failure = this.writeFailures.shift();
+    if (failure === 'network') return 'network';
+    if (typeof failure === 'number') return { status: failure, body: { error: { code: failure, errors: [{ reason: failure === 403 ? 'forbidden' : 'backendError' }] } } };
+    const existing = this.entries.get(eventId)?.item;
+    let reply: { status: number; body: Record<string, unknown> };
+    if (method === 'POST') {
+      if (existing) reply = { status: 409, body: { error: { code: 409, message: 'The requested identifier already exists.' } } };
+      else { this.put({ ...body }); reply = { status: 200, body: this.get(eventId)! }; }
+    } else if (method === 'PATCH') {
+      if (!existing) reply = { status: 404, body: { error: { code: 404, message: 'Not Found' } } };
+      else { this.put({ ...existing, ...body }); reply = { status: 200, body: this.get(eventId)! }; }
+    } else {
+      if (!existing || existing.status === 'cancelled') reply = { status: 410, body: { error: { code: 410, message: 'Resource has been deleted' } } };
+      else { this.cancel(eventId); reply = { status: 204, body: {} }; }
+    }
+    return failure === 'lost-response' ? 'network' : reply;
+  }
 
   handle(params: URLSearchParams): { status: number; body: Record<string, unknown> } | 'network' {
     this.requests.push(params);
@@ -138,6 +171,16 @@ export class FakeGoogle {
       const index = pageToken ? Number(pageToken.replace('page-', '')) : 0;
       return respond(200, { kind: 'calendar#calendarList', items: this.calendarPages[index] ?? [],
         ...(index + 1 < this.calendarPages.length ? { nextPageToken: `page-${index + 1}` } : {}) });
+    }
+    const writeMatch = url.match(/^https:\/\/www\.googleapis\.com\/calendar\/v3\/calendars\/([^/?]+)\/events(?:\/([^/?]+))?$/);
+    if (writeMatch && init?.method && init.method !== 'GET') {
+      const token = String(init.headers?.Authorization ?? '').replace(/^Bearer /, '');
+      this.calendarTokens.push(token);
+      if (this.rejectedAccessTokens.has(token)) return respond(401, { error: { code: 401, status: 'UNAUTHENTICATED' } });
+      const reply = this.events(decodeURIComponent(writeMatch[1]!)).write(init.method, writeMatch[2] ? decodeURIComponent(writeMatch[2]) : null,
+        init.body ? JSON.parse(init.body) : null);
+      if (reply === 'network') throw new TypeError('fetch failed');
+      return respond(reply.status, reply.body);
     }
     const eventsMatch = url.match(/^https:\/\/www\.googleapis\.com\/calendar\/v3\/calendars\/([^/]+)\/events\?(.*)$/);
     if (eventsMatch) {

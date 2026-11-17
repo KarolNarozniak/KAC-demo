@@ -56,6 +56,9 @@ test('makieta: odłączenie, powtórne odłączenie, anulowana próba, zatrzyman
 
     const attempt = await start(app);
     await app.inject({ method: 'POST', url: `/api/v1/integrations/google/attempts/${attempt.attemptId}/demo-consent`, payload: { allow: true, account: 'student.kac.demo@gmail.com' } });
+    // Historyjka 23 (krok 3): kalendarz do synchronizacji wybiera użytkownik.
+    const selection = (await app.inject({ method: 'GET', url: '/api/v1/integrations/google/calendar-selection' })).json();
+    await app.inject({ method: 'PUT', url: '/api/v1/integrations/google/calendar-selection', payload: { version: selection.version, sourceCalendarIds: ['primary'], publicationTargetCalendarId: null } });
     assert.equal((await app.inject({ method: 'POST', url: '/api/v1/integrations/google/sync', payload: {} })).json().attempt.status, 'success');
     const synced = await syncedCount(scope);
     assert.ok(synced > 0);

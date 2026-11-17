@@ -1,6 +1,6 @@
 // Symulowana publikacja zaakceptowanego grafiku w Google Calendar (S23KC2S1P2-30, G07 / S23KC2S1P2-291).
-// Czyste funkcje bez React – testowane w tests/googlePublication.test.ts. Publikacja jest symulacją: nic nie trafia do Google.
-import { apiErrorMessage, type Notice, type SyncAttempt } from './googleIntegration.ts';
+// Czyste funkcje bez React – testowane w tests/googlePublication.test.ts. Konto Google: prawdziwy zapis; konto demonstracyjne: symulacja (simulated).
+import { apiErrorMessage, plural, type GoogleIntegrationStatus, type Notice, type SyncAttempt } from './googleIntegration.ts';
 
 export type PublicationAction = 'create' | 'update' | 'unchanged';
 export type PublicationItem = {
@@ -43,8 +43,11 @@ export function itemTimeLabel(item: Pick<PublicationItem, 'start' | 'end'>): str
 
 const ACTION_LABELS: Record<PublicationAction, string> = { create: 'zostanie dodana', update: 'zostanie zaktualizowana', unchanged: 'bez zmian – pominięta' };
 export const actionLabel = (action: PublicationAction) => ACTION_LABELS[action];
-const RESULT_LABELS: Record<PublicationItemResult, string> = { published: 'opublikowano (symulacja)', unchanged: 'bez zmian', failed: 'błąd', skipped: 'nie wysłano' };
-export const itemResultLabel = (result: PublicationItemResult) => RESULT_LABELS[result];
+const RESULT_LABELS: Record<PublicationItemResult, string> = { published: 'opublikowano', unchanged: 'bez zmian', failed: 'błąd', skipped: 'nie wysłano' };
+export const itemResultLabel = (result: PublicationItemResult, simulated = true) =>
+  result === 'published' && simulated ? 'opublikowano (symulacja)' : RESULT_LABELS[result];
+const capitalize = (text: string) => text.replace(/^./, (letter) => letter.toUpperCase());
+
 
 /** Ile pozycji zmieni się po potwierdzeniu. 0 – nie ma czego publikować. */
 export const pendingCount = (preview: Pick<PublicationPreview, 'summary'>) => preview.summary.create + preview.summary.update;
@@ -64,9 +67,9 @@ export function publicationNotice(result: PublicationResult): Notice {
   const label = result.simulated ? 'Symulacja: ' : '';
   const published = result.items.filter((item) => item.result === 'published').length;
   if (result.attempt.status === 'success') {
-    return { tone: 'success', text: published
-      ? `${label}opublikowano ${published} ${published === 1 ? 'zmianę' : 'zmian'} w kalendarzu „${result.preview.target.name}”. Nic nie trafiło do Google.`
-      : `${label}wszystko było już opublikowane – nic nie zmieniono.` };
+    return { tone: 'success', text: capitalize(published
+      ? `${label}opublikowano ${published} ${plural(published, 'zmianę', 'zmiany', 'zmian')} w kalendarzu „${result.preview.target.name}”.${result.simulated ? ' Nic nie trafiło do Google.' : ' Zmiany są widoczne w Google Calendar.'}`
+      : `${label}wszystko było już opublikowane – nic nie zmieniono.`) };
   }
   const cause = result.attempt.message ?? 'Publikacja nie powiodła się.';
   if (result.attempt.status === 'partial') {
@@ -91,4 +94,35 @@ export function publicationErrorMessage(code: string): string {
     case 'publication_in_progress': return 'Publikacja już trwa – poczekaj na jej wynik.';
     default: return apiErrorMessage(code);
   }
+}
+
+// --- Kroki historyjki 30 wokół podglądu: konto Google (3–4a) i widok kalendarza po publikacji (10) ---
+
+/** Krok 3–4a: konto, do którego trafi publikacja, i zgoda na dodawanie wydarzeń. Bez zgody publikacja nie jest możliwa. */
+export function publicationAccount(status: GoogleIntegrationStatus | null): { state: 'not_connected' | 'no_write' | 'ok'; text: string } {
+  if (!status?.account || status.status === 'not_connected') {
+    return { state: 'not_connected', text: 'Brak połączonego konta Google. Połącz konto w Ustawieniach, żeby opublikować grafik.' };
+  }
+  if (status.status === 'reconnect_required') {
+    return { state: 'not_connected', text: `Google nie przyjmuje już dostępu do konta ${status.account.email}. Połącz konto ponownie w Ustawieniach.` };
+  }
+  if (!status.account.access.eventsWrite) {
+    return { state: 'no_write', text: `Konto ${status.account.email} nie zezwala na dodawanie wydarzeń – bez tej zgody publikacja nie jest możliwa. Połącz konto ponownie i zaznacz dostęp do wydarzeń.` };
+  }
+  return { state: 'ok', text: `Konto Google: ${status.account.email} · dodawanie wydarzeń: zgoda udzielona` };
+}
+
+export type CalendarViewEvent = { id: string; title: string; start: string; end: string; published: boolean };
+export type PublicationCalendarView = {
+  simulated: boolean; calendar: { id: string; name: string }; weekStart: string; events: CalendarViewEvent[]; othersError: string | null;
+};
+
+/** Krok 10: zmiany robocze razem z pozostałymi wydarzeniami w (przykładowym) widoku kalendarza Google. */
+export function calendarViewLines(view: PublicationCalendarView): { key: string; when: string; title: string; published: boolean }[] {
+  return view.events.map((event) => ({ key: event.id, when: itemTimeLabel(event), title: event.title, published: event.published }));
+}
+
+export function calendarViewTitle(view: PublicationCalendarView): string {
+  const published = view.events.filter((event) => event.published).length;
+  return `Kalendarz Google „${view.calendar.name}” – tydzień od ${view.weekStart.slice(8, 10)}.${view.weekStart.slice(5, 7)}: opublikowane zmiany: ${published}, pozostałe wydarzenia: ${view.events.length - published}.`;
 }

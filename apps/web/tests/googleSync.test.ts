@@ -34,9 +34,10 @@ test('przyczyny błędu: brak internetu, wygasłe logowanie, brak uprawnień, li
 
 test('przyciski po próbie: „Spróbuj ponownie” przy błędzie przejściowym, „Połącz ponownie” przy wygasłym logowaniu albo wyłączonej synchronizacji', () => {
   assert.deepEqual(syncActions(status()), { sync: true, retry: false, reconnect: false });
-  assert.deepEqual(syncActions(status({ state: 'error', lastAttempt: networkError })), { sync: false, retry: true, reconnect: false });
-  // Wygasłe logowanie: zwykłe ponowienie nic nie da.
-  assert.deepEqual(syncActions(status({ state: 'error', lastAttempt: authError, connection: 'reconnect_required' })), { sync: false, retry: false, reconnect: true });
+  // Historyjka 17, krok 2: po błędzie zawsze oba przyciski – „Spróbuj ponownie” i „Połącz ponownie konto Google”.
+  assert.deepEqual(syncActions(status({ state: 'error', lastAttempt: networkError })), { sync: false, retry: true, reconnect: true });
+  assert.deepEqual(syncActions(status({ state: 'error', lastAttempt: authError, connection: 'reconnect_required' })), { sync: false, retry: true, reconnect: true });
+  assert.deepEqual(syncActions(status({ state: 'partial', lastAttempt: networkError })), { sync: false, retry: true, reconnect: true });
   // 5a: odmowa przy ponownym logowaniu – synchronizacja wyłączona, zostaje tylko „Połącz ponownie”.
   assert.deepEqual(syncActions(status({ enabled: false, state: 'error', lastAttempt: networkError })), { sync: false, retry: false, reconnect: true });
   assert.deepEqual(syncActions(status({ state: 'running' })), { sync: false, retry: false, reconnect: false });

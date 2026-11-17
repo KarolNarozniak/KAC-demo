@@ -82,5 +82,7 @@ export const config = {
       }
       : null,
     tokenKey: process.env.GOOGLE_TOKEN_ENCRYPTION_KEY?.trim() ?? '',
+    /** Publikacja grafiku i korekty (G07, G09): domyślnie prawdziwy zapis do Google dla kont Google; „simulation” go wyłącza. */
+    publication: (process.env.GOOGLE_PUBLICATION_MODE?.trim() === 'simulation' ? 'simulation' : 'google') as 'google' | 'simulation',
   },
 };

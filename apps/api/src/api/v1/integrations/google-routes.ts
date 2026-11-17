@@ -24,7 +24,7 @@ import { PUBLICATION_SIMULATIONS, PublicationError, type PublicationSimulation }
 import { CORRECTION_SIMULATIONS, CorrectionError, type CorrectionSimulation } from '../../../integrations/google/corrections.js';
 import {
   attemptExamples, calendarsExamples, callbackPage, cancelledExamples, connectBodyExamples, demoConsentBodyExamples, demoConsentExamples,
-  correctionStatusExamples, correctionSyncExamples, importedEventExamples, disconnectExamples, divergenceExamples, integrationErrors, publicationBodyExamples, publicationPreviewExamples, publicationResultExamples, selectionBodyExamples, selectionExamples, startedExamples, statusExamples, syncBodyExamples, syncRunExamples, syncStatusExamples,
+  calendarViewExamples, correctionStatusExamples, correctionSyncExamples, importedEventExamples, disconnectExamples, divergenceExamples, integrationErrors, publicationBodyExamples, publicationPreviewExamples, publicationResultExamples, selectionBodyExamples, selectionExamples, startedExamples, statusExamples, syncBodyExamples, syncRunExamples, syncStatusExamples,
 } from './examples.js';
 
 const nullable = (schema: object) => ({ anyOf: [schema, { type: 'null' }] });
@@ -97,7 +97,7 @@ const publicationItemSchema = { type: 'object', additionalProperties: false,
     publishedAt: nullable({ type: 'string', format: 'date-time' }) } } as const;
 const publicationPreviewSchema = { type: 'object', additionalProperties: false,
   required: ['simulated', 'weekStart', 'scheduleId', 'scheduleVersion', 'target', 'targets', 'items', 'summary'], properties: {
-    simulated: { type: 'boolean', description: 'true – publikacja demonstracyjna: nic nie trafia do Google.' },
+    simulated: { type: 'boolean', description: 'true – symulacja (konto demonstracyjne albo GOOGLE_PUBLICATION_MODE=simulation): nic nie trafia do Google. false – prawdziwy zapis.' },
     weekStart: { type: 'string', format: 'date' }, scheduleId: { type: 'string' }, scheduleVersion: { type: 'integer', minimum: 1 },
     target: { type: 'object', additionalProperties: false, required: ['id', 'name'], properties: { id: { type: 'string' }, name: { type: 'string' } } },
     targets: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['id', 'name', 'primary'],
@@ -129,7 +129,7 @@ const importedEventSchema = { type: 'object', additionalProperties: false, requi
   lastSyncAt: nullable({ type: 'string', format: 'date-time' }), connected: { type: 'boolean' } } } as const;
 
 const correctionItemSchema = { type: 'object', additionalProperties: false,
-  required: ['eventId', 'calendar', 'state', 'simulated', 'errorCode', 'errorClass', 'message', 'tries', 'lastTryAt', 'publishedAt', 'snapshot'], properties: {
+  required: ['eventId', 'calendar', 'state', 'simulated', 'errorCode', 'errorClass', 'message', 'tries', 'lastTryAt', 'publishedAt', 'snapshot', 'lastOperation'], properties: {
     eventId: { type: 'string', description: 'Lokalne ID wydarzenia (zostaje także po jego usunięciu).' },
     calendar: { type: 'object', additionalProperties: false, required: ['id', 'name'], properties: { id: { type: 'string' }, name: { type: 'string' } } },
     state: { type: 'string', enum: ['synced', 'pending', 'error', 'missing', 'pending_delete', 'deleted'],
@@ -139,13 +139,23 @@ const correctionItemSchema = { type: 'object', additionalProperties: false,
     message: nullable({ type: 'string' }), tries: { type: 'integer', minimum: 0 },
     lastTryAt: nullable({ type: 'string', format: 'date-time' }), publishedAt: nullable({ type: 'string', format: 'date-time' }),
     snapshot: nullable({ type: 'object', additionalProperties: false, required: ['title', 'start', 'end'],
-      properties: { title: { type: 'string' }, start: { type: 'string' }, end: { type: 'string' } } }) } } as const;
+      properties: { title: { type: 'string' }, start: { type: 'string' }, end: { type: 'string' } } }),
+    lastOperation: nullable({ type: 'string', enum: ['Utworzenie', 'Aktualizacja'], description: 'Ostatnia operacja w Google; usunięcie wynika ze stanu.' }) } } as const;
 const correctionStatusSchema = { type: 'object', additionalProperties: false, required: ['eventId', 'items'], properties: {
   eventId: { type: 'string' }, items: { type: 'array', items: correctionItemSchema } } } as const;
 const correctionSyncSchema = { type: 'object', additionalProperties: false, required: ['eventId', 'result', 'errorCode', 'items'], properties: {
   eventId: { type: 'string' }, result: { type: 'string', enum: ['nothing', 'success', 'error'], description: 'nothing – wszystko już było zgodne.' },
   errorCode: nullable({ type: 'string' }), items: { type: 'array', items: correctionItemSchema } } } as const;
 const eventParams = { type: 'object', additionalProperties: false, required: ['eventId'], properties: { eventId: { type: 'string', minLength: 1, maxLength: 200 } } } as const;
+
+const calendarViewSchema = { type: 'object', additionalProperties: false, required: ['simulated', 'calendar', 'weekStart', 'events', 'othersError'], properties: {
+  simulated: { type: 'boolean', description: 'true – opublikowane zmiany są symulacją i pochodzą z pozycji publikacji; false – wszystko odczytano z Google.' },
+  calendar: { type: 'object', additionalProperties: false, required: ['id', 'name'], properties: { id: { type: 'string' }, name: { type: 'string' } } },
+  weekStart: { type: 'string', format: 'date' },
+  events: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['id', 'title', 'start', 'end', 'published'], properties: {
+    id: { type: 'string' }, title: { type: 'string' }, start: { type: 'string', format: 'date-time' }, end: { type: 'string', format: 'date-time' },
+    published: { type: 'boolean', description: 'true – zmiana opublikowana przez KAC; false – pozostałe wydarzenie kalendarza.' } } } },
+  othersError: nullable({ type: 'string', description: 'Pozostałych wydarzeń nie udało się odczytać – widok zawiera tylko opublikowane zmiany.' }) } } as const;
 
 const weekParams = { type: 'object', additionalProperties: false, required: ['weekStart'], properties: { weekStart: { type: 'string', format: 'date' } } } as const;
 const publicationBlocked = ['schedule_version_conflict', 'schedule_not_accepted', 'schedule_empty', 'no_publication_target', 'calendar_unavailable', 'reconnect_required'];
@@ -313,8 +323,8 @@ export function registerGoogleIntegration(app: FastifyInstance, service: GoogleI
   } }, async (request, reply) => handle(reply, (google) => google.selection.save(scope(request), request.body)));
 
   app.get<{ Params: { weekStart: string }; Querystring: { calendarId?: string } }>('/integrations/google/publications/:weekStart/preview', { schema: {
-    tags: ['Google integration'], summary: 'Preview simulated schedule publication', operationId: 'previewGooglePublication',
-    description: 'Lists the shifts of the accepted schedule for the week that a publication would create or update in the chosen calendar (default: the publication calendar from the calendar selection). Changes nothing. Publication is currently a simulation: nothing is sent to Google.',
+    tags: ['Google integration'], summary: 'Preview schedule publication', operationId: 'previewGooglePublication',
+    description: 'Lists the shifts of the accepted schedule for the week that a publication would create or update in the chosen calendar (default: the publication calendar from the calendar selection). Changes nothing. For an account connected through Google the publication writes real events (simulated=false); a demo account, or GOOGLE_PUBLICATION_MODE=simulation, only simulates it.',
     params: weekParams,
     querystring: { type: 'object', additionalProperties: false, properties: { calendarId: { type: 'string', minLength: 1, maxLength: 1024, description: 'Inny kalendarz z prawem zapisu niż domyślny.' } } },
     response: {
@@ -327,16 +337,30 @@ export function registerGoogleIntegration(app: FastifyInstance, service: GoogleI
     },
   } }, async (request, reply) => handle(reply, (google) => google.publication.preview(scope(request), request.params.weekStart, request.query.calendarId)));
 
+  app.get<{ Params: { weekStart: string }; Querystring: { calendarId?: string } }>('/integrations/google/publications/:weekStart/calendar-view', { schema: {
+    tags: ['Google integration'], summary: 'Google calendar view after publication', operationId: 'getGooglePublicationCalendarView',
+    description: 'Step 10 of story 30: the week of the target Google calendar with the published shifts among the other events. With real publication everything is read from Google and KAC shifts are recognised by the kacEventId private property. In a simulation (or when Google cannot be read) published shifts come from the publication records and other events from Google or the demo account.',
+    params: weekParams,
+    querystring: { type: 'object', additionalProperties: false, properties: { calendarId: { type: 'string', minLength: 1, maxLength: 1024 } } },
+    response: {
+      200: documented(calendarViewSchema, 'Widok kalendarza Google.', calendarViewExamples),
+      400: fail('Kalendarz nie należy do połączonego konta.', ['unknown_calendar']),
+      404: fail('Brak konta.', ['not_connected']),
+      409: fail('Brak kalendarza publikacji.', ['no_publication_target']),
+      503: fail('Integracja niedostępna.', ['integration_not_configured']),
+    },
+  } }, async (request, reply) => handle(reply, (google) => google.publication.calendarView(scope(request), request.params.weekStart, request.query.calendarId)));
+
   app.post<{ Params: { weekStart: string }; Body: { expectedVersion: number; calendarId?: string | null; simulate?: PublicationSimulation } }>('/integrations/google/publications/:weekStart', { schema: {
-    tags: ['Google integration'], summary: 'Publish accepted schedule (simulation)', operationId: 'publishGoogleSchedule',
-    description: 'Confirmed publication of the accepted schedule after the preview. Currently a simulation: nothing is sent to Google and no Google event IDs are created; the result is marked simulated. Each shift has one publication record per calendar, so a retry after an error publishes only what is missing. The attempt is recorded in the sync registry with direction publish. A Google-side error is the attempt result (200), not an HTTP error.',
+    tags: ['Google integration'], summary: 'Publish accepted schedule', operationId: 'publishGoogleSchedule',
+    description: 'Confirmed publication of the accepted schedule after the preview. For an account connected through Google each shift becomes a Google event with an ID derived from the account, calendar and shift, so a retry after a lost response does not create a duplicate; an already published shift is updated, and one deleted by hand in Google is published again. A demo account (or GOOGLE_PUBLICATION_MODE=simulation) only simulates it: nothing is sent to Google and the result is marked simulated. Each shift has one publication record per calendar, so a retry after an error publishes only what is missing. The attempt is recorded in the sync registry with direction publish. A Google-side error is the attempt result (200), not an HTTP error.',
     params: weekParams,
     body: withExamples({ type: 'object', additionalProperties: false, required: ['expectedVersion'], properties: {
       expectedVersion: { type: 'integer', minimum: 1, description: 'Wersja grafiku z podglądu.' },
       calendarId: nullable({ type: 'string', minLength: 1, maxLength: 1024 }),
       simulate: { type: 'string', enum: [...PUBLICATION_SIMULATIONS], description: 'Wymuszony wynik symulacji (błąd, wynik częściowy).' } } }, publicationBodyExamples),
     response: {
-      200: documented(publicationResultSchema, 'Wynik próby publikacji (symulacja).', publicationResultExamples),
+      200: documented(publicationResultSchema, 'Wynik próby publikacji.', publicationResultExamples),
       400: fail('Kalendarz nie należy do połączonego konta.', ['unknown_calendar']),
       404: fail('Brak konta albo grafiku.', ['not_connected', 'schedule_not_found']),
       409: fail('Grafiku nie można opublikować.', [...publicationBlocked, 'publication_in_progress']),
@@ -347,7 +371,7 @@ export function registerGoogleIntegration(app: FastifyInstance, service: GoogleI
 
   app.get<{ Params: { eventId: string } }>('/integrations/google/publications/events/:eventId', { schema: {
     tags: ['Google integration'], summary: 'Get published event sync state', operationId: 'getGooglePublishedEvent',
-    description: 'Synchronization state of a published work shift in each calendar it was published to (simulation). Also works after the local event was deleted, because the publication record keeps a tombstone.',
+    description: 'Synchronization state of a published work shift in each calendar it was published to (simulated=true for a demo account). Also works after the local event was deleted, because the publication record keeps a tombstone.',
     params: eventParams,
     response: { 200: documented(correctionStatusSchema, 'Stan publikacji wydarzenia.', correctionStatusExamples),
       404: fail('Wydarzenie nie było publikowane.', ['publication_not_found']), 503: fail('Integracja niedostępna.', ['integration_not_configured']) },
@@ -355,7 +379,7 @@ export function registerGoogleIntegration(app: FastifyInstance, service: GoogleI
 
   app.post<{ Params: { eventId: string } }>('/integrations/google/publications/events/:eventId/sync', { schema: {
     tags: ['Google integration'], summary: 'Sync published event correction', operationId: 'syncGooglePublishedEvent',
-    description: 'Retry ("Ponów synchronizację") for an edited or deleted published shift; the app also calls it right after saving. Sends the latest local state, not an old job body: an update of a Google event that no longer exists reports missing without creating a new one, and deleting an already missing event succeeds. A Google error is the result (200) and never reverts the local change. Simulation: nothing is sent to Google.',
+    description: 'Retry ("Ponów synchronizację") for an edited or deleted published shift; the app also calls it right after saving. Sends the latest local state, not an old job body: an update of a Google event that no longer exists reports missing without creating a new one, and deleting an already missing event succeeds. A Google error is the result (200) and never reverts the local change. A shift published through a Google account is patched or deleted in Google (events.patch / events.delete); a demo publication is only simulated.',
     params: eventParams,
     response: { 200: documented(correctionSyncSchema, 'Wynik synchronizacji.', correctionSyncExamples),
       404: fail('Wydarzenie nie było publikowane.', ['publication_not_found']), 503: fail('Integracja niedostępna.', ['integration_not_configured']) },

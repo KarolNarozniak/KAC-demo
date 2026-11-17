@@ -16,11 +16,13 @@ type Props = { week: Date; setWeek: (value: Date) => void; now: Date; active: bo
   /** Informuje aplikację o niezapisanych zmianach profilu (pytanie przy wyjściu z zakładki – S23KC2S1P2-15, 3a). */
   onUnsavedChange?: (unsaved: boolean) => void;
   /** Zmiana wartości odrzuca niezapisane zmiany profilu (użytkownik wybrał „Odrzuć zmiany”). */
-  discardSignal?: number };
+  discardSignal?: number;
+  /** Publikacja bez połączonego konta albo bez zgody na zapis (historyjka 30, kroki 3–4a) prowadzi do Ustawień → Google Calendar. */
+  onOpenSettings?: () => void };
 const modeLabel: Record<WorkMode, string> = { elastyczny: 'Elastyczny', zmianowy: 'Zmianowy' };
 const statusLabel = { target_met: 'Cel osiągnięty', proven_infeasible: 'Cel niemożliwy przy tych ograniczeniach', not_found: 'Nie znaleziono pełnego grafiku' };
 const minutesLabel = (minutes: number) => `${Math.floor(minutes / 60)} h${minutes % 60 ? ` ${minutes % 60} min` : ''}`;
-export default function ScheduleScreen({ week, setWeek, now, active, onApproved, onPreview, onUnsavedChange, discardSignal = 0 }: Props) {
+export default function ScheduleScreen({ week, setWeek, now, active, onApproved, onPreview, onUnsavedChange, discardSignal = 0, onOpenSettings }: Props) {
   const { palette, styles } = useTheme();
   const monday = startOfWeek(week);
   const weekStart = localDateKey(monday);
@@ -259,7 +261,7 @@ export default function ScheduleScreen({ week, setWeek, now, active, onApproved,
         </View>}
         {schedule.isApproved && <Text style={[styles.muted, { color: palette.green, marginTop: 10 }]}>Zatwierdzone zmiany są widoczne jako wydarzenia „Praca” w widoku Tydzień.</Text>}
         {/* Symulowana publikacja zaakceptowanego grafiku w Google Calendar (S23KC2S1P2-30, G07). */}
-        <GooglePublication weekStart={weekStart} schedule={schedule} readOnly={historyReadOnly} />
+        <GooglePublication weekStart={weekStart} schedule={schedule} readOnly={historyReadOnly} onOpenSettings={onOpenSettings} />
       </View>
     </>}
   </ScrollView>;

@@ -27,9 +27,11 @@ type Props = {
   onReconnect: () => void;
   /** Wynik synchronizacji zmienił stan konta (np. Google odrzucił dostęp) – panel odświeża się, żeby pokazać właściwy widok. */
   onConnectionChange: () => void;
+  /** Krok 7 historyjki 23: przejście do zaktualizowanego planu (widok Tydzień). */
+  onShowPlan?: () => void;
 };
 
-export default function GoogleSyncSection({ mode, connection, connectionKey, autoRunSignal, onReconnect, onConnectionChange }: Props) {
+export default function GoogleSyncSection({ mode, connection, connectionKey, autoRunSignal, onReconnect, onConnectionChange, onShowPlan }: Props) {
   const { palette, styles } = useTheme();
   const [status, setStatus] = useState<SyncStatus | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -68,7 +70,9 @@ export default function GoogleSyncSection({ mode, connection, connectionKey, aut
       if (result.status.connection !== connection) onConnectionChange();
     } catch (error) {
       if (!mounted.current) return;
-      setNotice({ tone: 'error', text: apiErrorMessage(error instanceof GoogleIntegrationApiError ? error.code : 'network') });
+      const code = error instanceof GoogleIntegrationApiError ? error.code : 'network';
+      // Brak wybranych kalendarzy (historyjka 23, 3a): po odświeżeniu stanu sekcja sama prosi o wskazanie kalendarza – bez drugiego komunikatu.
+      if (code !== 'no_calendars_selected') setNotice({ tone: 'error', text: apiErrorMessage(code) });
       await load();
     } finally {
       busyRef.current = false;
@@ -110,8 +114,8 @@ export default function GoogleSyncSection({ mode, connection, connectionKey, aut
           const line = calendarResultLine(calendar);
           return <Text key={calendar.calendarId} style={[styles.muted, { color: line.tone === 'error' ? palette.red : line.tone === 'info' ? palette.amber : palette.muted }]}>• {line.text}</Text>;
         })}
-        {summary.calendars.some((calendar) => !calendar.errorCode && calendar.created + calendar.updated + calendar.deleted > 0) &&
-          <Text style={[styles.muted, { marginTop: 2 }]}>Zmiany są już w widoku Tydzień.</Text>}
+        {summary.calendars.some((calendar) => !calendar.errorCode) && !!onShowPlan &&
+          <View style={{ marginTop: 6, alignSelf: 'flex-start' }}><Button title="Pokaż zaktualizowany plan" onPress={onShowPlan} /></View>}
       </View>}
       {!notice && last && last.status === 'error' && <Text style={[styles.body, { color: palette.red, marginTop: 8 }]}>
         Ostatnia próba ({attemptTimeLabel(last)}): {syncErrorLabel(last)}.

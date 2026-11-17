@@ -232,7 +232,7 @@ export const publicationBodyExamples: NamedExamples = {
 const correctionItem = (state: string, extra: Record<string, unknown> = {}) => ({
   eventId: 'e-1', calendar: { id: 'praca@group.calendar.google.com', name: 'Grafik pracy' }, state, simulated: true, errorCode: null, errorClass: null,
   message: null, tries: 2, lastTryAt: '2026-11-17T10:00:00.000Z', publishedAt: '2026-11-17T09:00:00.000Z',
-  snapshot: { title: 'Zmiana pracy', start: '2026-11-23T14:00:00.000Z', end: '2026-11-23T19:00:00.000Z' }, ...extra,
+  snapshot: { title: 'Zmiana pracy', start: '2026-11-23T14:00:00.000Z', end: '2026-11-23T19:00:00.000Z' }, lastOperation: 'Aktualizacja', ...extra,
 });
 const correctionError = correctionItem('error', { errorCode: 'network_error', errorClass: 'network', message: 'Brak połączenia z Google (brak internetu albo przekroczony czas).' });
 const correctionMissing = correctionItem('missing', { errorCode: 'event_not_found', errorClass: 'other',
@@ -259,4 +259,14 @@ export const importedEventExamples: NamedExamples = {
     value: { eventId: 'e-10', calendar: { id: 'primary', name: 'Student' }, account: 'student@example.com', state: 'conflict',
       googleVersion: { title: 'Dentysta', start: '2026-11-19T15:00:00.000Z', end: '2026-11-19T15:45:00.000Z', location: 'ul. Górczewska 212' },
       lastSyncAt: '2026-11-17T10:00:00.000Z', connected: true } },
+};
+
+// --- Widok kalendarza Google po publikacji (historyjka 30, krok 10) ---
+export const calendarViewExamples: NamedExamples = {
+  week: { summary: 'Tydzień w kalendarzu Google', description: 'Dwie opublikowane zmiany (symulacja) i pozostałe wydarzenia kalendarza.', value: {
+    simulated: true, calendar: { id: 'praca@group.calendar.google.com', name: 'Grafik pracy' }, weekStart: '2026-11-23', othersError: null, events: [
+      { id: 'zespol_20261123', title: 'Spotkanie zespołu', start: '2026-11-23T08:00:00.000Z', end: '2026-11-23T08:30:00.000Z', published: false },
+      { id: 'kac-z-1', title: 'Zmiana pracy', start: '2026-11-23T14:00:00.000Z', end: '2026-11-23T19:00:00.000Z', published: true },
+      { id: 'kac-z-2', title: 'Zmiana pracy', start: '2026-11-25T08:00:00.000Z', end: '2026-11-25T13:00:00.000Z', published: true },
+    ] } },
 };

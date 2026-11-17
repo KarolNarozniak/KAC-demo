@@ -29,7 +29,11 @@ const timeLabel = (iso: string) => {
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 };
 
-export default function GoogleIntegrationPanel() {
+/**
+ * onShowPlan – „Pokaż zaktualizowany plan” po synchronizacji (krok 7 historyjki 23) przełącza na widok Tydzień.
+ * active – czy zakładka Ustawienia jest widoczna; zakładki zostają zamontowane, więc po powrocie panel odświeża stan.
+ */
+export default function GoogleIntegrationPanel({ onShowPlan, active = true }: { onShowPlan?: () => void; active?: boolean } = {}) {
   const { palette, styles } = useTheme();
   const [status, setStatus] = useState<GoogleIntegrationStatus | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -40,6 +44,8 @@ export default function GoogleIntegrationPanel() {
   const [notice, setNotice] = useState<Notice | null>(null);
   const [confirmChange, setConfirmChange] = useState(false);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+  // Historyjka 12, krok 1–2: najpierw „Połącz z Google Calendar”, potem informacja o zakresie dostępu i „Zaloguj się przez Google”.
+  const [connectOpen, setConnectOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   // „Połącz ponownie konto Google” z sekcji synchronizacji: po udanym połączeniu synchronizacja rusza sama (historyjka 17, krok 6).
   const [syncSignal, setSyncSignal] = useState(0);
@@ -90,6 +96,14 @@ export default function GoogleIntegrationPanel() {
     return () => { mounted.current = false; stopPolling(); };
   }, []);
 
+  // Powrót do Ustawień z innej zakładki: stan połączenia mógł się zmienić (np. wygasłe logowanie wykryte przy publikacji – historyjka 30),
+  // a lista rozbieżności – po korekcie w widoku tygodnia (historyjka 47). Odświeżenie przeładowuje też wybór i rozbieżności.
+  const wasActive = useRef(active);
+  useEffect(() => {
+    if (active && !wasActive.current && !busyRef.current && !activeAttempt.current) void refresh();
+    wasActive.current = active;
+  }, [active]);
+
   const run = async (action: () => Promise<void>) => {
     if (busyRef.current) return;
     busyRef.current = true; setBusy(true);
@@ -109,6 +123,9 @@ export default function GoogleIntegrationPanel() {
     stopPolling();
     setAttempt(null); setDemoAccount(''); setConfirmChange(false);
     setNotice(attemptNotice(result));
+    // 5a: odmowa albo zamknięcie okna – powrót do kroku 1; połączenie – przy kolejnym odłączeniu też zaczynamy od kroku 1.
+    // 6a (błąd autoryzacji) wraca do kroku 3, więc informacja o zakresie i „Zaloguj się przez Google” zostają widoczne.
+    if (result.status !== 'error') setConnectOpen(false);
     await refresh();
     if (result.status === 'connected' && syncAfterReconnect.current) setSyncSignal((value) => value + 1);
     syncAfterReconnect.current = false;
@@ -192,7 +209,7 @@ export default function GoogleIntegrationPanel() {
       <Button title="Zmień konto" primary disabled={busy} onPress={() => void begin('change_account')} />,
       <Button title="Nie zmieniaj" disabled={busy} onPress={() => setConfirmChange(false)} />);
     if (confirmDisconnect) return confirmBox(disconnectWarning(email, status?.mode ?? 'demo'),
-      <Button title="Potwierdź odłączenie" danger disabled={busy} onPress={() => void disconnect()} />,
+      <Button title="Potwierdź" danger disabled={busy} onPress={() => void disconnect()} />,
       <Button title="Anuluj" disabled={busy} onPress={() => setConfirmDisconnect(false)} />);
     return <View style={[styles.row, { marginTop: 14, flexWrap: 'wrap' }]}>
       {extra}
@@ -223,13 +240,20 @@ export default function GoogleIntegrationPanel() {
         <View style={[styles.row, { marginTop: 8 }]}><Button title="Spróbuj ponownie" disabled={busy} onPress={() => void run(refresh)} /></View>
       </View>}
 
-      {state === 'not_connected' && status && <View style={{ marginTop: 8 }}>
+      {state === 'not_connected' && status && !connectOpen && <View style={{ marginTop: 8 }}>
         <Text style={styles.body}>Połącz konto Google, żeby KAC mógł korzystać z Twoich kalendarzy – na przykład publikować zaakceptowany grafik pracy.</Text>
-        <Text style={[styles.label, { marginTop: 14 }]}>KAC POPROSI O DOSTĘP DO</Text>
+        <View style={[styles.row, { marginTop: 12 }]}><Button title="Połącz z Google Calendar" primary disabled={busy} onPress={() => setConnectOpen(true)} /></View>
+      </View>}
+
+      {state === 'not_connected' && status && connectOpen && <View style={{ marginTop: 8 }}>
+        <Text style={[styles.label, { marginTop: 6 }]}>KAC POPROSI O DOSTĘP DO</Text>
         {accessList(requestedAccessLines(status.requestedAccess))}
         <Text style={[styles.muted, { marginTop: 10 }]}>Samo połączenie niczego nie zmienia w Twoich kalendarzach. Dane dostępu są przechowywane na serwerze w postaci zaszyfrowanej i nie trafiają do aplikacji.</Text>
         {status.mode === 'demo' && <Text style={[styles.muted, { marginTop: 4 }]}>Tryb demonstracyjny: serwer nie ma klienta Google, więc logowanie i zgoda są symulowane.</Text>}
-        <View style={[styles.row, { marginTop: 12 }]}><Button title="Zaloguj się przez Google" primary disabled={busy} onPress={() => void begin('connect')} /></View>
+        <View style={[styles.row, { marginTop: 12, flexWrap: 'wrap' }]}>
+          <Button title="Zaloguj się przez Google" primary disabled={busy} onPress={() => void begin('connect')} />
+          <Button title="Anuluj" disabled={busy} onPress={() => setConnectOpen(false)} />
+        </View>
       </View>}
 
       {state === 'connecting' && attempt && <View style={{ marginTop: 8 }}>
@@ -286,7 +310,7 @@ export default function GoogleIntegrationPanel() {
         </>}
 
         <GoogleSyncSection mode={status?.mode ?? 'demo'} connection={state}
-          connectionKey={`${account.email}|${state}|${account.connectedAt ?? ''}|${account.grantedScopes.join(' ')}|${selectionSaves}`} autoRunSignal={syncSignal}
+          connectionKey={`${account.email}|${state}|${account.connectedAt ?? ''}|${account.grantedScopes.join(' ')}|${selectionSaves}`} autoRunSignal={syncSignal} onShowPlan={onShowPlan}
           onConnectionChange={() => void refresh()} onReconnect={() => { syncAfterReconnect.current = true; void begin('reconnect'); }} />
         {/* Rozbieżności po edycji albo usunięciu opublikowanych zmian (S23KC2S1P2-47, G09). */}
         <GoogleDivergences reloadKey={`${account.email}|${calendarsLoads}|${selectionSaves}`} />
@@ -300,7 +324,7 @@ export default function GoogleIntegrationPanel() {
         <Text style={styles.body}>Google nie przyjmuje już zapisanego dostępu do konta <Text style={{ fontWeight: '800' }}>{account.email}</Text> – wygasł albo cofnięto zgodę w ustawieniach Google.</Text>
         <Text style={[styles.muted, { marginTop: 6 }]}>Twoje wydarzenia w KAC są bez zmian. Po ponownym zalogowaniu połączenie znowu zacznie działać.</Text>
         <GoogleSyncSection mode={status?.mode ?? 'demo'} connection={state}
-          connectionKey={`${account.email}|${state}|${account.connectedAt ?? ''}|${account.grantedScopes.join(' ')}|${selectionSaves}`} autoRunSignal={syncSignal}
+          connectionKey={`${account.email}|${state}|${account.connectedAt ?? ''}|${account.grantedScopes.join(' ')}|${selectionSaves}`} autoRunSignal={syncSignal} onShowPlan={onShowPlan}
           onConnectionChange={() => void refresh()} onReconnect={() => { syncAfterReconnect.current = true; void begin('reconnect'); }} />
         {/* „Połącz ponownie konto Google” jest w sekcji synchronizacji – po połączeniu od razu synchronizuje (historyjka 17, krok 6). */}
         {accountActions(account.email, null)}

@@ -225,3 +225,50 @@ export async function listIntegrationEventsPage(accessToken: string, fetchImpl: 
     nextSyncToken: typeof body?.nextSyncToken === 'string' && body.nextSyncToken ? body.nextSyncToken : null,
   };
 }
+
+// --- Zapis wydarzeń: publikacja grafiku (G07) i korekty opublikowanych zmian (G09) ---
+
+/** Treść wydarzenia zapisywanego przez KAC. kacEventId pozwala synchronizacji (G05) pominąć własne wydarzenia KAC. */
+export type GoogleEventWrite = {
+  summary: string; description?: string; start: { dateTime: string }; end: { dateTime: string };
+  extendedProperties?: { private: Record<string, string> }; status?: 'confirmed';
+};
+
+async function eventRequest(accessToken: string, fetchImpl: FetchLike, method: 'POST' | 'PATCH' | 'DELETE', url: string, body?: unknown) {
+  try {
+    return await fetchImpl(url, {
+      method, headers: { Authorization: `Bearer ${accessToken}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+      ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(20000),
+    });
+  } catch {
+    throw new GoogleIntegrationError('network_error');
+  }
+}
+const eventsUrl = (calendarId: string) => `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`;
+
+/**
+ * Dodanie wydarzenia z identyfikatorem nadanym przez KAC. Ponowienie po zerwanym połączeniu (wydarzenie mogło już powstać)
+ * dostaje od Google 409 – zwracamy wtedy „exists”, a wywołujący aktualizuje istniejące wydarzenie zamiast tworzyć duplikat.
+ */
+export async function insertIntegrationEvent(accessToken: string, fetchImpl: FetchLike, calendarId: string, eventId: string, event: GoogleEventWrite): Promise<'created' | 'exists'> {
+  const response = await eventRequest(accessToken, fetchImpl, 'POST', eventsUrl(calendarId), { id: eventId, ...event });
+  if (response.status === 409) return 'exists';
+  if (!response.ok) throw await calendarApiError(response);
+  return 'created';
+}
+
+/** Częściowa aktualizacja. Wydarzenie nieistniejące (404/410) albo usunięte w Google (status cancelled) → event_not_found. */
+export async function patchIntegrationEvent(accessToken: string, fetchImpl: FetchLike, calendarId: string, eventId: string, event: Partial<GoogleEventWrite>): Promise<void> {
+  const response = await eventRequest(accessToken, fetchImpl, 'PATCH', `${eventsUrl(calendarId)}/${encodeURIComponent(eventId)}`, event);
+  if (response.status === 404 || response.status === 410) throw new GoogleIntegrationError('event_not_found', response.status);
+  if (!response.ok) throw await calendarApiError(response);
+  const body = await response.json().catch(() => ({}));
+  if (body?.status === 'cancelled') throw new GoogleIntegrationError('event_not_found', 410);
+}
+
+/** Usunięcie. Wydarzenia, którego w Google już nie ma (404/410), nie trzeba usuwać – to sukces. */
+export async function deleteIntegrationEvent(accessToken: string, fetchImpl: FetchLike, calendarId: string, eventId: string): Promise<void> {
+  const response = await eventRequest(accessToken, fetchImpl, 'DELETE', `${eventsUrl(calendarId)}/${encodeURIComponent(eventId)}`);
+  if (response.ok || response.status === 404 || response.status === 410) return;
+  throw await calendarApiError(response);
+}

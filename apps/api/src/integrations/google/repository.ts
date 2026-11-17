@@ -261,11 +261,8 @@ export class PostgresGoogleIntegrationRepository {
             rola_dostepu = excluded.rola_dostepu, strefa = excluded.strefa, glowny = excluded.glowny, updated_at = now()`,
         [account.accountId, calendar.name, calendar.id, ACCESS_LABEL[calendar.accessRole], calendar.accessRole, calendar.timeZone, calendar.primary]);
       }
-      // G04: dopóki użytkownik nie zapisał własnego wyboru (wersja 1) i nic nie jest wybrane, źródłem jest kalendarz główny.
-      // Obejmuje konta połączone przed migracją 019 i ponowne połączenie po odłączeniu. Zapisany wybór (także pusty) nie jest ruszany.
-      await client.query(`update t_kalendarze_google g set wybrany = true, updated_at = now()
-        where g.id_konta = $1 and g.glowny and (select k.wersja_wyboru = 1 from t_konta_google k where k.id_konta = $1)
-          and not exists (select 1 from t_kalendarze_google w where w.id_konta = $1 and w.wybrany)`, [account.accountId]);
+      // Historyjka 23 (3, 3a) i 41 (4): kalendarze do synchronizacji wybiera użytkownik – nie ma wyboru domyślnego.
+      // Bez wyboru synchronizacja prosi o wskazanie kalendarza.
       if (!complete) return;
       const ids = calendars.map((calendar) => calendar.id);
       // Znikniętego kalendarza nie usuwamy, gdy użytkownik go wybrał albo opublikowano do niego grafik (historia publikacji, G07) –
@@ -429,12 +426,38 @@ export class PostgresGoogleIntegrationRepository {
     };
   }
 
+  /** Opublikowane zmiany grafiku w kalendarzu (dane z chwili publikacji) – do widoku kalendarza po publikacji (historyjka 30, krok 10). */
+  async listPublishedSnapshots(targetRowId: string, scheduleId: string): Promise<{ shiftId: string; title: string; start: string; end: string }[]> {
+    const result = await this.pool.query(`select id_zmiany, migawka from t_publikacje
+      where id_kal_google = $1 and id_grafiku = $2 and status in ('Opublikowano', 'Oczekuje', 'Błąd') and migawka is not null
+      order by migawka->>'start'`, [targetRowId, scheduleId]);
+    return result.rows.map((row) => ({ shiftId: String(row.id_zmiany), title: String(row.migawka.title ?? 'Zmiana pracy'),
+      start: new Date(row.migawka.start).toISOString(), end: new Date(row.migawka.end).toISOString() }));
+  }
+
+  async userTimeZone(userId: string): Promise<string> {
+    const result = await this.pool.query(`select strefa_czasowa from t_uzytkownicy where id_uzytkownika = $1`, [userId]);
+    return result.rows[0]?.strefa_czasowa ?? 'Europe/Warsaw';
+  }
+
+  /** Rewizja „serwera Google” makiety dla kalendarza (G05) – 0, gdy kalendarza jeszcze nie synchronizowano. */
+  async demoRevision(accountId: string, calendarRowId: string): Promise<number> {
+    const result = await this.pool.query(`select demo_rewizja from t_google_sync_stan where id_konta = $1 and id_kal_google = $2`, [accountId, calendarRowId]);
+    return Number(result.rows[0]?.demo_rewizja ?? 0);
+  }
+
   /** Udane publikacje zmian do kalendarza Google (po ID wiersza t_kalendarze_google). */
-  async listPublished(targetRowId: string, shiftIds: string[]): Promise<Map<string, { eventVersion: number; publishedAt: string; mode: 'symulacja' | 'google' }>> {
-    const result = await this.pool.query(`select id_zmiany, wersja_wydarzenia, opublikowano, tryb from t_publikacje
-      where id_kal_google = $1 and id_zmiany = any($2::text[]) and status in ('Opublikowano', 'Oczekuje', 'Błąd')`, [targetRowId, shiftIds]);
+  /**
+   * Opublikowane zmiany w kalendarzu. „Brak w Google” (wydarzenie usunięte tam ręcznie) też jest zwracane – z zewnętrznym ID,
+   * żeby ponowna publikacja przywróciła to samo wydarzenie zamiast tworzyć drugie.
+   */
+  async listPublished(targetRowId: string, shiftIds: string[]): Promise<Map<string, { eventVersion: number; publishedAt: string; mode: 'symulacja' | 'google';
+    externalId: string | null; missing: boolean }>> {
+    const result = await this.pool.query(`select id_zmiany, wersja_wydarzenia, opublikowano, tryb, zewnetrzne_id, status from t_publikacje
+      where id_kal_google = $1 and id_zmiany = any($2::text[]) and status in ('Opublikowano', 'Oczekuje', 'Błąd', 'Brak w Google')`, [targetRowId, shiftIds]);
     return new Map(result.rows.map((row) => [String(row.id_zmiany),
-      { eventVersion: Number(row.wersja_wydarzenia), publishedAt: new Date(row.opublikowano).toISOString(), mode: row.tryb }]));
+      { eventVersion: Number(row.wersja_wydarzenia), publishedAt: new Date(row.opublikowano).toISOString(), mode: row.tryb,
+        externalId: row.zewnetrzne_id ?? null, missing: row.status === 'Brak w Google' }]));
   }
 
   /**

@@ -1,4 +1,4 @@
-// Synchronizacja korekt opublikowanych zmian z Google Calendar – SYMULACJA (S23KC2S1P2-47, G09 / S23KC2S1P2-292).
+// Synchronizacja korekt opublikowanych zmian z Google Calendar (S23KC2S1P2-47, G09 / S23KC2S1P2-292).
 //
 // Edycja albo usunięcie opublikowanej zmiany oznacza jej pozycje publikacji (t_publikacje) w tej samej transakcji co zapis
 // lokalny i zlecenie w outboxie (W02). Konsument „google” w workerze – albo „Ponów synchronizację” w API – wykonuje potem
@@ -9,10 +9,15 @@
 //  - aktualizacja brakującego wydarzenia w Google kończy się stanem „Brak w Google” bez tworzenia nowego,
 //  - usunięcie wydarzenia, którego w Google już nie ma, jest sukcesem,
 //  - po usunięciu lokalnym pozycja zostaje jako „nagrobek” (ref_wydarzenia, kalendarz, zewnętrzne ID, migawka, stan próby).
-// Dziś działa tylko adapter demonstracyjny – nic nie trafia do Google.
+// Tryb pozycji decyduje o adapterze: „google” – prawdziwe events.patch / events.delete (GoogleCorrectionWriter),
+// „symulacja” (konto demonstracyjne) – adapter demonstracyjny, nic nie trafia do Google.
+// Prawdziwe wywołania odbywają się w transakcji wywołującego, ale bez blokady wiersza konta – odświeżenie tokenu blokuje
+// ten wiersz w osobnym połączeniu i inaczej czekałoby na koniec tej transakcji.
 import type { PoolClient } from 'pg';
 import type { UserScope } from '../../api/scope.js';
-import type { PostgresGoogleIntegrationRepository } from './repository.js';
+import type { FetchLike } from '../../import/google/oauth.js';
+import { GoogleCorrectionWriter, type GoogleCall } from './google-writer.js';
+import type { GoogleAccountRecord, PostgresGoogleIntegrationRepository } from './repository.js';
 import { GoogleIntegrationError, type GoogleErrorCode } from './oauth-client.js';
 import { classifySyncError, isTransientCode, messageFor, type SyncErrorClass } from './sync.js';
 
@@ -21,7 +26,7 @@ export type CorrectionSimulation = typeof CORRECTION_SIMULATIONS[number];
 
 type Snapshot = { title: string; start: string; end: string };
 
-/** Adapter korekt. Przyszła publikacja rzeczywista dostarczy wersję wywołującą Google Calendar API (events.patch / events.delete). */
+/** Adapter korekt: demonstracyjny albo GoogleCorrectionWriter (events.patch / events.delete). */
 export interface CorrectionAdapter {
   readonly mode: 'symulacja' | 'google';
   update(input: { calendarId: string; externalId: string | null; event: Snapshot }): Promise<void>;
@@ -76,6 +81,8 @@ export type CorrectionItem = {
   eventId: string; calendar: { id: string; name: string }; state: CorrectionState; simulated: boolean;
   errorCode: string | null; errorClass: SyncErrorClass | null; message: string | null;
   tries: number; lastTryAt: string | null; publishedAt: string | null; snapshot: Snapshot | null;
+  /** Ostatnia operacja w Google: Utworzenie (publikacja G07) albo Aktualizacja (korekta). Usunięcie wynika ze stanu. */
+  lastOperation: 'Utworzenie' | 'Aktualizacja' | null;
 };
 
 const CORRECTION_MESSAGES: Record<string, string> = {
@@ -91,6 +98,7 @@ export const correctionItemFrom = (row: Record<string, any>): CorrectionItem => 
   message: correctionMessage(row.kod_bledu ?? null), tries: Number(row.proby ?? 0),
   lastTryAt: row.ostatnia_proba ? new Date(row.ostatnia_proba).toISOString() : null,
   publishedAt: row.opublikowano ? new Date(row.opublikowano).toISOString() : null, snapshot: row.migawka ?? null,
+  lastOperation: row.operacja === 'Utworzenie' || row.operacja === 'Aktualizacja' ? row.operacja : null,
 });
 
 export const CORRECTION_SELECT = `select p.*, k.id_zewnetrzne as kalendarz_id, k.nazwa as kalendarz_nazwa
@@ -107,8 +115,12 @@ export type CorrectionOutcome = {
   items: CorrectionItem[];
 };
 
+/** Zależności prawdziwego zapisu: konto z tokenami i wywołanie Calendar API z odświeżaniem tokenu (GoogleIntegrationService.callGoogle). */
+export type CorrectionGoogleAccess = { account: (userId: string) => Promise<GoogleAccountRecord | null>; call: GoogleCall; fetchImpl: FetchLike };
+
 export class GoogleCorrectionSync {
-  constructor(private readonly adapterFor: (simulate: CorrectionSimulation | null) => CorrectionAdapter = (simulate) => new SimulatedCorrectionAdapter(simulate)) {}
+  constructor(private readonly google: CorrectionGoogleAccess | null = null,
+    private readonly simulatedFor: (simulate: CorrectionSimulation | null) => CorrectionAdapter = (simulate) => new SimulatedCorrectionAdapter(simulate)) {}
 
   /** Synchronizuje wszystkie oczekujące pozycje jednego wydarzenia (także usuniętego) w transakcji wywołującego. */
   async process(client: PoolClient, input: { userId: string; eventId: string }): Promise<CorrectionOutcome> {
@@ -120,12 +132,28 @@ export class GoogleCorrectionSync {
     // Najnowszy stan lokalny – nie treść zlecenia, które mogło zostać wyprzedzone przez późniejszą edycję lub usunięcie.
     const event = (await client.query(`select event_version, tytul, rozpoczecie, zakonczenie from t_wydarzenia
       where id_wydarzenia = $1 and status = 'Aktywne'`, [input.eventId])).rows[0];
-    const account = (await client.query(`with current as (
-        select id_konta, generacja, symulacja_publikacji from t_konta_google
-        where id_uzytkownika = $1 and status_polaczenia = 'Połączone' for update)
-      update t_konta_google k set symulacja_publikacji = null from current where k.id_konta = current.id_konta
-      returning current.id_konta, current.generacja, current.symulacja_publikacji`, [input.userId])).rows[0];
-    const adapter = this.adapterFor((account?.symulacja_publikacji as CorrectionSimulation | null) ?? null);
+    const account = (await client.query(`select id_konta, generacja, symulacja_publikacji, tryb from t_konta_google
+      where id_uzytkownika = $1 and status_polaczenia = 'Połączone'`, [input.userId])).rows[0];
+    const real = pending.some((row) => row.tryb === 'google');
+    // Wymuszony wynik makiety jest jednorazowy – zużywa go tylko symulacja (konto demonstracyjne nie odświeża tokenów, więc blokada nie szkodzi).
+    let simulate: CorrectionSimulation | null = null;
+    if (account?.symulacja_publikacji && !real) {
+      const used = await client.query(`update t_konta_google set symulacja_publikacji = null where id_konta = $1 and symulacja_publikacji is not null
+        returning 1`, [account.id_konta]);
+      if (used.rowCount) simulate = account.symulacja_publikacji as CorrectionSimulation;
+    }
+    const simulated = this.simulatedFor(simulate);
+    let writer: CorrectionAdapter | null = null;
+    const adapterFor = async (row: Record<string, any>): Promise<CorrectionAdapter> => {
+      if (row.tryb !== 'google') return simulated;
+      if (writer) return writer;
+      // Zapis do Google wyłączony w konfiguracji (GOOGLE_PUBLICATION_MODE=simulation) – pozycja czeka na ponowienie po włączeniu.
+      if (!this.google) throw new GoogleIntegrationError('google_error');
+      const record = await this.google.account(input.userId);
+      if (!record || record.accountId !== row.id_konta || record.mode !== 'google') throw new GoogleIntegrationError('reconnect_required');
+      writer = new GoogleCorrectionWriter(this.google.call, this.google.fetchImpl, record);
+      return writer;
+    };
 
     let errorCode: string | null = null;
     let changes = 0;
@@ -135,6 +163,7 @@ export class GoogleCorrectionSync {
       if (!account || account.id_konta !== row.id_konta) code = 'not_connected';
       else {
         try {
+          const adapter = await adapterFor(row);
           if (remove) await adapter.delete({ calendarId: row.kalendarz_id, externalId: row.zewnetrzne_id });
           else await adapter.update({ calendarId: row.kalendarz_id, externalId: row.zewnetrzne_id,
             event: { title: event.tytul, start: new Date(event.rozpoczecie).toISOString(), end: new Date(event.zakonczenie).toISOString() } });
@@ -160,12 +189,14 @@ export class GoogleCorrectionSync {
     }
 
     if (account) {
-      const operation = `${!event ? 'Usunięcie' : 'Aktualizacja'} opublikowanej zmiany (symulacja)`;
+      const operation = `${!event ? 'Usunięcie' : 'Aktualizacja'} opublikowanej zmiany${real ? '' : ' (symulacja)'}`;
       const status = !errorCode ? 'Sukces' : changes ? 'Częściowo' : 'Błąd';
       await client.query(`insert into t_synchronizacje (id_konta, kierunek, operacja, status, zakres, proby, generacja, liczba_zmian, kod_bledu, komunikat, zakonczono_at)
         values ($1, 'Publikacja', $2, $3, $4, 1, $5, $6, $7, $8, now())`,
       [account.id_konta, operation, status, `event:${input.eventId}`, account.generacja, changes, errorCode,
-        errorCode ? `Symulacja: ${correctionMessage(errorCode)}` : `Symulacja: zsynchronizowano ${changes} ${changes === 1 ? 'pozycję' : 'pozycje'}. Nic nie trafiło do Google.`]);
+        real
+          ? errorCode ? correctionMessage(errorCode) : `Zsynchronizowano z Google Calendar: ${changes} ${changes === 1 ? 'pozycja' : 'pozycje'}.`
+          : errorCode ? `Symulacja: ${correctionMessage(errorCode)}` : `Symulacja: zsynchronizowano ${changes} ${changes === 1 ? 'pozycję' : 'pozycje'}. Nic nie trafiło do Google.`]);
       if (!errorCode) await client.query(`update t_konta_google set ostatnia_publikacja = now(), updated_at = now() where id_konta = $1`, [account.id_konta]);
     }
     const items = (await client.query(`${CORRECTION_SELECT} where p.ref_wydarzenia = $1 and p.id_uzytkownika = $2 order by p.id_publikacji`,

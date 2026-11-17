@@ -64,11 +64,13 @@ test('zapis atomowy z wersją, konflikt, obcy kalendarz, kalendarz tylko do odcz
   const app = await connected(scope, google);
   const eventsBefore = await localEvents(scope);
   try {
-    // Bez zapisanego wyboru kalendarz główny jest domyślnie źródłem, a celu publikacji nie ma.
+    // Historyjka 23 (3a): kalendarz wybiera użytkownik – po połączeniu nic nie jest wybrane, a synchronizacja prosi o wybór.
     let selection = (await getSelection(app)).json();
     assert.equal(selection.version, 1);
-    assert.deepEqual(selection.sourceCalendarIds, ['primary']);
+    assert.deepEqual(selection.sourceCalendarIds, []);
     assert.equal(selection.publicationTargetCalendarId, null);
+    const beforeChoice = await app.inject({ method: 'POST', url: '/api/v1/integrations/google/sync', payload: {} });
+    assert.deepEqual([beforeChoice.statusCode, beforeChoice.json()], [409, { error: 'no_calendars_selected' }]);
     assert.equal(selection.canPublish, true);
     assert.deepEqual(selection.calendars.map((calendar: { id: string; writable: boolean }) => [calendar.id, calendar.writable]),
       [['primary', true], ['praca@group.calendar.google.com', true], ['kolo@group.calendar.google.com', false], ['pl.polish#holiday@group.v.calendar.google.com', false]]);

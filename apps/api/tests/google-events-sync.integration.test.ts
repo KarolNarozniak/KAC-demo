@@ -150,6 +150,7 @@ test('pełny odczyt: wszystkie strony, instancje serii, zmiana czasu, pominięte
 
 test('zmiany przyrostowe; usunięcie w Google nie kasuje ręcznego wpisu; edycja w KAC wygrywa, „Przywróć wersję z Google”, usunięcie w KAC jest trwałe', { skip }, () => withGoogle(async ({ app, scope, google }) => {
   const calendar = seedPrimary(google);
+  await selectSources(app, ['primary']);
   await sync(app);
   // Ręczny wpis z tym samym tytułem i godziną co instancja serii z Google (wpisany w KAC, bez mapowania).
   const manualId = String((await pool!.query(`insert into t_wydarzenia (id_kalendarza, id_kategorii, tytul, rozpoczecie, zakonczenie)
@@ -291,6 +292,8 @@ test('odznaczenie kalendarza (D04), ponowny wybór bez duplikatów, zmiana konta
   const started = (await app.inject({ method: 'POST', url: '/api/v1/integrations/google/connect', payload: { purpose: 'change_account' } })).json();
   google.grantCode('code-2', { sub: `sub2-${scope.userId}`, email: 'drugie@example.test', refreshToken: '1//r2' });
   assert.equal((await app.inject({ method: 'GET', url: `/api/v1/integrations/google/callback?state=${new URL(started.authUrl).searchParams.get('state')}&code=code-2` })).statusCode, 200);
+  // Nowe konto zaczyna bez wybranych kalendarzy (historyjka 23, 3a) – użytkownik wybiera je sam.
+  await selectSources(app, ['primary']);
   const second = await sync(app);
   assert.equal(second.attempt.status, 'success');
   const all = await synced(scope);

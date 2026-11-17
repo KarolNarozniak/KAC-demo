@@ -19548,11 +19548,11 @@
     "/api/v1/integrations/google/publications/{weekStart}/preview": {
       "get": {
         "operationId": "previewGooglePublication",
-        "summary": "Preview simulated schedule publication",
+        "summary": "Preview schedule publication",
         "tags": [
           "Google integration"
         ],
-        "description": "Lists the shifts of the accepted schedule for the week that a publication would create or update in the chosen calendar (default: the publication calendar from the calendar selection). Changes nothing. Publication is currently a simulation: nothing is sent to Google.",
+        "description": "Lists the shifts of the accepted schedule for the week that a publication would create or update in the chosen calendar (default: the publication calendar from the calendar selection). Changes nothing. For an account connected through Google the publication writes real events (simulated=false); a demo account, or GOOGLE_PUBLICATION_MODE=simulation, only simulates it.",
         "parameters": [
           {
             "schema": {
@@ -19596,7 +19596,7 @@
                   "properties": {
                     "simulated": {
                       "type": "boolean",
-                      "description": "true – publikacja demonstracyjna: nic nie trafia do Google."
+                      "description": "true – symulacja (konto demonstracyjne albo GOOGLE_PUBLICATION_MODE=simulation): nic nie trafia do Google. false – prawdziwy zapis."
                     },
                     "weekStart": {
                       "type": "string",
@@ -20014,14 +20014,303 @@
         }
       }
     },
-    "/api/v1/integrations/google/publications/{weekStart}": {
-      "post": {
-        "operationId": "publishGoogleSchedule",
-        "summary": "Publish accepted schedule (simulation)",
+    "/api/v1/integrations/google/publications/{weekStart}/calendar-view": {
+      "get": {
+        "operationId": "getGooglePublicationCalendarView",
+        "summary": "Google calendar view after publication",
         "tags": [
           "Google integration"
         ],
-        "description": "Confirmed publication of the accepted schedule after the preview. Currently a simulation: nothing is sent to Google and no Google event IDs are created; the result is marked simulated. Each shift has one publication record per calendar, so a retry after an error publishes only what is missing. The attempt is recorded in the sync registry with direction publish. A Google-side error is the attempt result (200), not an HTTP error.",
+        "description": "Step 10 of story 30: the week of the target Google calendar with the published shifts among the other events. With real publication everything is read from Google and KAC shifts are recognised by the kacEventId private property. In a simulation (or when Google cannot be read) published shifts come from the publication records and other events from Google or the demo account.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "in": "query",
+            "name": "calendarId",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "in": "path",
+            "name": "weekStart",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Widok kalendarza Google.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "simulated",
+                    "calendar",
+                    "weekStart",
+                    "events",
+                    "othersError"
+                  ],
+                  "properties": {
+                    "simulated": {
+                      "type": "boolean",
+                      "description": "true – opublikowane zmiany są symulacją i pochodzą z pozycji publikacji; false – wszystko odczytano z Google."
+                    },
+                    "calendar": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "id",
+                        "name"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "weekStart": {
+                      "type": "string",
+                      "format": "date"
+                    },
+                    "events": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "title",
+                          "start",
+                          "end",
+                          "published"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "start": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "end": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "published": {
+                            "type": "boolean",
+                            "description": "true – zmiana opublikowana przez KAC; false – pozostałe wydarzenie kalendarza."
+                          }
+                        }
+                      }
+                    },
+                    "othersError": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "description": "Pozostałych wydarzeń nie udało się odczytać – widok zawiera tylko opublikowane zmiany."
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "description": "Widok kalendarza Google."
+                },
+                "examples": {
+                  "week": {
+                    "summary": "Tydzień w kalendarzu Google",
+                    "description": "Dwie opublikowane zmiany (symulacja) i pozostałe wydarzenia kalendarza.",
+                    "value": {
+                      "simulated": true,
+                      "calendar": {
+                        "id": "praca@group.calendar.google.com",
+                        "name": "Grafik pracy"
+                      },
+                      "weekStart": "2026-11-23",
+                      "othersError": null,
+                      "events": [
+                        {
+                          "id": "zespol_20261123",
+                          "title": "Spotkanie zespołu",
+                          "start": "2026-11-23T08:00:00.000Z",
+                          "end": "2026-11-23T08:30:00.000Z",
+                          "published": false
+                        },
+                        {
+                          "id": "kac-z-1",
+                          "title": "Zmiana pracy",
+                          "start": "2026-11-23T14:00:00.000Z",
+                          "end": "2026-11-23T19:00:00.000Z",
+                          "published": true
+                        },
+                        {
+                          "id": "kac-z-2",
+                          "title": "Zmiana pracy",
+                          "start": "2026-11-25T08:00:00.000Z",
+                          "end": "2026-11-25T13:00:00.000Z",
+                          "published": true
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Kalendarz nie należy do połączonego konta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Kalendarz nie należy do połączonego konta.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unknown_calendar"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unknown_calendar": {
+                    "summary": "Nieznany kalendarz",
+                    "description": "Kalendarz nie należy do połączonego konta Google. Nic nie zostało zmienione.",
+                    "value": {
+                      "error": "unknown_calendar"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Brak konta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak konta.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "not_connected"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "not_connected": {
+                    "summary": "Brak połączonego konta",
+                    "description": "Najpierw połącz konto Google.",
+                    "value": {
+                      "error": "not_connected"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Brak kalendarza publikacji.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak kalendarza publikacji.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "no_publication_target"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "no_publication_target": {
+                    "summary": "Brak kalendarza publikacji",
+                    "description": "Wybierz kalendarz publikacji w ustawieniach integracji albo podaj calendarId.",
+                    "value": {
+                      "error": "no_publication_target"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Integracja niedostępna.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Integracja niedostępna.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "integration_not_configured"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "integration_not_configured": {
+                    "summary": "Serwer bez bazy danych",
+                    "description": "API działa bez bazy danych, więc nie może zapisać połączenia z Google.",
+                    "value": {
+                      "error": "integration_not_configured"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/integrations/google/publications/{weekStart}": {
+      "post": {
+        "operationId": "publishGoogleSchedule",
+        "summary": "Publish accepted schedule",
+        "tags": [
+          "Google integration"
+        ],
+        "description": "Confirmed publication of the accepted schedule after the preview. For an account connected through Google each shift becomes a Google event with an ID derived from the account, calendar and shift, so a retry after a lost response does not create a duplicate; an already published shift is updated, and one deleted by hand in Google is published again. A demo account (or GOOGLE_PUBLICATION_MODE=simulation) only simulates it: nothing is sent to Google and the result is marked simulated. Each shift has one publication record per calendar, so a retry after an error publishes only what is missing. The attempt is recorded in the sync registry with direction publish. A Google-side error is the attempt result (200), not an HTTP error.",
         "requestBody": {
           "required": true,
           "content": {
@@ -20104,7 +20393,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Wynik próby publikacji (symulacja).",
+            "description": "Wynik próby publikacji.",
             "content": {
               "application/json": {
                 "schema": {
@@ -20326,7 +20615,7 @@
                       "properties": {
                         "simulated": {
                           "type": "boolean",
-                          "description": "true – publikacja demonstracyjna: nic nie trafia do Google."
+                          "description": "true – symulacja (konto demonstracyjne albo GOOGLE_PUBLICATION_MODE=simulation): nic nie trafia do Google. false – prawdziwy zapis."
                         },
                         "weekStart": {
                           "type": "string",
@@ -20465,7 +20754,7 @@
                       }
                     }
                   },
-                  "description": "Wynik próby publikacji (symulacja)."
+                  "description": "Wynik próby publikacji."
                 },
                 "examples": {
                   "success": {
@@ -20937,7 +21226,7 @@
         "tags": [
           "Google integration"
         ],
-        "description": "Synchronization state of a published work shift in each calendar it was published to (simulation). Also works after the local event was deleted, because the publication record keeps a tombstone.",
+        "description": "Synchronization state of a published work shift in each calendar it was published to (simulated=true for a demo account). Also works after the local event was deleted, because the publication record keeps a tombstone.",
         "parameters": [
           {
             "schema": {
@@ -20982,7 +21271,8 @@
                           "tries",
                           "lastTryAt",
                           "publishedAt",
-                          "snapshot"
+                          "snapshot",
+                          "lastOperation"
                         ],
                         "properties": {
                           "eventId": {
@@ -21110,6 +21400,21 @@
                                 "type": "null"
                               }
                             ]
+                          },
+                          "lastOperation": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "Utworzenie",
+                                  "Aktualizacja"
+                                ],
+                                "description": "Ostatnia operacja w Google; usunięcie wynika ze stanu."
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           }
                         }
                       }
@@ -21141,7 +21446,8 @@
                             "title": "Zmiana pracy",
                             "start": "2026-11-23T14:00:00.000Z",
                             "end": "2026-11-23T19:00:00.000Z"
-                          }
+                          },
+                          "lastOperation": "Aktualizacja"
                         }
                       ]
                     }
@@ -21170,7 +21476,8 @@
                             "title": "Zmiana pracy",
                             "start": "2026-11-23T14:00:00.000Z",
                             "end": "2026-11-23T19:00:00.000Z"
-                          }
+                          },
+                          "lastOperation": "Aktualizacja"
                         }
                       ]
                     }
@@ -21253,7 +21560,7 @@
         "tags": [
           "Google integration"
         ],
-        "description": "Retry (\"Ponów synchronizację\") for an edited or deleted published shift; the app also calls it right after saving. Sends the latest local state, not an old job body: an update of a Google event that no longer exists reports missing without creating a new one, and deleting an already missing event succeeds. A Google error is the result (200) and never reverts the local change. Simulation: nothing is sent to Google.",
+        "description": "Retry (\"Ponów synchronizację\") for an edited or deleted published shift; the app also calls it right after saving. Sends the latest local state, not an old job body: an update of a Google event that no longer exists reports missing without creating a new one, and deleting an already missing event succeeds. A Google error is the result (200) and never reverts the local change. A shift published through a Google account is patched or deleted in Google (events.patch / events.delete); a demo publication is only simulated.",
         "parameters": [
           {
             "schema": {
@@ -21319,7 +21626,8 @@
                           "tries",
                           "lastTryAt",
                           "publishedAt",
-                          "snapshot"
+                          "snapshot",
+                          "lastOperation"
                         ],
                         "properties": {
                           "eventId": {
@@ -21447,6 +21755,21 @@
                                 "type": "null"
                               }
                             ]
+                          },
+                          "lastOperation": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "Utworzenie",
+                                  "Aktualizacja"
+                                ],
+                                "description": "Ostatnia operacja w Google; usunięcie wynika ze stanu."
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           }
                         }
                       }
@@ -21480,7 +21803,8 @@
                             "title": "Zmiana pracy",
                             "start": "2026-11-23T14:00:00.000Z",
                             "end": "2026-11-23T19:00:00.000Z"
-                          }
+                          },
+                          "lastOperation": "Aktualizacja"
                         }
                       ]
                     }
@@ -21510,7 +21834,8 @@
                             "title": "Zmiana pracy",
                             "start": "2026-11-23T14:00:00.000Z",
                             "end": "2026-11-23T19:00:00.000Z"
-                          }
+                          },
+                          "lastOperation": "Aktualizacja"
                         }
                       ]
                     }
@@ -21540,7 +21865,8 @@
                             "title": "Zmiana pracy",
                             "start": "2026-11-23T14:00:00.000Z",
                             "end": "2026-11-23T19:00:00.000Z"
-                          }
+                          },
+                          "lastOperation": "Aktualizacja"
                         }
                       ]
                     }
@@ -21652,7 +21978,8 @@
                           "tries",
                           "lastTryAt",
                           "publishedAt",
-                          "snapshot"
+                          "snapshot",
+                          "lastOperation"
                         ],
                         "properties": {
                           "eventId": {
@@ -21780,6 +22107,21 @@
                                 "type": "null"
                               }
                             ]
+                          },
+                          "lastOperation": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "Utworzenie",
+                                  "Aktualizacja"
+                                ],
+                                "description": "Ostatnia operacja w Google; usunięcie wynika ze stanu."
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           }
                         }
                       }
@@ -21810,7 +22152,8 @@
                             "title": "Zmiana pracy",
                             "start": "2026-11-23T14:00:00.000Z",
                             "end": "2026-11-23T19:00:00.000Z"
-                          }
+                          },
+                          "lastOperation": "Aktualizacja"
                         },
                         {
                           "eventId": "e-2",
@@ -21830,7 +22173,8 @@
                             "title": "Zmiana pracy",
                             "start": "2026-11-23T14:00:00.000Z",
                             "end": "2026-11-23T19:00:00.000Z"
-                          }
+                          },
+                          "lastOperation": "Aktualizacja"
                         }
                       ]
                     }

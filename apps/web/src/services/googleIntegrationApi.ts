@@ -3,7 +3,7 @@
 // Jednorazowy import (googleImportApi.ts, S23KC2S1P2-27) ma osobne endpointy.
 
 import { apiBaseUrl } from './importApi';
-import type { PublicationPreview, PublicationResult, PublicationSimulation } from '../domain/googlePublication';
+import type { PublicationCalendarView, PublicationPreview, PublicationResult, PublicationSimulation } from '../domain/googlePublication';
 import type { CorrectionItem, CorrectionSimulation, CorrectionSyncResult } from '../domain/googleCorrection';
 import {
   apiErrorMessage, type AttemptPurpose, type GoogleAccountView, type GoogleIntegrationStatus, type IntegrationAttempt, type IntegrationCalendar,
@@ -80,3 +80,7 @@ export const setCorrectionSimulation = (simulate: CorrectionSimulation | null) =
 /** Pobrane wydarzenie (S23KC2S1P2-23, G05): pochodzenie i „Przywróć wersję z Google”. 404 not_imported – wydarzenie nie pochodzi z Google. */
 export const getImportedEvent = (eventId: string) => call<ImportedEvent>('GET', `/api/v1/integrations/google/imported-events/${encodeURIComponent(eventId)}`);
 export const restoreImportedEvent = (eventId: string) => call<ImportedEvent>('POST', `/api/v1/integrations/google/imported-events/${encodeURIComponent(eventId)}/restore`, {});
+
+/** Krok 10 historyjki 30: widok tygodnia w kalendarzu Google z opublikowanymi zmianami (symulacja) i pozostałymi wydarzeniami. */
+export const getPublicationCalendarView = (weekStart: string, calendarId: string) =>
+  call<PublicationCalendarView>('GET', `/api/v1/integrations/google/publications/${encodeURIComponent(weekStart)}/calendar-view?calendarId=${encodeURIComponent(calendarId)}`);

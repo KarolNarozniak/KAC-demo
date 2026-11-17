@@ -50,7 +50,9 @@ test('makieta: stan wyjściowy i „po zmianach w Google” oraz różnica jak w
   assert.deepEqual(demoIntegrationEvents('praca.kac.demo@gmail.com', 'primary', 0, window), []);
   // Wydarzenia całodniowe i oznaczone jako publikacja KAC są w danych – pomija je dopiero synchronizacja.
   assert.ok(demoIntegrationEvents('student.kac.demo@gmail.com', 'urodziny', 0, window).every((event) => event.start?.date));
-  assert.ok(demoIntegrationEvents('student.kac.demo@gmail.com', 'grafik-pracy', 0, window)[0]!.extendedProperties?.private?.kacEventId);
+  assert.ok(demoIntegrationEvents('student.kac.demo@gmail.com', 'grafik-pracy', 0, window).some((event) => event.extendedProperties?.private?.kacEventId));
+  // Kalendarz publikacji ma też przykładowe pozostałe wydarzenia (historyjka 30, krok 10).
+  assert.ok(demoIntegrationEvents('student.kac.demo@gmail.com', 'grafik-pracy', 0, window).some((event) => event.summary === 'Spotkanie zespołu'));
 });
 
 test('komunikat wyniku: zmiany, konflikty, pominięte całodniowe i kalendarze z błędem', () => {

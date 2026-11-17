@@ -2,7 +2,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  apiErrorMessage, draftFrom, draftProblem, NO_SOURCES_TEXT, selectionChanges, selectionSummary, syncActions, targetOptions, targetProblemText, toggleSource,
+  apiErrorMessage, draftFrom, draftProblem, NO_SOURCES_TEXT, selectionChanges, selectionConfirmation, selectionSummary, SOURCE_PERMISSION_TEXT, syncActions,
+  targetOptions, targetProblemText, toggleSource,
   type CalendarSelection, type SelectionCalendar,
 } from '../src/domain/googleIntegration.ts';
 
@@ -57,6 +58,8 @@ test('podsumowanie zmian przed zatwierdzeniem: dodane, wyłączone (bez usuwania
 test('opis zapisanego wyboru i problemy po utracie uprawnień', () => {
   assert.equal(selectionSummary(selection()), '1 kalendarz do planowania · publikacja: Praca');
   assert.equal(selectionSummary(selection({ sourceCalendarIds: [], publicationTargetCalendarId: null })), 'Brak kalendarzy do planowania · bez kalendarza publikacji');
+  assert.match(selectionSummary(selection({ sourceCalendarIds: ['a', 'b'] })), /^2 kalendarze do planowania/);
+  assert.match(selectionSummary(selection({ sourceCalendarIds: ['a', 'b', 'c', 'd', 'e'] })), /^5 kalendarzy do planowania/);
   assert.match(targetProblemText('unavailable') ?? '', /straciło dostęp/);
   assert.match(targetProblemText('not_writable') ?? '', /prawem zapisu/);
   assert.match(targetProblemText('write_access_missing') ?? '', /Połącz konto ponownie/);
@@ -70,4 +73,17 @@ test('komunikaty błędów zapisu i synchronizacja bez wybranych kalendarzy', ()
   const base = { connection: 'connected' as const, enabled: true, state: 'never' as const, lastAttempt: null };
   assert.deepEqual(syncActions({ ...base, sourcesSelected: 0 }), { sync: false, retry: false, reconnect: false });
   assert.equal(syncActions({ ...base, sourcesSelected: 2 }).sync, true);
+});
+
+test('potwierdzenie wyboru (41, krok 5): zaznaczone kalendarze, kalendarz publikacji, wymagane uprawnienie (23, krok 4) i skutki odznaczenia', () => {
+  const current = selection();
+  assert.deepEqual(selectionConfirmation(current, { sources: ['Koło', 'Praca'], target: 'Student' }), [
+    'Kalendarze do planowania i synchronizacji: Praca, Koło.',
+    'Kalendarz publikacji grafiku: Student.',
+    SOURCE_PERMISSION_TEXT,
+    'Wyłączone z planowania i synchronizacji: Student. Pobrane z nich wydarzenia znikną z KAC; te edytowane w KAC zostaną jako zwykłe wydarzenia.',
+  ]);
+  // 23 (3a): bez kalendarza synchronizacja poprosi o wskazanie kalendarza.
+  assert.deepEqual(selectionConfirmation(current, { sources: [], target: null }).slice(0, 2),
+    ['Nie zaznaczono żadnego kalendarza – synchronizacja poprosi o wskazanie kalendarza.', 'Kalendarz publikacji grafiku: brak.']);
 });

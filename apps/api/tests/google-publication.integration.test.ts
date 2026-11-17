@@ -9,6 +9,8 @@ import { config } from '../src/config.js';
 import { pool } from '../src/database.js';
 import { PostgresGoogleIntegrationRepository } from '../src/integrations/google/repository.js';
 import { GoogleIntegrationService } from '../src/integrations/google/service.js';
+import { TokenCipher } from '../src/integrations/google/token-cipher.js';
+import { FakeGoogle, OAUTH } from './google-integration-fakes.js';
 
 const skip = !config.databaseUrl;
 const WEEK = '2035-03-05';
@@ -176,3 +178,44 @@ test('cudzy grafik i cudze konto są niewidoczne', { skip }, () => withUser(asyn
     await ownerApp.close(); await otherApp.close();
   }
 })));
+
+test('widok kalendarza Google po publikacji (historyjka 30, krok 10): opublikowane zmiany razem z pozostałymi wydarzeniami tygodnia', { skip }, () => withUser(async (scope) => {
+  const google = new FakeGoogle();
+  google.calendarPages = [[
+    { id: 'primary', summary: 'Student', primary: true, accessRole: 'owner', timeZone: 'Europe/Warsaw' },
+    { id: 'praca@group.calendar.google.com', summary: 'Grafik pracy', accessRole: 'writer', timeZone: 'Europe/Warsaw' },
+  ]];
+  const service = new GoogleIntegrationService(new PostgresGoogleIntegrationRepository(pool!), {
+    // Symulacja przy koncie Google (GOOGLE_PUBLICATION_MODE=simulation); prawdziwy zapis: google-publication-real.integration.test.ts.
+    oauth: OAUTH, cipher: new TokenCipher(randomBytes(32)), fetch: google.fetch, sync: { sleep: async () => {} }, publication: 'simulation',
+  });
+  const app = buildApi(null, [], { userScope: () => scope, googleIntegration: service });
+  try {
+    const started = (await app.inject({ method: 'POST', url: '/api/v1/integrations/google/connect', payload: {} })).json();
+    google.grantCode('code-1', { sub: `sub-${scope.userId}`, email: 'student@example.test', refreshToken: '1//r1' });
+    await app.inject({ method: 'GET', url: `/api/v1/integrations/google/callback?state=${new URL(started.authUrl).searchParams.get('state')}&code=code-1` });
+    await setTarget(app, 'praca@group.calendar.google.com');
+    await schedule(scope, { accepted: true, shifts: 2 });
+    const calendar = google.events('praca@group.calendar.google.com');
+    calendar.put({ id: 'zespol', summary: 'Spotkanie zespołu', start: { dateTime: '2035-03-05T09:00:00+01:00' }, end: { dateTime: '2035-03-05T09:30:00+01:00' } });
+    calendar.put({ id: 'pozniej', summary: 'Za dwa tygodnie', start: { dateTime: '2035-03-20T09:00:00+01:00' }, end: { dateTime: '2035-03-20T10:00:00+01:00' } });
+    calendar.put({ id: 'kac', summary: 'Zmiana pracy', start: { dateTime: '2035-03-06T09:00:00+01:00' }, end: { dateTime: '2035-03-06T14:00:00+01:00' },
+      extendedProperties: { private: { kacEventId: 'e-1' } } });
+    assert.equal((await publish(app, { expectedVersion: 1 })).json().attempt.status, 'success');
+
+    const view = (await app.inject({ method: 'GET', url: `/api/v1/integrations/google/publications/${WEEK}/calendar-view` })).json();
+    assert.deepEqual([view.simulated, view.calendar.id, view.othersError], [true, 'praca@group.calendar.google.com', null]);
+    assert.deepEqual(view.events.map((event: { title: string; published: boolean }) => [event.title, event.published]),
+      [['Spotkanie zespołu', false], ['Zmiana pracy', true], ['Zmiana pracy', true]]);
+    // Tydzień liczony w strefie użytkownika; własne wydarzenie KAC z Google nie dubluje opublikowanej zmiany.
+    const request = calendar.requests.at(-1)!;
+    assert.deepEqual([request.get('timeMin'), request.get('timeMax')], ['2035-03-04T23:00:00.000Z', '2035-03-11T23:00:00.000Z']);
+
+    // Bez dostępu do Google widok pokazuje same opublikowane zmiany i mówi dlaczego.
+    calendar.pageFailures = [{ page: 0, reply: 'network' }];
+    const offline = (await app.inject({ method: 'GET', url: `/api/v1/integrations/google/publications/${WEEK}/calendar-view` })).json();
+    assert.deepEqual([offline.othersError, offline.events.length], ['network_error', 2]);
+  } finally {
+    await app.close();
+  }
+}));

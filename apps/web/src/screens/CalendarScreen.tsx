@@ -116,10 +116,15 @@ export default function CalendarScreen({ week, setWeek, todayOnly = false, weekL
   const [notice, setNotice] = useState('');
   // G09: ostatni zapis albo usunięcie zmiany do zsynchronizowania z Google (symulacja).
   const [correction, setCorrection] = useState<CorrectionRequest | null>(null);
+  // Historyjka 47: wybrana zmiana jest opublikowana w tym kalendarzu Google – edycja i usunięcie dotyczą obu kalendarzy.
+  const [publishedIn, setPublishedIn] = useState<string | null>(null);
+  // Konto demonstracyjne: zmiana w Google jest tylko symulowana – opis edycji i usunięcia to mówi.
+  const [publishedSimulated, setPublishedSimulated] = useState(false);
+  const simulationNote = publishedSimulated ? ' – symulacja' : '';
   // S23KC2S1P2-302: wynik ponownego sprawdzenia dotyczy dokładnie tego szkicu – każda zmiana pola go unieważnia.
   const [recheck, setRecheck] = useState<{ draft: CalendarEvent; conflicts: EventCollision[] } | null>(null);
   const [checking, setChecking] = useState(false);
-  const close = () => { setDialog(null); setDraft(null); setSelected(null); setPending(null); setEditId(null); setError(''); setCollisionToken(undefined); setRecheck(null); setPlanChange(null); };
+  const close = () => { setDialog(null); setDraft(null); setSelected(null); setPending(null); setEditId(null); setError(''); setCollisionToken(undefined); setRecheck(null); setPlanChange(null); setPublishedIn(null); };
   const normalizedDraft = (value: CalendarEvent) => ({ ...value, title: value.title.trim(), mandatory: value.category === 'Class' && value.mandatory });
   const recheckDraft = async () => {
     if (!draft || checking) return;
@@ -132,7 +137,7 @@ export default function CalendarScreen({ week, setWeek, todayOnly = false, weekL
   };
   const recheckCurrent = recheck && draft && JSON.stringify(normalizedDraft(draft)) === JSON.stringify(recheck.draft) ? recheck : null;
   const newEvent = (date: Date) => { const key = localDateKey(date); setDraft({ id: `evt-${Date.now()}`, title: '', location: '', start: `${key}T09:00`, end: `${key}T10:00`, category: 'Class', mandatory: false, repeatWeekly: false }); setDialog('form'); };
-  const details = (item: Occurrence) => { setSelected(item); setDialog('details'); };
+  const details = (item: Occurrence) => { setSelected(item); setPublishedIn(null); setDialog('details'); };
   const edit = () => {
     if (!selected) return;
     const { title, location, start, end, category, mandatory, repeatWeekly } = selected;
@@ -222,21 +227,24 @@ export default function CalendarScreen({ week, setWeek, todayOnly = false, weekL
           <Text style={[styles.body, { color: recheckCurrent.conflicts.length ? palette.amber : palette.green }]}>{collisionSummary(recheckCurrent.conflicts)}</Text>
           {recheckCurrent.conflicts.map((conflict) => describeCollision(conflict)).map(item => <Text key={item.key} style={styles.muted}>• {item.title} ({item.kind}) {item.range}{item.notes.length ? ` – ${item.notes.join(', ')}` : ''}</Text>)}
         </View>}
-        {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}<View style={[styles.row, { justifyContent: 'flex-end', flexWrap: 'wrap', marginTop: 12 }]}><Button title="Anuluj" disabled={saving} onPress={close} /><Button title={checking ? 'Sprawdzanie…' : 'Sprawdź kolizje'} disabled={saving || checking || loading || !!loadError} onPress={() => void recheckDraft()} /><Button title={saving ? 'Zapisywanie…' : editId ? 'Zapisz zmiany' : 'Zapisz wydarzenie'} disabled={saving || loading || !!loadError} primary onPress={save} /></View>
+        {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}<View style={[styles.row, { justifyContent: 'flex-end', flexWrap: 'wrap', marginTop: 12 }]}><Button title="Anuluj" disabled={saving} onPress={close} /><Button title={checking ? 'Sprawdzanie…' : 'Sprawdź kolizje'} disabled={saving || checking || loading || !!loadError} onPress={() => void recheckDraft()} /><Button title={saving ? 'Zapisywanie…' : editId ? (publishedIn ? 'Zapisz' : 'Zapisz zmiany') : 'Zapisz wydarzenie'} disabled={saving || loading || !!loadError} primary onPress={save} /></View>
+        {!!editId && !!publishedIn && <Text style={[styles.muted, { marginTop: 8 }]}>Zapisanie zmieni zmianę w kalendarzu aplikacji i powiązane wydarzenie w Google Calendar („{publishedIn}”){simulationNote}.</Text>}
       </View></>}
       {dialog === 'details' && selected && <>{planChange && <View accessibilityRole="alert" style={{ marginTop: 8, padding: 10, borderRadius: 10, borderWidth: 1, borderColor: palette.amber, backgroundColor: palette.surfaceAlt }}>
         <Text style={[styles.body, { fontWeight: '700' }]}>Zmiana planu</Text>
         {planChange.lines.map((line) => <Text key={line} style={styles.body}>{line}</Text>)}
         {planChange.outdated && <Text style={[styles.muted, { color: palette.amber }]}>Wydarzenie zmieniło się ponownie po wysłaniu powiadomienia – poniżej aktualny termin.</Text>}
-      </View>}<Text style={[styles.heading, { marginTop: 12 }]}>{selected.title}</Text><Text style={styles.subtitle}>{selected.occurrenceStart.toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' })} · {selected.occurrenceStart.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}–{selected.occurrenceEnd.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}</Text><Text style={[styles.subtitle, { marginTop: 8 }]}>{selected.location ? `Miejsce: ${selected.location}` : 'Nie podano miejsca.'}</Text><Text style={[styles.body, { marginTop: 12 }]}>{selected.repeatWeekly ? 'Seria cotygodniowa. Edycja zmienia całą serię.' : 'Wydarzenie jednorazowe.'} {selected.mandatory ? 'Zajęcia obowiązkowe.' : ''}</Text>{selected.category === 'Work' && <GoogleEventSync eventId={selected.id} />}<GoogleImportedEvent eventId={selected.id} onRestored={() => { close(); setNotice('Przywrócono wersję z Google.'); void reload(); }} /><View style={[styles.row, { justifyContent: 'flex-end', flexWrap: 'wrap', marginTop: 18 }]}><Button title="Edytuj" primary onPress={edit} /><Button title={selected.repeatWeekly ? 'Usuń serię' : 'Usuń wydarzenie'} danger onPress={() => { setError(''); setDialog('delete'); }} /><Button title="Zamknij" onPress={close} /></View></>}
+      </View>}<Text style={[styles.heading, { marginTop: 12 }]}>{selected.title}</Text><Text style={styles.subtitle}>{selected.occurrenceStart.toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' })} · {selected.occurrenceStart.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}–{selected.occurrenceEnd.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}</Text><Text style={[styles.subtitle, { marginTop: 8 }]}>{selected.location ? `Miejsce: ${selected.location}` : 'Nie podano miejsca.'}</Text><Text style={[styles.body, { marginTop: 12 }]}>{selected.repeatWeekly ? 'Seria cotygodniowa. Edycja zmienia całą serię.' : 'Wydarzenie jednorazowe.'} {selected.mandatory ? 'Zajęcia obowiązkowe.' : ''}</Text>{selected.category === 'Work' && <GoogleEventSync eventId={selected.id} onPublished={(name, simulated) => { setPublishedIn(name); setPublishedSimulated(simulated); }} />}<GoogleImportedEvent eventId={selected.id} onRestored={() => { close(); setNotice('Przywrócono wersję z Google.'); void reload(); }} /><View style={[styles.row, { justifyContent: 'flex-end', flexWrap: 'wrap', marginTop: 18 }]}><Button title="Edytuj" primary onPress={edit} /><Button title={selected.repeatWeekly ? 'Usuń serię' : publishedIn ? 'Usuń' : 'Usuń wydarzenie'} danger onPress={() => { setError(''); setDialog('delete'); }} /><Button title="Zamknij" onPress={close} /></View></>}
       {dialog === 'delete' && selected && <>
         <Text style={styles.heading}>{selected.repeatWeekly ? 'Usunąć całą serię?' : 'Usunąć wydarzenie?'}</Text>
         <Text style={styles.subtitle}>{selected.title}</Text>
-        <Text style={styles.body}>{selected.repeatWeekly ? 'Wszystkie cotygodniowe wystąpienia zostaną usunięte.' : 'Wydarzenie zostanie usunięte z kalendarza.'}</Text>
+        <Text style={styles.body}>{selected.repeatWeekly ? 'Wszystkie cotygodniowe wystąpienia zostaną usunięte.' : publishedIn
+          ? `Zmiana zostanie usunięta z kalendarza aplikacji i z powiązanego wydarzenia w Google Calendar („${publishedIn}”)${simulationNote}.`
+          : 'Wydarzenie zostanie usunięte z kalendarza.'}</Text>
         {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
         <View style={[styles.row, { justifyContent: 'flex-end', flexWrap: 'wrap', marginTop: 16 }]}>
           <Button title="Anuluj" disabled={saving} onPress={() => { setError(''); setDialog('details'); }} />
-          <Button title={saving ? 'Usuwanie…' : selected.repeatWeekly ? 'Usuń całą serię' : 'Usuń wydarzenie'} danger disabled={saving} onPress={() => void remove()} />
+          <Button title={saving ? 'Usuwanie…' : selected.repeatWeekly ? 'Usuń całą serię' : publishedIn ? 'Potwierdź usunięcie' : 'Usuń wydarzenie'} danger disabled={saving} onPress={() => void remove()} />
         </View>
       </>}
       {dialog === 'collision' && <>

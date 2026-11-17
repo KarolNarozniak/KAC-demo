@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { SyncAttempt } from '../src/domain/googleIntegration.ts';
 import {
-  actionLabel, canRetry, itemResultLabel, itemTimeLabel, pendingCount, previewSummary, publicationEntry, publicationErrorMessage, publicationNotice,
+  actionLabel, calendarViewLines, calendarViewTitle, canRetry, itemResultLabel, itemTimeLabel, pendingCount, previewSummary, publicationAccount, publicationEntry,
+  publicationErrorMessage, publicationNotice,
   type PublicationItem, type PublicationPreview, type PublicationResult,
 } from '../src/domain/googlePublication.ts';
 
@@ -47,7 +48,8 @@ test('podgląd: konkretne zmiany, opis akcji i nic do publikacji', () => {
 test('wynik: sukces oznaczony jako symulacja, błąd i wynik częściowy nigdy jako sukces', () => {
   const ok = publicationNotice(result('success', ['published', 'published']));
   assert.equal(ok.tone, 'success');
-  assert.match(ok.text, /^Symulacja: opublikowano 2 zmian .*Nic nie trafiło do Google\./);
+  assert.match(ok.text, /^Symulacja: opublikowano 2 zmiany .*Nic nie trafiło do Google\./);
+  assert.match(publicationNotice(result('success', ['published', 'published', 'published', 'published', 'published'])).text, /opublikowano 5 zmian /);
   assert.match(publicationNotice(result('success', ['unchanged'])).text, /nic nie zmieniono/);
   const error = publicationNotice(result('error', ['failed', 'skipped'], { message: 'Symulacja nieudana: brak sieci.', retryable: true, errorClass: 'network' }));
   assert.equal(error.tone, 'error');
@@ -70,4 +72,37 @@ test('komunikaty błędów wejścia', () => {
   assert.match(publicationErrorMessage('not_connected'), /Ustawieniach/);
   assert.match(publicationErrorMessage('schedule_version_conflict'), /Nic nie opublikowano/);
   assert.match(publicationErrorMessage('target_not_writable'), /prawem zapisu/);
+});
+
+test('historyjka 30, kroki 3–4a: konto Google i zgoda na dodawanie wydarzeń', () => {
+  const status = (extra: Record<string, unknown> = {}, access = { calendarsRead: true, eventsWrite: true }) => ({
+    mode: 'demo' as const, ready: true, problem: null, status: 'connected' as const, requestedAccess: access, demoAccounts: [],
+    account: { email: 'student@example.com', connectedAt: null, grantedScopes: [], access }, ...extra });
+  assert.deepEqual(publicationAccount(status()), { state: 'ok', text: 'Konto Google: student@example.com · dodawanie wydarzeń: zgoda udzielona' });
+  assert.equal(publicationAccount(status({}, { calendarsRead: true, eventsWrite: false })).state, 'no_write');
+  assert.match(publicationAccount(status({}, { calendarsRead: true, eventsWrite: false })).text, /bez tej zgody publikacja nie jest możliwa/);
+  assert.equal(publicationAccount(status({ status: 'not_connected', account: null })).state, 'not_connected');
+  assert.equal(publicationAccount(null).state, 'not_connected');
+  assert.equal(publicationAccount(status({ status: 'reconnect_required' })).state, 'not_connected');
+});
+
+test('historyjka 30, krok 10: zmiany robocze razem z pozostałymi wydarzeniami w widoku kalendarza Google', () => {
+  const view = { simulated: true, calendar: { id: 'praca', name: 'Grafik pracy' }, weekStart: '2035-03-05', othersError: null, events: [
+    { id: 'zespol', title: 'Spotkanie zespołu', start: new Date(2035, 2, 5, 9).toISOString(), end: new Date(2035, 2, 5, 9, 30).toISOString(), published: false },
+    { id: 'kac-1', title: 'Zmiana pracy', start: new Date(2035, 2, 5, 14).toISOString(), end: new Date(2035, 2, 5, 19).toISOString(), published: true },
+  ] };
+  assert.equal(calendarViewTitle(view), 'Kalendarz Google „Grafik pracy” – tydzień od 05.03: opublikowane zmiany: 1, pozostałe wydarzenia: 1.');
+  assert.deepEqual(calendarViewLines(view), [
+    { key: 'zespol', when: 'pn 05.03, 09:00–09:30', title: 'Spotkanie zespołu', published: false },
+    { key: 'kac-1', when: 'pn 05.03, 14:00–19:00', title: 'Zmiana pracy', published: true },
+  ]);
+});
+
+test('prawdziwa publikacja (konto Google): bez oznaczeń symulacji, komunikat mówi, że zmiany są w Google Calendar', () => {
+  const real = { ...result('success', ['published', 'published']), simulated: false };
+  const notice = publicationNotice(real);
+  assert.equal(notice.text, 'Opublikowano 2 zmiany w kalendarzu „Grafik pracy”. Zmiany są widoczne w Google Calendar.');
+  assert.doesNotMatch(notice.text, /Symulacja|Nic nie trafiło/);
+  assert.equal(itemResultLabel('published', false), 'opublikowano');
+  assert.equal(itemResultLabel('published'), 'opublikowano (symulacja)');
 });

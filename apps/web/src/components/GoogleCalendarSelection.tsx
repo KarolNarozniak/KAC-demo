@@ -11,7 +11,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Button, useTheme } from './ui';
 import {
-  accessRoleLabel, apiErrorMessage, draftFrom, draftProblem, selectionChanges, selectionSummary, targetOptions, targetProblemText, toggleSource,
+  accessRoleLabel, apiErrorMessage, draftFrom, draftProblem, selectionChanges, selectionConfirmation, selectionSummary, SOURCE_PERMISSION_TEXT, targetOptions,
+  targetProblemText, toggleSource,
   type CalendarSelection, type Notice, type SelectionDraft,
 } from '../domain/googleIntegration';
 import { getGoogleCalendarSelection, GoogleIntegrationApiError, saveGoogleCalendarSelection } from '../services/googleIntegrationApi';
@@ -93,7 +94,8 @@ export default function GoogleCalendarSelection({ reloadKey, onSaved }: Props) {
     <View style={{ marginTop: 4 }}>
       {!editing && <Text style={[styles.body, { marginBottom: 6 }]}>{selectionSummary(selection)}</Text>}
       {!!problem && !editing && <Text style={[styles.body, { color: palette.amber, marginBottom: 6 }]}>{problem}</Text>}
-      {editing && <Text style={[styles.muted, { marginBottom: 6 }]}>Zaznacz kalendarze uwzględniane przy planowaniu i synchronizacji.</Text>}
+      {editing && <Text style={[styles.muted, { marginBottom: 2 }]}>Zaznacz kalendarze uwzględniane przy planowaniu i synchronizacji.</Text>}
+      {editing && <Text style={[styles.muted, { marginBottom: 6 }]}>{SOURCE_PERMISSION_TEXT}</Text>}
 
       <View accessibilityRole={editing ? 'list' : undefined}>
         {selection.calendars.map((calendar) => {
@@ -105,9 +107,11 @@ export default function GoogleCalendarSelection({ reloadKey, onSaved }: Props) {
             onPress={() => setDraft((current) => (current ? toggleSource(selection, current, calendar.id) : current))}
             style={[styles.row, { paddingVertical: 9, borderTopWidth: 1, borderColor: palette.line }]}>
             <Text style={{ width: 22, fontWeight: '800', color: checked ? palette.blue : palette.muted }}>{checked ? '☑' : '☐'}</Text>
-            <Text numberOfLines={1} style={[styles.body, { flex: 1, minWidth: 0 }, !calendar.available && { color: palette.muted }]}>
-              {calendar.name}{calendar.primary ? '  · główny' : ''}
-            </Text>
+            {/* Historyjka 41: nazwy kalendarzy i ich identyfikatory. */}
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text numberOfLines={1} style={[styles.body, !calendar.available && { color: palette.muted }]}>{calendar.name}{calendar.primary ? '  · główny' : ''}</Text>
+              <Text numberOfLines={1} style={{ fontSize: 11, color: palette.muted }}>{calendar.id}</Text>
+            </View>
             {!editing && calendar.publicationTarget && badge('PUBLIKACJA', calendar.available && calendar.writable ? palette.green : palette.amber)}
             <Text style={[styles.muted, { marginLeft: 8 }, calendar.writable && { color: palette.green, fontWeight: '700' }, !calendar.available && { color: palette.amber }]}>{role}</Text>
           </Pressable>;
@@ -137,7 +141,7 @@ export default function GoogleCalendarSelection({ reloadKey, onSaved }: Props) {
 
       {confirming && <View style={{ marginTop: 10, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: palette.blue }}>
         <Text style={[styles.body, { fontWeight: '800' }]}>Zatwierdzić zmiany?</Text>
-        {changes.map((line) => <Text key={line} style={[styles.body, { marginTop: 4 }]}>• {line}</Text>)}
+        {selectionConfirmation(selection, draft!).map((line) => <Text key={line} style={[styles.body, { marginTop: 4 }]}>• {line}</Text>)}
         <View style={[styles.row, { marginTop: 10, flexWrap: 'wrap' }]}>
           <Button title="Zatwierdź" primary disabled={busy} onPress={() => void save()} />
           <Button title="Wróć" disabled={busy} onPress={() => setConfirming(false)} />

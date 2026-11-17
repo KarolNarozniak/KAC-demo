@@ -85,7 +85,8 @@ export function calendarsSummary(calendars: IntegrationCalendar[], complete: boo
   return `${complete ? '' : 'Pierwsze '}${total}${writes}.${complete ? '' : ' Google zwrócił więcej kalendarzy, niż mieści lista.'}`;
 }
 
-function plural(count: number, one: string, few: string, many: string) {
+/** Polska odmiana po liczebniku: 1 kalendarz, 2–4 kalendarze (bez 12–14), pozostałe – kalendarzy. */
+export function plural(count: number, one: string, few: string, many: string) {
   if (count === 1) return one;
   const tens = count % 100, units = count % 10;
   return units >= 2 && units <= 4 && (tens < 12 || tens > 14) ? few : many;
@@ -224,16 +225,18 @@ export const lastSuccessLabel = (status: Pick<SyncStatus, 'lastSuccess'>) =>
   status.lastSuccess.read ? `Ostatnia udana synchronizacja: ${dateTime(status.lastSuccess.read)}` : 'Ostatnia udana synchronizacja: jeszcze nie było';
 export const attemptTimeLabel = (attempt: Pick<SyncAttempt, 'startedAt'>) => dateTime(attempt.startedAt);
 
-/** Które przyciski pokazać po próbie (krok 2 historyjki 17). Przy wygasłym logowaniu zwykłe ponowienie nic nie da. */
+/**
+ * Które przyciski pokazać (historyjka 17). Krok 2: po błędzie zawsze oba – „Spróbuj ponownie” i „Połącz ponownie konto Google”.
+ * 5a: synchronizacja wyłączona po odmowie zgody – tylko ponowne połączenie. 23 (3a): bez wybranych kalendarzy – najpierw wybór.
+ */
 export function syncActions(status: Pick<SyncStatus, 'enabled' | 'connection' | 'state' | 'lastAttempt'> & { sourcesSelected?: number }): { sync: boolean; retry: boolean; reconnect: boolean } {
-  const needsLogin = !status.enabled || status.connection === 'reconnect_required' || status.lastAttempt?.errorClass === 'reconnect';
-  const failed = status.state === 'error' || status.state === 'partial';
-  // G04: bez wybranych kalendarzy nie ma czego synchronizować – najpierw wybór (konto zostaje połączone).
+  const failed = status.state === 'error' || status.state === 'partial' || status.connection === 'reconnect_required';
   const hasSources = (status.sourcesSelected ?? 1) > 0;
+  const running = status.state === 'running';
   return {
-    sync: status.enabled && hasSources && !needsLogin && !failed && status.state !== 'running',
-    retry: status.enabled && hasSources && !needsLogin && failed && Boolean(status.lastAttempt?.retryable),
-    reconnect: needsLogin || status.lastAttempt?.errorClass === 'permissions',
+    sync: status.enabled && hasSources && !failed && !running,
+    retry: status.enabled && hasSources && failed && !running,
+    reconnect: !running && (!status.enabled || failed),
   };
 }
 
@@ -332,10 +335,28 @@ export function selectionChanges(selection: CalendarSelection, draft: SelectionD
   return lines;
 }
 
+/** Historyjka 23, krok 4: informacja o uprawnieniu wymaganym do synchronizacji wybranych kalendarzy. */
+export const SOURCE_PERMISSION_TEXT = 'Synchronizacja odczytuje wydarzenia z zaznaczonych kalendarzy – wymaga uprawnienia do odczytu wydarzeń, przyznanego przy połączeniu konta Google.';
+
+/**
+ * Historyjka 41, krok 5: zaznaczone kalendarze do potwierdzenia (cały wybór, nie tylko różnice) razem z kalendarzem publikacji,
+ * wymaganym uprawnieniem (23, krok 4) i skutkami odznaczenia (D04).
+ */
+export function selectionConfirmation(selection: CalendarSelection, draft: SelectionDraft): string[] {
+  const names = selection.calendars.filter((calendar) => draft.sources.includes(calendar.id)).map((calendar) => calendar.name);
+  const lines = [names.length
+    ? `Kalendarze do planowania i synchronizacji: ${names.join(', ')}.`
+    : 'Nie zaznaczono żadnego kalendarza – synchronizacja poprosi o wskazanie kalendarza.'];
+  lines.push(draft.target === null ? 'Kalendarz publikacji grafiku: brak.' : `Kalendarz publikacji grafiku: ${nameOf(selection, draft.target)}.`);
+  if (names.length) lines.push(SOURCE_PERMISSION_TEXT);
+  const removed = selectionChanges(selection, draft).filter((line) => line.startsWith('Wyłączone z planowania'));
+  return [...lines, ...removed];
+}
+
 /** Krótkie podsumowanie zapisanego wyboru w widoku panelu. */
 export function selectionSummary(selection: CalendarSelection): string {
   const count = selection.sourceCalendarIds.length;
-  const sources = count === 0 ? 'Brak kalendarzy do planowania' : count === 1 ? '1 kalendarz do planowania' : `${count} kalendarzy do planowania`;
+  const sources = count === 0 ? 'Brak kalendarzy do planowania' : `${count} ${plural(count, 'kalendarz', 'kalendarze', 'kalendarzy')} do planowania`;
   const target = selection.publicationTargetCalendarId ? `publikacja: ${nameOf(selection, selection.publicationTargetCalendarId)}` : 'bez kalendarza publikacji';
   return `${sources} · ${target}`;
 }

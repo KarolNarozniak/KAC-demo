@@ -37,6 +37,13 @@ const localEvents = async (scope: Scope) => (await pool!.query(`select id_wydarz
   from t_wydarzenia where id_kalendarza = $1 and zrodlo <> 'Google (synchronizacja)' order by id_wydarzenia`, [scope.calendarId])).rows;
 const sync = (app: FastifyInstance, body: Record<string, unknown> = {}) => app.inject({ method: 'POST', url: '/api/v1/integrations/google/sync', payload: body });
 const syncStatus = async (app: FastifyInstance) => (await app.inject({ method: 'GET', url: '/api/v1/integrations/google/sync' })).json();
+/** Historyjka 23 (krok 3): kalendarz do synchronizacji wybiera użytkownik – nie ma wyboru domyślnego. */
+const choosePrimary = async (app: FastifyInstance) => {
+  const current = (await app.inject({ method: 'GET', url: '/api/v1/integrations/google/calendar-selection' })).json();
+  const saved = await app.inject({ method: 'PUT', url: '/api/v1/integrations/google/calendar-selection',
+    payload: { version: current.version, sourceCalendarIds: ['primary'], publicationTargetCalendarId: current.publicationTargetCalendarId } });
+  assert.equal(saved.statusCode, 200, saved.body);
+};
 const connectDemo = async (app: FastifyInstance, account = 'student.kac.demo@gmail.com', purpose = 'connect') => {
   const started = (await app.inject({ method: 'POST', url: '/api/v1/integrations/google/connect', payload: { purpose } })).json();
   return (await app.inject({ method: 'POST', url: `/api/v1/integrations/google/attempts/${started.attemptId}/demo-consent`, payload: { allow: true, account } })).json();
@@ -57,6 +64,7 @@ test('makieta: nigdy → sukces, błąd po ograniczonych ponowieniach nie nadpis
     assert.deepEqual((await syncStatus(app)).connection, 'not_connected');
     assert.deepEqual((await sync(app)).json(), { error: 'not_connected' });
     await connectDemo(app);
+    await choosePrimary(app);
     let status = await syncStatus(app);
     assert.deepEqual([status.state, status.enabled, status.lastAttempt, status.lastSuccess.read], ['never', true, null, null]);
 
@@ -124,6 +132,7 @@ test('makieta: wygasłe logowanie → „Połącz ponownie”; odmowa wyłącza 
   const eventsBefore = await localEvents(scope);
   try {
     await connectDemo(app);
+    await choosePrimary(app);
     assert.equal((await sync(app)).json().attempt.status, 'success');
 
     // Krok 2 + 3: błąd logowania – bez ponowień, konto „Wymaga ponownego logowania”, przycisk „Spróbuj ponownie” nie ma sensu.
@@ -175,6 +184,7 @@ test('udawany Google: 503 dwa razy i sukces za trzecim, zerwane połączenie, Ca
     google.grantCode('code-ok', { sub: 'sub-1', email: 'student@example.test', refreshToken: '1//r1' });
     const state = new URL(started.authUrl).searchParams.get('state')!;
     assert.equal((await app.inject({ method: 'GET', url: `/api/v1/integrations/google/callback?state=${state}&code=code-ok` })).statusCode, 200);
+    await choosePrimary(app);
 
     // Symulacja błędów jest dostępna tylko w makiecie.
     assert.deepEqual((await sync(app, { simulate: 'network' })).json(), { error: 'demo_only' });

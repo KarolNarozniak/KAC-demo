@@ -89,6 +89,11 @@ export function demoIntegrationEvents(email: string, calendarId: string, revisio
   } else if (calendarId === 'kolo-naukowe') {
     timed('demo-ctf', 'Warsztaty CTF', addDays(anchor, 2), '16:00', '20:00', { location: 'WAT, bud. 100' });
   } else if (calendarId === 'grafik-pracy') {
+    // Przykładowe pozostałe wydarzenia kalendarza publikacji (historyjka 30: „przykładowe pozostałe wydarzenia w kalendarzu Google”).
+    for (let date = first; date <= last; date = addDays(date, 1)) {
+      if (weekday(date) === 1) instance('demo-zespol', 'Spotkanie zespołu', date, '09:00', '09:30', { location: 'Biuro, sala 2' });
+    }
+    timed('demo-bhp', 'Szkolenie BHP', addDays(anchor, 3), '10:00', '12:00');
     // Wydarzenie opublikowane przez KAC (przyszła prawdziwa publikacja oznacza je tak samo) – nie wraca jako nowy wpis.
     timed('demo-kac-zmiana', 'Zmiana pracy', anchor, '08:00', '12:00', { extendedProperties: { private: { kacEventId: 'demo-publikacja' } } });
   }

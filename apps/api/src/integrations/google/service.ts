@@ -15,7 +15,7 @@ import { TokenCipher } from './token-cipher.js';
 import { GoogleTokenService } from './token-service.js';
 import { GoogleSyncService, type SyncOptions } from './sync.js';
 import { GooglePublicationService } from './publication.js';
-import { GoogleCorrectionService } from './corrections.js';
+import { GoogleCorrectionService, GoogleCorrectionSync } from './corrections.js';
 import { GoogleCalendarSelectionService } from './selection.js';
 import { GoogleEventSync, GoogleImportedEventService } from './events-sync.js';
 
@@ -24,6 +24,8 @@ export type IntegrationOptions = {
   oauth: GoogleIntegrationOAuthConfig | null; cipher: TokenCipher | null; keyProblem?: KeyProblem; fetch?: FetchLike; attemptTtlMinutes?: number;
   /** Ponowienia synchronizacji (G06) – w testach atrapa zegara. */
   sync?: SyncOptions;
+  /** „simulation” wyłącza prawdziwy zapis do Google (publikacja i korekty) także dla kont Google. Domyślnie „google”. */
+  publication?: 'google' | 'simulation';
 };
 
 /** Błędy przebiegu połączenia zwracane przez API (kod → status HTTP w trasach). */
@@ -55,9 +57,11 @@ export class GoogleIntegrationService {
   readonly sync: GoogleSyncService;
   /** Trwały wybór kalendarzy źródłowych i kalendarza publikacji (S23KC2S1P2-41, G04). */
   readonly selection: GoogleCalendarSelectionService;
-  /** Symulowana publikacja grafiku (G07); ponowienia jak w synchronizacji. */
+  /** Publikacja grafiku (G07): prawdziwa dla kont Google, symulacja dla kont demonstracyjnych; ponowienia jak w synchronizacji. */
   readonly publication: GooglePublicationService;
-  /** Korekty opublikowanych zmian (G09, symulacja). */
+  /** Wykonanie korekt opublikowanych zmian (G09) – używa go też worker outboxa. */
+  readonly correctionEngine: GoogleCorrectionSync;
+  /** Korekty opublikowanych zmian (G09): stan, rozbieżności i „Ponów synchronizację”. */
   readonly corrections: GoogleCorrectionService;
   /** Pobieranie i stosowanie zmian z Google (S23KC2S1P2-23, G05). */
   readonly events: GoogleEventSync;
@@ -70,8 +74,12 @@ export class GoogleIntegrationService {
     this.tokens = new GoogleTokenService(repository, options.cipher, options.oauth, this.fetchImpl);
     this.sync = new GoogleSyncService(repository, this, options.sync);
     this.selection = new GoogleCalendarSelectionService(repository);
-    this.publication = new GooglePublicationService(repository, options.sync);
-    this.corrections = new GoogleCorrectionService(repository);
+    const call = <T>(account: GoogleAccountRecord, work: (token: string) => Promise<T>) => this.callGoogle(account, work);
+    const realWrites = options.publication !== 'simulation';
+    this.publication = new GooglePublicationService(repository, { ...options.sync, realWrites }, call, this.fetchImpl);
+    // Pozycje opublikowane naprawdę są korygowane w Google; przy wyłączonym zapisie zostają ze stanem „Błąd” do ponowienia po włączeniu.
+    this.correctionEngine = new GoogleCorrectionSync(realWrites ? { account: (userId) => repository.getActiveAccount(userId), call, fetchImpl: this.fetchImpl } : null);
+    this.corrections = new GoogleCorrectionService(repository, this.correctionEngine);
     this.events = new GoogleEventSync(repository, (account, work) => this.callGoogle(account, work), this.fetchImpl);
     this.importedEvents = new GoogleImportedEventService(repository);
   }
@@ -295,7 +303,8 @@ export class GoogleIntegrationService {
  * Usługa z konfiguracji serwera. Zły klucz szyfrowania nie zatrzymuje API (reszta aplikacji działa),
  * ale integracja zgłasza problem i nie rozpoczyna logowania, dopóki tokenów nie da się bezpiecznie zapisać.
  */
-export function createGoogleIntegrationService(pool: Pool, settings: { oauth: GoogleIntegrationOAuthConfig | null; tokenKey: string }, fetchImpl?: FetchLike) {
+export function createGoogleIntegrationService(pool: Pool, settings: { oauth: GoogleIntegrationOAuthConfig | null; tokenKey: string; publication?: 'google' | 'simulation' },
+  fetchImpl?: FetchLike) {
   let cipher: TokenCipher | null = null;
   let keyProblem: KeyProblem = null;
   try {
@@ -304,7 +313,8 @@ export function createGoogleIntegrationService(pool: Pool, settings: { oauth: Go
   } catch {
     keyProblem = 'token_key_invalid';
   }
-  return new GoogleIntegrationService(new PostgresGoogleIntegrationRepository(pool), { oauth: settings.oauth, cipher, keyProblem, fetch: fetchImpl });
+  return new GoogleIntegrationService(new PostgresGoogleIntegrationRepository(pool), { oauth: settings.oauth, cipher, keyProblem, fetch: fetchImpl,
+    publication: settings.publication });
 }
 
 function callbackConflictMessage(code: string | null | undefined): string {

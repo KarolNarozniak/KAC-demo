@@ -57,7 +57,7 @@ export class PostgresEventOutboxWorker {
         return;
       }
       if (item.consumer === 'google' && item.typ_agregatu === 'calendar_event') {
-        // G09: korekta opublikowanej zmiany (symulacja). Wysyłany jest najnowszy stan wydarzenia, nie treść zlecenia.
+        // G09: korekta opublikowanej zmiany (prawdziwa dla kont Google, symulacja dla demonstracyjnych). Wysyłany jest najnowszy stan wydarzenia.
         // Wydarzenie, którego nie publikowano, nie wymaga niczego w Google.
         const outcome = await this.google.process(client, { userId: item.id_uzytkownika, eventId: item.id_agregatu });
         if (outcome.status !== 'error') {

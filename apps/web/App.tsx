@@ -55,7 +55,7 @@ function CalendarApp() {
   }, []);
 
   useEffect(() => {
-    if (typeof window === 'undefined' || !window.location?.href) return;
+    if (typeof window === 'undefined' || !window.location?.href || !window.history?.replaceState) return;
     const url = new URL(window.location.href);
     const eventId = url.searchParams.get('notificationEventId');
     const eventStart = url.searchParams.get('notificationEventStart');
@@ -228,7 +228,8 @@ function CalendarApp() {
       return (
         route === 'Dziś' || route === 'Tydzień' ? <CalendarScreen active={active} now={now} weekLayout={weekLayout} todayOnly={route === 'Dziś'} week={week} setWeek={setWeek} draftSchedule={schedulePreview}
           notificationTarget={route === 'Tydzień' ? notificationTarget : null} onNotificationResolved={() => setNotificationTarget(null)} /> :
-        route === 'Grafik' ? <ScheduleScreen active={active} now={now} week={week} setWeek={setWeek} onPreview={setSchedulePreview} onApproved={() => setTab('Tydzień')} onUnsavedChange={onUnsavedChange} discardSignal={discardSignal} /> :
+        route === 'Grafik' ? <ScheduleScreen active={active} now={now} week={week} setWeek={setWeek} onPreview={setSchedulePreview} onApproved={() => setTab('Tydzień')} onUnsavedChange={onUnsavedChange} discardSignal={discardSignal}
+          onOpenSettings={() => setTab('Ustawienia')} /> :
         route === 'Blokady' ? <BlocksScreen /> :
         route === 'Asystent' ? <AssistantScreen active={active} onCalendarChange={() => setTab('Tydzień')} /> :
         route === 'Ustawienia' ? <ScrollView style={{ flex: 1, minHeight: 0 }} contentContainerStyle={[styles.content, { padding: 16, paddingBottom: 32 }]} keyboardShouldPersistTaps="handled">
@@ -254,7 +255,7 @@ function CalendarApp() {
              {!!notificationError && <Text accessibilityRole="alert" style={styles.error}>{notificationError}</Text>}
            </View>
           {/* Trwałe połączenie z Google Calendar (S23KC2S1P2-12) */}
-          <GoogleIntegrationPanel />
+          <GoogleIntegrationPanel active={active} onShowPlan={() => setTab('Tydzień')} />
           {!!storageError && <Text accessibilityRole="alert" style={styles.error}>{storageError}</Text>}
          </ScrollView> : <View style={[styles.content,{padding:16}]}><Text style={styles.heading}>Niedostępna sekcja</Text></View>
       );
