@@ -22,7 +22,7 @@ All operations are generated from OpenAPI in the [endpoint reference](./api/open
 | Domain | Resource prefix | Example operations |
 | --- | --- | --- |
 | System | `/api/v1/health` | Liveness and readiness |
-| Calendar | `/api/v1/calendar` | Overview and event CRUD |
+| Calendar | `/api/v1/calendar` | Overview, event CRUD, collision re-check (`POST /calendar/events/collision-check`) |
 | Work profile | `/api/v1/work-profile` | Hour limits, weekly or monthly hour target, commute, availability, shift templates, profile version |
 | Scheduling | `/api/v1/schedules` | Generation, listing, versions, validation and approval |
 | Imports | `/api/v1/import` | Timetables, previews, sessions and confirmation |
@@ -32,7 +32,7 @@ All paths are served from the same API host. OpenAPI lists full paths including 
 
 ## Error conventions
 
-Invalid input returns `400`. Invalid work profile values return `422` with an error code for each field (`fields`). Calendar conflicts or stale versions use `409`; schedule constraint violations use `422` (a shift overlapping a mandatory class returns `class_collision` identifying the class); unknown resources use `404`; missing database or unavailable dependency uses `503`. Import does not write calendar events before confirmation.
+Invalid input returns `400`. Invalid work profile values return `422` with an error code for each field (`fields`). Calendar conflicts or stale versions use `409` (`event_collision` lists every collision with name, category, term, shared part and `mandatory`, `repeatWeekly`, `recurring`; `collision-check` returns the same token, and any change of the draft invalidates it); schedule constraint violations use `422` (a shift overlapping a mandatory class returns `class_collision` identifying the class); unknown resources use `404`; missing database or unavailable dependency uses `503`. Import does not write calendar events before confirmation.
 
 ## Contract in the repository
 

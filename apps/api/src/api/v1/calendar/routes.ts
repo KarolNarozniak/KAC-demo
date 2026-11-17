@@ -4,7 +4,7 @@ import type { EventInput } from '../../../database.js';
 import type { CalendarRepository } from '../../contracts.js';
 import type { ScopeResolver } from '../../scope.js';
 import { documented, errorExamples, withExamples } from '../../examples.js';
-import { collisionExamples, deletedEventExamples, eventInputExamples, overviewExamples, savedEventExamples } from './examples.js';
+import { collisionCheckExamples, collisionCheckInputExamples, collisionExamples, deletedEventExamples, eventInputExamples, overviewExamples, savedEventExamples } from './examples.js';
 
 const eventBody = { type: 'object', additionalProperties: false,
   required: ['title', 'start', 'end', 'category', 'location', 'mandatory', 'repeatWeekly'],
@@ -17,6 +17,31 @@ const eventBody = { type: 'object', additionalProperties: false,
     collisionToken: { type: 'string', pattern: '^[a-f0-9]{64}$' },
   },
 } as const;
+const instant = { type: 'string', format: 'date-time' } as const;
+/** S23KC2S1P2-302 (N10): pełny opis jednej kolizji – nazwa, kategoria, termin wydarzenia i część wspólna. */
+const collisionSchema = { type: 'object', title: 'EventCollision', additionalProperties: false,
+  description: 'Istniejące wydarzenie, z którym koliduje szkic. start/end i overlapStart/overlapEnd (UTC) dotyczą pierwszego kolidującego wystąpienia. Stykające się granice (koniec jednego = początek drugiego) nie są kolizją.',
+  required: ['id', 'title', 'category', 'start', 'end', 'overlapStart', 'overlapEnd', 'mandatory', 'repeatWeekly', 'recurring'],
+  properties: {
+    id: { type: 'string' }, title: { type: 'string' },
+    category: { type: 'string', description: 'Kategoria istniejącego wydarzenia: Class/Work/Personal albo jej polska nazwa z bazy (Zajęcia/Praca/Prywatne).' },
+    start: instant, end: instant,
+    overlapStart: { ...instant, description: 'Początek części wspólnej.' }, overlapEnd: { ...instant, description: 'Koniec części wspólnej.' },
+    mandatory: { type: 'boolean', description: 'Istniejące wydarzenie to zajęcia obowiązkowe.' },
+    repeatWeekly: { type: 'boolean', description: 'Istniejące wydarzenie należy do serii cotygodniowej.' },
+    recurring: { type: 'boolean', description: 'Szkic i wydarzenie są seriami cotygodniowymi – ta sama kolizja powtarza się co tydzień.' },
+  },
+} as const;
+const collisionResponse = { type: 'object', title: 'EventCollisionError', required: ['error', 'conflicts', 'collisionToken'], additionalProperties: false,
+  properties: { error: { type: 'string', enum: ['event_collision'] }, conflicts: { type: 'array', minItems: 1, items: collisionSchema },
+    collisionToken: { type: 'string', pattern: '^[a-f0-9]{64}$', description: 'Potwierdzenie świadomego zapisu; ważne tylko dla tych samych danych i tej samej listy kolizji.' } },
+} as const;
+const collisionCheckResponse = { type: 'object', title: 'EventCollisionCheck', required: ['conflicts', 'collisionToken'], additionalProperties: false,
+  properties: { conflicts: { type: 'array', items: collisionSchema },
+    collisionToken: { anyOf: [{ type: 'string', pattern: '^[a-f0-9]{64}$' }, { type: 'null' }], description: 'null, gdy kolizji nie ma; w przeciwnym razie token do świadomego zapisu.' } },
+} as const;
+const collisionCheckBody = { ...eventBody, properties: { ...eventBody.properties,
+  eventId: { type: 'string', minLength: 1, maxLength: 200, description: 'Identyfikator edytowanego wydarzenia – pomijany przy porównaniu, tak jak przy PUT.' } } } as const;
 const eventIdParams = { type: 'object', required: ['id'], properties: { id: { type: 'string', minLength: 1, maxLength: 200 } } } as const;
 const objectResponse = { type: 'object', description: 'Calendar operation result.', additionalProperties: true,
   'x-examples': { success: { summary: 'Wynik operacji kalendarza', description: 'Syntetyczny kształt bazowy; szczegóły zależą od operacji.', value: { status: 'ok' } } } } as const;
@@ -58,7 +83,7 @@ export async function calendarRoutes(app: FastifyInstance, options: { repository
         ...(isCreate ? {} : { params: eventIdParams }),
         response: {
           ...(isCreate ? { 201: savedEvent } : { 200: savedEvent, 404: errorExamples('Wydarzenie nie istnieje.', { event_not_found: 'Brak wydarzenia' }) }),
-          400: invalidEvent, 409: documented(objectResponse, 'Kolizja z innymi wydarzeniami.', collisionExamples),
+          400: invalidEvent, 409: documented(collisionResponse, 'Kolizja z innymi wydarzeniami – pełna lista kolidujących pozycji.', collisionExamples),
           503: unavailable({ event_not_saved: 'Zapis nie powiódł się', database_not_configured: 'Brak DATABASE_URL' }),
         },
       },
@@ -85,6 +110,29 @@ export async function calendarRoutes(app: FastifyInstance, options: { repository
       },
     });
   }
+
+  // S23KC2S1P2-302 (N10): ponowne sprawdzenie kolizji po korekcie – bez zapisu, te same reguły i token co przy zapisie.
+  app.post<{ Body: EventInput & { eventId?: string } }>('/calendar/events/collision-check', { schema: {
+    tags: ['Calendar'], summary: 'Check event collisions without saving',
+    description: 'Re-checks a draft (for example after the user corrected the time) against all active events in the calendar and returns the complete list of collisions. Nothing is saved. The returned collisionToken is accepted by POST/PUT as long as neither the draft nor the list of collisions changes.',
+    operationId: 'checkCalendarEventCollisions', body: withExamples(collisionCheckBody, collisionCheckInputExamples),
+    response: { 200: documented(collisionCheckResponse, 'Wynik sprawdzenia – lista kolizji (może być pusta).', collisionCheckExamples), 400: invalidEvent,
+      404: errorExamples('Edytowane wydarzenie albo kalendarz nie istnieje.', { event_not_found: 'Brak wydarzenia', calendar_not_found: 'Brak kalendarza' }),
+      503: unavailable({ collision_check_failed: 'Sprawdzenie nie powiodło się', database_not_configured: 'Brak DATABASE_URL' }) },
+  } }, async (request, reply) => {
+    if (!repository?.checkCollisions) return reply.code(503).send({ error: 'database_not_configured' });
+    const { eventId, ...input } = request.body;
+    if (!input.title.trim() || input.end <= input.start) return reply.code(400).send({ error: 'invalid_event' });
+    try {
+      const owner = options.scope(request);
+      return await repository.checkCollisions(input, eventId, owner.userId, owner.calendarId);
+    } catch (error) {
+      if (error instanceof EventValidationError) return reply.code(400).send({ error: error.message });
+      if (error instanceof EventNotFoundError) return reply.code(404).send({ error: error.message });
+      request.log.error({ err: error }, 'Collision check failed');
+      return reply.code(503).send({ error: 'collision_check_failed' });
+    }
+  });
 
   app.delete<{ Params: { id: string } }>('/calendar/events/:id', { schema: {
     tags: ['Calendar'], summary: 'Delete calendar event', description: 'Deletes a one-off event or an entire weekly series after confirmation by the client.',

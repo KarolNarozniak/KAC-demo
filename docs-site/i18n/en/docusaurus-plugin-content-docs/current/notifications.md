@@ -29,11 +29,24 @@ npx web-push generate-vapid-keys
 
 Set `WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_PUSH_VAPID_PRIVATE_KEY` and `WEB_PUSH_VAPID_SUBJECT` in API/worker configuration. The private key is a secret and must never be set in the frontend.
 
+## Plan changes (S23KC2S1P2-299)
+
+The outbox consumer creates a **“Zmiana planu”** (plan change) notification when the date, time or location of a future event changes – whatever the source: calendar edit, series correction, or an import that replaces an existing event. The message contains the name, the new term and the previous term.
+
+- Saving the same data again (also in a different time format) or changing only the title is not a plan change.
+- One event version yields at most one notification (idempotency key `plan-change:{id}:{version}`), so redelivery never creates a duplicate.
+- Several quick edits before delivery are merged into one notification with the difference from the original term; reverting to the original term sends nothing.
+- When the event carries no “before” state, the notification does not invent a difference – it asks the user to open the calendar and shows the current term.
+- The `wlaczone` and `zmiany_wlaczone` settings and quiet hours apply (delivery moves to the end of quiet hours).
+- A click first reloads the calendar, then opens the event with a “Zmiana planu” box (before → after). If the event changed again after the notification was sent, the app says so.
+
+The difference is stored in `t_powiadomienia.szczegoly` (migration `016_plan_change_notifications.sql`) and returned as `change` in `GET /api/v1/notifications/due`. Google changes (G05) and replacing an approved schedule are out of scope – they do not yet emit a `calendar_event.updated` event with a difference.
+
 ## API
 
 - `GET /api/v1/notifications/settings` returns saved preferences and the pending reminder count.
 - `PUT /api/v1/notifications/settings` saves enablement and lead time, then reschedules pending reminders.
-- `GET /api/v1/notifications/due` atomically claims due reminders for a limited time.
+- `GET /api/v1/notifications/due` atomically claims due reminders for a limited time; for “Zmiana planu” the `change` field holds `kind`, `fields`, `before`, `after` and `eventVersion`.
 - `POST /api/v1/notifications/{id}/ack` marks a reminder as displayed after client acknowledgement; it does not mark it as read.
 - `GET /api/v1/notifications/push-config` returns configuration state and only the public VAPID key.
 - `POST /api/v1/notifications/subscriptions` stores a subscription for the current scope; `DELETE` removes only that scope's subscription.

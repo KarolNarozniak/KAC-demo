@@ -11,7 +11,17 @@ export function parseEventTime(value: string, timeZone: string): Date {
 export function reminderTime(start: Date, minutesBefore: number, timeZone: string, now: Date,
   quietStart?: string | null, quietEnd?: string | null): Date | null {
   if (start <= now) return null;
-  let sendAt = new Date(start.getTime() - Math.min(24 * 60, Math.max(0, minutesBefore)) * 60_000);
+  const sendAt = new Date(start.getTime() - Math.min(24 * 60, Math.max(0, minutesBefore)) * 60_000);
+  return deferForQuietHours(sendAt, start, timeZone, now, quietStart, quietEnd);
+}
+
+/**
+ * Przesuwa wysyłkę z godzin ciszy na ich koniec (najpóźniej na początek wydarzenia) i nigdy nie planuje jej w przeszłości.
+ * Wspólne dla przypomnień o pracy i powiadomień o zmianie planu (S23KC2S1P2-299).
+ */
+export function deferForQuietHours(planned: Date, start: Date, timeZone: string, now: Date,
+  quietStart?: string | null, quietEnd?: string | null): Date {
+  let sendAt = planned;
   if (quietStart && quietEnd) {
     const local = localDateTimeString(sendAt, timeZone);
     const date = local.slice(0, 10), time = local.slice(11, 16);

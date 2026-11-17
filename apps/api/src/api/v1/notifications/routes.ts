@@ -18,17 +18,34 @@ const settingsResponse = documented({ type: 'object', additionalProperties: fals
   },
 }, 'Preferencje i liczba zaplanowanych przypomnień dla bieżącego zakresu.', { settings: { summary: 'Ustawienia przypomnień', value: { enabled: true, classReminders: true, workRemindersEnabled: true, privateReminders: true, eventChangesEnabled: true, minutesBefore: 30, quietStart: null, quietEnd: null, pendingReminderCount: 2 } } });
 
+const settingsResponse = documented({ type: 'object', additionalProperties: false, required: ['enabled', 'workRemindersEnabled', 'eventChangesEnabled', 'minutesBefore', 'quietStart', 'quietEnd', 'pendingReminderCount'],
+  properties: { enabled: { type: 'boolean' }, workRemindersEnabled: { type: 'boolean' }, eventChangesEnabled: { type: 'boolean' }, minutesBefore: { type: 'integer', minimum: 1, maximum: 1440 }, quietStart: { type: ['string', 'null'] }, quietEnd: { type: ['string', 'null'] }, pendingReminderCount: { type: 'integer', minimum: 0 } },
+}, 'Preferencje i liczba zaplanowanych przypomnień dla bieżącego zakresu.', { settings: { summary: 'Ustawienia przypomnień', value: { enabled: true, workRemindersEnabled: true, eventChangesEnabled: true, minutesBefore: 30, quietStart: null, quietEnd: null, pendingReminderCount: 2 } } });
+const changeState = { type: 'object', additionalProperties: false, required: ['start', 'end', 'location'], properties: {
+  start: { type: 'string', description: 'Lokalna data i godzina (YYYY-MM-DDTHH:MM) w strefie użytkownika.' }, end: { type: 'string' },
+  location: { anyOf: [{ type: 'string' }, { type: 'null' }] } } } as const;
+const planChangeSchema = { type: 'object', title: 'PlanChangeDetails', additionalProperties: false, required: ['kind', 'fields', 'before', 'after', 'eventVersion'],
+  description: 'Różnica terminu wydarzenia. kind=changed: realna zmiana (fields: date/time/location). kind=unknown_previous: poprzedni stan nie był znany – aplikacja ma ponownie odczytać wydarzenie zamiast pokazywać zmyśloną różnicę.',
+  properties: { kind: { type: 'string', enum: ['changed', 'unknown_previous'] }, fields: { type: 'array', items: { type: 'string', enum: ['date', 'time', 'location'] } },
+    before: { anyOf: [changeState, { type: 'null' }] }, after: changeState, eventVersion: { type: 'integer', minimum: 1 } } } as const;
 const dueResponse = documented({
   type: 'object', additionalProperties: false, required: ['notifications'], properties: {
     notifications: { type: 'array', items: {
       type: 'object', additionalProperties: false, required: ['id', 'eventId', 'type', 'message', 'scheduledAt', 'eventStart', 'eventEnd', 'title'], properties: {
         id: { type: 'string' }, eventId: { type: 'string' }, type: { type: 'string' }, message: { type: 'string' }, scheduledAt: { type: 'string', format: 'date-time' },
         eventStart: { type: 'string' }, eventEnd: { type: 'string' }, title: { type: 'string' },
+        change: { anyOf: [planChangeSchema, { type: 'null' }], description: 'S23KC2S1P2-299: dla typu „Zmiana planu” – co się zmieniło (przed/po); null dla przypomnień.' },
       },
     } },
   },
 }, 'Lista przypomnień przejętych przez aktywnego klienta.', { due: { summary: 'Oczekujące przypomnienie', value: { notifications: [{ id: 'synthetic-notification', eventId: 'synthetic-event', type: 'Przypomnienie pracy', message: 'Przypomnienie: Zmiana, 2026-11-16 08:00–16:00', scheduledAt: '2026-11-16T07:30:00Z', eventStart: '2026-11-16T08:00', eventEnd: '2026-11-16T16:00', title: 'Zmiana' }] } } });
 
+}, 'Lista przypomnień przejętych przez aktywnego klienta.', { due: { summary: 'Oczekujące przypomnienie', value: { notifications: [{ id: 'synthetic-notification', eventId: 'synthetic-event', type: 'Przypomnienie pracy', message: 'Przypomnienie: Zmiana, 2026-11-16 08:00–16:00', scheduledAt: '2026-11-16T07:30:00Z', eventStart: '2026-11-16T08:00', eventEnd: '2026-11-16T16:00', title: 'Zmiana', change: null }] } },
+  planChange: { summary: 'Zmiana planu z różnicą', description: 'Laboratorium przeniesiono z czwartku 10:00–11:30 na piątek 12:00–13:30 i do innej sali. change.fields mówi, co się zmieniło; kliknięcie otwiera aktualny stan wydarzenia.',
+    value: { notifications: [{ id: 'synthetic-change', eventId: 'synthetic-lab', type: 'Zmiana planu', message: 'Zmiana planu: „Laboratorium” – nowy termin 2026-11-20 12:00–13:30 (było 2026-11-19 10:00–11:30); miejsce: s. 204 (było s. 101).',
+      scheduledAt: '2026-11-16T09:00:00Z', eventStart: '2026-11-20T12:00', eventEnd: '2026-11-20T13:30', title: 'Laboratorium',
+      change: { kind: 'changed', fields: ['date', 'time', 'location'], before: { start: '2026-11-19T10:00', end: '2026-11-19T11:30', location: 's. 101' },
+        after: { start: '2026-11-20T12:00', end: '2026-11-20T13:30', location: 's. 204' }, eventVersion: 3 } }] } } });
 const ackResponse = documented({ type: 'object', additionalProperties: false, required: ['status'], properties: { status: { type: 'string', enum: ['delivered'] } },
 }, 'Potwierdzenie wyświetlenia powiadomienia przez klienta.', { delivered: { summary: 'Przypomnienie wyświetlone', value: { status: 'delivered' } } });
 

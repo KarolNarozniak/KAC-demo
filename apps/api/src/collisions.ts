@@ -1,8 +1,15 @@
 import { createHash } from 'node:crypto';
 import { toInstant } from './import/rules.js';
 
-export type TimedEvent = { id?: string; title: string; start: string; end: string; category: string; repeatWeekly: boolean };
-export type Collision = { id: string; title: string; category: string; start: string; end: string; overlapStart: string; overlapEnd: string };
+export type TimedEvent = { id?: string; title: string; start: string; end: string; category: string; repeatWeekly: boolean; mandatory?: boolean };
+/**
+ * Kolizja z jednym istniejącym wydarzeniem (S23KC2S1P2-302, N10).
+ * start/end i overlap* opisują pierwsze kolidujące wystąpienie; recurring = obie strony są seriami cotygodniowymi,
+ * więc ta sama kolizja powtarza się w każdym kolejnym tygodniu.
+ */
+export type Collision = { id: string; title: string; category: string; start: string; end: string; overlapStart: string; overlapEnd: string;
+  mandatory: boolean; repeatWeekly: boolean; recurring: boolean };
+export type CollisionCheck = { conflicts: Collision[]; collisionToken: string | null };
 export class EventValidationError extends Error {}
 export class EventNotFoundError extends Error {}
 export class CollisionError extends Error {
@@ -73,7 +80,8 @@ export function findEventCollisions(candidate: TimedEvent, events: TimedEvent[],
         if (a.start < b.end && b.start < a.end) {
           result.push({ id: event.id!, title: event.title, category: event.category, start: b.start.toISOString(), end: b.end.toISOString(),
             overlapStart: new Date(Math.max(a.start.getTime(), b.start.getTime())).toISOString(),
-            overlapEnd: new Date(Math.min(a.end.getTime(), b.end.getTime())).toISOString() });
+            overlapEnd: new Date(Math.min(a.end.getTime(), b.end.getTime())).toISOString(),
+            mandatory: event.mandatory === true, repeatWeekly: event.repeatWeekly, recurring: candidate.repeatWeekly && event.repeatWeekly });
           found = true; break;
         }
       }
@@ -83,11 +91,23 @@ export function findEventCollisions(candidate: TimedEvent, events: TimedEvent[],
   return result.sort((a,b) => a.start.localeCompare(b.start) || a.id.localeCompare(b.id));
 }
 
-/** Bind explicit override to this draft and the conflicts actually shown to the user. */
-export function requireCollisionDecision(candidate: TimedEvent & { location?: string; mandatory?: boolean; collisionToken?: string }, events: TimedEvent[], zone: string, excludeId?: string) {
-  const conflicts = findEventCollisions(candidate, events, zone, excludeId);
-  if (!conflicts.length) return;
-  const token = createHash('sha256').update(JSON.stringify({ excludeId, title: candidate.title, start: candidate.start, end: candidate.end,
+type CollisionCandidate = TimedEvent & { location?: string; mandatory?: boolean; collisionToken?: string };
+
+/** Token wiąże świadomą decyzję z tym szkicem i dokładnie tą listą kolizji – każda zmiana danych albo listy go unieważnia. */
+function collisionTokenFor(candidate: CollisionCandidate, conflicts: Collision[], excludeId?: string) {
+  return createHash('sha256').update(JSON.stringify({ excludeId, title: candidate.title, start: candidate.start, end: candidate.end,
     category: candidate.category, repeatWeekly: candidate.repeatWeekly, location: candidate.location, mandatory: candidate.mandatory, conflicts })).digest('hex');
-  if (candidate.collisionToken !== token) throw new CollisionError(conflicts, token);
+}
+
+/** Ponowne sprawdzenie bez zapisu (S23KC2S1P2-302): pełna lista kolizji i token potrzebny do świadomego zapisu. */
+export function checkEventCollisions(candidate: CollisionCandidate, events: TimedEvent[], zone: string, excludeId?: string): CollisionCheck {
+  const conflicts = findEventCollisions(candidate, events, zone, excludeId);
+  return { conflicts, collisionToken: conflicts.length ? collisionTokenFor(candidate, conflicts, excludeId) : null };
+}
+
+/** Bind explicit override to this draft and the conflicts actually shown to the user. */
+export function requireCollisionDecision(candidate: CollisionCandidate, events: TimedEvent[], zone: string, excludeId?: string) {
+  const { conflicts, collisionToken } = checkEventCollisions(candidate, events, zone, excludeId);
+  if (!conflicts.length || !collisionToken) return;
+  if (candidate.collisionToken !== collisionToken) throw new CollisionError(conflicts, collisionToken);
 }
