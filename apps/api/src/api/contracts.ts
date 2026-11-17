@@ -1,6 +1,7 @@
 import type { ChatImport, ChatImportBinding, ChatImportPatch } from '../import/chat.js';
 import type { UserScope } from './scope.js';
 import type { CalendarOverview, EventInput } from '../database.js';
+import type { CollisionCheck } from '../collisions.js';
 import type { ExistingEvent } from '../import/rules.js';
 import type { AcceptedRow, ConfirmResult, CreateSessionInput } from '../import/session.js';
 import type { GoogleImportOptions } from './v1/imports/google-routes.js';
@@ -24,6 +25,7 @@ export type CalendarRepository = {
   bindChatImport?: (id: string, input: ChatImportBinding, scope: UserScope) => Promise<ChatImport>;
   listChatImports?: (scope: UserScope, conversationId: string) => Promise<ChatImport[]>;
   updateChatImport?: (scope: UserScope, id: string, conversationId: string, revision: number, patches: ChatImportPatch[]) => Promise<ChatImport>;
+  checkCollisions?: (input: EventInput, eventId?: string, userId?: string, calendarId?: string) => Promise<CollisionCheck>;
   checkConnection: () => Promise<void>;
   getOverview: (userId?: string, calendarId?: string) => Promise<CalendarOverview | null>;
   createImportSession?: (input: CreateSessionInput, userId?: string) => Promise<{ id: string; expiresAt: Date }>;

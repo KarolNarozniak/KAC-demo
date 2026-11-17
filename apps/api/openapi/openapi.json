@@ -1021,18 +1021,101 @@
             }
           },
           "409": {
-            "description": "Kolizja z innymi wydarzeniami.",
+            "description": "Kolizja z innymi wydarzeniami – pełna lista kolidujących pozycji.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Kolizja z innymi wydarzeniami.",
-                  "additionalProperties": true
+                  "title": "EventCollisionError",
+                  "required": [
+                    "error",
+                    "conflicts",
+                    "collisionToken"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "event_collision"
+                      ]
+                    },
+                    "conflicts": {
+                      "type": "array",
+                      "minItems": 1,
+                      "items": {
+                        "type": "object",
+                        "title": "EventCollision",
+                        "additionalProperties": false,
+                        "description": "Istniejące wydarzenie, z którym koliduje szkic. start/end i overlapStart/overlapEnd (UTC) dotyczą pierwszego kolidującego wystąpienia. Stykające się granice (koniec jednego = początek drugiego) nie są kolizją.",
+                        "required": [
+                          "id",
+                          "title",
+                          "category",
+                          "start",
+                          "end",
+                          "overlapStart",
+                          "overlapEnd",
+                          "mandatory",
+                          "repeatWeekly",
+                          "recurring"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "category": {
+                            "type": "string",
+                            "description": "Kategoria istniejącego wydarzenia: Class/Work/Personal albo jej polska nazwa z bazy (Zajęcia/Praca/Prywatne)."
+                          },
+                          "start": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "end": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "overlapStart": {
+                            "type": "string",
+                            "format": "date-time",
+                            "description": "Początek części wspólnej."
+                          },
+                          "overlapEnd": {
+                            "type": "string",
+                            "format": "date-time",
+                            "description": "Koniec części wspólnej."
+                          },
+                          "mandatory": {
+                            "type": "boolean",
+                            "description": "Istniejące wydarzenie to zajęcia obowiązkowe."
+                          },
+                          "repeatWeekly": {
+                            "type": "boolean",
+                            "description": "Istniejące wydarzenie należy do serii cotygodniowej."
+                          },
+                          "recurring": {
+                            "type": "boolean",
+                            "description": "Szkic i wydarzenie są seriami cotygodniowymi – ta sama kolizja powtarza się co tydzień."
+                          }
+                        }
+                      }
+                    },
+                    "collisionToken": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$",
+                      "description": "Potwierdzenie świadomego zapisu; ważne tylko dla tych samych danych i tej samej listy kolizji."
+                    }
+                  },
+                  "description": "Kolizja z innymi wydarzeniami – pełna lista kolidujących pozycji."
                 },
                 "examples": {
                   "collision": {
                     "summary": "Termin nachodzi na inne wydarzenie",
-                    "description": "Nic nie zostało zapisane. conflicts pokazuje, z czym jest kolizja i w jakich godzinach: konsultacje 15:00–16:00 nachodzą na laboratorium 15:30–16:30, więc wspólna część to 15:30–16:00 (w odpowiedzi w UTC: overlapStart 14:30Z – overlapEnd 15:00Z). Użytkownik może zmienić termin albo zapisać mimo to – wtedy wysyła żądanie ponownie z collisionToken (zobacz przykład żądania „Zapis mimo kolizji”).",
+                    "description": "Nic nie zostało zapisane. conflicts pokazuje, z czym jest kolizja i w jakich godzinach: konsultacje 15:00–16:00 nachodzą na laboratorium 15:30–16:30, więc wspólna część to 15:30–16:00 (w odpowiedzi w UTC: overlapStart 14:30Z – overlapEnd 15:00Z). mandatory: true – to zajęcia obowiązkowe. Użytkownik może zmienić termin albo zapisać mimo to – wtedy wysyła żądanie ponownie z collisionToken (zobacz przykład żądania „Zapis mimo kolizji”).",
                     "value": {
                       "error": "event_collision",
                       "conflicts": [
@@ -1043,7 +1126,44 @@
                           "start": "2026-11-19T14:30:00.000Z",
                           "end": "2026-11-19T15:30:00.000Z",
                           "overlapStart": "2026-11-19T14:30:00.000Z",
-                          "overlapEnd": "2026-11-19T15:00:00.000Z"
+                          "overlapEnd": "2026-11-19T15:00:00.000Z",
+                          "mandatory": true,
+                          "repeatWeekly": true,
+                          "recurring": false
+                        }
+                      ],
+                      "collisionToken": "5f2b9c0e7d4a1b3c6e8f0a2d4c6b8e0f1a3c5e7b9d1f3a5c7e9b1d3f5a7c9e1b"
+                    }
+                  },
+                  "many": {
+                    "summary": "Kilka kolizji naraz",
+                    "description": "Lista zawiera wszystkie wydarzenia, z którymi koliduje szkic, posortowane po czasie – tu zmiana w pracy i laboratorium. Każda pozycja ma nazwę, kategorię, pełny przedział wydarzenia i wspólną część.",
+                    "value": {
+                      "error": "event_collision",
+                      "conflicts": [
+                        {
+                          "id": "E-WORK",
+                          "title": "Praca",
+                          "category": "Work",
+                          "start": "2026-11-19T13:00:00.000Z",
+                          "end": "2026-11-19T17:00:00.000Z",
+                          "overlapStart": "2026-11-19T14:00:00.000Z",
+                          "overlapEnd": "2026-11-19T15:00:00.000Z",
+                          "mandatory": false,
+                          "repeatWeekly": false,
+                          "recurring": false
+                        },
+                        {
+                          "id": "E-LAB",
+                          "title": "Sieci komputerowe – laboratorium",
+                          "category": "Class",
+                          "start": "2026-11-19T14:30:00.000Z",
+                          "end": "2026-11-19T15:30:00.000Z",
+                          "overlapStart": "2026-11-19T14:30:00.000Z",
+                          "overlapEnd": "2026-11-19T15:00:00.000Z",
+                          "mandatory": true,
+                          "repeatWeekly": true,
+                          "recurring": false
                         }
                       ],
                       "collisionToken": "5f2b9c0e7d4a1b3c6e8f0a2d4c6b8e0f1a3c5e7b9d1f3a5c7e9b1d3f5a7c9e1b"
@@ -1308,18 +1428,101 @@
             }
           },
           "409": {
-            "description": "Kolizja z innymi wydarzeniami.",
+            "description": "Kolizja z innymi wydarzeniami – pełna lista kolidujących pozycji.",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Kolizja z innymi wydarzeniami.",
-                  "additionalProperties": true
+                  "title": "EventCollisionError",
+                  "required": [
+                    "error",
+                    "conflicts",
+                    "collisionToken"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "event_collision"
+                      ]
+                    },
+                    "conflicts": {
+                      "type": "array",
+                      "minItems": 1,
+                      "items": {
+                        "type": "object",
+                        "title": "EventCollision",
+                        "additionalProperties": false,
+                        "description": "Istniejące wydarzenie, z którym koliduje szkic. start/end i overlapStart/overlapEnd (UTC) dotyczą pierwszego kolidującego wystąpienia. Stykające się granice (koniec jednego = początek drugiego) nie są kolizją.",
+                        "required": [
+                          "id",
+                          "title",
+                          "category",
+                          "start",
+                          "end",
+                          "overlapStart",
+                          "overlapEnd",
+                          "mandatory",
+                          "repeatWeekly",
+                          "recurring"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "category": {
+                            "type": "string",
+                            "description": "Kategoria istniejącego wydarzenia: Class/Work/Personal albo jej polska nazwa z bazy (Zajęcia/Praca/Prywatne)."
+                          },
+                          "start": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "end": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "overlapStart": {
+                            "type": "string",
+                            "format": "date-time",
+                            "description": "Początek części wspólnej."
+                          },
+                          "overlapEnd": {
+                            "type": "string",
+                            "format": "date-time",
+                            "description": "Koniec części wspólnej."
+                          },
+                          "mandatory": {
+                            "type": "boolean",
+                            "description": "Istniejące wydarzenie to zajęcia obowiązkowe."
+                          },
+                          "repeatWeekly": {
+                            "type": "boolean",
+                            "description": "Istniejące wydarzenie należy do serii cotygodniowej."
+                          },
+                          "recurring": {
+                            "type": "boolean",
+                            "description": "Szkic i wydarzenie są seriami cotygodniowymi – ta sama kolizja powtarza się co tydzień."
+                          }
+                        }
+                      }
+                    },
+                    "collisionToken": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$",
+                      "description": "Potwierdzenie świadomego zapisu; ważne tylko dla tych samych danych i tej samej listy kolizji."
+                    }
+                  },
+                  "description": "Kolizja z innymi wydarzeniami – pełna lista kolidujących pozycji."
                 },
                 "examples": {
                   "collision": {
                     "summary": "Termin nachodzi na inne wydarzenie",
-                    "description": "Nic nie zostało zapisane. conflicts pokazuje, z czym jest kolizja i w jakich godzinach: konsultacje 15:00–16:00 nachodzą na laboratorium 15:30–16:30, więc wspólna część to 15:30–16:00 (w odpowiedzi w UTC: overlapStart 14:30Z – overlapEnd 15:00Z). Użytkownik może zmienić termin albo zapisać mimo to – wtedy wysyła żądanie ponownie z collisionToken (zobacz przykład żądania „Zapis mimo kolizji”).",
+                    "description": "Nic nie zostało zapisane. conflicts pokazuje, z czym jest kolizja i w jakich godzinach: konsultacje 15:00–16:00 nachodzą na laboratorium 15:30–16:30, więc wspólna część to 15:30–16:00 (w odpowiedzi w UTC: overlapStart 14:30Z – overlapEnd 15:00Z). mandatory: true – to zajęcia obowiązkowe. Użytkownik może zmienić termin albo zapisać mimo to – wtedy wysyła żądanie ponownie z collisionToken (zobacz przykład żądania „Zapis mimo kolizji”).",
                     "value": {
                       "error": "event_collision",
                       "conflicts": [
@@ -1330,7 +1533,44 @@
                           "start": "2026-11-19T14:30:00.000Z",
                           "end": "2026-11-19T15:30:00.000Z",
                           "overlapStart": "2026-11-19T14:30:00.000Z",
-                          "overlapEnd": "2026-11-19T15:00:00.000Z"
+                          "overlapEnd": "2026-11-19T15:00:00.000Z",
+                          "mandatory": true,
+                          "repeatWeekly": true,
+                          "recurring": false
+                        }
+                      ],
+                      "collisionToken": "5f2b9c0e7d4a1b3c6e8f0a2d4c6b8e0f1a3c5e7b9d1f3a5c7e9b1d3f5a7c9e1b"
+                    }
+                  },
+                  "many": {
+                    "summary": "Kilka kolizji naraz",
+                    "description": "Lista zawiera wszystkie wydarzenia, z którymi koliduje szkic, posortowane po czasie – tu zmiana w pracy i laboratorium. Każda pozycja ma nazwę, kategorię, pełny przedział wydarzenia i wspólną część.",
+                    "value": {
+                      "error": "event_collision",
+                      "conflicts": [
+                        {
+                          "id": "E-WORK",
+                          "title": "Praca",
+                          "category": "Work",
+                          "start": "2026-11-19T13:00:00.000Z",
+                          "end": "2026-11-19T17:00:00.000Z",
+                          "overlapStart": "2026-11-19T14:00:00.000Z",
+                          "overlapEnd": "2026-11-19T15:00:00.000Z",
+                          "mandatory": false,
+                          "repeatWeekly": false,
+                          "recurring": false
+                        },
+                        {
+                          "id": "E-LAB",
+                          "title": "Sieci komputerowe – laboratorium",
+                          "category": "Class",
+                          "start": "2026-11-19T14:30:00.000Z",
+                          "end": "2026-11-19T15:30:00.000Z",
+                          "overlapStart": "2026-11-19T14:30:00.000Z",
+                          "overlapEnd": "2026-11-19T15:00:00.000Z",
+                          "mandatory": true,
+                          "repeatWeekly": true,
+                          "recurring": false
                         }
                       ],
                       "collisionToken": "5f2b9c0e7d4a1b3c6e8f0a2d4c6b8e0f1a3c5e7b9d1f3a5c7e9b1d3f5a7c9e1b"
@@ -1495,6 +1735,344 @@
                     "description": "Błąd po stronie serwera, nie danych – spróbuj ponownie za chwilę. Nic nie zostało zmienione.",
                     "value": {
                       "error": "event_not_deleted"
+                    }
+                  },
+                  "database_not_configured": {
+                    "summary": "Brak DATABASE_URL",
+                    "description": "API działa bez skonfigurowanej bazy danych (brak DATABASE_URL), więc ta operacja jest niedostępna.",
+                    "value": {
+                      "error": "database_not_configured"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/calendar/events/collision-check": {
+      "post": {
+        "operationId": "checkCalendarEventCollisions",
+        "summary": "Check event collisions without saving",
+        "tags": [
+          "Calendar"
+        ],
+        "description": "Re-checks a draft (for example after the user corrected the time) against all active events in the calendar and returns the complete list of collisions. Nothing is saved. The returned collisionToken is accepted by POST/PUT as long as neither the draft nor the list of collisions changes.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "title",
+                  "start",
+                  "end",
+                  "category",
+                  "location",
+                  "mandatory",
+                  "repeatWeekly"
+                ],
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "start": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$"
+                  },
+                  "end": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$"
+                  },
+                  "category": {
+                    "type": "string",
+                    "enum": [
+                      "Class",
+                      "Work",
+                      "Personal"
+                    ]
+                  },
+                  "location": {
+                    "type": "string",
+                    "maxLength": 500
+                  },
+                  "mandatory": {
+                    "type": "boolean"
+                  },
+                  "repeatWeekly": {
+                    "type": "boolean"
+                  },
+                  "collisionToken": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "eventId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "description": "Identyfikator edytowanego wydarzenia – pomijany przy porównaniu, tak jak przy PUT."
+                  }
+                }
+              },
+              "examples": {
+                "afterCorrection": {
+                  "summary": "Ponowne sprawdzenie po korekcie",
+                  "description": "Użytkownik przesunął konsultacje na 16:30–17:30 i chce sprawdzić termin przed zapisem. eventId podajemy przy edycji istniejącego wydarzenia, żeby nie porównywać go z samym sobą.",
+                  "value": {
+                    "title": "Konsultacje z promotorem",
+                    "start": "2026-11-19T16:30",
+                    "end": "2026-11-19T17:30",
+                    "category": "Personal",
+                    "location": "Bud. 65, s. 120",
+                    "mandatory": false,
+                    "repeatWeekly": false,
+                    "eventId": "a1b2c3d4-0000-4000-8000-000000000001"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Wynik sprawdzenia – lista kolizji (może być pusta).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "EventCollisionCheck",
+                  "required": [
+                    "conflicts",
+                    "collisionToken"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "conflicts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "title": "EventCollision",
+                        "additionalProperties": false,
+                        "description": "Istniejące wydarzenie, z którym koliduje szkic. start/end i overlapStart/overlapEnd (UTC) dotyczą pierwszego kolidującego wystąpienia. Stykające się granice (koniec jednego = początek drugiego) nie są kolizją.",
+                        "required": [
+                          "id",
+                          "title",
+                          "category",
+                          "start",
+                          "end",
+                          "overlapStart",
+                          "overlapEnd",
+                          "mandatory",
+                          "repeatWeekly",
+                          "recurring"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "category": {
+                            "type": "string",
+                            "description": "Kategoria istniejącego wydarzenia: Class/Work/Personal albo jej polska nazwa z bazy (Zajęcia/Praca/Prywatne)."
+                          },
+                          "start": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "end": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "overlapStart": {
+                            "type": "string",
+                            "format": "date-time",
+                            "description": "Początek części wspólnej."
+                          },
+                          "overlapEnd": {
+                            "type": "string",
+                            "format": "date-time",
+                            "description": "Koniec części wspólnej."
+                          },
+                          "mandatory": {
+                            "type": "boolean",
+                            "description": "Istniejące wydarzenie to zajęcia obowiązkowe."
+                          },
+                          "repeatWeekly": {
+                            "type": "boolean",
+                            "description": "Istniejące wydarzenie należy do serii cotygodniowej."
+                          },
+                          "recurring": {
+                            "type": "boolean",
+                            "description": "Szkic i wydarzenie są seriami cotygodniowymi – ta sama kolizja powtarza się co tydzień."
+                          }
+                        }
+                      }
+                    },
+                    "collisionToken": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "null, gdy kolizji nie ma; w przeciwnym razie token do świadomego zapisu."
+                    }
+                  },
+                  "description": "Wynik sprawdzenia – lista kolizji (może być pusta)."
+                },
+                "examples": {
+                  "clear": {
+                    "summary": "Brak kolizji",
+                    "description": "Termin jest wolny: conflicts jest puste, a collisionToken ma wartość null – zapis (POST/PUT) przejdzie bez tokenu. Nic nie zostało zapisane.",
+                    "value": {
+                      "conflicts": [],
+                      "collisionToken": null
+                    }
+                  },
+                  "conflicts": {
+                    "summary": "Nadal są kolizje",
+                    "description": "Po korekcie termin wciąż nachodzi na wydarzenia. Token można wysłać w POST/PUT, jeśli użytkownik świadomie zapisuje mimo kolizji; każda zmiana danych szkicu albo listy kolizji go unieważnia.",
+                    "value": {
+                      "conflicts": [
+                        {
+                          "id": "E-WORK",
+                          "title": "Praca",
+                          "category": "Work",
+                          "start": "2026-11-19T13:00:00.000Z",
+                          "end": "2026-11-19T17:00:00.000Z",
+                          "overlapStart": "2026-11-19T14:00:00.000Z",
+                          "overlapEnd": "2026-11-19T15:00:00.000Z",
+                          "mandatory": false,
+                          "repeatWeekly": false,
+                          "recurring": false
+                        },
+                        {
+                          "id": "E-LAB",
+                          "title": "Sieci komputerowe – laboratorium",
+                          "category": "Class",
+                          "start": "2026-11-19T14:30:00.000Z",
+                          "end": "2026-11-19T15:30:00.000Z",
+                          "overlapStart": "2026-11-19T14:30:00.000Z",
+                          "overlapEnd": "2026-11-19T15:00:00.000Z",
+                          "mandatory": true,
+                          "repeatWeekly": true,
+                          "recurring": false
+                        }
+                      ],
+                      "collisionToken": "5f2b9c0e7d4a1b3c6e8f0a2d4c6b8e0f1a3c5e7b9d1f3a5c7e9b1d3f5a7c9e1b"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Niepoprawne dane wydarzenia – błąd schematu albo walidacji dat.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Niepoprawne dane wydarzenia – błąd schematu albo walidacji dat.",
+                  "additionalProperties": true
+                },
+                "examples": {
+                  "invalid_event": {
+                    "summary": "Błędny termin",
+                    "description": "Koniec wydarzenia nie jest później niż początek, data nie istnieje (np. 30 lutego) albo tytuł jest pusty. Nic nie zostało zapisane.",
+                    "value": {
+                      "error": "invalid_event"
+                    }
+                  },
+                  "validation": {
+                    "summary": "Brakujące albo złe pole",
+                    "description": "Żądanie odrzucone przed sprawdzeniem terminu: brakuje wymaganego pola albo ma złą wartość. message wskazuje pole – tu category musi być jedną z: Class, Work, Personal.",
+                    "value": {
+                      "statusCode": 400,
+                      "code": "FST_ERR_VALIDATION",
+                      "error": "Bad Request",
+                      "message": "body/category must be equal to one of the allowed values"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Edytowane wydarzenie albo kalendarz nie istnieje.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Edytowane wydarzenie albo kalendarz nie istnieje.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "event_not_found",
+                        "calendar_not_found"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "event_not_found": {
+                    "summary": "Brak wydarzenia",
+                    "description": "Nie ma wydarzenia o tym identyfikatorze – mogło zostać już usunięte.",
+                    "value": {
+                      "error": "event_not_found"
+                    }
+                  },
+                  "calendar_not_found": {
+                    "summary": "Brak kalendarza",
+                    "description": "Użytkownik nie ma jeszcze kalendarza.",
+                    "value": {
+                      "error": "calendar_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Baza danych niedostępna albo nieskonfigurowana.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Baza danych niedostępna albo nieskonfigurowana.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "collision_check_failed",
+                        "database_not_configured"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "collision_check_failed": {
+                    "summary": "Sprawdzenie nie powiodło się",
+                    "value": {
+                      "error": "collision_check_failed"
                     }
                   },
                   "database_not_configured": {
@@ -3749,7 +4327,7 @@
                           {
                             "type": "object",
                             "title": "ScheduleViolation",
-                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. details: maximumMinutes, totalMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu przekracza maxHoursPerDay. details: date, maximumMinutes, totalMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: maximumMinutes, existingWorkMinutes.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: puste; zmiany wskazuje candidateIds.\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe.\nWartości w details są w minutach.",
+                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. Suma równa limitowi jest dozwolona. details: period (week), periodRule (shift_start – zmiana należy w całości do tygodnia, w którym się zaczyna; dotyczy też zapisanej pracy, więc nocna zmiana z niedzieli nie jest liczona drugi raz), periodStartLocal, periodEndLocal, maximumMinutes, totalMinutes, existingWorkMinutes, proposedMinutes, exceededByMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu kalendarzowym przekracza maxHoursPerDay; zmiana nocna dzieli się o północy. details: period (day), date, maximumMinutes, totalMinutes, exceededByMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: jak w maximum_hours (proposedMinutes = 0).\nOstrzeżenia o limicie są twarde: potwierdzenie przeczytania w aplikacji nie pozwala zatwierdzić grafiku ponad limit.\n- hard_conflict (error) – zmiana nachodzi na inne wydarzenie albo blokadę (razem z buforem dojazdu). details.conflicts: lista wszystkich kolidujących pozycji – id, title, startLocal, endLocal (rzeczywisty termin), bufferMinutes, overlapStartLocal, overlapEndLocal.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: kind (overlap | rest), gapMinutes, requiredMinutes, shifts (candidateId, startLocal, endLocal obu zmian w kolejności czasu).\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe. details: penalty, conflicts (jak w hard_conflict).\nWartości w details są w minutach.",
                             "required": [
                               "code",
                               "severity",
@@ -4418,7 +4996,7 @@
                           {
                             "type": "object",
                             "title": "ScheduleViolation",
-                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. details: maximumMinutes, totalMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu przekracza maxHoursPerDay. details: date, maximumMinutes, totalMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: maximumMinutes, existingWorkMinutes.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: puste; zmiany wskazuje candidateIds.\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe.\nWartości w details są w minutach.",
+                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. Suma równa limitowi jest dozwolona. details: period (week), periodRule (shift_start – zmiana należy w całości do tygodnia, w którym się zaczyna; dotyczy też zapisanej pracy, więc nocna zmiana z niedzieli nie jest liczona drugi raz), periodStartLocal, periodEndLocal, maximumMinutes, totalMinutes, existingWorkMinutes, proposedMinutes, exceededByMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu kalendarzowym przekracza maxHoursPerDay; zmiana nocna dzieli się o północy. details: period (day), date, maximumMinutes, totalMinutes, exceededByMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: jak w maximum_hours (proposedMinutes = 0).\nOstrzeżenia o limicie są twarde: potwierdzenie przeczytania w aplikacji nie pozwala zatwierdzić grafiku ponad limit.\n- hard_conflict (error) – zmiana nachodzi na inne wydarzenie albo blokadę (razem z buforem dojazdu). details.conflicts: lista wszystkich kolidujących pozycji – id, title, startLocal, endLocal (rzeczywisty termin), bufferMinutes, overlapStartLocal, overlapEndLocal.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: kind (overlap | rest), gapMinutes, requiredMinutes, shifts (candidateId, startLocal, endLocal obu zmian w kolejności czasu).\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe. details: penalty, conflicts (jak w hard_conflict).\nWartości w details są w minutach.",
                             "required": [
                               "code",
                               "severity",
@@ -4557,7 +5135,7 @@
                           {
                             "type": "object",
                             "title": "ScheduleViolation",
-                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. details: maximumMinutes, totalMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu przekracza maxHoursPerDay. details: date, maximumMinutes, totalMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: maximumMinutes, existingWorkMinutes.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: puste; zmiany wskazuje candidateIds.\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe.\nWartości w details są w minutach.",
+                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. Suma równa limitowi jest dozwolona. details: period (week), periodRule (shift_start – zmiana należy w całości do tygodnia, w którym się zaczyna; dotyczy też zapisanej pracy, więc nocna zmiana z niedzieli nie jest liczona drugi raz), periodStartLocal, periodEndLocal, maximumMinutes, totalMinutes, existingWorkMinutes, proposedMinutes, exceededByMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu kalendarzowym przekracza maxHoursPerDay; zmiana nocna dzieli się o północy. details: period (day), date, maximumMinutes, totalMinutes, exceededByMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: jak w maximum_hours (proposedMinutes = 0).\nOstrzeżenia o limicie są twarde: potwierdzenie przeczytania w aplikacji nie pozwala zatwierdzić grafiku ponad limit.\n- hard_conflict (error) – zmiana nachodzi na inne wydarzenie albo blokadę (razem z buforem dojazdu). details.conflicts: lista wszystkich kolidujących pozycji – id, title, startLocal, endLocal (rzeczywisty termin), bufferMinutes, overlapStartLocal, overlapEndLocal.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: kind (overlap | rest), gapMinutes, requiredMinutes, shifts (candidateId, startLocal, endLocal obu zmian w kolejności czasu).\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe. details: penalty, conflicts (jak w hard_conflict).\nWartości w details są w minutach.",
                             "required": [
                               "code",
                               "severity",
@@ -4658,14 +5236,14 @@
                   },
                   "weeklyLimit": {
                     "summary": "Przekroczony limit godzin",
-                    "description": "Nic nie zostało zapisane. maximum_hours – profil pozwala na 20 h tygodniowo (maximumHours: 20 → 1200 min), a zmiany dałyby 22 h (1320 min). daily_maximum_hours – we wtorek wyszłoby 10 h przy limicie 8 h (maxHoursPerDay: 8 → 480 min).",
+                    "description": "Nic nie zostało zapisane. maximum_hours – profil pozwala na 20 h tygodniowo (maximumHours: 20 → 1200 min), a zmiany dałyby 22 h (1320 min), czyli 120 min ponad limit (exceededByMinutes). Okres to tydzień od poniedziałku 00:00 do następnego poniedziałku 00:00; zmiana należy w całości do tygodnia, w którym się zaczyna (periodRule: shift_start). daily_maximum_hours – we wtorek wyszłoby 10 h przy limicie 8 h (maxHoursPerDay: 8 → 480 min). Suma równa limitowi nie jest błędem.",
                     "value": {
                       "error": "invalid_schedule",
                       "errors": [
                         {
                           "code": "maximum_hours",
                           "severity": "error",
-                          "message": "Łączny czas pracy przekracza maksymalny limit tygodniowy.",
+                          "message": "Łączny czas pracy w tygodniu (22 h) przekracza limit 20 h o 2 h.",
                           "candidateIds": [
                             "X1",
                             "X2",
@@ -4673,23 +5251,32 @@
                           ],
                           "eventIds": [],
                           "details": {
+                            "period": "week",
+                            "periodRule": "shift_start",
+                            "periodStartLocal": "2026-11-16T00:00",
+                            "periodEndLocal": "2026-11-23T00:00",
                             "maximumMinutes": 1200,
-                            "totalMinutes": 1320
+                            "totalMinutes": 1320,
+                            "existingWorkMinutes": 420,
+                            "proposedMinutes": 900,
+                            "exceededByMinutes": 120
                           }
                         },
                         {
                           "code": "daily_maximum_hours",
                           "severity": "error",
-                          "message": "Limit pracy na dzień 2026-11-17 wynosi 480 minut.",
+                          "message": "Praca w dniu 2026-11-17 (10 h) przekracza limit dzienny 8 h o 2 h.",
                           "candidateIds": [
                             "X2",
                             "X3"
                           ],
                           "eventIds": [],
                           "details": {
+                            "period": "day",
                             "date": "2026-11-17",
                             "maximumMinutes": 480,
-                            "totalMinutes": 600
+                            "totalMinutes": 600,
+                            "exceededByMinutes": 120
                           }
                         }
                       ],
@@ -4724,13 +5311,29 @@
                         {
                           "code": "shift_overlap_or_rest",
                           "severity": "error",
-                          "message": "Zmiany nakładają się lub nie zachowują bufora i odpoczynku.",
+                          "message": "Między zmianami 2026-11-16 08:00–12:00 i 2026-11-16 13:00–17:00 jest 60 min przerwy, wymagane 120 min.",
                           "candidateIds": [
                             "X1",
                             "X2"
                           ],
                           "eventIds": [],
-                          "details": {}
+                          "details": {
+                            "kind": "rest",
+                            "gapMinutes": 60,
+                            "requiredMinutes": 120,
+                            "shifts": [
+                              {
+                                "candidateId": "X1",
+                                "startLocal": "2026-11-16T08:00",
+                                "endLocal": "2026-11-16T12:00"
+                              },
+                              {
+                                "candidateId": "X2",
+                                "startLocal": "2026-11-16T13:00",
+                                "endLocal": "2026-11-16T17:00"
+                              }
+                            ]
+                          }
                         }
                       ],
                       "warnings": []
@@ -5083,7 +5686,7 @@
                           {
                             "type": "object",
                             "title": "ScheduleViolation",
-                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. details: maximumMinutes, totalMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu przekracza maxHoursPerDay. details: date, maximumMinutes, totalMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: maximumMinutes, existingWorkMinutes.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: puste; zmiany wskazuje candidateIds.\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe.\nWartości w details są w minutach.",
+                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. Suma równa limitowi jest dozwolona. details: period (week), periodRule (shift_start – zmiana należy w całości do tygodnia, w którym się zaczyna; dotyczy też zapisanej pracy, więc nocna zmiana z niedzieli nie jest liczona drugi raz), periodStartLocal, periodEndLocal, maximumMinutes, totalMinutes, existingWorkMinutes, proposedMinutes, exceededByMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu kalendarzowym przekracza maxHoursPerDay; zmiana nocna dzieli się o północy. details: period (day), date, maximumMinutes, totalMinutes, exceededByMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: jak w maximum_hours (proposedMinutes = 0).\nOstrzeżenia o limicie są twarde: potwierdzenie przeczytania w aplikacji nie pozwala zatwierdzić grafiku ponad limit.\n- hard_conflict (error) – zmiana nachodzi na inne wydarzenie albo blokadę (razem z buforem dojazdu). details.conflicts: lista wszystkich kolidujących pozycji – id, title, startLocal, endLocal (rzeczywisty termin), bufferMinutes, overlapStartLocal, overlapEndLocal.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: kind (overlap | rest), gapMinutes, requiredMinutes, shifts (candidateId, startLocal, endLocal obu zmian w kolejności czasu).\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe. details: penalty, conflicts (jak w hard_conflict).\nWartości w details są w minutach.",
                             "required": [
                               "code",
                               "severity",
@@ -5499,7 +6102,7 @@
                           {
                             "type": "object",
                             "title": "ScheduleViolation",
-                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. details: maximumMinutes, totalMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu przekracza maxHoursPerDay. details: date, maximumMinutes, totalMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: maximumMinutes, existingWorkMinutes.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: puste; zmiany wskazuje candidateIds.\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe.\nWartości w details są w minutach.",
+                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. Suma równa limitowi jest dozwolona. details: period (week), periodRule (shift_start – zmiana należy w całości do tygodnia, w którym się zaczyna; dotyczy też zapisanej pracy, więc nocna zmiana z niedzieli nie jest liczona drugi raz), periodStartLocal, periodEndLocal, maximumMinutes, totalMinutes, existingWorkMinutes, proposedMinutes, exceededByMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu kalendarzowym przekracza maxHoursPerDay; zmiana nocna dzieli się o północy. details: period (day), date, maximumMinutes, totalMinutes, exceededByMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: jak w maximum_hours (proposedMinutes = 0).\nOstrzeżenia o limicie są twarde: potwierdzenie przeczytania w aplikacji nie pozwala zatwierdzić grafiku ponad limit.\n- hard_conflict (error) – zmiana nachodzi na inne wydarzenie albo blokadę (razem z buforem dojazdu). details.conflicts: lista wszystkich kolidujących pozycji – id, title, startLocal, endLocal (rzeczywisty termin), bufferMinutes, overlapStartLocal, overlapEndLocal.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: kind (overlap | rest), gapMinutes, requiredMinutes, shifts (candidateId, startLocal, endLocal obu zmian w kolejności czasu).\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe. details: penalty, conflicts (jak w hard_conflict).\nWartości w details są w minutach.",
                             "required": [
                               "code",
                               "severity",
@@ -5638,7 +6241,7 @@
                           {
                             "type": "object",
                             "title": "ScheduleViolation",
-                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. details: maximumMinutes, totalMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu przekracza maxHoursPerDay. details: date, maximumMinutes, totalMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: maximumMinutes, existingWorkMinutes.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: puste; zmiany wskazuje candidateIds.\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe.\nWartości w details są w minutach.",
+                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. Suma równa limitowi jest dozwolona. details: period (week), periodRule (shift_start – zmiana należy w całości do tygodnia, w którym się zaczyna; dotyczy też zapisanej pracy, więc nocna zmiana z niedzieli nie jest liczona drugi raz), periodStartLocal, periodEndLocal, maximumMinutes, totalMinutes, existingWorkMinutes, proposedMinutes, exceededByMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu kalendarzowym przekracza maxHoursPerDay; zmiana nocna dzieli się o północy. details: period (day), date, maximumMinutes, totalMinutes, exceededByMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: jak w maximum_hours (proposedMinutes = 0).\nOstrzeżenia o limicie są twarde: potwierdzenie przeczytania w aplikacji nie pozwala zatwierdzić grafiku ponad limit.\n- hard_conflict (error) – zmiana nachodzi na inne wydarzenie albo blokadę (razem z buforem dojazdu). details.conflicts: lista wszystkich kolidujących pozycji – id, title, startLocal, endLocal (rzeczywisty termin), bufferMinutes, overlapStartLocal, overlapEndLocal.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: kind (overlap | rest), gapMinutes, requiredMinutes, shifts (candidateId, startLocal, endLocal obu zmian w kolejności czasu).\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe. details: penalty, conflicts (jak w hard_conflict).\nWartości w details są w minutach.",
                             "required": [
                               "code",
                               "severity",
@@ -5739,14 +6342,14 @@
                   },
                   "weeklyLimit": {
                     "summary": "Przekroczony limit godzin",
-                    "description": "Nic nie zostało zapisane. maximum_hours – profil pozwala na 20 h tygodniowo (maximumHours: 20 → 1200 min), a zmiany dałyby 22 h (1320 min). daily_maximum_hours – we wtorek wyszłoby 10 h przy limicie 8 h (maxHoursPerDay: 8 → 480 min).",
+                    "description": "Nic nie zostało zapisane. maximum_hours – profil pozwala na 20 h tygodniowo (maximumHours: 20 → 1200 min), a zmiany dałyby 22 h (1320 min), czyli 120 min ponad limit (exceededByMinutes). Okres to tydzień od poniedziałku 00:00 do następnego poniedziałku 00:00; zmiana należy w całości do tygodnia, w którym się zaczyna (periodRule: shift_start). daily_maximum_hours – we wtorek wyszłoby 10 h przy limicie 8 h (maxHoursPerDay: 8 → 480 min). Suma równa limitowi nie jest błędem.",
                     "value": {
                       "error": "invalid_schedule",
                       "errors": [
                         {
                           "code": "maximum_hours",
                           "severity": "error",
-                          "message": "Łączny czas pracy przekracza maksymalny limit tygodniowy.",
+                          "message": "Łączny czas pracy w tygodniu (22 h) przekracza limit 20 h o 2 h.",
                           "candidateIds": [
                             "X1",
                             "X2",
@@ -5754,23 +6357,32 @@
                           ],
                           "eventIds": [],
                           "details": {
+                            "period": "week",
+                            "periodRule": "shift_start",
+                            "periodStartLocal": "2026-11-16T00:00",
+                            "periodEndLocal": "2026-11-23T00:00",
                             "maximumMinutes": 1200,
-                            "totalMinutes": 1320
+                            "totalMinutes": 1320,
+                            "existingWorkMinutes": 420,
+                            "proposedMinutes": 900,
+                            "exceededByMinutes": 120
                           }
                         },
                         {
                           "code": "daily_maximum_hours",
                           "severity": "error",
-                          "message": "Limit pracy na dzień 2026-11-17 wynosi 480 minut.",
+                          "message": "Praca w dniu 2026-11-17 (10 h) przekracza limit dzienny 8 h o 2 h.",
                           "candidateIds": [
                             "X2",
                             "X3"
                           ],
                           "eventIds": [],
                           "details": {
+                            "period": "day",
                             "date": "2026-11-17",
                             "maximumMinutes": 480,
-                            "totalMinutes": 600
+                            "totalMinutes": 600,
+                            "exceededByMinutes": 120
                           }
                         }
                       ],
@@ -5805,13 +6417,29 @@
                         {
                           "code": "shift_overlap_or_rest",
                           "severity": "error",
-                          "message": "Zmiany nakładają się lub nie zachowują bufora i odpoczynku.",
+                          "message": "Między zmianami 2026-11-16 08:00–12:00 i 2026-11-16 13:00–17:00 jest 60 min przerwy, wymagane 120 min.",
                           "candidateIds": [
                             "X1",
                             "X2"
                           ],
                           "eventIds": [],
-                          "details": {}
+                          "details": {
+                            "kind": "rest",
+                            "gapMinutes": 60,
+                            "requiredMinutes": 120,
+                            "shifts": [
+                              {
+                                "candidateId": "X1",
+                                "startLocal": "2026-11-16T08:00",
+                                "endLocal": "2026-11-16T12:00"
+                              },
+                              {
+                                "candidateId": "X2",
+                                "startLocal": "2026-11-16T13:00",
+                                "endLocal": "2026-11-16T17:00"
+                              }
+                            ]
+                          }
                         }
                       ],
                       "warnings": []
@@ -6502,7 +7130,7 @@
                           {
                             "type": "object",
                             "title": "ScheduleViolation",
-                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. details: maximumMinutes, totalMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu przekracza maxHoursPerDay. details: date, maximumMinutes, totalMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: maximumMinutes, existingWorkMinutes.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: puste; zmiany wskazuje candidateIds.\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe.\nWartości w details są w minutach.",
+                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. Suma równa limitowi jest dozwolona. details: period (week), periodRule (shift_start – zmiana należy w całości do tygodnia, w którym się zaczyna; dotyczy też zapisanej pracy, więc nocna zmiana z niedzieli nie jest liczona drugi raz), periodStartLocal, periodEndLocal, maximumMinutes, totalMinutes, existingWorkMinutes, proposedMinutes, exceededByMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu kalendarzowym przekracza maxHoursPerDay; zmiana nocna dzieli się o północy. details: period (day), date, maximumMinutes, totalMinutes, exceededByMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: jak w maximum_hours (proposedMinutes = 0).\nOstrzeżenia o limicie są twarde: potwierdzenie przeczytania w aplikacji nie pozwala zatwierdzić grafiku ponad limit.\n- hard_conflict (error) – zmiana nachodzi na inne wydarzenie albo blokadę (razem z buforem dojazdu). details.conflicts: lista wszystkich kolidujących pozycji – id, title, startLocal, endLocal (rzeczywisty termin), bufferMinutes, overlapStartLocal, overlapEndLocal.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: kind (overlap | rest), gapMinutes, requiredMinutes, shifts (candidateId, startLocal, endLocal obu zmian w kolejności czasu).\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe. details: penalty, conflicts (jak w hard_conflict).\nWartości w details są w minutach.",
                             "required": [
                               "code",
                               "severity",
@@ -7290,7 +7918,7 @@
                           {
                             "type": "object",
                             "title": "ScheduleViolation",
-                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. details: maximumMinutes, totalMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu przekracza maxHoursPerDay. details: date, maximumMinutes, totalMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: maximumMinutes, existingWorkMinutes.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: puste; zmiany wskazuje candidateIds.\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe.\nWartości w details są w minutach.",
+                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. Suma równa limitowi jest dozwolona. details: period (week), periodRule (shift_start – zmiana należy w całości do tygodnia, w którym się zaczyna; dotyczy też zapisanej pracy, więc nocna zmiana z niedzieli nie jest liczona drugi raz), periodStartLocal, periodEndLocal, maximumMinutes, totalMinutes, existingWorkMinutes, proposedMinutes, exceededByMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu kalendarzowym przekracza maxHoursPerDay; zmiana nocna dzieli się o północy. details: period (day), date, maximumMinutes, totalMinutes, exceededByMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: jak w maximum_hours (proposedMinutes = 0).\nOstrzeżenia o limicie są twarde: potwierdzenie przeczytania w aplikacji nie pozwala zatwierdzić grafiku ponad limit.\n- hard_conflict (error) – zmiana nachodzi na inne wydarzenie albo blokadę (razem z buforem dojazdu). details.conflicts: lista wszystkich kolidujących pozycji – id, title, startLocal, endLocal (rzeczywisty termin), bufferMinutes, overlapStartLocal, overlapEndLocal.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: kind (overlap | rest), gapMinutes, requiredMinutes, shifts (candidateId, startLocal, endLocal obu zmian w kolejności czasu).\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe. details: penalty, conflicts (jak w hard_conflict).\nWartości w details są w minutach.",
                             "required": [
                               "code",
                               "severity",
@@ -8198,7 +8826,7 @@
                           {
                             "type": "object",
                             "title": "ScheduleViolation",
-                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. details: maximumMinutes, totalMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu przekracza maxHoursPerDay. details: date, maximumMinutes, totalMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: maximumMinutes, existingWorkMinutes.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: puste; zmiany wskazuje candidateIds.\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe.\nWartości w details są w minutach.",
+                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. Suma równa limitowi jest dozwolona. details: period (week), periodRule (shift_start – zmiana należy w całości do tygodnia, w którym się zaczyna; dotyczy też zapisanej pracy, więc nocna zmiana z niedzieli nie jest liczona drugi raz), periodStartLocal, periodEndLocal, maximumMinutes, totalMinutes, existingWorkMinutes, proposedMinutes, exceededByMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu kalendarzowym przekracza maxHoursPerDay; zmiana nocna dzieli się o północy. details: period (day), date, maximumMinutes, totalMinutes, exceededByMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: jak w maximum_hours (proposedMinutes = 0).\nOstrzeżenia o limicie są twarde: potwierdzenie przeczytania w aplikacji nie pozwala zatwierdzić grafiku ponad limit.\n- hard_conflict (error) – zmiana nachodzi na inne wydarzenie albo blokadę (razem z buforem dojazdu). details.conflicts: lista wszystkich kolidujących pozycji – id, title, startLocal, endLocal (rzeczywisty termin), bufferMinutes, overlapStartLocal, overlapEndLocal.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: kind (overlap | rest), gapMinutes, requiredMinutes, shifts (candidateId, startLocal, endLocal obu zmian w kolejności czasu).\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe. details: penalty, conflicts (jak w hard_conflict).\nWartości w details są w minutach.",
                             "required": [
                               "code",
                               "severity",
@@ -8613,7 +9241,7 @@
                           {
                             "type": "object",
                             "title": "ScheduleViolation",
-                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. details: maximumMinutes, totalMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu przekracza maxHoursPerDay. details: date, maximumMinutes, totalMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: maximumMinutes, existingWorkMinutes.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: puste; zmiany wskazuje candidateIds.\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe.\nWartości w details są w minutach.",
+                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. Suma równa limitowi jest dozwolona. details: period (week), periodRule (shift_start – zmiana należy w całości do tygodnia, w którym się zaczyna; dotyczy też zapisanej pracy, więc nocna zmiana z niedzieli nie jest liczona drugi raz), periodStartLocal, periodEndLocal, maximumMinutes, totalMinutes, existingWorkMinutes, proposedMinutes, exceededByMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu kalendarzowym przekracza maxHoursPerDay; zmiana nocna dzieli się o północy. details: period (day), date, maximumMinutes, totalMinutes, exceededByMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: jak w maximum_hours (proposedMinutes = 0).\nOstrzeżenia o limicie są twarde: potwierdzenie przeczytania w aplikacji nie pozwala zatwierdzić grafiku ponad limit.\n- hard_conflict (error) – zmiana nachodzi na inne wydarzenie albo blokadę (razem z buforem dojazdu). details.conflicts: lista wszystkich kolidujących pozycji – id, title, startLocal, endLocal (rzeczywisty termin), bufferMinutes, overlapStartLocal, overlapEndLocal.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: kind (overlap | rest), gapMinutes, requiredMinutes, shifts (candidateId, startLocal, endLocal obu zmian w kolejności czasu).\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe. details: penalty, conflicts (jak w hard_conflict).\nWartości w details są w minutach.",
                             "required": [
                               "code",
                               "severity",
@@ -8752,7 +9380,7 @@
                           {
                             "type": "object",
                             "title": "ScheduleViolation",
-                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. details: maximumMinutes, totalMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu przekracza maxHoursPerDay. details: date, maximumMinutes, totalMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: maximumMinutes, existingWorkMinutes.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: puste; zmiany wskazuje candidateIds.\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe.\nWartości w details są w minutach.",
+                            "description": "Naruszenie albo ostrzeżenie grafiku. Najważniejsze kody:\n- maximum_hours (error) – łączny czas pracy w tygodniu (już zapisane zmiany + proponowane) przekracza maximumHours z profilu pracy. Suma równa limitowi jest dozwolona. details: period (week), periodRule (shift_start – zmiana należy w całości do tygodnia, w którym się zaczyna; dotyczy też zapisanej pracy, więc nocna zmiana z niedzieli nie jest liczona drugi raz), periodStartLocal, periodEndLocal, maximumMinutes, totalMinutes, existingWorkMinutes, proposedMinutes, exceededByMinutes.\n- daily_maximum_hours (error) – czas pracy w jednym dniu kalendarzowym przekracza maxHoursPerDay; zmiana nocna dzieli się o północy. details: period (day), date, maximumMinutes, totalMinutes, exceededByMinutes.\n- existing_work_exceeds_maximum (error) – już zapisane zmiany w tym tygodniu same przekraczają maximumHours, więc nie da się dołożyć nowych. details: jak w maximum_hours (proposedMinutes = 0).\nOstrzeżenia o limicie są twarde: potwierdzenie przeczytania w aplikacji nie pozwala zatwierdzić grafiku ponad limit.\n- hard_conflict (error) – zmiana nachodzi na inne wydarzenie albo blokadę (razem z buforem dojazdu). details.conflicts: lista wszystkich kolidujących pozycji – id, title, startLocal, endLocal (rzeczywisty termin), bufferMinutes, overlapStartLocal, overlapEndLocal.\n- shift_overlap_or_rest (error) – dwie proponowane zmiany nakładają się albo przerwa między nimi jest krótsza niż max(commuteBufferMinutes, minimumRestMinutes). details: kind (overlap | rest), gapMinutes, requiredMinutes, shifts (candidateId, startLocal, endLocal obu zmian w kolejności czasu).\n- commute_gap_too_short (error) – za krótka przerwa między zmianą a sąsiednim wydarzeniem (inną zmianą, zajęciami obowiązkowymi, wydarzeniem osobistym). Między dwiema zmianami wymagane jest max(commuteBufferMinutes, minimumRestMinutes), w pozostałych przypadkach commuteBufferMinutes. details: requiredMinutes, actualMinutes, leftId, rightId, leftTitle, rightTitle.\n- insufficient_free_time – wolny czas po odjęciu zajęć nie wystarcza na cel.\n- target_shortfall, minimum_shortfall (warning) – grafik poniżej celu lub minimum godzin.\n- optional_lecture_conflict – zmiana nachodzi na zajęcia nieobowiązkowe. details: penalty, conflicts (jak w hard_conflict).\nWartości w details są w minutach.",
                             "required": [
                               "code",
                               "severity",
@@ -8853,14 +9481,14 @@
                   },
                   "weeklyLimit": {
                     "summary": "Przekroczony limit godzin",
-                    "description": "Nic nie zostało zapisane. maximum_hours – profil pozwala na 20 h tygodniowo (maximumHours: 20 → 1200 min), a zmiany dałyby 22 h (1320 min). daily_maximum_hours – we wtorek wyszłoby 10 h przy limicie 8 h (maxHoursPerDay: 8 → 480 min).",
+                    "description": "Nic nie zostało zapisane. maximum_hours – profil pozwala na 20 h tygodniowo (maximumHours: 20 → 1200 min), a zmiany dałyby 22 h (1320 min), czyli 120 min ponad limit (exceededByMinutes). Okres to tydzień od poniedziałku 00:00 do następnego poniedziałku 00:00; zmiana należy w całości do tygodnia, w którym się zaczyna (periodRule: shift_start). daily_maximum_hours – we wtorek wyszłoby 10 h przy limicie 8 h (maxHoursPerDay: 8 → 480 min). Suma równa limitowi nie jest błędem.",
                     "value": {
                       "error": "invalid_schedule",
                       "errors": [
                         {
                           "code": "maximum_hours",
                           "severity": "error",
-                          "message": "Łączny czas pracy przekracza maksymalny limit tygodniowy.",
+                          "message": "Łączny czas pracy w tygodniu (22 h) przekracza limit 20 h o 2 h.",
                           "candidateIds": [
                             "X1",
                             "X2",
@@ -8868,23 +9496,32 @@
                           ],
                           "eventIds": [],
                           "details": {
+                            "period": "week",
+                            "periodRule": "shift_start",
+                            "periodStartLocal": "2026-11-16T00:00",
+                            "periodEndLocal": "2026-11-23T00:00",
                             "maximumMinutes": 1200,
-                            "totalMinutes": 1320
+                            "totalMinutes": 1320,
+                            "existingWorkMinutes": 420,
+                            "proposedMinutes": 900,
+                            "exceededByMinutes": 120
                           }
                         },
                         {
                           "code": "daily_maximum_hours",
                           "severity": "error",
-                          "message": "Limit pracy na dzień 2026-11-17 wynosi 480 minut.",
+                          "message": "Praca w dniu 2026-11-17 (10 h) przekracza limit dzienny 8 h o 2 h.",
                           "candidateIds": [
                             "X2",
                             "X3"
                           ],
                           "eventIds": [],
                           "details": {
+                            "period": "day",
                             "date": "2026-11-17",
                             "maximumMinutes": 480,
-                            "totalMinutes": 600
+                            "totalMinutes": 600,
+                            "exceededByMinutes": 120
                           }
                         }
                       ],
@@ -8919,13 +9556,29 @@
                         {
                           "code": "shift_overlap_or_rest",
                           "severity": "error",
-                          "message": "Zmiany nakładają się lub nie zachowują bufora i odpoczynku.",
+                          "message": "Między zmianami 2026-11-16 08:00–12:00 i 2026-11-16 13:00–17:00 jest 60 min przerwy, wymagane 120 min.",
                           "candidateIds": [
                             "X1",
                             "X2"
                           ],
                           "eventIds": [],
-                          "details": {}
+                          "details": {
+                            "kind": "rest",
+                            "gapMinutes": 60,
+                            "requiredMinutes": 120,
+                            "shifts": [
+                              {
+                                "candidateId": "X1",
+                                "startLocal": "2026-11-16T08:00",
+                                "endLocal": "2026-11-16T12:00"
+                              },
+                              {
+                                "candidateId": "X2",
+                                "startLocal": "2026-11-16T13:00",
+                                "endLocal": "2026-11-16T17:00"
+                              }
+                            ]
+                          }
                         }
                       ],
                       "warnings": []
@@ -19768,7 +20421,9 @@
                   "additionalProperties": false,
                   "required": [
                     "enabled",
+                    "classReminders",
                     "workRemindersEnabled",
+                    "privateReminders",
                     "eventChangesEnabled",
                     "minutesBefore",
                     "quietStart",
@@ -19779,7 +20434,13 @@
                     "enabled": {
                       "type": "boolean"
                     },
+                    "classReminders": {
+                      "type": "boolean"
+                    },
                     "workRemindersEnabled": {
+                      "type": "boolean"
+                    },
+                    "privateReminders": {
                       "type": "boolean"
                     },
                     "eventChangesEnabled": {
@@ -19814,7 +20475,9 @@
                     "summary": "Ustawienia przypomnień",
                     "value": {
                       "enabled": true,
+                      "classReminders": true,
                       "workRemindersEnabled": true,
+                      "privateReminders": true,
                       "eventChangesEnabled": true,
                       "minutesBefore": 30,
                       "quietStart": null,
@@ -19863,7 +20526,7 @@
         "tags": [
           "Notifications"
         ],
-        "description": "Enables or disables reminder scheduling and selects a bounded lead time.",
+        "description": "Enables or disables reminder scheduling, category filters, and selects a bounded lead time.",
         "requestBody": {
           "required": true,
           "content": {
@@ -19872,15 +20535,22 @@
                 "type": "object",
                 "required": [
                   "enabled",
+                  "classReminders",
                   "workRemindersEnabled",
-                  "minutesBefore"
+                  "privateReminders"
                 ],
                 "additionalProperties": false,
                 "properties": {
                   "enabled": {
                     "type": "boolean"
                   },
+                  "classReminders": {
+                    "type": "boolean"
+                  },
                   "workRemindersEnabled": {
+                    "type": "boolean"
+                  },
+                  "privateReminders": {
                     "type": "boolean"
                   },
                   "minutesBefore": {
@@ -19896,7 +20566,9 @@
                   "description": "Synthetic settings; no real user data.",
                   "value": {
                     "enabled": true,
+                    "classReminders": true,
                     "workRemindersEnabled": true,
+                    "privateReminders": true,
                     "minutesBefore": 30
                   }
                 }
@@ -19914,7 +20586,9 @@
                   "additionalProperties": false,
                   "required": [
                     "enabled",
+                    "classReminders",
                     "workRemindersEnabled",
+                    "privateReminders",
                     "eventChangesEnabled",
                     "minutesBefore",
                     "quietStart",
@@ -19925,7 +20599,13 @@
                     "enabled": {
                       "type": "boolean"
                     },
+                    "classReminders": {
+                      "type": "boolean"
+                    },
                     "workRemindersEnabled": {
+                      "type": "boolean"
+                    },
+                    "privateReminders": {
                       "type": "boolean"
                     },
                     "eventChangesEnabled": {
@@ -19960,7 +20640,9 @@
                     "summary": "Ustawienia przypomnień",
                     "value": {
                       "enabled": true,
+                      "classReminders": true,
                       "workRemindersEnabled": true,
+                      "privateReminders": true,
                       "eventChangesEnabled": true,
                       "minutesBefore": 30,
                       "quietStart": null,
@@ -20106,6 +20788,114 @@
                           },
                           "title": {
                             "type": "string"
+                          },
+                          "change": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "title": "PlanChangeDetails",
+                                "additionalProperties": false,
+                                "required": [
+                                  "kind",
+                                  "fields",
+                                  "before",
+                                  "after",
+                                  "eventVersion"
+                                ],
+                                "description": "Różnica terminu wydarzenia. kind=changed: realna zmiana (fields: date/time/location). kind=unknown_previous: poprzedni stan nie był znany – aplikacja ma ponownie odczytać wydarzenie zamiast pokazywać zmyśloną różnicę.",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "changed",
+                                      "unknown_previous"
+                                    ]
+                                  },
+                                  "fields": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "enum": [
+                                        "date",
+                                        "time",
+                                        "location"
+                                      ]
+                                    }
+                                  },
+                                  "before": {
+                                    "anyOf": [
+                                      {
+                                        "type": "object",
+                                        "additionalProperties": false,
+                                        "required": [
+                                          "start",
+                                          "end",
+                                          "location"
+                                        ],
+                                        "properties": {
+                                          "start": {
+                                            "type": "string",
+                                            "description": "Lokalna data i godzina (YYYY-MM-DDTHH:MM) w strefie użytkownika."
+                                          },
+                                          "end": {
+                                            "type": "string"
+                                          },
+                                          "location": {
+                                            "anyOf": [
+                                              {
+                                                "type": "string"
+                                              },
+                                              {
+                                                "type": "null"
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "after": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "start",
+                                      "end",
+                                      "location"
+                                    ],
+                                    "properties": {
+                                      "start": {
+                                        "type": "string",
+                                        "description": "Lokalna data i godzina (YYYY-MM-DDTHH:MM) w strefie użytkownika."
+                                      },
+                                      "end": {
+                                        "type": "string"
+                                      },
+                                      "location": {
+                                        "anyOf": [
+                                          {
+                                            "type": "string"
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  },
+                                  "eventVersion": {
+                                    "type": "integer",
+                                    "minimum": 1
+                                  }
+                                }
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "S23KC2S1P2-299: dla typu „Zmiana planu” – co się zmieniło (przed/po); null dla przypomnień."
                           }
                         }
                       }
@@ -20126,7 +20916,45 @@
                           "scheduledAt": "2026-11-16T07:30:00Z",
                           "eventStart": "2026-11-16T08:00",
                           "eventEnd": "2026-11-16T16:00",
-                          "title": "Zmiana"
+                          "title": "Zmiana",
+                          "change": null
+                        }
+                      ]
+                    }
+                  },
+                  "planChange": {
+                    "summary": "Zmiana planu z różnicą",
+                    "description": "Laboratorium przeniesiono z czwartku 10:00–11:30 na piątek 12:00–13:30 i do innej sali. change.fields mówi, co się zmieniło; kliknięcie otwiera aktualny stan wydarzenia.",
+                    "value": {
+                      "notifications": [
+                        {
+                          "id": "synthetic-change",
+                          "eventId": "synthetic-lab",
+                          "type": "Zmiana planu",
+                          "message": "Zmiana planu: „Laboratorium” – nowy termin 2026-11-20 12:00–13:30 (było 2026-11-19 10:00–11:30); miejsce: s. 204 (było s. 101).",
+                          "scheduledAt": "2026-11-16T09:00:00Z",
+                          "eventStart": "2026-11-20T12:00",
+                          "eventEnd": "2026-11-20T13:30",
+                          "title": "Laboratorium",
+                          "change": {
+                            "kind": "changed",
+                            "fields": [
+                              "date",
+                              "time",
+                              "location"
+                            ],
+                            "before": {
+                              "start": "2026-11-19T10:00",
+                              "end": "2026-11-19T11:30",
+                              "location": "s. 101"
+                            },
+                            "after": {
+                              "start": "2026-11-20T12:00",
+                              "end": "2026-11-20T13:30",
+                              "location": "s. 204"
+                            },
+                            "eventVersion": 3
+                          }
                         }
                       ]
                     }

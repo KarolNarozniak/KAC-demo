@@ -26,3 +26,4 @@ export async function blockRoutes(app: FastifyInstance, options:{repository:Cale
     try{if(!await repository.deleteBlock(req.params.id,scope(req).userId))return reply.code(404).send({error:'block_not_found'});return reply.code(204).send();}catch(e){req.log.error(e);return reply.code(503).send({error:'block_not_deleted'});}
   });
 }
+

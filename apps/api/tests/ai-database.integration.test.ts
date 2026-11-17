@@ -23,7 +23,7 @@ test('AI conversation scope, pending actions and calendar writes are locally per
     assert.equal((await ai.listMessages(owner, conversation.id)).length, 1);
     assert.equal(await ai.getConversation({ userId: 'different-user', calendarId: owner.calendarId }, conversation.id), null);
 
-    const payload = { event: { title: 'AI integration synthetic', start: '2035-02-14T12:00', end: '2035-02-14T13:00',
+    const payload = { event: { title: 'AI integration synthetic', start: '2035-02-18T05:00', end: '2035-02-18T06:00', // niedziela rano – poza cotygodniowymi wydarzeniami z danych seed
       category: 'Personal', location: '', mandatory: false, repeatWeekly: false } };
     const competing = await ai.createAction(owner, conversation.id, 'calendar_event_create', payload, 15);
     const competingClaims = await Promise.allSettled([ai.claimAction(owner, competing.id), ai.claimAction(owner, competing.id)]);
