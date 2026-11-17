@@ -8,8 +8,11 @@ import { PostgresWorkProfileRepository } from './profile/repository.js';
 import { demoScope } from './api/scope.js';
 import { AiRepository } from './ai/repository.js';
 import { PostgresNotificationRepository } from './notifications/repository.js';
+import { createGoogleIntegrationService } from './integrations/google/service.js';
 
 const repository = pool ? new PostgresCalendarRepository(pool) : null;
+// Trwałe połączenie z Google (S23KC2S1P2-12) wymaga bazy: konto, zgoda i zaszyfrowane tokeny są zapisywane w PostgreSQL.
+const googleIntegration = pool ? createGoogleIntegrationService(pool, config.googleIntegration) : null;
 const scheduleRepository = pool ? new PostgresScheduleRepository(pool) : undefined;
 const workProfileRepository = pool ? new PostgresWorkProfileRepository(pool) : undefined;
 const aiRepository = pool ? new AiRepository(pool) : undefined;
@@ -22,7 +25,7 @@ const scheduleReader = config.workScheduleReader === 'demo'
   ? new DemoScheduleReader()
   : new LocalScheduleReader(process.env.WORK_SCHEDULE_DEBUG === '1' ? { onText: printText } : {});
 // Użytkownika żądania ustala serwer (S23KC2S1P2-185). Do czasu logowania to użytkownik demonstracyjny z konfiguracji.
-const app = buildApi(repository, config.corsOrigins, { scheduleReader, scheduleRepository, workProfileRepository, aiRepository, notificationRepository, userScope: demoScope, google: { oauth: config.google } });
+const app = buildApi(repository, config.corsOrigins, { scheduleReader, scheduleRepository, workProfileRepository, aiRepository, notificationRepository, userScope: demoScope, google: { oauth: config.google }, googleIntegration });
 
 try {
   await app.listen({ host: '0.0.0.0', port: config.port });

@@ -267,7 +267,7 @@ export class PostgresScheduleRepository {
         (select coalesce(jsonb_agg(jsonb_build_object(
         'hourlyRatePln', z.stawka_pln, 'estimatedPayPln', z.wynagrodzenie_pln, 'rateKind', z.rodzaj_stawki, 'candidateId', coalesce(z.candidate_id,z.id_zmiany), 'templateId', z.template_id, 'optionalLectureIds', z.optional_lecture_ids,
         'softPenalty', z.soft_penalty, 'calendarEventId', z.id_wydarzenia, 'title', 'Praca', 'start', z.rozpoczecie, 'end', z.zakonczenie,
-        'durationMinutes', round(extract(epoch from(z.zakonczenie-z.rozpoczecie))/60)::integer, 'mode', g.tryb_pracy)), '[]'::jsonb) from t_zmiany_pracy z where z.id_grafiku = g.id_grafiku) as shift_rows,
+        'durationMinutes', round(extract(epoch from(z.zakonczenie-z.rozpoczecie))/60)::integer, 'mode', g.tryb_pracy)), '[]'::jsonb) from t_zmiany_pracy z where z.id_grafiku = g.id_grafiku and z.status <> 'Usunięta') as shift_rows,
         (select coalesce(jsonb_agg(jsonb_build_object('code', o.kod, 'severity', o.typ, 'message', o.opis,
         'candidateIds', o.szczegoly->'candidateIds', 'eventIds', o.szczegoly->'eventIds', 'details', o.szczegoly)), '[]'::jsonb) from t_ograniczenia_grafiku o where o.id_grafiku = g.id_grafiku) as violation_rows
       from t_grafiki g where ($3::text is not null or g.generator_version <> 'work-profile-v1') and g.id_kalendarza = $1 and g.tydzien_od = $2::date

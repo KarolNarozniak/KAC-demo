@@ -14,6 +14,7 @@ import AssistantScreen from './src/screens/AssistantScreen';
 import { acknowledgeNotification, claimDueNotifications, getNotificationSettings, getWebPushConfig, registerWebPushSubscription, removeWebPushSubscription, updateNotificationSettings, type DueNotification, type NotificationSettings } from './src/services/notificationsApi';
 import type { WeeklySchedule } from './src/services/scheduleApi';
 import ScreenTransition from './src/components/ScreenTransition';
+import GoogleIntegrationPanel from './src/components/GoogleIntegrationPanel';
 import { Button, ThemeProvider, ThemeToggle, useTheme, type ThemeMode } from './src/components/ui';
 
 // Konfiguracja obsługi powiadomień w tle / na pierwszym planie dla Expo (Mobile) z uwzględnieniem właściwości typu NotificationBehavior
@@ -342,7 +343,7 @@ function CalendarApp() {
             return (
                 route === 'Dziś' || route === 'Tydzień' ? <CalendarScreen onContinueInChat={(handoff)=>{setImportHandoff(handoff);setTab('Asystent');}} refreshVersion={calendarRevision} active={active} now={now} weekLayout={weekLayout} todayOnly={route === 'Dziś'} week={week} setWeek={setWeek} draftSchedule={schedulePreview}
                     notificationTarget={route === 'Tydzień' ? notificationTarget : null} onNotificationResolved={() => setNotificationTarget(null)} /> :
-                    route === 'Grafik' ? <ScheduleScreen active={active} now={now} week={week} setWeek={setWeek} onPreview={setSchedulePreview} onApproved={() => setTab('Tydzień')} onUnsavedChange={onUnsavedChange} discardSignal={discardSignal} /> :
+                    route === 'Grafik' ? <ScheduleScreen active={active} now={now} week={week} setWeek={setWeek} onPreview={setSchedulePreview} onApproved={() => setTab('Tydzień')} onUnsavedChange={onUnsavedChange} discardSignal={discardSignal} onOpenSettings={() => setTab('Ustawienia')}/> :
                         route === 'Blokady' ? <BlocksScreen /> :
                             route === 'Asystent' ? <AssistantScreen importHandoff={importHandoff} onHandoffConsumed={()=>setImportHandoff(null)} active={active} onCalendarChange={() => setCalendarRevision((value) => value + 1)} /> :
                                 route === 'Ustawienia' ? <ScrollView style={{ flex: 1, minHeight: 0 }} contentContainerStyle={[styles.content, { padding: 16, paddingBottom: 32 }]} keyboardShouldPersistTaps="handled">
@@ -445,7 +446,7 @@ function CalendarApp() {
                                         </View>
                                         {!!notificationError && <Text accessibilityRole="alert" style={styles.error}>{notificationError}</Text>}
                                     </View>
-
+                                        <GoogleIntegrationPanel active={active} onShowPlan={() => setTab('Tydzień')} />
                                     {!!storageError && <Text accessibilityRole="alert" style={styles.error}>{storageError}</Text>}
                                 </ScrollView> : <View style={[styles.content, { padding: 16 }]}><Text style={styles.heading}>Niedostępna sekcja</Text></View>
             );

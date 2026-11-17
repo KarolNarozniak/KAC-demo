@@ -11,6 +11,8 @@ import { profileRoutes } from './api/v1/profile/routes.js';
 import { schedulingRoutes } from './api/v1/scheduling/routes.js';
 import type { ApiOptions, CalendarRepository } from './api/contracts.js';
 import { registerGoogleImport } from './api/v1/imports/google-routes.js';
+import { registerGoogleIntegration } from './api/v1/integrations/google-routes.js';
+import { requestLogSerializer } from './api/log-redaction.js';
 import { DemoScheduleReader } from './import/work-schedule/reader.js';
 import { blockRoutes } from './api/v1/blocks/routes.js';
 import { aiImportRoutes } from './api/v1/imports/ai-routes.js';
@@ -28,7 +30,8 @@ const API_PREFIX = '/api/v1';
 
 export function buildApi(repository: CalendarRepository | null, allowedOrigins: string[] = [], options: ApiOptions = {}) {
   // `x-examples` to przykłady dla Swagger UI (api/examples.ts); Ajv w trybie strict musi znać ten klucz.
-  const app: FastifyInstance = Fastify({ logger: true, ajv: { customOptions: { keywords: ['x-examples'] } } });
+  // Log żądań bez kodu autoryzacji i state z adresów powrotu Google (api/log-redaction.ts).
+  const app: FastifyInstance = Fastify({ logger: { serializers: { req: requestLogSerializer } }, ajv: { customOptions: { keywords: ['x-examples'] } } });
   const allowAnyOrigin = allowedOrigins.includes('*');
   const origins = new Set(allowedOrigins);
 
@@ -66,6 +69,7 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
         { name: 'Scheduling', description: 'Weekly planning, versions, validation and approval.' },
         { name: 'Imports', description: 'Reviewable imports from schedules, ICS and class files.' },
         { name: 'Google import', description: 'One-time, read-only Google Calendar import.' },
+        { name: 'Google integration', description: 'Persistent Google account connection: consent, encrypted tokens, granted access and calendar list.' },
         { name: 'Blocks', description: 'Vacation, exam sessions and days off blocks.' },
         { name: 'AI imports', description: 'AI document extraction into the existing review/confirmation pipeline.' },
         { name: 'Assistant', description: 'Application-scoped conversations and confirmation-gated calendar actions.' },
@@ -100,6 +104,7 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
     await notificationRoutes(v1, { repository: options.notificationRepository, scope: options.userScope ?? demoScope });
     await blockRoutes(v1,{repository,scope:options.userScope});
     registerGoogleImport(v1, repository, options.google ?? {}, options.userScope ?? demoScope);
+    registerGoogleIntegration(v1, options.googleIntegration ?? null, options.userScope ?? demoScope);
   }, { prefix: API_PREFIX });
 
   return app;

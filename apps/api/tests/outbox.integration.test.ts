@@ -35,9 +35,10 @@ test('outbox enqueue is transactional and concurrent workers claim a job once', 
     assert.equal(claimed.reduce((sum, value) => sum + value, 0), 2);
     const result = await pool.query('select status, proby from t_event_outbox where id_agregatu = $1', [aggregateId]);
     const deliveries = await pool.query('select d.consumer, d.status, d.attempts from t_event_outbox_delivery d join t_event_outbox o using (id_outbox) where o.id_agregatu = $1 order by d.consumer', [aggregateId]);
-    assert.equal(result.rows[0].status, 'blocked', JSON.stringify(deliveries.rows));
+    // G09: niepublikowane wydarzenie nie wymaga niczego w Google – dostawa „google” kończy się bez pracy.
+    assert.equal(result.rows[0].status, 'delivered', JSON.stringify(deliveries.rows));
     assert.equal(Number(result.rows[0].proby), 0);
-    assert.deepEqual(deliveries.rows.map((row) => [row.consumer, row.status, Number(row.attempts)]), [['google', 'blocked', 1], ['notifications', 'delivered', 1]]);
+    assert.deepEqual(deliveries.rows.map((row) => [row.consumer, row.status, Number(row.attempts)]), [['google', 'delivered', 1], ['notifications', 'delivered', 1]]);
   } finally {
     client.release();
     await pool.query('delete from t_event_outbox where id_agregatu = $1', [aggregateId]);

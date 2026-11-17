@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { deferForQuietHours, parseEventTime, reminderText, reminderTime } from '../notifications/schedule.js';
+import { GoogleCorrectionSync } from '../integrations/google/corrections.js';
 import { detectPlanChange, mergePendingBefore, PLAN_CHANGE_TYPE, planChangeIdempotencyKey, type PlanChangeState } from '../notifications/plan-changes.js';
 
 type OutboxDelivery = {
@@ -13,7 +14,8 @@ type EventDetails = { title?: string; start?: string; end?: string; category?: s
 export class PostgresEventOutboxWorker {
   private readonly workerId = `worker-${randomUUID()}`;
 
-  constructor(private readonly pool: Pool, private readonly batchSize = 20, private readonly maxAttempts = 8) {}
+  constructor(private readonly pool: Pool, private readonly batchSize = 20, private readonly maxAttempts = 8,
+    private readonly google = new GoogleCorrectionSync()) {}
 
   async runOnce(outboxId?: string): Promise<number> {
     const batch = await this.claim(outboxId);
@@ -54,8 +56,22 @@ export class PostgresEventOutboxWorker {
         console.warn('Outbox delivery lease was lost before processing', { deliveryId: item.id_delivery, workerId: this.workerId });
         return;
       }
-      if (item.consumer === 'google') {
-        // The current Google OAuth connection is read-only. Keep this independent delivery visible and blocked until write scope is configured.
+      if (item.consumer === 'google' && item.typ_agregatu === 'calendar_event') {
+        // G09: korekta opublikowanej zmiany (prawdziwa dla kont Google, symulacja dla demonstracyjnych). Wysyłany jest najnowszy stan wydarzenia.
+        // Wydarzenie, którego nie publikowano, nie wymaga niczego w Google.
+        const outcome = await this.google.process(client, { userId: item.id_uzytkownika, eventId: item.id_agregatu });
+        if (outcome.status !== 'error') {
+          await client.query(`update t_event_outbox_delivery set status = 'delivered', delivered_at = now(), error_code = null,
+            lease_until = null, worker_id = null where id_delivery = $1`, [item.id_delivery]);
+        } else {
+          // Błąd przejściowy: automatyczne ponowienie z rosnącą przerwą. Inne błędy czekają na „Ponów synchronizację”.
+          const retry = outcome.transient && item.attempts < this.maxAttempts;
+          await client.query(`update t_event_outbox_delivery set status = $2, error_code = $3, lease_until = null, worker_id = null,
+              available_at = now() + make_interval(secs => $4::integer) where id_delivery = $1`,
+          [item.id_delivery, retry ? 'pending' : 'dead', outcome.errorCode, Math.min(3600, 2 ** Math.min(item.attempts, 10) * 5)]);
+        }
+      } else if (item.consumer === 'google') {
+        // Pozostałe zdarzenia (np. agregat schedule) nie mają jeszcze odpowiednika w Google – zostają widoczne jako zablokowane.
         await client.query(`update t_event_outbox_delivery set status = 'blocked', error_code = 'google_calendar_write_scope_required',
           lease_until = null, worker_id = null where id_delivery = $1`, [item.id_delivery]);
       } else if (item.consumer === 'notifications' && item.typ_agregatu === 'calendar_event') {
@@ -83,6 +99,9 @@ export class PostgresEventOutboxWorker {
   }
 
   private async refreshOutboxStatus(connection: Pick<Pool, 'query'>, outboxId: string) {
+    // Blokada wiersza zdarzenia: dwa workery kończące różne dostawy tego samego zdarzenia liczą stan po kolei,
+    // inaczej każdy widzi drugą dostawę jako trwającą i zdarzenie zostaje „pending” (niestabilny test outboxa).
+    await connection.query('select 1 from t_event_outbox where id_outbox = $1 for update', [outboxId]);
     await connection.query(`update t_event_outbox o set status = case
         when exists (select 1 from t_event_outbox_delivery d where d.id_outbox = o.id_outbox and d.status in ('pending', 'processing')) then 'pending'
         when exists (select 1 from t_event_outbox_delivery d where d.id_outbox = o.id_outbox and d.status in ('blocked', 'dead')) then 'blocked'

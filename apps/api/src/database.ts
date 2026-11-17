@@ -6,6 +6,8 @@ import { config } from './config.js';
 import { CATEGORY_IDS, type ExistingEvent } from './import/rules.js';
 import { planImport, type PlanAction } from './import/plan.js';
 import { enqueueDomainEvent } from './events/outbox.js';
+import { applyAcceptedShiftCorrection } from './scheduling/corrections.js';
+import { markPublicationsDeleted, markPublicationsUpdated } from './integrations/google/corrections.js';
 import { AiActionStalePreviewError } from './ai/repository.js';
 import {
   IMPORT_SESSION_TTL_MINUTES,
@@ -160,6 +162,13 @@ export class PostgresCalendarRepository {
             values ($1, (select id_kategorii from t_kategorie where nazwa = $2), $3, $4,
             $5::timestamp at time zone $10, $6::timestamp at time zone $10, $7, $8, $9, $11) returning id_wydarzenia, event_version`, [...values, aiActionId ?? null]);
       const savedEventId = String(result.rows[0].id_wydarzenia);
+      if (eventId) {
+        // G09: edycja zmiany z zaakceptowanego grafiku koryguje grafik (D07) i oznacza jej publikacje do aktualizacji w Google –
+        // w tej samej transakcji co wydarzenie i zlecenie w outboxie.
+        const saved = await client.query(`select rozpoczecie, zakonczenie from t_wydarzenia where id_wydarzenia = $1`, [savedEventId]);
+        await applyAcceptedShiftCorrection(client, { kind: 'update', eventId: savedEventId, start: saved.rows[0].rozpoczecie, end: saved.rows[0].zakonczenie });
+        await markPublicationsUpdated(client, savedEventId);
+      }
       await enqueueDomainEvent(client, { userId, calendarId }, 'calendar_event', savedEventId, eventId ? 'calendar_event.updated' : 'calendar_event.created', {
         origin: aiActionId ? 'assistant' : 'calendar', timeZone: timezone, eventVersion: result.rows[0].event_version,
         before: current ? { title: current.tytul, start: current.start, end: current.end, category: current.kategoria, location: current.miejsce ?? '' } : null,
@@ -224,6 +233,12 @@ export class PostgresCalendarRepository {
             to_char(e.zakonczenie at time zone $3, 'YYYY-MM-DD"T"HH24:MI') as local_end, k.nazwa as kategoria
             from t_wydarzenia e join t_kategorie k on k.id_kategorii = e.id_kategorii
             where e.id_wydarzenia = $1 and e.id_kalendarza = $2 for update of e`, [eventId, calendarId, owner.rows[0].strefa_czasowa]);
+      // G09: usunięcie zmiany z zaakceptowanego grafiku (D07) i nagrobki publikacji – zanim FK wydarzenia zostanie wyzerowany.
+      for (const removedEvent of removedEvents.rows) {
+        await applyAcceptedShiftCorrection(client, { kind: 'delete', eventId: String(removedEvent.id_wydarzenia) });
+        await markPublicationsDeleted(client, String(removedEvent.id_wydarzenia), { title: removedEvent.tytul,
+          start: removedEvent.local_start, end: removedEvent.local_end });
+      }
       for (const removedEvent of removedEvents.rows) await enqueueDomainEvent(client, { userId, calendarId }, 'calendar_event',
         String(removedEvent.id_wydarzenia), 'calendar_event.deleted', { origin: 'calendar', timeZone: owner.rows[0].strefa_czasowa,
           before: { title: removedEvent.tytul, start: removedEvent.local_start, end: removedEvent.local_end, category: removedEvent.kategoria, version: removedEvent.event_version } });

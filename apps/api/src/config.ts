@@ -68,4 +68,21 @@ export const config = {
       redirectUri: process.env.GOOGLE_REDIRECT_URI?.trim() || 'http://localhost:4000/api/v1/import/google/callback',
     }
     : null,
+  /**
+   * Trwałe połączenie z Google Calendar (S23KC2S1P2-12, G01). Ten sam klient OAuth co import, ale własny adres powrotu
+   * (GOOGLE_INTEGRATION_REDIRECT_URI – też trzeba go dodać w Google Cloud Console). Bez klienta działa makieta z kontami demonstracyjnymi.
+   * GOOGLE_TOKEN_ENCRYPTION_KEY (32 bajty w base64) szyfruje tokeny w bazie; bez niego prawdziwe logowanie jest wyłączone.
+   */
+  googleIntegration: {
+    oauth: process.env.GOOGLE_CLIENT_ID?.trim() && process.env.GOOGLE_CLIENT_SECRET?.trim()
+      ? {
+        clientId: process.env.GOOGLE_CLIENT_ID.trim(),
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET.trim(),
+        redirectUri: process.env.GOOGLE_INTEGRATION_REDIRECT_URI?.trim() || 'http://localhost:4000/api/v1/integrations/google/callback',
+      }
+      : null,
+    tokenKey: process.env.GOOGLE_TOKEN_ENCRYPTION_KEY?.trim() ?? '',
+    /** Publikacja grafiku i korekty (G07, G09): domyślnie prawdziwy zapis do Google dla kont Google; „simulation” go wyłącza. */
+    publication: (process.env.GOOGLE_PUBLICATION_MODE?.trim() === 'simulation' ? 'simulation' : 'google') as 'google' | 'simulation',
+  },
 };

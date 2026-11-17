@@ -59,6 +59,8 @@ Najważniejsze zmienne:
 | `EXPO_PUBLIC_API_URL` | Bazowy adres serwera API dla web |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Opcjonalny OAuth Google; bez nich dostępne jest konto demonstracyjne |
 | `GOOGLE_REDIRECT_URI` | Callback OAuth, domyślnie `http://localhost:4000/api/v1/import/google/callback` |
+| `GOOGLE_INTEGRATION_REDIRECT_URI` | Callback trwałego połączenia, domyślnie `http://localhost:4000/api/v1/integrations/google/callback` |
+| `GOOGLE_TOKEN_ENCRYPTION_KEY` | Klucz szyfrowania tokenów Google (32 bajty w base64); bez niego prawdziwe połączenie jest wyłączone |
 | `OPENAPI_SERVER_URL` | Bazowy serwer wpisany do eksportowanego OpenAPI |
 | `API_ORIGIN`, `API_OPENAPI_URL` | Publiczny host API używany przez Docusaurus w linkach do Swaggera i specyfikacji |
 | `DOCUSAURUS_URL`, `DOCUSAURUS_BASE_URL` | Publiczny URL i base path dokumentacji przy wdrożeniu |
