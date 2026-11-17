@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { randomUUID } from 'node:crypto';
 import { config } from '../src/config.js';
 import { pool, PostgresCalendarRepository } from '../src/database.js';
 import { AiRepository } from '../src/ai/repository.js';
@@ -9,10 +10,15 @@ test('AI conversation scope, pending actions and calendar writes are locally per
   assert.ok(pool);
   const ai = new AiRepository(pool);
   const calendar = new PostgresCalendarRepository(pool);
-  const owner = { userId: config.demoUserId, calendarId: config.demoCalendarId };
-  const conversation = await ai.createConversation(owner, 'gpt-5-mini', 30, 'Integration test');
+  const suffix = randomUUID();
+  const owner = { userId: `ai-test-${suffix}`, calendarId: `ai-calendar-${suffix}` };
   let eventId = '';
   try {
+    await pool.query(`insert into t_uzytkownicy (id_uzytkownika, imie, nazwisko, email)
+      values ($1, 'Test', 'Assistant', $2)`, [owner.userId, `${suffix}@example.test`]);
+    await pool.query(`insert into t_kalendarze (id_kalendarza, id_uzytkownika, nazwa, typ)
+      values ($1, $2, 'AI integration test', 'Osobisty')`, [owner.calendarId, owner.userId]);
+    const conversation = await ai.createConversation(owner, 'gpt-5-mini', 30, 'Integration test');
     await ai.appendMessage(owner, conversation.id, 'user', { text: 'Create a synthetic personal reminder.' }, 30);
     assert.equal((await ai.listMessages(owner, conversation.id)).length, 1);
     assert.equal(await ai.getConversation({ userId: 'different-user', calendarId: owner.calendarId }, conversation.id), null);
@@ -80,13 +86,12 @@ test('AI conversation scope, pending actions and calendar writes are locally per
     assert.deepEqual(deleteRetry, deleted);
     assert.deepEqual(deleted, [eventId]);
     await ai.completeAction(owner, deleteAction.id, null);
-    eventId = '';
   } finally {
     if (eventId) {
       await pool.query('delete from t_wydarzenia where id_wydarzenia = $1', [eventId]);
       await pool.query('delete from t_event_outbox where id_agregatu = $1', [eventId]);
     }
-    await ai.closeConversation(owner, conversation.id);
+    await pool.query('delete from t_uzytkownicy where id_uzytkownika = $1', [owner.userId]);
     await pool.end();
   }
 });

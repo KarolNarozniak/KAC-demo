@@ -58,7 +58,7 @@ For a private endpoint, configure API App Service VNet Integration and private D
 - Responses requests explicitly use `store: false`; conversation context is reconstructed from application tables.
 - Every assistant turn receives trusted server context: UTC time, the calendar owner's current local date/time and IANA time zone. It is not derived from user content.
 - PostgreSQL stores conversations, messages, usage metrics and action previews. Conversations expire after 30 days of inactivity; pending actions expire after 15 minutes. The worker removes expired history. Prompts, completions, tokens and file bytes are not written to application logs.
-- Original PDF/JPG/PNG bytes are validated and sent inline to the request. Before upload, the UI states that the file is sent to Azure AI; cancellation aborts the API request and upstream Responses request. Bytes are not stored in `t_importy`, a cache or Azure Files API. The database stores only normalized import rows, a short source excerpt and page number for review.
+- Original PDF/JPG/PNG bytes are validated and sent inline to the request. Before upload, the UI states that the file is sent to Azure AI; cancellation aborts the API request and upstream Responses request. Original file bytes are not stored in the database, a cache or Azure Files API. Standard imports store normalized rows, a short excerpt and page number. Chat imports additionally retain a bounded derivative image preview as described below.
 - `store: false` disables persisted response state used for later Responses turns. It does not by itself guarantee that all safety/abuse-monitoring logs are disabled. Azure states customer prompts are not used to train models; exact service retention depends on feature and service policy. Choose a regional deployment when residency is required; do not assume the same for Global/Data Zone deployments.
 - Images are signature-checked, size/pixel limited and resized when needed. PDFs are limited to 5 MB and 10 pages; images to 20 MP. Failed calls do not automatically fall back to OCR/Document Intelligence.
 
@@ -90,3 +90,75 @@ The script prints only row count, unresolved fields and usage; it does not print
 ## Sprint integration limits
 
 W02 adds a separate outbox worker. Reminders are scheduled in the database; optional Web Push requires VAPID configuration in the API/worker. Google import currently has only `calendar.readonly`; publishing changes requires adding a write OAuth scope and obtaining consent again. The Google consumer keeps its deliveries explicitly blocked until write scope is granted.
+
+## Creating events in chat (S23KC2S1P2-252)
+
+The assistant asks for a title, date, start and end or duration, and an ambiguous category. Location is optional; mandatory attendance and weekly recurrence default to false. Conversation rules are model instructions and also require testing against the actual Azure deployment.
+
+The Assistant preview displays the time, category, location and both flags. **Zatwierdź** saves the event; **Odrzuć** cancels the proposal. Saying “yes” in chat does not replace the application confirmation.
+
+`POST /api/v1/assistant/actions/{id}/confirm` accepts `{}` or `{ "collisionToken": "<64 hexadecimal characters>" }`. A collision returns HTTP 409 with `conflicts` and a token bound to the proposal and current conflicts. The UI displays them and offers a separate **Zapisz mimo kolizji** button. Changed conflicts invalidate the old token and require another decision. The backend issues this token; the model cannot confirm operations with it.
+
+After a lost response, confirm **the same proposal** again. Existing action identifiers make calendar writes idempotent; requesting another proposal is unnecessary. Cancelled or expired actions cannot be saved.
+
+### Manual test
+
+1. Start an Assistant conversation with “Dodaj spotkanie osobiste”. Verify that it asks for the missing title and time without creating an event.
+2. Reply “Spotkanie testowe, 20 listopada 2026, od 10:00 do 11:00”. Check all preview fields. Saying “tak” must not save the event.
+3. Select **Odrzuć** and check the calendar. Prepare another proposal, select **Zatwierdź**, and verify a single event.
+4. Propose another event at the same time. Review the collision list and explicitly save despite collisions. Also test rejecting it and requesting another time.
+5. After losing a confirmation response, retry the same card. Only one event should exist for that action.
+
+## Today card
+
+An empty day displays a fixed message without calling the assistant API or Azure. Detection includes today's weekly occurrences and events crossing midnight. The summary refreshes automatically when today's events change; there is no Refresh button. Unchanged data reuses the result within the current app session. The application displays “Dzień dobry!” from 05:00 through 17:59 and “Dobry wieczór!” otherwise, using the device's local time. The model is instructed to omit the date and an additional greeting.
+
+Internal conversations titled “Dzień w skrócie YYYY-MM-DD” remain available to the card but are hidden from the Assistant conversation list.
+
+## Chat, streaming and personalization
+
+Chat immediately displays the user's message and a typing indicator. It uses `POST /api/v1/assistant/conversations/{id}/messages?stream=true`, returning `application/x-ndjson`. Each line is an event: `accepted` confirms persisted user input, `delta` appends text, `reset` clears provisional text before another tool round, and `done` returns the persisted answer and pending proposals. `error` terminates an unsuccessful turn. Disconnecting aborts the upstream request. Without `stream`, the endpoint retains its JSON response. A stream ending without `done` is not successful.
+
+Empty or incomplete model responses produce `assistant_incomplete_response` (502 before streaming starts, an `error` event afterwards), rather than a stored summary. The 4000-token output budget includes model reasoning; diagnostics record the incomplete reason without conversation text.
+
+Confirmation keeps the user in chat. **Zatwierdź wszystko** executes proposals sequentially and stops on the first error or collision. Successful actions leave the list; remaining actions retain their identifiers for retry. Batch confirmation is not an atomic transaction across all proposals.
+
+Settings → Personalizacja agenta stores an address form (up to 60 characters) and a neutral, friendly or formal tone. Preferences are stored on the device and sent with subsequent messages as optional `preferences: { addressAs, tone }`; API tone values are `neutral`, `friendly`, and `formal`. Style preferences cannot change permissions or confirmation requirements.
+
+Regenerating the Today card creates a fresh hidden internal conversation, preventing reuse of stale calendar tool results from an earlier summary. Unchanged calendar data uses the current app session's cache.
+
+### Azure filtering versus an interrupted response
+
+`assistant_content_filtered` means Azure blocked the input or output through content filtering; `assistant_refused` indicates an explicit model refusal. Both return 422 in JSON mode or an `error` event after streaming starts. The UI clears provisional refusal text and displays a Polish explanation instead of labeling it as an interrupted transmission. The calendar remains unchanged.
+
+Safe diagnostics record the provider code and filtered category names without prompt text. Incorrect classification of an allowed request requires reviewing the assigned Foundry policy or reporting the issue to the provider. The application does not disable filters or automatically rewrite messages to avoid a block.
+
+### Multiple proposals in one turn
+
+The model can return multiple tool calls in one response (`parallel_tool_calls: true`); the backend validates and executes them sequentially. `AZURE_AI_MAX_TOOL_ROUNDS` defaults to 8 (configurable up to 16), with an additional limit of 64 calls per turn. Complete current-turn call/output pairs are retained independently of the 24-message window for earlier history.
+
+Exhausting the limit returns `assistant_tool_limit` (409 or an `error` event). Error responses may include `pendingActions`; the UI shows already prepared previews for confirmation or cancellation. Preparing the identical action again in the same conversation reuses its existing unexpired preview. Limits and errors never confirm calendar changes.
+
+### Current status of historical proposals
+
+A historical `awaiting_user_confirmation` result does not prove that a preview is still valid. Before each turn, the backend refreshes referenced action statuses in the model context from the database, scoped to the user and conversation. Expired, cancelled, failed or unavailable proposals need a fresh preview when requested again; confirmed actions indicate completed writes, while processing actions must not be duplicated. Stored historical messages remain unchanged.
+
+The Assistant displays the actual pending proposal count beside batch confirmation. An earlier textual claim by the model does not establish that all proposals remain available for saving. Preview TTL remains 15 minutes.
+
+### Photos and completing an import in chat
+
+The camera icon offers a class timetable or work schedule, local OCR or Azure AI, and file or camera selection. The image appears immediately in the conversation. The review stays in chat, where the user can ask to correct times, dates, titles, employee selection, omitted rows and duplicate decisions. Clicking the image enlarges it.
+
+The assistant uses `import_get_preview` and `import_prepare_changes` against a specific draft revision. A null `rowId` adds a missing row; other null fields leave values unchanged. There is no model confirmation tool. **Zatwierdź import** saves only the reviewed revision through the shared import workflow, including duplicates, overnight acknowledgement and transactional writes. Retrying a successful confirmation returns its receipt. Corrections renew the draft's 15-minute validity. The image and draft survive reopening the conversation.
+
+Drafts extend the existing `t_importy` table through `016_chat_import_drafts.sql`, scoped to user, calendar and conversation. Original image/PDF bytes are not stored. Images retain a derivative JPEG up to 1600×1600 and 700,000 data URL characters, following conversation retention. The latest AI-mode preview may enter the model context during follow-up discussion. With local OCR, image pixels stay outside Azure context; the model discusses normalized rows. PDFs appear as file-name messages without page thumbnails.
+
+The existing timetable and work schedule forms are now **Szybki import** (Quick import). **Dokończ w czacie** transfers an image and available corrections to the AI workflow when recognition, validation or saving needs attention. An active session preserves corrected rows, selections and duplicate decisions. Recognition errors without a session trigger a new image read. Transfer never confirms calendar writes.
+
+#### Manual verification
+
+1. In the Assistant, select the camera, class timetable and Azure AI, then a synthetic photo. Verify its message preview and event draft without calendar writes.
+2. Ask “w pierwszym wierszu koniec 10:30”. Check the new revision and time. Add a missing row, omit an unwanted row and resolve duplicates in chat.
+3. Reload and reopen the conversation; the image and draft should remain available.
+4. Confirm the import; retrying the same revision must not add copies. Also test cancellation and rejection of an old revision after corrections.
+5. Trigger an incomplete row or error in Quick import. Select Dokończ w czacie and verify the image and earlier corrections are retained.

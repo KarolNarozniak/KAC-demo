@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import type { CalendarEvent, Category, Occurrence } from '../domain/model';
 import { addCalendarDays, localDateKey, occurrencesForRange, startOfWeek, validateEventInput } from '../domain/calendar';
@@ -13,22 +13,22 @@ import WeekGrid, { type WeekLayout } from '../components/WeekGrid';
 import type { WeeklySchedule } from '../services/scheduleApi';
 import type { DueNotification } from '../services/notificationsApi';
 import { PLAN_CHANGE_TYPE, planChangeLines, planChangeOutdated, resolveNotificationTarget } from '../domain/notifications';
-import { getAssistantConfig, getDailySummary } from '../services/assistantApi';
+import { getDailySummaryForCalendar } from '../services/assistantApi';
+import { dailySummaryContext, dayGreeting } from '../domain/dailySummary';
+import type { ChatImportHandoff } from '../services/chatImportApi';
 import ClassScheduleImport from '../components/ClassScheduleImport';
 import WorkScheduleImport from '../components/WorkScheduleImport';
 import GoogleCalendarImport from '../components/GoogleCalendarImport';
 const categories: Category[] = ['Class', 'Work', 'Personal'];
 const labels: Record<Category, string> = { Class: 'Zajęcia', Work: 'Praca', Personal: 'Prywatne' };
-type Props = { week: Date; setWeek: (value: Date) => void; todayOnly?: boolean; weekLayout: WeekLayout; now: Date; active: boolean; draftSchedule?: WeeklySchedule | null;
+type Props = { onContinueInChat?: (handoff:ChatImportHandoff)=>void; refreshVersion?: number; week: Date; setWeek: (value: Date) => void; todayOnly?: boolean; weekLayout: WeekLayout; now: Date; active: boolean; draftSchedule?: WeeklySchedule | null;
   notificationTarget?: DueNotification | null; onNotificationResolved?: () => void };
-export default function CalendarScreen({ week, setWeek, todayOnly = false, weekLayout, now, active, draftSchedule, notificationTarget, onNotificationResolved }: Props) {
+export default function CalendarScreen({ onContinueInChat, refreshVersion = 0, week, setWeek, todayOnly = false, weekLayout, now, active, draftSchedule, notificationTarget, onNotificationResolved }: Props) {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dailySummary, setDailySummary] = useState<{ date: string; text: string } | null>(null);
+  const [dailySummary, setDailySummary] = useState<{ key: string; text: string } | null>(null);
   const [dailySummaryLoading, setDailySummaryLoading] = useState(false);
   const [dailySummaryError, setDailySummaryError] = useState('');
-  const summaryAttemptedDate = useRef('');
-  const summaryRequesting = useRef(false);
   const [loadError, setLoadError] = useState('');
   const [saving, setSaving] = useState(false);
   const [classImportOpen, setClassImportOpen] = useState(false);
@@ -41,7 +41,7 @@ export default function CalendarScreen({ week, setWeek, todayOnly = false, weekL
     catch (error) { setLoadError(error instanceof Error ? error.message : 'Nie udało się wczytać wydarzeń.'); }
     finally { setLoading(false); }
   };
-  useEffect(() => { if (active) void reload(); }, [active]);
+  useEffect(() => { if (active) void reload(); }, [active, refreshVersion]);
   const { palette, styles } = useTheme();
   const colors: Record<Category, string> = { Class: palette.class, Work: palette.work, Personal: palette.personal };
   const { width: viewportWidth } = useWindowDimensions();
@@ -51,27 +51,18 @@ export default function CalendarScreen({ week, setWeek, todayOnly = false, weekL
   const [error, setError] = useState(''); const [conflicts, setConflicts] = useState<EventCollision[]>([]); const [pending, setPending] = useState<CalendarEvent | null>(null);
   const monday = startOfWeek(todayOnly ? now : week); const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addCalendarDays(monday, i)), [monday.getTime()]);
   const todayKey = localDateKey(now);
-  const requestDailySummary = useCallback(async (refresh = false) => {
-    if (summaryRequesting.current || (!refresh && summaryAttemptedDate.current === todayKey)) return;
-    summaryRequesting.current = true;
-    summaryAttemptedDate.current = todayKey;
-    setDailySummaryLoading(true); setDailySummaryError('');
-    try {
-      const config = await getAssistantConfig();
-      if (!config.enabled) throw new Error('Asystent AI jest niedostępny. Sprawdź konfigurację Azure AI i spróbuj ponownie.');
-      const result = await getDailySummary(todayKey, refresh);
-      setDailySummary({ date: todayKey, text: result.text });
-    } catch (error) {
-      setDailySummaryError(error instanceof Error ? error.message : 'Nie udało się przygotować podsumowania dnia.');
-    } finally {
-      summaryRequesting.current = false;
-      setDailySummaryLoading(false);
-    }
-  }, [todayKey]);
+  const summaryContext = useMemo(() => dailySummaryContext(events, now), [events, todayKey]);
   useEffect(() => {
-    if (!active || !todayOnly || loading || loadError || summaryAttemptedDate.current === todayKey) return;
-    void requestDailySummary();
-  }, [active, todayOnly, loading, loadError, todayKey, requestDailySummary]);
+    if (!active || !todayOnly || loading || loadError) return;
+    let alive = true;
+    setDailySummaryLoading(!summaryContext.empty); setDailySummaryError('');
+    void getDailySummaryForCalendar(events, now).then((result) => {
+      if (alive) setDailySummary({ key: summaryContext.key, text: result.text });
+    }).catch((error) => {
+      if (alive) setDailySummaryError(error instanceof Error ? error.message : 'Nie udało się przygotować podsumowania dnia.');
+    }).finally(() => { if (alive) setDailySummaryLoading(false); });
+    return () => { alive = false; };
+  }, [active, todayOnly, loading, loadError, summaryContext.key]);
   const list = useMemo(() => occurrencesForRange(events, { start: monday, end: addCalendarDays(monday, 7) }), [events, monday.getTime()]);
   // S23KC2S1P2-299: po kliknięciu „Zmiana planu” najpierw ładujemy aktualny stan kalendarza, potem otwieramy wydarzenie z różnicą.
   const [refreshedFor, setRefreshedFor] = useState('');
@@ -190,8 +181,8 @@ export default function CalendarScreen({ week, setWeek, todayOnly = false, weekL
     {!!loadError && <View><Text accessibilityRole="alert" style={styles.error}>{loadError}</Text><Button title="Spróbuj ponownie" onPress={() => void reload()} /></View>}
     {!todayOnly && <View style={[styles.row, { justifyContent: 'space-between', paddingVertical: 6, flexWrap: 'wrap' }]}>
       <Text numberOfLines={1} style={[styles.heading, { flex: 1, minWidth: compact ? '100%' : 160, fontSize: compact ? 14 : 17 }]}>{selectedWeek}</Text>
-      <Button title="Importuj plan" onPress={() => setClassImportOpen(true)} />
-      <Button title="Grafik pracy" accessibilityLabel="Importuj grafik pracy" onPress={() => setImportOpen(true)} />
+      <Button title="Szybki import planu" onPress={() => setClassImportOpen(true)} />
+      <Button title="Szybki import grafiku" accessibilityLabel="Szybki import grafiku pracy" onPress={() => setImportOpen(true)} />
       <Button title="Google" accessibilityLabel="Importuj z Google Calendar" onPress={() => setGoogleImportOpen(true)} />
       <Button title="+" accessibilityLabel="Dodaj wydarzenie" primary onPress={() => newEvent(todayOnly ? new Date() : weekDays.some((date) => localDateKey(date) === localDateKey(new Date())) ? new Date() : monday)} />
     </View>}
@@ -202,15 +193,12 @@ export default function CalendarScreen({ week, setWeek, todayOnly = false, weekL
     </View>}
     {!!previewEvents.length && !todayOnly && <Text accessibilityLiveRegion="polite" style={[styles.muted, { paddingVertical: 5 }]}>Podgląd propozycji pracy: linie przerywane oznaczają zmiany niezatwierdzone.</Text>}
     {todayOnly ? <View style={{ flex: 1, minHeight: 0 }}>
-      <View style={[styles.row, { justifyContent: 'space-between', paddingVertical: 8 }]}><Text style={styles.heading}>Dzień dobry!</Text><Button title="+" accessibilityLabel="Dodaj wydarzenie" primary onPress={() => newEvent(now)} /></View>
+      <View style={[styles.row, { justifyContent: 'space-between', paddingVertical: 8 }]}><Text style={styles.heading}>{dayGreeting(now)}</Text><Button title="+" accessibilityLabel="Dodaj wydarzenie" primary onPress={() => newEvent(now)} /></View>
        <View accessibilityLabel="Podsumowanie dnia od asystenta" style={{ backgroundColor: palette.blueSoft, borderRadius: 8, padding: 12, marginBottom: 14, minHeight: 88 }}>
-         <View style={[styles.row, { justifyContent: 'space-between', alignItems: 'center' }]}>
-           <Text style={[styles.body, { fontWeight: '700' }]}>Twój dzień w skrócie</Text>
-           <Button title={dailySummaryLoading ? '...' : 'Odśwież'} disabled={dailySummaryLoading || !active} onPress={() => void requestDailySummary(true)} />
-         </View>
+         <Text style={[styles.body, { fontWeight: '700' }]}>Twój dzień w skrócie</Text>
          {dailySummaryLoading ? <Text accessibilityLiveRegion="polite" style={styles.muted}>Asystent analizuje dzisiejsze wydarzenia…</Text>
            : dailySummaryError ? <Text accessibilityRole="alert" style={styles.error}>{dailySummaryError}</Text>
-           : dailySummary?.date === todayKey ? <Text accessibilityLiveRegion="polite" style={styles.body}>{dailySummary.text}</Text>
+           : dailySummary?.key === summaryContext.key ? <Text accessibilityLiveRegion="polite" style={styles.body}>{dailySummary.text}</Text>
            : <Text style={styles.muted}>Asystent przygotuje podsumowanie dzisiejszego kalendarza.</Text>}
        </View>
       <WeekGrid active={active} days={[addCalendarDays(now, 0)]} events={upcoming} layout="days-top" now={now} startAtNow hideDayHeader onAdd={newEvent} onSelect={details} />
@@ -265,8 +253,8 @@ export default function CalendarScreen({ week, setWeek, todayOnly = false, weekL
       </>}
 
     </ScrollView></View></Modal>
-    <ClassScheduleImport visible={classImportOpen} onClose={() => setClassImportOpen(false)} onImported={() => void reload()} />
-    <WorkScheduleImport visible={importOpen} onClose={() => setImportOpen(false)} onImported={() => void reload()} />
+    <ClassScheduleImport onContinueInChat={onContinueInChat} visible={classImportOpen} onClose={() => setClassImportOpen(false)} onImported={() => void reload()} />
+    <WorkScheduleImport onContinueInChat={onContinueInChat} visible={importOpen} onClose={() => setImportOpen(false)} onImported={() => void reload()} />
     <GoogleCalendarImport visible={googleImportOpen} onClose={() => setGoogleImportOpen(false)} onImported={() => void reload()} />
   </View>;
 }

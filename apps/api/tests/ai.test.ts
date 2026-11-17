@@ -86,7 +86,7 @@ test('assistant tool registry creates a pending proposal but never writes a cale
 
 test('tool registry only exposes the reviewed calendar and profile operations', () => {
   assert.deepEqual(assistantTools.map((tool) => tool.name), [
-    'calendar_search_events', 'work_profile_get', 'calendar_prepare_event_create',
+    'import_get_preview', 'import_prepare_changes', 'calendar_search_events', 'work_profile_get', 'calendar_prepare_event_create',
     'calendar_prepare_event_update', 'calendar_prepare_event_delete',
   ]);
   assert.ok(assistantTools.every((tool) => tool.strict));
@@ -150,7 +150,75 @@ test('assistant Responses puts trusted time context in instructions, not persist
   const abortController = new AbortController();
   await service.sendAssistantMessage([{ role: 'user', content: 'What time is it?' }], [], 'trusted server time context', abortController.signal);
   assert.equal(captured?.store, false);
+  assert.equal(captured?.parallel_tool_calls, true);
   assert.match(String(captured?.instructions), /trusted server time context/);
   assert.deepEqual((captured?.input as unknown[])[0], { role: 'user', content: 'What time is it?' });
   assert.equal(requestSignal, abortController.signal);
+});
+
+test('assistant cannot prepare an incomplete or invalid create proposal', async () => {
+  let actions = 0;
+  const context: AssistantToolContext = {
+    scope: { userId: 'U-test', calendarId: 'K-test' }, conversationId: 'C-test',
+    calendar: { checkConnection: async () => {}, getOverview: async () => null },
+    ai: { createAction: async () => { actions++; throw new Error('must not prepare'); } }, actionTtlMinutes: 15,
+  };
+  const complete = { title: 'Spotkanie testowe', start: '2026-11-20T10:00', end: '2026-11-20T11:00', category: 'Personal', location: '', mandatory: false, repeatWeekly: false };
+  for (const patch of [{ title: '' }, { start: undefined }, { end: undefined }, { start: '2026-02-30T10:00' }, { end: complete.start }, { category: 'unknown' }]) {
+    const result = await executeAssistantTool('calendar_prepare_event_create', JSON.stringify({ ...complete, ...patch }), context);
+    assert.equal(result.error, 'invalid_tool_arguments');
+  }
+  assert.equal(actions, 0);
+});
+
+test('assistant service forwards streaming text without waiting for the completed response', async () => {
+  const deltas: string[] = [];
+  let finish!: () => void;
+  const gate = new Promise<void>((resolve) => { finish = resolve; });
+  const service = new AiService({ respond: async (_options, options) => {
+    options?.onTextDelta?.('Fragment'); await gate; return response('Fragment odpowiedzi');
+  } });
+  const result = service.sendAssistantMessage([{ role: 'user', content: 'Cześć' }], [], undefined, undefined, (text) => deltas.push(text));
+  assert.deepEqual(deltas, ['Fragment']);
+  finish(); assert.equal((await result).output_text, 'Fragment odpowiedzi');
+});
+
+test('assistant rejects exhausted reasoning output and empty responses instead of returning a successful placeholder', async () => {
+  const { AiIncompleteResponseError } = await import('../src/ai/service.js');
+  for (const value of [
+    { ...response(''), status: 'incomplete', incomplete_details: { reason: 'max_output_tokens' } },
+    { ...response(''), status: 'completed', output: [] },
+  ]) {
+    const service = new AiService({ respond: async (options) => {
+      assert.equal(options.max_output_tokens, 4000); return value as unknown as OpenAIResponse;
+    } });
+    await assert.rejects(service.sendAssistantMessage([{ role: 'user', content: 'Podsumuj dzień' }], []), AiIncompleteResponseError);
+  }
+});
+
+test('assistant distinguishes Azure content filtering and model refusal from exhausted or empty output', async () => {
+  const { AiContentFilterError, AiModelRefusalError } = await import('../src/ai/service.js');
+  const filtered = new AiService({ respond: async () => ({ ...response("I'm sorry, but I cannot assist with that request."), status: 'incomplete',
+    incomplete_details: { reason: 'content_filter' }, content_filters: [{ blocked: true, content_filter_results: { violence: { filtered: true, severity: 'high' }, hate: { filtered: false } } }], output: [] } as unknown as OpenAIResponse) });
+  await assert.rejects(filtered.sendAssistantMessage([{ role: 'user', content: 'Przygotuj podgląd zajęć' }], []), (error: unknown) => {
+    assert.ok(error instanceof AiContentFilterError); assert.deepEqual(error.categories, ['violence']); return true;
+  });
+  const refused = new AiService({ respond: async () => ({ ...response(''), status: 'completed', output: [{ type: 'message', content: [{ type: 'refusal', refusal: 'Synthetic model refusal' }] }] } as unknown as OpenAIResponse) });
+  await assert.rejects(refused.sendAssistantMessage([{ role: 'user', content: 'Przygotuj podgląd zajęć' }], []), AiModelRefusalError);
+});
+
+test('historical previews use current action states and cannot reuse another conversation action', async () => {
+  const { refreshActionHistory } = await import('../src/ai/action-history.js');
+  const statuses = ['pending', 'confirmed', 'expired', 'cancelled', 'failed', 'processing', 'foreign', 'missing'];
+  const actions = statuses.slice(0, -1).map((status, index) => ({ id: `action-${index}`, conversationId: status === 'foreign' ? 'other' : 'conversation', kind: 'calendar_event_create', payload: {}, status, expiresAt: '2035-01-01T00:00:00Z' }));
+  const messages = statuses.map((_status, index) => ({ id: `message-${index}`, role: 'tool' as const, content: { name: 'calendar_prepare_event_create', callId: `call-${index}`, result: { status: 'awaiting_user_confirmation', actionId: `action-${index}` } }, createdAt: '2026-01-01T00:00:00Z' }));
+  let reads = 0;
+  const history = await refreshActionHistory(messages, { userId: 'synthetic-user', calendarId: 'synthetic-calendar' }, 'conversation', {
+    getAction: async (_scope, id) => { reads++; return actions.find((action) => action.id === id) ?? null; },
+  }, [actions[0]]);
+  assert.equal(reads, 7);
+  const results = history.map((message) => message.content.result as Record<string, unknown>);
+  assert.deepEqual(results.map((result) => result.status), ['awaiting_user_confirmation', 'confirmed', 'expired', 'cancelled', 'failed', 'processing', 'unavailable', 'unavailable']);
+  assert.equal(results[5].requiresNewProposal, false);
+  assert.ok(messages.every((message) => message.content.result.status === 'awaiting_user_confirmation'));
 });
