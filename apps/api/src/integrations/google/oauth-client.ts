@@ -25,7 +25,8 @@ export function accessFromScopes(scopes: string[]): GoogleAccess {
 
 export type GoogleErrorCode =
   | 'network_error' | 'google_unavailable' | 'reconnect_required' | 'insufficient_permissions' | 'rate_limited' | 'api_not_enabled'
-  | 'authorization_code_invalid' | 'no_refresh_token' | 'missing_account_identity' | 'calendar_not_found' | 'calendar_not_writable' | 'event_not_found' | 'google_error';
+  | 'authorization_code_invalid' | 'no_refresh_token' | 'missing_account_identity' | 'calendar_not_found' | 'calendar_not_writable' | 'event_not_found'
+  | 'sync_token_expired' | 'calendar_too_large' | 'google_error';
 
 /** Błędy Google rozróżnione tak, żeby UI i ponowienia (G06) wiedziały, co dalej: ponowić, zalogować ponownie czy zmienić uprawnienia. */
 export class GoogleIntegrationError extends Error {
@@ -143,6 +144,8 @@ export async function calendarApiError(response: { status: number; json(): Promi
   const body = await response.json().catch(() => ({}));
   const reason = String(body?.error?.errors?.[0]?.reason ?? body?.error?.status ?? '');
   if (response.status === 401) return new GoogleIntegrationError('reconnect_required', 401);
+  // G05: kursor syncToken wygasł – trzeba zrobić pełny odczyt od nowa (kontrolowany, tylko przestrzeń Google).
+  if (response.status === 410) return new GoogleIntegrationError('sync_token_expired', 410);
   if (response.status === 429 || /rateLimit|userRateLimit|quota/i.test(reason)) return new GoogleIntegrationError('rate_limited', response.status);
   // Calendar API wyłączone w projekcie Google Cloud – błąd konfiguracji, nie brak zgody użytkownika.
   if (response.status === 403 && /accessNotConfigured|SERVICE_DISABLED/.test(JSON.stringify(body ?? {}))) return new GoogleIntegrationError('api_not_enabled', 403);
@@ -178,4 +181,47 @@ export async function listIntegrationCalendars(accessToken: string, fetchImpl: F
     if (!pageToken) return { calendars, complete: true };
   }
   return { calendars, complete: false };
+}
+
+// --- Wydarzenia kalendarza (S23KC2S1P2-23, G05) ---
+
+/** Wydarzenie z events.list (singleEvents=true – instancje serii mają własne id i recurringEventId). Tylko potrzebne pola. */
+export type GoogleEventItem = {
+  id: string;
+  status?: string;
+  summary?: string;
+  location?: string;
+  updated?: string;
+  start?: { date?: string; dateTime?: string; timeZone?: string };
+  end?: { date?: string; dateTime?: string; timeZone?: string };
+  recurringEventId?: string;
+  originalStartTime?: { date?: string; dateTime?: string; timeZone?: string };
+  extendedProperties?: { private?: Record<string, string>; shared?: Record<string, string> };
+  attendees?: { self?: boolean; responseStatus?: string }[];
+};
+export type GoogleEventPage = { items: GoogleEventItem[]; nextPageToken: string | null; nextSyncToken: string | null };
+/** Pełny odczyt: okno czasu (timeMin/timeMax). Odczyt przyrostowy: syncToken – Google nie pozwala łączyć go z oknem. */
+export type GoogleEventPageRequest = { syncToken: string | null; window: { from: Date; to: Date } | null; pageToken: string | null };
+
+/** Jedna strona events.list. Ostatnia strona serii ma nextSyncToken; wcześniejsze – nextPageToken. */
+export async function listIntegrationEventsPage(accessToken: string, fetchImpl: FetchLike, calendarId: string, request: GoogleEventPageRequest): Promise<GoogleEventPage> {
+  const params = new URLSearchParams({ singleEvents: 'true', maxResults: '2500' });
+  if (request.syncToken) params.set('syncToken', request.syncToken);
+  else if (request.window) { params.set('timeMin', request.window.from.toISOString()); params.set('timeMax', request.window.to.toISOString()); }
+  if (request.pageToken) params.set('pageToken', request.pageToken);
+  let response;
+  try {
+    response = await fetchImpl(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?${params}`,
+      { headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(20000) });
+  } catch {
+    throw new GoogleIntegrationError('network_error');
+  }
+  if (!response.ok) throw await calendarApiError(response);
+  const body = await response.json();
+  const items: GoogleEventItem[] = Array.isArray(body?.items) ? body.items.filter((item: any) => typeof item?.id === 'string') : [];
+  return {
+    items,
+    nextPageToken: typeof body?.nextPageToken === 'string' && body.nextPageToken ? body.nextPageToken : null,
+    nextSyncToken: typeof body?.nextSyncToken === 'string' && body.nextSyncToken ? body.nextSyncToken : null,
+  };
 }

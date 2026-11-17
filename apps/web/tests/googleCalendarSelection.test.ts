@@ -47,7 +47,7 @@ test('podsumowanie zmian przed zatwierdzeniem: dodane, wyłączone (bez usuwania
   const lines = selectionChanges(current, { sources: ['Koło'], target: 'Student' });
   assert.deepEqual(lines, [
     'Dodane do planowania i synchronizacji: Koło.',
-    'Wyłączone z przyszłych synchronizacji: Student. Wydarzenia już zapisane w KAC zostają.',
+    'Wyłączone z planowania i synchronizacji: Student. Pobrane z nich wydarzenia znikną z KAC; te edytowane w KAC zostaną jako zwykłe wydarzenia.',
     'Kalendarz publikacji: Student.',
   ]);
   assert.match(selectionChanges(current, { sources: ['Student'], target: null })[0], /Bez kalendarza publikacji/);

@@ -17,6 +17,7 @@ import { GoogleSyncService, type SyncOptions } from './sync.js';
 import { GooglePublicationService } from './publication.js';
 import { GoogleCorrectionService } from './corrections.js';
 import { GoogleCalendarSelectionService } from './selection.js';
+import { GoogleEventSync, GoogleImportedEventService } from './events-sync.js';
 
 export type KeyProblem = 'token_key_missing' | 'token_key_invalid' | null;
 export type IntegrationOptions = {
@@ -58,6 +59,10 @@ export class GoogleIntegrationService {
   readonly publication: GooglePublicationService;
   /** Korekty opublikowanych zmian (G09, symulacja). */
   readonly corrections: GoogleCorrectionService;
+  /** Pobieranie i stosowanie zmian z Google (S23KC2S1P2-23, G05). */
+  readonly events: GoogleEventSync;
+  /** Pobrane wydarzenie w szczegółach: stan i „Przywróć wersję z Google” (G05, D05). */
+  readonly importedEvents: GoogleImportedEventService;
   private readonly fetchImpl: FetchLike;
 
   constructor(private readonly repository: PostgresGoogleIntegrationRepository, private readonly options: IntegrationOptions) {
@@ -67,6 +72,29 @@ export class GoogleIntegrationService {
     this.selection = new GoogleCalendarSelectionService(repository);
     this.publication = new GooglePublicationService(repository, options.sync);
     this.corrections = new GoogleCorrectionService(repository);
+    this.events = new GoogleEventSync(repository, (account, work) => this.callGoogle(account, work), this.fetchImpl);
+    this.importedEvents = new GoogleImportedEventService(repository);
+  }
+
+  /**
+   * Wywołanie Calendar API z tokenem dostępu konta. 401 przy tokenie uznanym za ważny: jedno wymuszone odświeżenie,
+   * a dopiero ponowne 401 oznacza konto jako wymagające ponownego logowania.
+   */
+  async callGoogle<T>(account: GoogleAccountRecord, work: (token: string) => Promise<T>): Promise<T> {
+    let token = await this.tokens.accessToken(account);
+    try {
+      return await work(token);
+    } catch (error) {
+      if (!(error instanceof GoogleIntegrationError) || error.code !== 'reconnect_required') throw error;
+      await this.repository.expireAccessToken(account);
+      token = await this.tokens.accessToken(account);
+      try {
+        return await work(token);
+      } catch (retryError) {
+        if (retryError instanceof GoogleIntegrationError && retryError.code === 'reconnect_required') await this.repository.markReconnectRequired(account);
+        throw retryError;
+      }
+    }
   }
 
   get mode(): 'google' | 'demo' { return this.options.oauth ? 'google' : 'demo'; }
@@ -222,20 +250,7 @@ export class GoogleIntegrationService {
       await this.repository.saveCalendars(account, calendars);
       return { calendars, complete: true };
     }
-    let token = await this.tokens.accessToken(account);
-    let listed;
-    try {
-      listed = await listIntegrationCalendars(token, this.fetchImpl);
-    } catch (error) {
-      // 401 przy tokenie uznanym za ważny: jedno wymuszone odświeżenie, potem dopiero „wymagane ponowne logowanie”.
-      if (!(error instanceof GoogleIntegrationError) || error.code !== 'reconnect_required') throw error;
-      await this.repository.expireAccessToken(account);
-      token = await this.tokens.accessToken(account);
-      listed = await listIntegrationCalendars(token, this.fetchImpl).catch(async (retryError) => {
-        if (retryError instanceof GoogleIntegrationError && retryError.code === 'reconnect_required') await this.repository.markReconnectRequired(account);
-        throw retryError;
-      });
-    }
+    const listed = await this.callGoogle(account, (token) => listIntegrationCalendars(token, this.fetchImpl));
     await this.repository.saveCalendars(account, listed.calendars, listed.complete);
     return listed;
   }

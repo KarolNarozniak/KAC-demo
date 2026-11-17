@@ -157,6 +157,9 @@ export function apiErrorMessage(code: string): string {
     case 'sync_disabled': return SYNC_DISABLED_TEXT;
     case 'sync_in_progress': return 'Synchronizacja już trwa – poczekaj na jej wynik.';
     case 'no_calendars_selected': return NO_SOURCES_TEXT;
+    case 'not_imported': return 'To wydarzenie nie pochodzi z synchronizacji z Google.';
+    case 'google_version_missing': return 'Wydarzenie usunięto w Google – nie ma wersji do przywrócenia. Lokalna kopia zostaje jako zwykłe wydarzenie.';
+    case 'restore_series': return 'Wydarzenie zamieniono w KAC na serię cotygodniową – nie można przywrócić pojedynczej wersji z Google.';
     case 'selection_conflict': return 'Wybór kalendarzy zmienił się w innym oknie. Nic nie zapisano – wczytaliśmy aktualny wybór, sprawdź go i zapisz ponownie.';
     case 'unknown_calendar': return 'Kalendarza nie ma już na koncie Google. Odśwież listę i wybierz ponownie. Nic nie zapisano.';
     case 'calendar_unavailable': return 'Konto Google straciło dostęp do tego kalendarza. Wybierz inny. Nic nie zapisano.';
@@ -185,13 +188,15 @@ export type SyncStatus = {
   connection: 'not_connected' | 'connected' | 'reconnect_required'; enabled: boolean; sourcesSelected: number; state: SyncState;
   lastAttempt: SyncAttempt | null; lastSuccess: { read: string | null; publish: string | null }; history: SyncAttempt[];
 };
-export type SimulatedFailure = 'network' | 'flaky' | 'auth' | 'server' | 'rate_limit' | 'partial' | 'permissions';
+export type SimulatedFailure = 'network' | 'flaky' | 'auth' | 'server' | 'rate_limit' | 'partial' | 'permissions' | 'remote_changes' | 'page_error' | 'token_expired';
 
 /** Makieta: przyciski wymuszające wynik, żeby pokazać przebiegi błędów bez prawdziwego Google. */
 export const SIMULATIONS: { id: SimulatedFailure | null; label: string }[] = [
   { id: null, label: 'Bez błędu' }, { id: 'network', label: 'Brak internetu' }, { id: 'flaky', label: 'Chwilowy błąd sieci' },
   { id: 'auth', label: 'Wygasłe logowanie' }, { id: 'server', label: 'Błąd serwera Google' }, { id: 'rate_limit', label: 'Limit zapytań' },
   { id: 'partial', label: 'Wynik częściowy' }, { id: 'permissions', label: 'Brak uprawnień' },
+  // G05: zmiany wydarzeń w „Google” makiety, błąd strony (kursor stoi) i wygasły kursor (pełny odczyt).
+  { id: 'remote_changes', label: 'Zmiany w Google' }, { id: 'page_error', label: 'Błąd strony' }, { id: 'token_expired', label: 'Wygasły kursor (410)' },
 ];
 
 const SYNC_STATE_LABELS: Record<SyncState, string> = {
@@ -235,7 +240,8 @@ export function syncActions(status: Pick<SyncStatus, 'enabled' | 'connection' | 
 /** Komunikat po próbie: sukces (2a), wynik częściowy albo błąd z przyczyną i zapewnieniem o danych lokalnych. */
 export function syncResultNotice(attempt: SyncAttempt): Notice {
   if (attempt.status === 'success') return { tone: 'success', text: `Synchronizacja zakończona. ${attempt.message ?? ''}`.trim() };
-  if (attempt.status === 'partial') return { tone: 'info', text: `Synchronizacja częściowa – ${attempt.message ?? 'nie wszystko udało się odczytać.'} Lokalne wydarzenia pozostały bez zmian.` };
+  // G05: wynik częściowy – kalendarze, które się udały, są zapisane; z błędem zostały bez zmian (ich kursor też).
+  if (attempt.status === 'partial') return { tone: 'info', text: `Synchronizacja częściowa – ${attempt.message ?? 'nie wszystko udało się odczytać.'} Kalendarze z błędem zostały bez zmian – „Spróbuj ponownie” dokończy pobieranie.` };
   const retries = attempt.tries > 1 ? ` (próby: ${attempt.tries})` : '';
   return { tone: 'error', text: `Synchronizacja nie powiodła się${retries}: ${syncErrorLabel(attempt)}. Lokalne wydarzenia pozostały bez zmian.` };
 }
@@ -317,7 +323,8 @@ export function selectionChanges(selection: CalendarSelection, draft: SelectionD
   const added = selection.calendars.filter((calendar) => after.has(calendar.id) && !before.has(calendar.id)).map((calendar) => calendar.name);
   const removed = selection.calendars.filter((calendar) => before.has(calendar.id) && !after.has(calendar.id)).map((calendar) => calendar.name);
   if (added.length) lines.push(`Dodane do planowania i synchronizacji: ${added.join(', ')}.`);
-  if (removed.length) lines.push(`Wyłączone z przyszłych synchronizacji: ${removed.join(', ')}. Wydarzenia już zapisane w KAC zostają.`);
+  // D04: odznaczony kalendarz przestaje być brany pod uwagę – pobrane z niego wydarzenia znikają z KAC (edytowane w KAC zostają).
+  if (removed.length) lines.push(`Wyłączone z planowania i synchronizacji: ${removed.join(', ')}. Pobrane z nich wydarzenia znikną z KAC; te edytowane w KAC zostaną jako zwykłe wydarzenia.`);
   if (draft.target !== selection.publicationTargetCalendarId) {
     lines.push(draft.target === null ? 'Bez kalendarza publikacji – grafik nie będzie publikowany w Google.' : `Kalendarz publikacji: ${nameOf(selection, draft.target)}.`);
   }
@@ -339,5 +346,54 @@ export function targetProblemText(problem: TargetProblem | null): string | null 
     case 'not_writable': return 'Kalendarz publikacji nie pozwala już na dodawanie wydarzeń. Wybierz inny kalendarz z prawem zapisu.';
     case 'write_access_missing': return 'Zgoda Google nie obejmuje dodawania wydarzeń, więc grafik nie zostanie opublikowany. Połącz konto ponownie i zaznacz ten dostęp.';
     default: return null;
+  }
+}
+
+// --- Pobieranie zmian z Google (S23KC2S1P2-23, G05) ---
+
+export type CalendarSyncResult = {
+  calendarId: string; name: string; mode: 'full' | 'incremental'; reason: 'first' | 'window' | 'token_expired' | null;
+  created: number; updated: number; deleted: number; unchanged: number; conflicts: number;
+  skippedAllDay: number; skippedDeclined: number; skippedOwn: number; errorCode: string | null;
+};
+export type SyncSummary = { calendars: CalendarSyncResult[] };
+
+const READ_REASONS: Record<NonNullable<CalendarSyncResult['reason']>, string> = {
+  first: 'pierwszy pełny odczyt', window: 'pełny odczyt – przesunięte okno', token_expired: 'pełny odczyt – Google unieważnił znacznik zmian',
+};
+
+/** Krok 7 historyjki 23: wynik per kalendarz – co przybyło, zmieniło się i zniknęło, co pominięto i dlaczego. */
+export function calendarResultLine(result: CalendarSyncResult): { text: string; tone: 'success' | 'info' | 'error' } {
+  if (result.errorCode) return { tone: 'error', text: `${result.name}: nie udało się pobrać – nic nie zmieniono (${syncErrorLabel({ errorClass: null, errorCode: result.errorCode })}).` };
+  const counts = [['nowe', result.created], ['zmienione', result.updated], ['usunięte', result.deleted]].filter(([, value]) => value) as [string, number][];
+  const extra = [
+    result.conflicts ? `edytowane w KAC – nienadpisane: ${result.conflicts}` : '',
+    result.skippedAllDay ? `całodniowe pominięte: ${result.skippedAllDay}` : '',
+    result.skippedDeclined ? `odrzucone zaproszenia: ${result.skippedDeclined}` : '',
+    result.skippedOwn ? `opublikowane przez KAC: ${result.skippedOwn}` : '',
+    result.reason ? READ_REASONS[result.reason] : '',
+  ].filter(Boolean);
+  const main = counts.length ? counts.map(([label, value]) => `${label} ${value}`).join(', ') : 'bez zmian';
+  return { tone: result.conflicts ? 'info' : 'success', text: `${result.name}: ${main}${extra.length ? ` (${extra.join('; ')})` : ''}.` };
+}
+
+export type ImportedEvent = {
+  eventId: string; calendar: { id: string; name: string }; account: string; state: 'synced' | 'conflict' | 'detached';
+  googleVersion: { title: string; start: string; end: string; location: string } | null; lastSyncAt: string | null; connected: boolean;
+};
+
+const pad2 = (value: number) => String(value).padStart(2, '0');
+const shortTime = (iso: string) => { const date = new Date(iso); return `${pad2(date.getDate())}.${pad2(date.getMonth() + 1)}, ${pad2(date.getHours())}:${pad2(date.getMinutes())}`; };
+
+/** Szczegóły pobranego wydarzenia (D05): skąd pochodzi i czy Google je jeszcze aktualizuje. */
+export function importedEventLines(view: ImportedEvent): { origin: string; state: string; google: string | null; canRestore: boolean } {
+  const origin = `Z Google Calendar: „${view.calendar.name}” (${view.account})${view.connected ? '' : ' – konto odłączone, wydarzenie nie jest już aktualizowane'}`;
+  const google = view.googleVersion
+    ? `W Google: ${view.googleVersion.title}, ${shortTime(view.googleVersion.start)}–${new Date(view.googleVersion.end).toTimeString().slice(0, 5)}${view.googleVersion.location ? `, ${view.googleVersion.location}` : ''}`
+    : null;
+  switch (view.state) {
+    case 'conflict': return { origin, state: 'Edytowane w KAC – zmiany z Google nie nadpisują tego wydarzenia.', google, canRestore: Boolean(view.googleVersion) };
+    case 'detached': return { origin, state: 'Usunięte w Google – lokalna kopia została jako zwykłe wydarzenie KAC.', google: null, canRestore: false };
+    default: return { origin, state: view.lastSyncAt ? `Zgodne z Google (ostatnia synchronizacja: ${shortTime(view.lastSyncAt)}).` : 'Zgodne z Google.', google: null, canRestore: false };
   }
 }

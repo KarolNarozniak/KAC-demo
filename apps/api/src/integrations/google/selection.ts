@@ -4,11 +4,13 @@
 //  - sourceCalendarIds – kalendarze uwzględniane przy planowaniu i synchronizacji (historyjka 23 wybiera z tego samego zbioru),
 //  - publicationTargetCalendarId – jeden kalendarz z prawem zapisu, do którego trafi publikacja grafiku (G07).
 // Zapis jest atomowy i ma kontrolę wersji. Prawo zapisu sprawdza serwer, nie tylko filtr w interfejsie.
-// Założenie D04 (do potwierdzenia w zespole): odznaczenie kalendarza tylko wyłącza go z przyszłych synchronizacji –
-// niczego nie usuwa z kalendarza KAC.
+// Założenie D04 (do potwierdzenia w zespole): odznaczony kalendarz przestaje być brany pod uwagę – wydarzenia pobrane z niego
+// przez synchronizację (G05) znikają z KAC w tej samej transakcji co zapis wyboru; edytowane w KAC zostają jako zwykłe wydarzenia.
+// Ręczne wpisy i jednorazowy import (27) nie są dotykane. Ponowne zaznaczenie zaczyna od pełnego odczytu.
 import type { UserScope } from '../../api/scope.js';
 import { accessFromScopes, type IntegrationCalendar } from './oauth-client.js';
 import type { PostgresGoogleIntegrationRepository, StoredSelection } from './repository.js';
+import { releaseCalendars } from './events-sync.js';
 
 export type SelectionCalendar = {
   id: string; name: string; primary: boolean; accessRole: IntegrationCalendar['accessRole'] | null; timeZone: string | null;
@@ -87,6 +89,11 @@ export class GoogleCalendarSelectionService {
         targetRowId = target.rowId;
       }
       return { sourceRowIds: sources, targetRowId };
+    }, async (client, previous, next) => {
+      // D04: odznaczony kalendarz przestaje być brany pod uwagę – pobrane z niego wydarzenia znikają (edytowane w KAC zostają).
+      const kept = new Set(next.sourceRowIds);
+      await releaseCalendars(client, { userId: scope.userId, accountId: account.accountId,
+        calendarRowIds: previous.calendars.filter((calendar) => calendar.source && !kept.has(calendar.rowId)).map((calendar) => calendar.rowId) });
     });
     if (result === 'conflict') throw new SelectionError('selection_conflict', 409);
     return view(result, canPublish);

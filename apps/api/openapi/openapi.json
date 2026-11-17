@@ -22405,15 +22405,15 @@
                       "lastAttempt": {
                         "id": "c1d2e3f4-0000-4000-8000-000000000006",
                         "direction": "read",
-                        "scope": "calendar_list",
-                        "operation": "Lista kalendarzy",
+                        "scope": "events",
+                        "operation": "Pobieranie zmian z Google",
                         "status": "success",
                         "startedAt": "2026-11-17T08:30:00.000Z",
                         "finishedAt": "2026-11-17T08:30:02.000Z",
                         "tries": 1,
                         "changes": 4,
                         "errorCode": null,
-                        "message": "Odczytane kalendarze: 4.",
+                        "message": "Kalendarze: 2. Pobrano zmiany z Google: nowe 3, zmienione 1. (pominięte całodniowe: 2)",
                         "errorClass": null,
                         "retryable": false
                       },
@@ -22425,15 +22425,15 @@
                         {
                           "id": "c1d2e3f4-0000-4000-8000-000000000006",
                           "direction": "read",
-                          "scope": "calendar_list",
-                          "operation": "Lista kalendarzy",
+                          "scope": "events",
+                          "operation": "Pobieranie zmian z Google",
                           "status": "success",
                           "startedAt": "2026-11-17T08:30:00.000Z",
                           "finishedAt": "2026-11-17T08:30:02.000Z",
                           "tries": 1,
                           "changes": 4,
                           "errorCode": null,
-                          "message": "Odczytane kalendarze: 4.",
+                          "message": "Kalendarze: 2. Pobrano zmiany z Google: nowe 3, zmienione 1. (pominięte całodniowe: 2)",
                           "errorClass": null,
                           "retryable": false
                         }
@@ -22451,8 +22451,8 @@
                       "lastAttempt": {
                         "id": "c1d2e3f4-0000-4000-8000-000000000006",
                         "direction": "read",
-                        "scope": "calendar_list",
-                        "operation": "Lista kalendarzy",
+                        "scope": "events",
+                        "operation": "Pobieranie zmian z Google",
                         "status": "error",
                         "startedAt": "2026-11-17T08:30:00.000Z",
                         "finishedAt": "2026-11-17T08:30:02.000Z",
@@ -22471,8 +22471,8 @@
                         {
                           "id": "c1d2e3f4-0000-4000-8000-000000000006",
                           "direction": "read",
-                          "scope": "calendar_list",
-                          "operation": "Lista kalendarzy",
+                          "scope": "events",
+                          "operation": "Pobieranie zmian z Google",
                           "status": "error",
                           "startedAt": "2026-11-17T08:30:00.000Z",
                           "finishedAt": "2026-11-17T08:30:02.000Z",
@@ -22496,8 +22496,8 @@
                       "lastAttempt": {
                         "id": "c1d2e3f4-0000-4000-8000-000000000006",
                         "direction": "read",
-                        "scope": "calendar_list",
-                        "operation": "Lista kalendarzy",
+                        "scope": "events",
+                        "operation": "Pobieranie zmian z Google",
                         "status": "error",
                         "startedAt": "2026-11-17T08:30:00.000Z",
                         "finishedAt": "2026-11-17T08:30:02.000Z",
@@ -22516,8 +22516,8 @@
                         {
                           "id": "c1d2e3f4-0000-4000-8000-000000000006",
                           "direction": "read",
-                          "scope": "calendar_list",
-                          "operation": "Lista kalendarzy",
+                          "scope": "events",
+                          "operation": "Pobieranie zmian z Google",
                           "status": "error",
                           "startedAt": "2026-11-17T08:30:00.000Z",
                           "finishedAt": "2026-11-17T08:30:02.000Z",
@@ -22575,7 +22575,7 @@
         "tags": [
           "Google integration"
         ],
-        "description": "Runs a read synchronization (calendar list) and records the attempt. Network errors, rate limits and Google server errors are retried automatically a limited number of times with growing delays; a rejected login is not retried and asks for reconnecting. Google errors are part of the attempt result (200), local events are never changed. simulate is accepted only in demo mode.",
+        "description": "Reads the calendar list, then downloads and applies event changes from the selected source calendars (G05): a full read of the time window the first time (and after the sync cursor expires or the window must move), afterwards only changes since the cursor. Each calendar is applied atomically together with its new cursor; a page error saves nothing for that calendar and keeps the cursor. Only events created by the synchronization are changed or deleted – manual events are never touched; events edited in KAC are not overwritten (conflict). Network errors, rate limits and Google server errors are retried a limited number of times with growing delays; a rejected login asks for reconnecting. Google errors are part of the attempt result (200). simulate is accepted only in demo mode.",
         "requestBody": {
           "required": true,
           "content": {
@@ -22593,7 +22593,10 @@
                       "server",
                       "rate_limit",
                       "partial",
-                      "permissions"
+                      "permissions",
+                      "remote_changes",
+                      "page_error",
+                      "token_expired"
                     ],
                     "description": "Tylko makieta: wymuszony błąd albo wynik częściowy."
                   }
@@ -22625,7 +22628,8 @@
                   "additionalProperties": false,
                   "required": [
                     "attempt",
-                    "status"
+                    "status",
+                    "summary"
                   ],
                   "properties": {
                     "attempt": {
@@ -23069,6 +23073,121 @@
                           "description": "Ostatnie próby, najnowsza pierwsza (najwyżej 10)."
                         }
                       }
+                    },
+                    "summary": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "calendars"
+                          ],
+                          "properties": {
+                            "calendars": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "calendarId",
+                                  "name",
+                                  "mode",
+                                  "reason",
+                                  "created",
+                                  "updated",
+                                  "deleted",
+                                  "unchanged",
+                                  "conflicts",
+                                  "skippedAllDay",
+                                  "skippedDeclined",
+                                  "skippedOwn",
+                                  "errorCode"
+                                ],
+                                "properties": {
+                                  "calendarId": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "mode": {
+                                    "type": "string",
+                                    "enum": [
+                                      "full",
+                                      "incremental"
+                                    ],
+                                    "description": "full – pełny odczyt okna (pierwszy raz, przesunięcie okna, wygasły kursor); incremental – tylko zmiany od ostatniego kursora."
+                                  },
+                                  "reason": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "first",
+                                          "window",
+                                          "token_expired"
+                                        ]
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "created": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                  },
+                                  "updated": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                  },
+                                  "deleted": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                  },
+                                  "unchanged": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                  },
+                                  "conflicts": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "description": "Zmiany z Google niezastosowane, bo wydarzenie edytowano w KAC (D05)."
+                                  },
+                                  "skippedAllDay": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                  },
+                                  "skippedDeclined": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                  },
+                                  "skippedOwn": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "description": "Wydarzenia opublikowane przez KAC – nie wracają jako nowe wpisy."
+                                  },
+                                  "errorCode": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "description": "Błąd tego kalendarza – nic z niego nie zapisano, kursor bez zmian."
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "description": "Wynik pobierania zmian per kalendarz; null, gdy nie doszło do odczytu wydarzeń (np. błąd listy kalendarzy)."
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   },
                   "description": "Wynik próby (także nieudanej) i aktualny stan synchronizacji."
@@ -23080,15 +23199,15 @@
                       "attempt": {
                         "id": "c1d2e3f4-0000-4000-8000-000000000006",
                         "direction": "read",
-                        "scope": "calendar_list",
-                        "operation": "Lista kalendarzy",
+                        "scope": "events",
+                        "operation": "Pobieranie zmian z Google",
                         "status": "success",
                         "startedAt": "2026-11-17T08:30:00.000Z",
                         "finishedAt": "2026-11-17T08:30:02.000Z",
                         "tries": 1,
                         "changes": 4,
                         "errorCode": null,
-                        "message": "Odczytane kalendarze: 4.",
+                        "message": "Kalendarze: 2. Pobrano zmiany z Google: nowe 3, zmienione 1. (pominięte całodniowe: 2)",
                         "errorClass": null,
                         "retryable": false
                       },
@@ -23100,15 +23219,15 @@
                         "lastAttempt": {
                           "id": "c1d2e3f4-0000-4000-8000-000000000006",
                           "direction": "read",
-                          "scope": "calendar_list",
-                          "operation": "Lista kalendarzy",
+                          "scope": "events",
+                          "operation": "Pobieranie zmian z Google",
                           "status": "success",
                           "startedAt": "2026-11-17T08:30:00.000Z",
                           "finishedAt": "2026-11-17T08:30:02.000Z",
                           "tries": 1,
                           "changes": 4,
                           "errorCode": null,
-                          "message": "Odczytane kalendarze: 4.",
+                          "message": "Kalendarze: 2. Pobrano zmiany z Google: nowe 3, zmienione 1. (pominięte całodniowe: 2)",
                           "errorClass": null,
                           "retryable": false
                         },
@@ -23120,17 +23239,51 @@
                           {
                             "id": "c1d2e3f4-0000-4000-8000-000000000006",
                             "direction": "read",
-                            "scope": "calendar_list",
-                            "operation": "Lista kalendarzy",
+                            "scope": "events",
+                            "operation": "Pobieranie zmian z Google",
                             "status": "success",
                             "startedAt": "2026-11-17T08:30:00.000Z",
                             "finishedAt": "2026-11-17T08:30:02.000Z",
                             "tries": 1,
                             "changes": 4,
                             "errorCode": null,
-                            "message": "Odczytane kalendarze: 4.",
+                            "message": "Kalendarze: 2. Pobrano zmiany z Google: nowe 3, zmienione 1. (pominięte całodniowe: 2)",
                             "errorClass": null,
                             "retryable": false
+                          }
+                        ]
+                      },
+                      "summary": {
+                        "calendars": [
+                          {
+                            "calendarId": "primary",
+                            "name": "Student",
+                            "mode": "incremental",
+                            "reason": null,
+                            "created": 3,
+                            "updated": 1,
+                            "deleted": 0,
+                            "unchanged": 0,
+                            "conflicts": 0,
+                            "skippedAllDay": 2,
+                            "skippedDeclined": 0,
+                            "skippedOwn": 0,
+                            "errorCode": null
+                          },
+                          {
+                            "calendarId": "kolo@group.calendar.google.com",
+                            "name": "Koło naukowe",
+                            "mode": "full",
+                            "reason": "first",
+                            "created": 0,
+                            "updated": 0,
+                            "deleted": 0,
+                            "unchanged": 0,
+                            "conflicts": 0,
+                            "skippedAllDay": 0,
+                            "skippedDeclined": 0,
+                            "skippedOwn": 0,
+                            "errorCode": null
                           }
                         ]
                       }
@@ -23138,12 +23291,13 @@
                   },
                   "error": {
                     "summary": "Błąd sieci po ponowieniach",
+                    "description": "Lista kalendarzy nie została odczytana – wydarzenia nie były pobierane (summary: null).",
                     "value": {
                       "attempt": {
                         "id": "c1d2e3f4-0000-4000-8000-000000000006",
                         "direction": "read",
-                        "scope": "calendar_list",
-                        "operation": "Lista kalendarzy",
+                        "scope": "events",
+                        "operation": "Pobieranie zmian z Google",
                         "status": "error",
                         "startedAt": "2026-11-17T08:30:00.000Z",
                         "finishedAt": "2026-11-17T08:30:02.000Z",
@@ -23162,8 +23316,8 @@
                         "lastAttempt": {
                           "id": "c1d2e3f4-0000-4000-8000-000000000006",
                           "direction": "read",
-                          "scope": "calendar_list",
-                          "operation": "Lista kalendarzy",
+                          "scope": "events",
+                          "operation": "Pobieranie zmian z Google",
                           "status": "error",
                           "startedAt": "2026-11-17T08:30:00.000Z",
                           "finishedAt": "2026-11-17T08:30:02.000Z",
@@ -23182,8 +23336,8 @@
                           {
                             "id": "c1d2e3f4-0000-4000-8000-000000000006",
                             "direction": "read",
-                            "scope": "calendar_list",
-                            "operation": "Lista kalendarzy",
+                            "scope": "events",
+                            "operation": "Pobieranie zmian z Google",
                             "status": "error",
                             "startedAt": "2026-11-17T08:30:00.000Z",
                             "finishedAt": "2026-11-17T08:30:02.000Z",
@@ -23193,6 +23347,74 @@
                             "message": "Brak połączenia z Google (brak internetu albo przekroczony czas).",
                             "errorClass": "network",
                             "retryable": true
+                          }
+                        ]
+                      },
+                      "summary": null
+                    }
+                  },
+                  "partial": {
+                    "summary": "Błąd jednego kalendarza",
+                    "description": "Pierwszy kalendarz zastosowany, drugi nie (błąd strony) – jego kursor bez zmian.",
+                    "value": {
+                      "attempt": {
+                        "id": "c1d2e3f4-0000-4000-8000-000000000006",
+                        "direction": "read",
+                        "scope": "events",
+                        "operation": "Pobieranie zmian z Google",
+                        "status": "partial",
+                        "startedAt": "2026-11-17T08:30:00.000Z",
+                        "finishedAt": "2026-11-17T08:30:02.000Z",
+                        "tries": 3,
+                        "changes": 3,
+                        "errorCode": "google_unavailable",
+                        "message": "Kalendarze: 1. Pobrano zmiany z Google: nowe 3. Nie udało się pobrać: „Koło naukowe”.",
+                        "errorClass": "server",
+                        "retryable": true
+                      },
+                      "status": {
+                        "connection": "connected",
+                        "enabled": true,
+                        "sourcesSelected": 2,
+                        "state": "never",
+                        "lastAttempt": null,
+                        "lastSuccess": {
+                          "read": "2026-11-16T18:00:00.000Z",
+                          "publish": null
+                        },
+                        "history": []
+                      },
+                      "summary": {
+                        "calendars": [
+                          {
+                            "calendarId": "primary",
+                            "name": "Student",
+                            "mode": "incremental",
+                            "reason": null,
+                            "created": 3,
+                            "updated": 0,
+                            "deleted": 0,
+                            "unchanged": 0,
+                            "conflicts": 0,
+                            "skippedAllDay": 0,
+                            "skippedDeclined": 0,
+                            "skippedOwn": 0,
+                            "errorCode": null
+                          },
+                          {
+                            "calendarId": "kolo@group.calendar.google.com",
+                            "name": "Koło naukowe",
+                            "mode": "incremental",
+                            "reason": null,
+                            "created": 0,
+                            "updated": 0,
+                            "deleted": 0,
+                            "unchanged": 0,
+                            "conflicts": 0,
+                            "skippedAllDay": 0,
+                            "skippedDeclined": 0,
+                            "skippedOwn": 0,
+                            "errorCode": "google_unavailable"
                           }
                         ]
                       }
@@ -23284,6 +23506,489 @@
                     "description": "Synchronizacja dotyczy wybranych kalendarzy – wybierz co najmniej jeden w ustawieniach integracji. Konto zostaje połączone.",
                     "value": {
                       "error": "no_calendars_selected"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Integracja niedostępna.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Integracja niedostępna.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "integration_not_configured"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "integration_not_configured": {
+                    "summary": "Serwer bez bazy danych",
+                    "description": "API działa bez bazy danych, więc nie może zapisać połączenia z Google.",
+                    "value": {
+                      "error": "integration_not_configured"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/integrations/google/imported-events/{eventId}": {
+      "get": {
+        "operationId": "getGoogleImportedEvent",
+        "summary": "Get synchronized event origin",
+        "tags": [
+          "Google integration"
+        ],
+        "description": "For an event created by the Google synchronization: source calendar, whether it was edited in KAC (Google changes are then not applied) or deleted in Google, and the latest Google version.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "in": "path",
+            "name": "eventId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pochodzenie i stan wydarzenia.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "eventId",
+                    "calendar",
+                    "account",
+                    "state",
+                    "googleVersion",
+                    "lastSyncAt",
+                    "connected"
+                  ],
+                  "properties": {
+                    "eventId": {
+                      "type": "string"
+                    },
+                    "calendar": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "id",
+                        "name"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "account": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "synced",
+                        "conflict",
+                        "detached"
+                      ],
+                      "description": "synced – zgodne z Google; conflict – edytowane w KAC, Google nie nadpisuje; detached – usunięte w Google, lokalna kopia została."
+                    },
+                    "googleVersion": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "title",
+                            "start",
+                            "end",
+                            "location"
+                          ],
+                          "properties": {
+                            "title": {
+                              "type": "string"
+                            },
+                            "start": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "end": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "location": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "lastSyncAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "connected": {
+                      "type": "boolean"
+                    }
+                  },
+                  "description": "Pochodzenie i stan wydarzenia."
+                },
+                "examples": {
+                  "synced": {
+                    "summary": "Zgodne z Google",
+                    "value": {
+                      "eventId": "e-10",
+                      "calendar": {
+                        "id": "primary",
+                        "name": "Student"
+                      },
+                      "account": "student@example.com",
+                      "state": "synced",
+                      "googleVersion": {
+                        "title": "Dentysta",
+                        "start": "2026-11-19T14:00:00.000Z",
+                        "end": "2026-11-19T14:45:00.000Z",
+                        "location": "ul. Górczewska 200"
+                      },
+                      "lastSyncAt": "2026-11-17T10:00:00.000Z",
+                      "connected": true
+                    }
+                  },
+                  "conflict": {
+                    "summary": "Edytowane w KAC",
+                    "description": "Zmiana z Google (nowa godzina) nie nadpisała lokalnej edycji – można przywrócić wersję z Google.",
+                    "value": {
+                      "eventId": "e-10",
+                      "calendar": {
+                        "id": "primary",
+                        "name": "Student"
+                      },
+                      "account": "student@example.com",
+                      "state": "conflict",
+                      "googleVersion": {
+                        "title": "Dentysta",
+                        "start": "2026-11-19T15:00:00.000Z",
+                        "end": "2026-11-19T15:45:00.000Z",
+                        "location": "ul. Górczewska 212"
+                      },
+                      "lastSyncAt": "2026-11-17T10:00:00.000Z",
+                      "connected": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Wydarzenie nie pochodzi z synchronizacji Google.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Wydarzenie nie pochodzi z synchronizacji Google.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "not_imported"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "not_imported": {
+                    "summary": "Nie pochodzi z Google",
+                    "description": "To wydarzenie nie zostało pobrane przez synchronizację z Google.",
+                    "value": {
+                      "error": "not_imported"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Integracja niedostępna.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Integracja niedostępna.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "integration_not_configured"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "integration_not_configured": {
+                    "summary": "Serwer bez bazy danych",
+                    "description": "API działa bez bazy danych, więc nie może zapisać połączenia z Google.",
+                    "value": {
+                      "error": "integration_not_configured"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/integrations/google/imported-events/{eventId}/restore": {
+      "post": {
+        "operationId": "restoreGoogleImportedEvent",
+        "summary": "Restore Google version of an event",
+        "tags": [
+          "Google integration"
+        ],
+        "description": "Replaces a local edit of a synchronized event with the latest Google version; later Google changes are applied again. Works without network – the Google version is stored locally.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "in": "path",
+            "name": "eventId",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Przywrócona wersja z Google.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "eventId",
+                    "calendar",
+                    "account",
+                    "state",
+                    "googleVersion",
+                    "lastSyncAt",
+                    "connected"
+                  ],
+                  "properties": {
+                    "eventId": {
+                      "type": "string"
+                    },
+                    "calendar": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "id",
+                        "name"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "account": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "synced",
+                        "conflict",
+                        "detached"
+                      ],
+                      "description": "synced – zgodne z Google; conflict – edytowane w KAC, Google nie nadpisuje; detached – usunięte w Google, lokalna kopia została."
+                    },
+                    "googleVersion": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "title",
+                            "start",
+                            "end",
+                            "location"
+                          ],
+                          "properties": {
+                            "title": {
+                              "type": "string"
+                            },
+                            "start": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "end": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "location": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "lastSyncAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "connected": {
+                      "type": "boolean"
+                    }
+                  },
+                  "description": "Przywrócona wersja z Google."
+                },
+                "examples": {
+                  "restored": {
+                    "summary": "Zgodne z Google",
+                    "value": {
+                      "eventId": "e-10",
+                      "calendar": {
+                        "id": "primary",
+                        "name": "Student"
+                      },
+                      "account": "student@example.com",
+                      "state": "synced",
+                      "googleVersion": {
+                        "title": "Dentysta",
+                        "start": "2026-11-19T14:00:00.000Z",
+                        "end": "2026-11-19T14:45:00.000Z",
+                        "location": "ul. Górczewska 200"
+                      },
+                      "lastSyncAt": "2026-11-17T10:00:00.000Z",
+                      "connected": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Wydarzenie nie pochodzi z synchronizacji Google.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Wydarzenie nie pochodzi z synchronizacji Google.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "not_imported"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "not_imported": {
+                    "summary": "Nie pochodzi z Google",
+                    "description": "To wydarzenie nie zostało pobrane przez synchronizację z Google.",
+                    "value": {
+                      "error": "not_imported"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Nie ma czego przywrócić.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Nie ma czego przywrócić.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "google_version_missing",
+                        "restore_series"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "google_version_missing": {
+                    "summary": "Brak wersji z Google",
+                    "description": "Wydarzenie usunięto w Google – lokalna kopia jest już zwykłym wydarzeniem KAC.",
+                    "value": {
+                      "error": "google_version_missing"
+                    }
+                  },
+                  "restore_series": {
+                    "summary": "Wydarzenie jest serią w KAC",
+                    "description": "Wydarzenie zamieniono w KAC na serię cotygodniową – przywrócenie pojedynczej wersji z Google nie jest możliwe.",
+                    "value": {
+                      "error": "restore_series"
                     }
                   }
                 }

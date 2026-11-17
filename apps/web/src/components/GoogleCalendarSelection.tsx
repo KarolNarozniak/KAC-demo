@@ -19,8 +19,8 @@ import { getGoogleCalendarSelection, GoogleIntegrationApiError, saveGoogleCalend
 type Props = {
   /** Zmienia się po odświeżeniu listy kalendarzy z Google – wybór jest wtedy wczytywany ponownie. */
   reloadKey: string;
-  /** Wybór zapisany – np. sekcja synchronizacji odświeża liczbę wybranych kalendarzy. */
-  onSaved: () => void;
+  /** Wybór zapisany – sekcja synchronizacji odświeża stan; po zmianie źródeł panel od razu pobiera zmiany (G05, krok 6 historyjki 23). */
+  onSaved: (saved: CalendarSelection, sourcesChanged: boolean) => void;
 };
 
 const codeOf = (error: unknown) => (error instanceof GoogleIntegrationApiError ? error.code : 'network');
@@ -59,9 +59,11 @@ export default function GoogleCalendarSelection({ reloadKey, onSaved }: Props) {
     try {
       const saved = await saveGoogleCalendarSelection(selection.version, draft.sources, draft.target);
       if (!mounted.current) return;
+      const before = [...selection.sourceCalendarIds].sort().join('|');
+      const sourcesChanged = before !== [...saved.sourceCalendarIds].sort().join('|');
       setSelection(saved); setDraft(null); setConfirming(false);
-      setNotice({ tone: 'success', text: 'Zapisano wybór kalendarzy.' });
-      onSaved();
+      setNotice({ tone: 'success', text: sourcesChanged && saved.sourceCalendarIds.length ? 'Zapisano wybór kalendarzy – pobieram zmiany z Google.' : 'Zapisano wybór kalendarzy.' });
+      onSaved(saved, sourcesChanged);
     } catch (error) {
       if (!mounted.current) return;
       const code = codeOf(error);

@@ -34,8 +34,11 @@ async function withUser(work: (scope: Scope) => Promise<void>) {
   }
 }
 
+// Wydarzenia wpisane w KAC; pobrane przez synchronizację (G05) sprawdza osobno syncedCount – odłączenie też ich nie usuwa.
 const localEvents = async (scope: Scope) => (await pool!.query(`select id_wydarzenia, tytul, rozpoczecie, zakonczenie, status, updated_at
-  from t_wydarzenia where id_kalendarza = $1 order by id_wydarzenia`, [scope.calendarId])).rows;
+  from t_wydarzenia where id_kalendarza = $1 and zrodlo <> 'Google (synchronizacja)' order by id_wydarzenia`, [scope.calendarId])).rows;
+const syncedCount = async (scope: Scope) => (await pool!.query(`select count(*)::int as n from t_wydarzenia where id_kalendarza = $1 and zrodlo = 'Google (synchronizacja)'`,
+  [scope.calendarId])).rows[0].n as number;
 const disconnect = (app: FastifyInstance) => app.inject({ method: 'DELETE', url: '/api/v1/integrations/google' });
 const status = async (app: FastifyInstance) => (await app.inject({ method: 'GET', url: '/api/v1/integrations/google' })).json();
 const start = async (app: FastifyInstance, purpose = 'connect') =>
@@ -54,6 +57,8 @@ test('makieta: odłączenie, powtórne odłączenie, anulowana próba, zatrzyman
     const attempt = await start(app);
     await app.inject({ method: 'POST', url: `/api/v1/integrations/google/attempts/${attempt.attemptId}/demo-consent`, payload: { allow: true, account: 'student.kac.demo@gmail.com' } });
     assert.equal((await app.inject({ method: 'POST', url: '/api/v1/integrations/google/sync', payload: {} })).json().attempt.status, 'success');
+    const synced = await syncedCount(scope);
+    assert.ok(synced > 0);
     const before = await pool!.query('select id_konta, generacja from t_konta_google where id_uzytkownika = $1', [scope.userId]);
 
     // Zaplanowana praca dla Google (outbox) i otwarta próba „Zmień konto” w chwili odłączenia.
@@ -90,6 +95,8 @@ test('makieta: odłączenie, powtórne odłączenie, anulowana próba, zatrzyman
     assert.equal((await app.inject({ method: 'POST', url: `/api/v1/integrations/google/attempts/${again.attemptId}/demo-consent`,
       payload: { allow: true, account: 'student.kac.demo@gmail.com' } })).json().status, 'connected');
     assert.deepEqual(await localEvents(scope), eventsBefore);
+    // G03 + G05: odłączenie nie usuwa też wydarzeń pobranych z Google – przestają być tylko synchronizowane.
+    assert.equal(await syncedCount(scope), synced);
   } finally {
     await app.close();
   }

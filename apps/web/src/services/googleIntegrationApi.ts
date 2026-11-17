@@ -7,7 +7,7 @@ import type { PublicationPreview, PublicationResult, PublicationSimulation } fro
 import type { CorrectionItem, CorrectionSimulation, CorrectionSyncResult } from '../domain/googleCorrection';
 import {
   apiErrorMessage, type AttemptPurpose, type GoogleAccountView, type GoogleIntegrationStatus, type IntegrationAttempt, type IntegrationCalendar,
-  type CalendarSelection, type DisconnectResult, type SimulatedFailure, type SyncAttempt, type SyncStatus,
+  type CalendarSelection, type DisconnectResult, type ImportedEvent, type SimulatedFailure, type SyncAttempt, type SyncStatus, type SyncSummary,
 } from '../domain/googleIntegration';
 
 export class GoogleIntegrationApiError extends Error {
@@ -51,7 +51,7 @@ export const getGoogleSync = () => call<SyncStatus>('GET', '/api/v1/integrations
 /** „Synchronizuj z Google”. Błąd Google jest wynikiem próby (200), nie wyjątkiem; simulate działa tylko w makiecie. */
 export const runGoogleSync = (simulate?: SimulatedFailure) =>
   // Serwer może ponowić próbę kilka razy (każda do 15 s), więc czekamy dłużej niż przy zwykłych zapytaniach.
-  call<{ attempt: SyncAttempt; status: SyncStatus }>('POST', '/api/v1/integrations/google/sync', simulate ? { simulate } : {}, 75000);
+  call<{ attempt: SyncAttempt; status: SyncStatus; summary: SyncSummary | null }>('POST', '/api/v1/integrations/google/sync', simulate ? { simulate } : {}, 120000);
 
 /** „Odłącz konto Google” (S23KC2S1P2-35, G03): usuwa dane dostępu w KAC i prosi Google o cofnięcie zgody. Powtórzenie jest bezpieczne. */
 export const disconnectGoogleIntegration = () => call<DisconnectResult>('DELETE', '/api/v1/integrations/google');
@@ -76,3 +76,7 @@ export const syncPublishedEvent = (eventId: string) => call<CorrectionSyncResult
 export const listGoogleDivergences = () => call<{ items: CorrectionItem[] }>('GET', '/api/v1/integrations/google/publications/divergences');
 export const setCorrectionSimulation = (simulate: CorrectionSimulation | null) =>
   call<{ simulate: CorrectionSimulation | null }>('PUT', '/api/v1/integrations/google/publications/simulation', { simulate });
+
+/** Pobrane wydarzenie (S23KC2S1P2-23, G05): pochodzenie i „Przywróć wersję z Google”. 404 not_imported – wydarzenie nie pochodzi z Google. */
+export const getImportedEvent = (eventId: string) => call<ImportedEvent>('GET', `/api/v1/integrations/google/imported-events/${encodeURIComponent(eventId)}`);
+export const restoreImportedEvent = (eventId: string) => call<ImportedEvent>('POST', `/api/v1/integrations/google/imported-events/${encodeURIComponent(eventId)}/restore`, {});

@@ -349,6 +349,9 @@ export class PostgresGoogleIntegrationRepository {
       const account = accountFrom(active.rows[0]);
       const tokens = await client.query('select refresh_token_enc, access_token_enc from t_google_tokeny where id_konta = $1 for update', [account.accountId]);
       await client.query('delete from t_google_tokeny where id_konta = $1', [account.accountId]);
+      // G05: kursory zmian są kasowane – po ponownym połączeniu pierwszy odczyt jest pełny i uzgadnia pobrane wydarzenia.
+      // Same pobrane wydarzenia zostają w KAC (odłączenie nigdy nie usuwa wydarzeń lokalnych).
+      await client.query('delete from t_google_sync_stan where id_konta = $1', [account.accountId]);
       await client.query(`update t_konta_google set status_polaczenia = 'Niepołączone', zgoda_synchronizacja = false, generacja = generacja + 1,
         odlaczono_at = now(), updated_at = now() where id_konta = $1`, [account.accountId]);
       await client.query(`update t_synchronizacje set status = 'Błąd', kod_bledu = 'disconnected', zakonczono_at = now(), komunikat = 'Konto odłączono w trakcie synchronizacji.'
@@ -371,13 +374,17 @@ export class PostgresGoogleIntegrationRepository {
    * Zapis wyboru w jednej transakcji z kontrolą wersji: albo cały zbiór i kalendarz publikacji, albo nic.
    * validate dostaje aktualny stan pod blokadą konta i rzuca błąd, gdy wybór jest niedozwolony.
    */
-  async saveSelection(accountId: string, expectedVersion: number, apply: (current: StoredSelection) => { sourceRowIds: string[]; targetRowId: string | null }): Promise<StoredSelection | 'conflict'> {
+  async saveSelection(accountId: string, expectedVersion: number, apply: (current: StoredSelection) => { sourceRowIds: string[]; targetRowId: string | null },
+    afterSave?: (client: PoolClient, previous: StoredSelection, next: { sourceRowIds: string[]; targetRowId: string | null }) => Promise<void>): Promise<StoredSelection | 'conflict'> {
     return this.transaction(async (client) => {
       const locked = await client.query('select wersja_wyboru from t_konta_google where id_konta = $1 for update', [accountId]);
       if (Number(locked.rows[0]?.wersja_wyboru) !== expectedVersion) return 'conflict';
-      const next = apply(await this.getSelectionWith(client, accountId));
+      const previous = await this.getSelectionWith(client, accountId);
+      const next = apply(previous);
       await client.query(`update t_kalendarze_google set wybrany = (id_kal_google = any($2::text[])), updated_at = now() where id_konta = $1`, [accountId, next.sourceRowIds]);
       await client.query(`update t_konta_google set id_kal_publikacji = $2, wersja_wyboru = wersja_wyboru + 1, updated_at = now() where id_konta = $1`, [accountId, next.targetRowId]);
+      // W tej samej transakcji: skutki zmiany wyboru dla pobranych wydarzeń (D04, G05).
+      if (afterSave) await afterSave(client, previous, next);
       return this.getSelectionWith(client, accountId);
     });
   }

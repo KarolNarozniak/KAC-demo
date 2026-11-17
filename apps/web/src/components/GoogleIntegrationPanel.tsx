@@ -279,7 +279,10 @@ export default function GoogleIntegrationPanel() {
           {!!calendarError && <Text accessibilityRole="alert" style={styles.error}>{calendarError}</Text>}
           {calendars && <Text style={[styles.muted, { marginBottom: 6 }]}>{calendarsSummary(calendars.list, calendars.complete)}</Text>}
           {/* Wybór kalendarzy do planowania i kalendarza publikacji (S23KC2S1P2-41, G04) – lista po odczycie z Google. */}
-          {calendars && <GoogleCalendarSelection reloadKey={`${account.email}|${calendarsLoads}`} onSaved={() => setSelectionSaves((value) => value + 1)} />}
+          {calendars && <GoogleCalendarSelection reloadKey={`${account.email}|${calendarsLoads}`} onSaved={(saved, sourcesChanged) => {
+            setSelectionSaves((value) => value + 1);
+            if (sourcesChanged && saved.sourceCalendarIds.length) setSyncSignal((value) => value + 1);
+          }} />}
         </>}
 
         <GoogleSyncSection mode={status?.mode ?? 'demo'} connection={state}

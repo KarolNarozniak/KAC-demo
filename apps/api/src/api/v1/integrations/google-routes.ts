@@ -19,11 +19,12 @@ import type { AuthAttempt } from '../../../integrations/google/repository.js';
 import { GoogleIntegrationService, IntegrationFlowError } from '../../../integrations/google/service.js';
 import { SIMULATED_FAILURES, SyncFlowError, type SimulatedFailure } from '../../../integrations/google/sync.js';
 import { SelectionError } from '../../../integrations/google/selection.js';
+import { ImportedEventError } from '../../../integrations/google/events-sync.js';
 import { PUBLICATION_SIMULATIONS, PublicationError, type PublicationSimulation } from '../../../integrations/google/publication.js';
 import { CORRECTION_SIMULATIONS, CorrectionError, type CorrectionSimulation } from '../../../integrations/google/corrections.js';
 import {
   attemptExamples, calendarsExamples, callbackPage, cancelledExamples, connectBodyExamples, demoConsentBodyExamples, demoConsentExamples,
-  correctionStatusExamples, correctionSyncExamples, disconnectExamples, divergenceExamples, integrationErrors, publicationBodyExamples, publicationPreviewExamples, publicationResultExamples, selectionBodyExamples, selectionExamples, startedExamples, statusExamples, syncBodyExamples, syncRunExamples, syncStatusExamples,
+  correctionStatusExamples, correctionSyncExamples, importedEventExamples, disconnectExamples, divergenceExamples, integrationErrors, publicationBodyExamples, publicationPreviewExamples, publicationResultExamples, selectionBodyExamples, selectionExamples, startedExamples, statusExamples, syncBodyExamples, syncRunExamples, syncStatusExamples,
 } from './examples.js';
 
 const nullable = (schema: object) => ({ anyOf: [schema, { type: 'null' }] });
@@ -109,6 +110,24 @@ const publicationResultSchema = { type: 'object', additionalProperties: false, r
   items: { type: 'array', items: { ...publicationItemSchema, required: [...publicationItemSchema.required, 'result'], properties: { ...publicationItemSchema.properties,
     result: { type: 'string', enum: ['published', 'unchanged', 'failed', 'skipped'] } } } },
   preview: publicationPreviewSchema } } as const;
+const calendarSyncResultSchema = { type: 'object', additionalProperties: false,
+  required: ['calendarId', 'name', 'mode', 'reason', 'created', 'updated', 'deleted', 'unchanged', 'conflicts', 'skippedAllDay', 'skippedDeclined', 'skippedOwn', 'errorCode'], properties: {
+    calendarId: { type: 'string' }, name: { type: 'string' },
+    mode: { type: 'string', enum: ['full', 'incremental'], description: 'full – pełny odczyt okna (pierwszy raz, przesunięcie okna, wygasły kursor); incremental – tylko zmiany od ostatniego kursora.' },
+    reason: nullable({ type: 'string', enum: ['first', 'window', 'token_expired'] }),
+    created: { type: 'integer', minimum: 0 }, updated: { type: 'integer', minimum: 0 }, deleted: { type: 'integer', minimum: 0 }, unchanged: { type: 'integer', minimum: 0 },
+    conflicts: { type: 'integer', minimum: 0, description: 'Zmiany z Google niezastosowane, bo wydarzenie edytowano w KAC (D05).' },
+    skippedAllDay: { type: 'integer', minimum: 0 }, skippedDeclined: { type: 'integer', minimum: 0 },
+    skippedOwn: { type: 'integer', minimum: 0, description: 'Wydarzenia opublikowane przez KAC – nie wracają jako nowe wpisy.' },
+    errorCode: nullable({ type: 'string', description: 'Błąd tego kalendarza – nic z niego nie zapisano, kursor bez zmian.' }) } } as const;
+const importedEventSchema = { type: 'object', additionalProperties: false, required: ['eventId', 'calendar', 'account', 'state', 'googleVersion', 'lastSyncAt', 'connected'], properties: {
+  eventId: { type: 'string' }, calendar: { type: 'object', additionalProperties: false, required: ['id', 'name'], properties: { id: { type: 'string' }, name: { type: 'string' } } },
+  account: { type: 'string' }, state: { type: 'string', enum: ['synced', 'conflict', 'detached'],
+    description: 'synced – zgodne z Google; conflict – edytowane w KAC, Google nie nadpisuje; detached – usunięte w Google, lokalna kopia została.' },
+  googleVersion: nullable({ type: 'object', additionalProperties: false, required: ['title', 'start', 'end', 'location'], properties: {
+    title: { type: 'string' }, start: { type: 'string', format: 'date-time' }, end: { type: 'string', format: 'date-time' }, location: { type: 'string' } } }),
+  lastSyncAt: nullable({ type: 'string', format: 'date-time' }), connected: { type: 'boolean' } } } as const;
+
 const correctionItemSchema = { type: 'object', additionalProperties: false,
   required: ['eventId', 'calendar', 'state', 'simulated', 'errorCode', 'errorClass', 'message', 'tries', 'lastTryAt', 'publishedAt', 'snapshot'], properties: {
     eventId: { type: 'string', description: 'Lokalne ID wydarzenia (zostaje także po jego usunięciu).' },
@@ -158,7 +177,7 @@ export function registerGoogleIntegration(app: FastifyInstance, service: GoogleI
     try {
       return await work(service);
     } catch (error) {
-      if (error instanceof IntegrationFlowError || error instanceof SyncFlowError || error instanceof SelectionError || error instanceof PublicationError || error instanceof CorrectionError) return reply.code(error.status).send({ error: error.code });
+      if (error instanceof IntegrationFlowError || error instanceof SyncFlowError || error instanceof SelectionError || error instanceof PublicationError || error instanceof CorrectionError || error instanceof ImportedEventError) return reply.code(error.status).send({ error: error.code });
       if (error instanceof GoogleIntegrationError) return reply.code(GOOGLE_ERROR_STATUS[error.code] ?? 502).send({ error: error.code });
       throw error;
     }
@@ -367,15 +386,34 @@ export function registerGoogleIntegration(app: FastifyInstance, service: GoogleI
 
   app.post<{ Body: { simulate?: SimulatedFailure } }>('/integrations/google/sync', { schema: {
     tags: ['Google integration'], summary: 'Synchronize with Google now', operationId: 'runGoogleSync',
-    description: 'Runs a read synchronization (calendar list) and records the attempt. Network errors, rate limits and Google server errors are retried automatically a limited number of times with growing delays; a rejected login is not retried and asks for reconnecting. Google errors are part of the attempt result (200), local events are never changed. simulate is accepted only in demo mode.',
+    description: 'Reads the calendar list, then downloads and applies event changes from the selected source calendars (G05): a full read of the time window the first time (and after the sync cursor expires or the window must move), afterwards only changes since the cursor. Each calendar is applied atomically together with its new cursor; a page error saves nothing for that calendar and keeps the cursor. Only events created by the synchronization are changed or deleted – manual events are never touched; events edited in KAC are not overwritten (conflict). Network errors, rate limits and Google server errors are retried a limited number of times with growing delays; a rejected login asks for reconnecting. Google errors are part of the attempt result (200). simulate is accepted only in demo mode.',
     body: withExamples({ type: 'object', additionalProperties: false, properties: {
       simulate: { type: 'string', enum: [...SIMULATED_FAILURES], description: 'Tylko makieta: wymuszony błąd albo wynik częściowy.' } } }, syncBodyExamples),
     response: {
-      200: documented({ type: 'object', additionalProperties: false, required: ['attempt', 'status'], properties: { attempt: syncAttemptSchema, status: syncStatusSchema } },
+      200: documented({ type: 'object', additionalProperties: false, required: ['attempt', 'status', 'summary'], properties: { attempt: syncAttemptSchema, status: syncStatusSchema,
+        summary: nullable({ type: 'object', additionalProperties: false, required: ['calendars'], properties: { calendars: { type: 'array', items: calendarSyncResultSchema } },
+          description: 'Wynik pobierania zmian per kalendarz; null, gdy nie doszło do odczytu wydarzeń (np. błąd listy kalendarzy).' }) } },
         'Wynik próby (także nieudanej) i aktualny stan synchronizacji.', syncRunExamples),
       404: fail('Brak połączonego konta.', ['not_connected']),
       409: fail('Synchronizacja niemożliwa w tej chwili.', ['sync_disabled', 'sync_in_progress', 'demo_only', 'no_calendars_selected']),
       503: fail('Integracja niedostępna.', ['integration_not_configured']),
     },
   } }, async (request, reply) => handle(reply, (google) => google.sync.runRead(scope(request), { simulate: request.body?.simulate })));
+
+  app.get<{ Params: { eventId: string } }>('/integrations/google/imported-events/:eventId', { schema: {
+    tags: ['Google integration'], summary: 'Get synchronized event origin', operationId: 'getGoogleImportedEvent',
+    description: 'For an event created by the Google synchronization: source calendar, whether it was edited in KAC (Google changes are then not applied) or deleted in Google, and the latest Google version.',
+    params: eventParams,
+    response: { 200: documented(importedEventSchema, 'Pochodzenie i stan wydarzenia.', importedEventExamples),
+      404: fail('Wydarzenie nie pochodzi z synchronizacji Google.', ['not_imported']), 503: fail('Integracja niedostępna.', ['integration_not_configured']) },
+  } }, async (request, reply) => handle(reply, (google) => google.importedEvents.get(scope(request), request.params.eventId)));
+
+  app.post<{ Params: { eventId: string } }>('/integrations/google/imported-events/:eventId/restore', { schema: {
+    tags: ['Google integration'], summary: 'Restore Google version of an event', operationId: 'restoreGoogleImportedEvent',
+    description: 'Replaces a local edit of a synchronized event with the latest Google version; later Google changes are applied again. Works without network – the Google version is stored locally.',
+    params: eventParams,
+    response: { 200: documented(importedEventSchema, 'Przywrócona wersja z Google.', { restored: importedEventExamples.synced! }),
+      404: fail('Wydarzenie nie pochodzi z synchronizacji Google.', ['not_imported']),
+      409: fail('Nie ma czego przywrócić.', ['google_version_missing', 'restore_series']), 503: fail('Integracja niedostępna.', ['integration_not_configured']) },
+  } }, async (request, reply) => handle(reply, (google) => google.importedEvents.restore(scope(request), request.params.eventId)));
 }

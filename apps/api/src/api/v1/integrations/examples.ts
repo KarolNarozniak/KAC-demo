@@ -110,6 +110,9 @@ export const integrationErrors: Record<string, [string, string]> = {
   no_publication_target: ['Brak kalendarza publikacji', 'Wybierz kalendarz publikacji w ustawieniach integracji albo podaj calendarId.'],
   publication_in_progress: ['Publikacja trwa', 'Inna publikacja dla tego konta jeszcze trwa. Poczekaj na jej wynik.'],
   publication_not_found: ['Wydarzenie nie było publikowane', 'To wydarzenie nie ma powiązania z kalendarzem Google – nie ma czego synchronizować.'],
+  not_imported: ['Nie pochodzi z Google', 'To wydarzenie nie zostało pobrane przez synchronizację z Google.'],
+  google_version_missing: ['Brak wersji z Google', 'Wydarzenie usunięto w Google – lokalna kopia jest już zwykłym wydarzeniem KAC.'],
+  restore_series: ['Wydarzenie jest serią w KAC', 'Wydarzenie zamieniono w KAC na serię cotygodniową – przywrócenie pojedynczej wersji z Google nie jest możliwe.'],
   no_calendars_selected: ['Nie wybrano kalendarzy', 'Synchronizacja dotyczy wybranych kalendarzy – wybierz co najmniej jeden w ustawieniach integracji. Konto zostaje połączone.'],
   selection_conflict: ['Wybór zmienił się w międzyczasie', 'Ktoś zapisał wybór w innym oknie (inna wersja). Nic nie zostało zmienione – wczytaj aktualny wybór.'],
   unknown_calendar: ['Nieznany kalendarz', 'Kalendarz nie należy do połączonego konta Google. Nic nie zostało zmienione.'],
@@ -125,11 +128,14 @@ export const callbackPage = (title: string, message: string): NamedExamples => (
 
 // --- Synchronizacja (G06) ---
 const syncAttempt = (status: string, extra: Record<string, unknown> = {}) => ({
-  id: 'c1d2e3f4-0000-4000-8000-000000000006', direction: 'read', scope: 'calendar_list', operation: 'Lista kalendarzy', status,
+  id: 'c1d2e3f4-0000-4000-8000-000000000006', direction: 'read', scope: 'events', operation: 'Pobieranie zmian z Google', status,
   startedAt: '2026-11-17T08:30:00.000Z', finishedAt: '2026-11-17T08:30:02.000Z', tries: 1, changes: 0, errorCode: null, message: null,
   errorClass: null, retryable: false, ...extra,
 });
-const success = syncAttempt('success', { changes: 4, message: 'Odczytane kalendarze: 4.' });
+const success = syncAttempt('success', { changes: 4, message: 'Kalendarze: 2. Pobrano zmiany z Google: nowe 3, zmienione 1. (pominięte całodniowe: 2)' });
+const calendarResult = (extra: Record<string, unknown>) => ({ calendarId: 'primary', name: 'Student', mode: 'incremental', reason: null, created: 0, updated: 0,
+  deleted: 0, unchanged: 0, conflicts: 0, skippedAllDay: 0, skippedDeclined: 0, skippedOwn: 0, errorCode: null, ...extra });
+const summary = { calendars: [calendarResult({ created: 3, updated: 1, skippedAllDay: 2 }), calendarResult({ calendarId: 'kolo@group.calendar.google.com', name: 'Koło naukowe', mode: 'full', reason: 'first' })] };
 const networkError = syncAttempt('error', { tries: 3, errorCode: 'network_error', errorClass: 'network', retryable: true,
   message: 'Brak połączenia z Google (brak internetu albo przekroczony czas).' });
 const reconnectError = syncAttempt('error', { errorCode: 'reconnect_required', errorClass: 'reconnect', retryable: false,
@@ -153,8 +159,14 @@ export const syncBodyExamples: NamedExamples = {
 };
 
 export const syncRunExamples: NamedExamples = {
-  success: { summary: 'Udana synchronizacja', value: { attempt: success, status: statusWith(success, '2026-11-17T08:30:02.000Z') } },
-  error: { summary: 'Błąd sieci po ponowieniach', value: { attempt: networkError, status: statusWith(networkError, '2026-11-16T18:00:00.000Z') } },
+  success: { summary: 'Udana synchronizacja', value: { attempt: success, status: statusWith(success, '2026-11-17T08:30:02.000Z'), summary } },
+  error: { summary: 'Błąd sieci po ponowieniach', description: 'Lista kalendarzy nie została odczytana – wydarzenia nie były pobierane (summary: null).',
+    value: { attempt: networkError, status: statusWith(networkError, '2026-11-16T18:00:00.000Z'), summary: null } },
+  partial: { summary: 'Błąd jednego kalendarza', description: 'Pierwszy kalendarz zastosowany, drugi nie (błąd strony) – jego kursor bez zmian.',
+    value: { attempt: syncAttempt('partial', { changes: 3, tries: 3, errorCode: 'google_unavailable', errorClass: 'server', retryable: true,
+      message: 'Kalendarze: 1. Pobrano zmiany z Google: nowe 3. Nie udało się pobrać: „Koło naukowe”.' }),
+    status: statusWith(null, '2026-11-16T18:00:00.000Z'),
+    summary: { calendars: [calendarResult({ created: 3 }), calendarResult({ calendarId: 'kolo@group.calendar.google.com', name: 'Koło naukowe', errorCode: 'google_unavailable' })] } } },
 };
 
 // --- Odłączenie (G03) ---
@@ -236,4 +248,15 @@ export const correctionSyncExamples: NamedExamples = {
 };
 export const divergenceExamples: NamedExamples = {
   some: { summary: 'Rozbieżności', value: { items: [correctionError, correctionItem('pending_delete', { eventId: 'e-2', errorCode: 'google_unavailable', errorClass: 'server', message: 'Google zwrócił błąd serwera.' })] } },
+};
+
+// --- Pobieranie zmian z Google (G05) ---
+export const importedEventExamples: NamedExamples = {
+  synced: { summary: 'Zgodne z Google', value: { eventId: 'e-10', calendar: { id: 'primary', name: 'Student' }, account: 'student@example.com', state: 'synced',
+    googleVersion: { title: 'Dentysta', start: '2026-11-19T14:00:00.000Z', end: '2026-11-19T14:45:00.000Z', location: 'ul. Górczewska 200' },
+    lastSyncAt: '2026-11-17T10:00:00.000Z', connected: true } },
+  conflict: { summary: 'Edytowane w KAC', description: 'Zmiana z Google (nowa godzina) nie nadpisała lokalnej edycji – można przywrócić wersję z Google.',
+    value: { eventId: 'e-10', calendar: { id: 'primary', name: 'Student' }, account: 'student@example.com', state: 'conflict',
+      googleVersion: { title: 'Dentysta', start: '2026-11-19T15:00:00.000Z', end: '2026-11-19T15:45:00.000Z', location: 'ul. Górczewska 212' },
+      lastSyncAt: '2026-11-17T10:00:00.000Z', connected: true } },
 };

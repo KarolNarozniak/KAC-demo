@@ -6,13 +6,14 @@
 // 3–5a „Połącz ponownie” prowadzi przez logowanie panelu (G02); odmowa wyłącza synchronizację, dane lokalne zostają
 // 6/6a po ponownym połączeniu panel sam uruchamia synchronizację; kolejny błąd pokazuje komunikat jeszcze raz
 // Stany: „Nigdy”, „W trakcie”, „Zsynchronizowano”, „Częściowo”, „Błąd”. W makiecie można wymusić błąd, żeby pokazać przebiegi.
+// G05 (S23KC2S1P2-23): synchronizacja pobiera zmiany wydarzeń z wybranych kalendarzy; po próbie panel pokazuje wynik per kalendarz.
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Button, useTheme } from './ui';
 import {
-  apiErrorMessage, attemptTimeLabel, lastSuccessLabel, NO_SOURCES_TEXT, SIMULATIONS, SYNC_DISABLED_TEXT, syncActions, syncErrorLabel, syncResultNotice, syncStateLabel,
-  type Notice, type SimulatedFailure, type SyncStatus,
+  apiErrorMessage, attemptTimeLabel, calendarResultLine, lastSuccessLabel, NO_SOURCES_TEXT, SIMULATIONS, SYNC_DISABLED_TEXT, syncActions, syncErrorLabel, syncResultNotice, syncStateLabel,
+  type Notice, type SimulatedFailure, type SyncStatus, type SyncSummary,
 } from '../domain/googleIntegration';
 import { getGoogleSync, GoogleIntegrationApiError, runGoogleSync } from '../services/googleIntegrationApi';
 
@@ -32,6 +33,7 @@ export default function GoogleSyncSection({ mode, connection, connectionKey, aut
   const { palette, styles } = useTheme();
   const [status, setStatus] = useState<SyncStatus | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [summary, setSummary] = useState<SyncSummary | null>(null);
   const [busy, setBusy] = useState(false);
   const [simulate, setSimulate] = useState<SimulatedFailure | null>(null);
   const [showHistory, setShowHistory] = useState(false);
@@ -55,13 +57,14 @@ export default function GoogleSyncSection({ mode, connection, connectionKey, aut
 
   const run = async () => {
     if (busyRef.current) return;
-    busyRef.current = true; setBusy(true); setNotice(null);
+    busyRef.current = true; setBusy(true); setNotice(null); setSummary(null);
     setStatus((current) => (current ? { ...current, state: 'running' } : current));
     try {
       const result = await runGoogleSync(mode === 'demo' ? simulate ?? undefined : undefined);
       if (!mounted.current) return;
       setStatus(result.status);
       setNotice(syncResultNotice(result.attempt));
+      setSummary(result.summary);
       if (result.status.connection !== connection) onConnectionChange();
     } catch (error) {
       if (!mounted.current) return;
@@ -102,6 +105,14 @@ export default function GoogleSyncSection({ mode, connection, connectionKey, aut
 
       {!!notice && <Text accessibilityRole={notice.tone === 'error' ? 'alert' : undefined} accessibilityLiveRegion="polite"
         style={[styles.body, { color: tone[notice.tone], marginTop: 8 }]}>{notice.text}</Text>}
+      {!!summary?.calendars.length && <View accessibilityLabel="Wynik pobierania zmian" style={{ marginTop: 6 }}>
+        {summary.calendars.map((calendar) => {
+          const line = calendarResultLine(calendar);
+          return <Text key={calendar.calendarId} style={[styles.muted, { color: line.tone === 'error' ? palette.red : line.tone === 'info' ? palette.amber : palette.muted }]}>• {line.text}</Text>;
+        })}
+        {summary.calendars.some((calendar) => !calendar.errorCode && calendar.created + calendar.updated + calendar.deleted > 0) &&
+          <Text style={[styles.muted, { marginTop: 2 }]}>Zmiany są już w widoku Tydzień.</Text>}
+      </View>}
       {!notice && last && last.status === 'error' && <Text style={[styles.body, { color: palette.red, marginTop: 8 }]}>
         Ostatnia próba ({attemptTimeLabel(last)}): {syncErrorLabel(last)}.
       </Text>}

@@ -32,8 +32,9 @@ async function withUser(work: (scope: Scope) => Promise<void>) {
   }
 }
 
+// Wydarzenia lokalne poza tymi, które sama synchronizacja pobiera z Google (G05) – one mają własne testy w google-events-sync.
 const localEvents = async (scope: Scope) => (await pool!.query(`select id_wydarzenia, tytul, rozpoczecie, zakonczenie, status, updated_at
-  from t_wydarzenia where id_kalendarza = $1 order by id_wydarzenia`, [scope.calendarId])).rows;
+  from t_wydarzenia where id_kalendarza = $1 and zrodlo <> 'Google (synchronizacja)' order by id_wydarzenia`, [scope.calendarId])).rows;
 const sync = (app: FastifyInstance, body: Record<string, unknown> = {}) => app.inject({ method: 'POST', url: '/api/v1/integrations/google/sync', payload: body });
 const syncStatus = async (app: FastifyInstance) => (await app.inject({ method: 'GET', url: '/api/v1/integrations/google/sync' })).json();
 const connectDemo = async (app: FastifyInstance, account = 'student.kac.demo@gmail.com', purpose = 'connect') => {
@@ -61,7 +62,10 @@ test('makieta: nigdy → sukces, błąd po ograniczonych ponowieniach nie nadpis
 
     // 2a: sukces – zapisany ostatni udany odczyt.
     const ok = (await sync(app)).json();
-    assert.deepEqual([ok.attempt.status, ok.attempt.tries, ok.attempt.changes, ok.attempt.direction, ok.attempt.scope], ['success', 1, 4, 'read', 'calendar_list']);
+    assert.deepEqual([ok.attempt.status, ok.attempt.tries, ok.attempt.direction, ok.attempt.scope], ['success', 1, 'read', 'events']);
+    // G05: pierwszy odczyt pobiera wydarzenia wybranego kalendarza (domyślnie główny) – liczba zmian to utworzone wydarzenia.
+    assert.ok(ok.attempt.changes > 0);
+    assert.deepEqual(ok.summary.calendars.map((calendar: { calendarId: string; mode: string }) => [calendar.calendarId, calendar.mode]), [['primary', 'full']]);
     assert.equal(ok.status.state, 'success');
     const lastSuccess = ok.status.lastSuccess.read;
     assert.ok(lastSuccess);

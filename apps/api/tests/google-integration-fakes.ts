@@ -16,8 +16,65 @@ export function idToken(claims: Record<string, unknown>) {
   return `${part({ alg: 'RS256', typ: 'JWT' })}.${part(claims)}.test-signature`;
 }
 
+/**
+ * Wydarzenia jednego kalendarza udawanego Google (G05): stan, dziennik zmian (kursor = numer ostatniej zmiany),
+ * podział na strony, wygasłe kursory (410) i wymuszone błędy wybranych stron.
+ */
+export class FakeCalendarEvents {
+  private seq = 0;
+  private readonly entries = new Map<string, { item: Record<string, any>; seq: number }>();
+  pageSize = 2500;
+  readonly expiredTokens = new Set<string>();
+  /** Błąd wymuszony dla strony o danym numerze (od 0) – zużywany po jednym. */
+  pageFailures: Array<{ page: number; reply: number | 'network' }> = [];
+  readonly requests: URLSearchParams[] = [];
+
+  put(item: Record<string, any>) {
+    this.entries.set(item.id, { item: { status: 'confirmed', ...item, updated: new Date(Date.UTC(2035, 0, 1) + (this.seq + 1) * 1000).toISOString() }, seq: ++this.seq });
+  }
+  cancel(id: string) {
+    const previous = this.entries.get(id)?.item;
+    this.entries.set(id, { item: { id, status: 'cancelled', ...(previous?.recurringEventId ? { recurringEventId: previous.recurringEventId } : {}) }, seq: ++this.seq });
+  }
+  get cursor() { return `fake-${this.seq}`; }
+
+  handle(params: URLSearchParams): { status: number; body: Record<string, unknown> } | 'network' {
+    this.requests.push(params);
+    const syncToken = params.get('syncToken');
+    if (syncToken && this.expiredTokens.has(syncToken)) return { status: 410, body: { error: { code: 410, message: 'Sync token is no longer valid, a full sync is required.' } } };
+    const offset = Number(params.get('pageToken') ?? 0);
+    const page = Math.floor(offset / this.pageSize);
+    const failure = this.pageFailures.findIndex((entry) => entry.page === page);
+    if (failure >= 0) {
+      const [entry] = this.pageFailures.splice(failure, 1);
+      if (entry!.reply === 'network') return 'network';
+      return { status: entry!.reply as number, body: { error: { code: entry!.reply } } };
+    }
+    let items: Record<string, any>[];
+    if (syncToken) {
+      const since = Number(syncToken.replace('fake-', ''));
+      items = [...this.entries.values()].filter((entry) => entry.seq > since).sort((a, b) => a.seq - b.seq).map((entry) => entry.item);
+    } else {
+      const from = Date.parse(params.get('timeMin') ?? '1970-01-01T00:00:00Z'); const to = Date.parse(params.get('timeMax') ?? '9999-12-31T00:00:00Z');
+      items = [...this.entries.values()].map((entry) => entry.item).filter((item) => item.status !== 'cancelled').filter((item) => {
+        const start = Date.parse(item.start?.dateTime ?? `${item.start?.date}T00:00:00Z`); const end = Date.parse(item.end?.dateTime ?? `${item.end?.date}T00:00:00Z`);
+        return end > from && start < to;
+      }).sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    }
+    const slice = items.slice(offset, offset + this.pageSize);
+    const more = offset + this.pageSize < items.length;
+    return { status: 200, body: { kind: 'calendar#events', items: slice, ...(more ? { nextPageToken: String(offset + this.pageSize) } : { nextSyncToken: this.cursor }) } };
+  }
+}
+
 export class FakeGoogle {
   readonly tokenRequests: URLSearchParams[] = [];
+  /** Wydarzenia kalendarzy (G05) – brak wpisu oznacza pusty kalendarz. */
+  readonly calendarEvents = new Map<string, FakeCalendarEvents>();
+  events(calendarId: string) {
+    if (!this.calendarEvents.has(calendarId)) this.calendarEvents.set(calendarId, new FakeCalendarEvents());
+    return this.calendarEvents.get(calendarId)!;
+  }
   readonly calendarTokens: string[] = [];
   readonly revoked: string[] = [];
   readonly rejectedAccessTokens = new Set<string>();
@@ -81,6 +138,15 @@ export class FakeGoogle {
       const index = pageToken ? Number(pageToken.replace('page-', '')) : 0;
       return respond(200, { kind: 'calendar#calendarList', items: this.calendarPages[index] ?? [],
         ...(index + 1 < this.calendarPages.length ? { nextPageToken: `page-${index + 1}` } : {}) });
+    }
+    const eventsMatch = url.match(/^https:\/\/www\.googleapis\.com\/calendar\/v3\/calendars\/([^/]+)\/events\?(.*)$/);
+    if (eventsMatch) {
+      const token = String(init?.headers?.Authorization ?? '').replace(/^Bearer /, '');
+      this.calendarTokens.push(token);
+      if (this.rejectedAccessTokens.has(token)) return respond(401, { error: { code: 401, status: 'UNAUTHENTICATED' } });
+      const reply = this.events(decodeURIComponent(eventsMatch[1]!)).handle(new URLSearchParams(eventsMatch[2]));
+      if (reply === 'network') throw new TypeError('fetch failed');
+      return respond(reply.status, reply.body);
     }
     throw new Error(`Nieoczekiwane żądanie do ${new URL(url).host}`);
   };
