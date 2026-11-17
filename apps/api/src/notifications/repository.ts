@@ -4,9 +4,9 @@ import { parseEventTime, reminderText, reminderTime } from './schedule.js';
 
 export type NotificationSettings = { 
   enabled: boolean; 
-  classReminders: boolean; 
+  classReminders?: boolean; 
   workRemindersEnabled: boolean; 
-  privateReminders: boolean; 
+  privateReminders?: boolean; 
   eventChangesEnabled: boolean; 
   minutesBefore: number; 
   quietStart: string | null; 
@@ -75,6 +75,8 @@ export class PostgresNotificationRepository {
 
   async updateSettings(scope: UserScope, settings: Pick<NotificationSettings, 'enabled' | 'classReminders' | 'workRemindersEnabled' | 'privateReminders' | 'minutesBefore'>): Promise<void> {
     const client = await this.pool.connect();
+    const classRemindersVal = settings.classReminders ?? true;
+    const privateRemindersVal = settings.privateReminders ?? true;
     try {
       await client.query('begin');
       const current = await client.query(`select id_ustawien from t_ustaw_powiadomien
@@ -83,11 +85,11 @@ export class PostgresNotificationRepository {
       if (current.rows[0]) {
         await client.query(`update t_ustaw_powiadomien set wlaczone = $2, zajecia_wlaczone = $3, przypomnienia_wlaczone = $4,
           prywatne_wlaczone = $5, min_przed = $6, updated_at = now() where id_ustawien = $1 returning id_ustawien`,
-        [current.rows[0].id_ustawien, settings.enabled, settings.classReminders, settings.workRemindersEnabled, settings.privateReminders, settings.minutesBefore]);
+        [current.rows[0].id_ustawien, settings.enabled, classRemindersVal, settings.workRemindersEnabled, privateRemindersVal, settings.minutesBefore]);
         settingsId = String(current.rows[0].id_ustawien);
       } else {
         const inserted = await client.query(`insert into t_ustaw_powiadomien (id_uzytkownika, wlaczone, zajecia_wlaczone, przypomnienia_wlaczone, prywatne_wlaczone, min_przed)
-          values ($1, $2, $3, $4, $5, $6) returning id_ustawien`, [scope.userId, settings.enabled, settings.classReminders, settings.workRemindersEnabled, settings.privateReminders, settings.minutesBefore]);
+          values ($1, $2, $3, $4, $5, $6) returning id_ustawien`, [scope.userId, settings.enabled, classRemindersVal, settings.workRemindersEnabled, privateRemindersVal, settings.minutesBefore]);
         settingsId = String(inserted.rows[0].id_ustawien);
       }
       await client.query(`update t_powiadomienia n set status = 'Anulowane', lease_until = null
