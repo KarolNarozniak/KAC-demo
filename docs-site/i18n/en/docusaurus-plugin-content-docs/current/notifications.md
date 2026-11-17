@@ -9,6 +9,8 @@ description: Work reminder settings, scheduling, delivery and navigation.
 
 ## Settings
 
+Run `npm run db:migrate` before starting the API or worker. Migration `017_notification_category_settings.sql` adds the `zajecia_wlaczone` and `prywatne_wlaczone` category switches to `t_ustaw_powiadomien`. Both fields default to `true` for existing and new settings; the migration preserves enablement, work reminder preferences and lead time.
+
 Notification settings let users enable or disable reminders and set a positive lead time from 1 to 1440 minutes. Edits remain a draft until “Save settings” is selected; “Cancel edit” restores the last saved values. Enabling reminders requires browser permission. The UI shows permission state and the number of scheduled reminders; zero means there are currently no upcoming approved shifts.
 
 Saving or changing settings atomically cancels prior pending reminders and schedules replacements for existing approved events in the “Work” category. Later event creation, approval, rescheduling or deletion is handled through the outbox. Changing reminder preferences never changes the work schedule.

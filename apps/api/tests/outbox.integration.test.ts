@@ -64,9 +64,16 @@ test('notification preferences reschedule existing shifts and unacknowledged cla
     assert.equal(planned.rows.filter((row) => row.status === 'Zaplanowane').length, 1);
     assert.match(planned.rows.find((row) => row.status === 'Zaplanowane').tresc, /09:00.*17:00/);
     assert.equal((await notifications.getSettings(scope)).pendingReminderCount, 1);
+    const defaults = await notifications.getSettings(scope);
+    assert.equal(defaults.classReminders, true);
+    assert.equal(defaults.privateReminders, true);
     const oldPlannedAt = new Date(planned.rows.find((row) => row.status === 'Zaplanowane').planowana_data).toISOString();
 
-    await notifications.updateSettings(scope, { enabled: true, workRemindersEnabled: true, minutesBefore: 45 });
+    await notifications.updateSettings(scope, { enabled: true, classReminders: false, workRemindersEnabled: true, privateReminders: false, minutesBefore: 45 });
+    const saved = await notifications.getSettings(scope);
+    assert.equal(saved.classReminders, false);
+    assert.equal(saved.privateReminders, false);
+    assert.equal(saved.workRemindersEnabled, true);
     planned = await pool.query(`select id_powiadomienia, planowana_data, status from t_powiadomienia where id_uzytkownika = $1 and id_wydarzenia = $2 order by planowana_data, id_powiadomienia`, [userId, eventId]);
     const active = planned.rows.filter((row) => row.status === 'Zaplanowane');
     assert.equal(active.length, 1);
