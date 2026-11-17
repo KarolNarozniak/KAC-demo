@@ -114,9 +114,9 @@ export function BlocksScreen() {
                   backgroundColor: isSelected ? palette.blueSoft : palette.surfaceAlt,
                 }}
               >
-                <Text style={[styles.body, { fontWeight: '700', color: isSelected ? palette.blue : palette.text }]}>
-                  {typeLabels[t]}
-                </Text>
+                <Text style={[styles.body, { fontWeight: '700', ...(isSelected ? { color: palette.blue } : {}) }]}>
+					{typeLabels[t]}
+				</Text>
               </Pressable>
             );
           })}

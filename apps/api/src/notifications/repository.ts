@@ -2,15 +2,51 @@ import type { Pool } from 'pg';
 import type { UserScope } from '../api/scope.js';
 import { parseEventTime, reminderText, reminderTime } from './schedule.js';
 
-export type NotificationSettings = { enabled: boolean; classReminders: boolean; workRemindersEnabled: boolean; privateReminders: boolean; eventChangesEnabled: boolean; minutesBefore: number; quietStart: string | null; quietEnd: string | null; pendingReminderCount: number };
-export type DueNotification = { id: string; eventId: string; type: string; message: string; scheduledAt: string; eventStart: string; eventEnd: string; title: string };
-export type NotificationSettings = { enabled: boolean; workRemindersEnabled: boolean; eventChangesEnabled: boolean; minutesBefore: number; quietStart: string | null; quietEnd: string | null; pendingReminderCount: number };
-export type PlanChangeDetails = { kind: 'changed' | 'unknown_previous'; fields: ('date' | 'time' | 'location')[];
-  before: { start: string; end: string; location: string | null } | null; after: { start: string; end: string; location: string | null }; eventVersion: number };
-export type DueNotification = { id: string; eventId: string; type: string; message: string; scheduledAt: string; eventStart: string; eventEnd: string; title: string;
+export type NotificationSettings = { 
+  enabled: boolean; 
+  classReminders: boolean; 
+  workRemindersEnabled: boolean; 
+  privateReminders: boolean; 
+  eventChangesEnabled: boolean; 
+  minutesBefore: number; 
+  quietStart: string | null; 
+  quietEnd: string | null; 
+  pendingReminderCount: number 
+};
+
+export type PlanChangeState = { 
+  start: string; 
+  end: string; 
+  location: string | null 
+};
+
+export type PlanChangeDetails = { 
+  kind: 'changed' | 'unknown_previous'; 
+  fields: ('date' | 'time' | 'location')[];
+  before: PlanChangeState | null; 
+  after: PlanChangeState; 
+  eventVersion: number 
+};
+
+export type DueNotification = { 
+  id: string; 
+  eventId: string; 
+  type: string; 
+  message: string; 
+  scheduledAt: string; 
+  eventStart: string; 
+  eventEnd: string; 
+  title: string;
   /** S23KC2S1P2-299: szczegóły różnicy dla typu „Zmiana planu”; null dla przypomnień. */
-  change?: PlanChangeDetails | null };
-export type PushSubscriptionInput = { endpoint: string; p256dh: string; auth: string; expirationTime?: number | null };
+  change?: PlanChangeDetails | null 
+};
+
+export type PushSubscriptionInput = { 
+  endpoint: string; 
+  p256dh: string; 
+  auth: string; 
+  expirationTime?: number | null 
+};
 
 export class PostgresNotificationRepository {
   constructor(private readonly pool: Pool) {}

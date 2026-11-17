@@ -14,7 +14,7 @@ import type { WeeklySchedule } from './src/services/scheduleApi';
 import ScreenTransition from './src/components/ScreenTransition';
 import { Button, ThemeProvider, ThemeToggle, useTheme, type ThemeMode } from './src/components/ui';
 
-// Konfiguracja obsługi powiadomień w tle / na pierwszym planie dla Expo (Mobile)
+// Konfiguracja obsługi powiadomień w tle / na pierwszym planie dla Expo (Mobile) z uwzględnieniem właściwości typu NotificationBehavior
 Notifications.setNotificationHandler({
     handleNotification: async () => ({
         shouldShowAlert: true,
@@ -118,7 +118,6 @@ function CalendarApp() {
                 const due = await claimDueNotifications();
                 if (!alive) return;
                 for (const item of due) {
-                    // 1. Próba wysłania przez powiadomienia natywne Expo (Mobile / Android / iOS)
                     try {
                         await Notifications.scheduleNotificationAsync({
                             content: {
@@ -126,10 +125,9 @@ function CalendarApp() {
                                 body: item.message,
                                 data: { eventStart: item.eventStart, notificationItem: item },
                             },
-                            trigger: null, // Wyślij natychmiast
+                            trigger: null,
                         });
                     } catch {
-                        // 2. Fallback do przeglądarki Web, jeśli jesteśmy w środowisku webowym z uprawnieniami
                         if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
                             const notification = new Notification(item.title || 'Przypomnienie KAC', { body: item.message, tag: item.id });
                             notification.onclick = () => {
@@ -227,7 +225,6 @@ function CalendarApp() {
                 return;
             }
             try {
-                // Sprawdzenie i prośba o uprawnienia Expo (Mobile) oraz przeglądarkowe (Web)
                 const { status: existingStatus } = await Notifications.getPermissionsAsync().catch(() => ({ status: 'denied' }));
                 let finalStatus = existingStatus;
                 if (existingStatus !== 'granted') {
