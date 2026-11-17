@@ -19,7 +19,8 @@
       "adaptiveIcon": {
         "foregroundImage": "./logo.png",
         "backgroundColor": "#f7f8fc"
-      }
+      },
+      "softwareKeyboardLayoutMode": "resize"
     },
     "plugins": [
       "expo-asset",

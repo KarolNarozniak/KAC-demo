@@ -27,8 +27,8 @@ export default function WeekGrid({ days, events, layout, now, active, startAtNow
   const initialScrollKey = useRef('');
   const latestHour = useRef(0);
   const horizontal = layout === 'days-left';
-  const gutter = horizontal ? 44 : 36;
-  const headerHeight = hideDayHeader ? 0 : 30;
+  const gutter = horizontal ? 60 : 48;
+  const headerHeight = hideDayHeader ? 0 : 40;
   const viewportWidth = Math.max(0, size.width - gutter);
   const viewportHeight = Math.max(0, size.height - headerHeight);
   const isWeek = days.length > 1;
@@ -62,7 +62,7 @@ export default function WeekGrid({ days, events, layout, now, active, startAtNow
   const tickStep = Math.max(1, Math.ceil((horizontal ? 30 : 16) / Math.max(1, hourSize)));
   const colors = { Class: palette.class, Work: palette.work, Personal: palette.personal };
   const dayLabel = (date: Date, index: number, style: object) => <Pressable key={localDateKey(date)} accessibilityRole="button" accessibilityLabel={`Dodaj wydarzenie: ${date.toLocaleDateString('pl-PL')}`} onPress={() => onAdd(date)} style={[{ justifyContent: 'center', alignItems: 'center', borderBottomWidth: 1, borderColor: palette.line, backgroundColor: localDateKey(date) === localDateKey(now) ? palette.blueSoft : palette.surface }, style]}>
-    <Text style={{ fontSize: 11, fontWeight: '700', color: palette.ink }}>{daysLabel[(date.getDay() + 6) % 7]}</Text><Text style={{ fontSize: 11, color: palette.muted }}>{date.getDate()}</Text>
+    <Text style={{ fontSize: 11, fontWeight: '700', color: palette.ink }}>{daysLabel[(date.getDay() + 6) % 7]}</Text><Text style={{ fontSize: 12, color: palette.muted }}>{date.getDate()}</Text>
   </Pressable>;
   const ticks = [firstHour, ...Array.from({ length: Math.max(0, Math.ceil(lastHour) - Math.floor(firstHour) - 1) }, (_, index) => Math.floor(firstHour) + index + 1)];
   const eventRows = <View style={{ width: bodyWidth, height: bodyHeight }}>
@@ -84,16 +84,16 @@ export default function WeekGrid({ days, events, layout, now, active, startAtNow
               const offset = Math.max(0, (from - firstHour) * hourSize);
               const length = Math.max(1, (to - from) * hourSize);
               const laneSize = daySize / Math.max(1, lanes.length);
-              return <Pressable key={event.id} disabled={event.preview} accessibilityRole={event.preview ? undefined : 'button'} accessibilityLabel={`${event.preview ? 'Propozycja: ' : ''}${event.title}, ${event.occurrenceStart.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}`} onPress={() => !event.preview && onSelect(event)} style={[{ position: 'absolute', padding: 2, overflow: 'hidden', borderRadius: 3, backgroundColor: `${colors[event.category]}25`, borderColor: colors[event.category], borderStyle: event.preview ? 'dashed' : 'solid', opacity: event.preview ? 0.82 : 1 }, horizontal ? { left: offset, width: length, top: positions[index] * laneSize, height: laneSize - 1, borderTopWidth: 2 } : { top: offset, height: length, left: positions[index] * laneSize, width: laneSize - 1, borderLeftWidth: 2 }]}>
-                <Text numberOfLines={horizontal ? 3 : 2} style={{ fontSize: 10, fontWeight: '700', color: palette.ink }}>{event.title}</Text>
+              return <Pressable key={event.id} disabled={event.preview} accessibilityRole={event.preview ? undefined : 'button'} accessibilityLabel={`${event.preview ? 'Propozycja: ' : ''}${event.title}, ${event.occurrenceStart.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}`} onPress={() => !event.preview && onSelect(event)} style={[{ position: 'absolute', padding: 8, overflow: 'hidden', borderRadius: 8, backgroundColor: `${colors[event.category]}25`, borderColor: colors[event.category], borderStyle: event.preview ? 'dashed' : 'solid', opacity: event.preview ? 0.82 : 1 }, horizontal ? { left: offset, width: length, top: positions[index] * laneSize, height: laneSize - 1, borderTopWidth: 2 } : { top: offset, height: length, left: positions[index] * laneSize, width: laneSize - 1, borderLeftWidth: 2 }]}>
+                <Text numberOfLines={horizontal ? 3 : 2} style={{ fontSize: 13, lineHeight: 18, fontWeight: '700', color: palette.ink }}>{event.title}</Text><Text style={{ fontSize: 12, color: palette.muted, marginTop: 4 }}>{event.occurrenceStart.toLocaleTimeString('pl-PL', {hour:'2-digit',minute:'2-digit'})} – {event.occurrenceEnd.toLocaleTimeString('pl-PL', {hour:'2-digit',minute:'2-digit'})}</Text>
               </Pressable>;
             })}
             {isWeek && includesToday && currentHour >= firstHour && currentHour < lastHour && <View pointerEvents="none" accessibilityLabel={`Aktualna godzina ${now.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}`} style={[{ position: 'absolute', zIndex: 2, backgroundColor: localDateKey(date) === localDateKey(now) ? palette.red : palette.muted, opacity: localDateKey(date) === localDateKey(now) ? 1 : 0.35 }, horizontal ? { left: (currentHour - firstHour) * hourSize, top: 0, bottom: 0, width: localDateKey(date) === localDateKey(now) ? 3 : 1 } : { top: (currentHour - firstHour) * hourSize, left: 0, right: 0, height: localDateKey(date) === localDateKey(now) ? 3 : 1 }]} />}
           </View>;
         })}
   </View>;
-  const timeLabels = (top: boolean) => ticks.filter((hour, index) => index === 0 || (hour % tickStep === 0 && (hour - firstHour) * hourSize >= (top ? 30 : 16))).map((hour) => <Text key={hour} style={[{ position: 'absolute', fontSize: 9, color: palette.muted }, top ? { left: (hour - firstHour) * hourSize, top: 8 } : { top: (hour - firstHour) * hourSize }]}>{hour === firstHour && startAtNow ? now.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }) : hourLabel(hour)}</Text>);
-  return <View onLayout={({ nativeEvent: { layout: measured } }) => setSize({ width: measured.width, height: measured.height })} style={{ flex: 1, minHeight: 0, overflow: 'hidden', backgroundColor: palette.surface }}>
+  const timeLabels = (top: boolean) => ticks.filter((hour, index) => index === 0 || (hour % tickStep === 0 && (hour - firstHour) * hourSize >= (top ? 30 : 16))).map((hour) => <Text key={hour} style={[{ position: 'absolute', fontSize: 12, color: palette.muted }, top ? { left: (hour - firstHour) * hourSize, top: 8 } : { top: (hour - firstHour) * hourSize }]}>{hour === firstHour && startAtNow ? now.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }) : hourLabel(hour)}</Text>);
+  return <View onLayout={({ nativeEvent: { layout: measured } }) => setSize({ width: measured.width, height: measured.height })} style={{ flex: 1, minHeight: 0, overflow: 'hidden', backgroundColor: palette.surface, borderRadius: 14, borderWidth: 1, borderColor: palette.line, marginBottom: 20 }}>
     {horizontal ? <View style={{ flex: 1, flexDirection: 'row' }}>
       <View style={{ width: gutter }}>
         <View style={{ height: headerHeight }} />

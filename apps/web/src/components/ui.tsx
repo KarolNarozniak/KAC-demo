@@ -29,7 +29,7 @@ export type ThemePalette = {
 };
 
 const lightPalette: ThemePalette = {
-  ink: '#18243A', muted: '#758198', line: '#E7EAF1', paper: '#FFFFFF', surface: '#FFFFFF', surfaceAlt: '#F2F4F8', input: '#FFFFFF', bg: '#F5F6FA',
+  ink: '#18243A', muted: '#58677D', line: '#E0E5EF', paper: '#FFFFFF', surface: '#FFFFFF', surfaceAlt: '#F2F4F8', input: '#FFFFFF', bg: '#F5F6FA',
   blue: '#5265E8', blueSoft: '#EEF0FF', green: '#14835D', greenSoft: '#E9F7F0', amber: '#A55B05', amberSoft: '#FFF4E6', red: '#B04444', redSoft: '#FFF0EF',
   class: '#2563EB', work: '#F97316', personal: '#16A34A', grid: '#EFF1F5', scrim: 'rgba(17, 24, 39, 0.55)', selected: '#EEF0FF', placeholder: '#929BAA',
 };
@@ -49,13 +49,13 @@ const buildStyles = (palette: ThemePalette): Record<string, any> => ({
   subtitle: { fontSize: 14, color: palette.muted, marginTop: 5, lineHeight: 21 },
   heading: { fontSize: 17, fontWeight: '800', color: palette.ink },
   body: { fontSize: 14, lineHeight: 21, color: palette.ink },
-  muted: { fontSize: 12, lineHeight: 18, color: palette.muted },
-  label: { fontSize: 10, fontWeight: '800', letterSpacing: 1.1, color: palette.muted, marginBottom: 6 },
-  input: { borderWidth: 1, borderColor: palette.line, backgroundColor: palette.input, borderRadius: 11, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: palette.ink, minWidth: 0 },
-  button: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 11, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
+  muted: { fontSize: 13, lineHeight: 20, color: palette.muted },
+  label: { fontSize: 12, fontWeight: '700', letterSpacing: 0.3, color: palette.muted, marginBottom: 8 },
+  input: { borderWidth: 1, borderColor: palette.line, backgroundColor: palette.input, borderRadius: 11, paddingHorizontal: 12, paddingVertical: 10, fontSize: 16, color: palette.ink, minWidth: 0, minHeight: 44 },
+  button: { minHeight: 44, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 11, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
   buttonText: { fontSize: 13, fontWeight: '700', color: palette.ink },
   primary: { backgroundColor: palette.blue, borderColor: palette.blue },
-  primaryText: { color: '#FFFFFF' },
+  primaryText: { color: palette.bg === '#0B111B' ? '#101724' : '#FFFFFF' },
   danger: { backgroundColor: palette.redSoft, borderColor: palette.line },
   error: { color: palette.red, fontSize: 13, lineHeight: 19, marginTop: 8, marginBottom: 6 },
 });

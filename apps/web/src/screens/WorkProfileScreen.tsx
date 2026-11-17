@@ -1,10 +1,12 @@
+import DurationField from '../components/DurationField';
+import Disclosure from '../components/Disclosure';
 import type {BlockingEvent} from '../services/scheduleApi';
 import AvailabilityEditor from '../components/AvailabilityEditor';
 import PreferredWorkWindowsEditor from '../components/PreferredWorkWindowsEditor';
 // Profil pracy (S23KC2S1P2-15, S23KC2S1P2-181) z celem godzin (S23KC2S1P2-39, S23KC2S1P2-156).
 // Ekran jest osadzony w zakładce „Grafik”, nad generowaniem tygodnia. Stan formularza trzyma hook useWorkProfile.
 import React from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { Button, Field, useTheme } from '../components/ui';
 import { errorMessage, formatNumber, parseNumber, weeklyHours, type ProfileDraft } from '../domain/workProfile';
 import type { WorkProfileState } from '../hooks/useWorkProfile';
@@ -13,8 +15,9 @@ import type { NumberField, ShiftTemplate, WorkMode } from '../services/workProfi
 const modeLabel: Record<WorkMode, string> = { elastyczny: 'Elastyczny', zmianowy: 'Zmianowy' };
 const weekdays = ['Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'Sb', 'Nd'];
 
-export default function WorkProfileScreen({ state, blockingEvents, disabled = false }: { state: WorkProfileState; blockingEvents?:BlockingEvent[]; disabled?: boolean }) {
+export default function WorkProfileScreen({ state, blockingEvents, disabled = false, showSaveActions = true }: { state: WorkProfileState; blockingEvents?:BlockingEvent[]; disabled?: boolean; showSaveActions?: boolean }) {
   const { palette, styles } = useTheme();
+  const compact = useWindowDimensions().width < 760;
   const { draft, errors, dirty, valid, saving } = state;
 
   if (state.loadError) return <View style={styles.card}>
@@ -34,8 +37,9 @@ export default function WorkProfileScreen({ state, blockingEvents, disabled = fa
 
   const numberField = (field: NumberField, label: string, placeholder?: string) => {
     const text = message(field);
-    return <View key={field} style={{ flex: 1, minWidth: 150 }}>
+    return <View key={field} style={{ flex: 1, minWidth: compact ? '100%' : 150 }}>
       <Field label={label} value={draft.numbers[field]} onChangeText={(value) => setNumber(field, value)} keyboardType="decimal-pad" placeholder={placeholder} editable={!locked} invalid={!!text} maxLength={7} />
+      {['minimumRestMinutes', 'minimumShiftMinutes', 'maximumSlotMinutes'].includes(field) && Number(draft.numbers[field]) > 0 && <Text style={[styles.muted, { marginTop: -6, marginBottom: 12 }]}>{Math.floor(Number(draft.numbers[field]) / 60)} h {Number(draft.numbers[field]) % 60} min</Text>}
       {!!text && <Text accessibilityRole="alert" style={[styles.error, { marginTop: -8 }]}>{text}</Text>}
     </View>;
   };
@@ -51,23 +55,24 @@ export default function WorkProfileScreen({ state, blockingEvents, disabled = fa
   const targetValid = target !== null && !Number.isNaN(target) && !errors.targetHours;
 
   return <View style={styles.card}>
-    <Text style={styles.heading}>Profil pracy</Text>
-    <Text style={[styles.muted, { marginTop: 4, marginBottom: 12 }]}>Limity godzin, cel, dojazd i dostępność. Zmiany obejmą kolejne generowane grafiki – zatwierdzone grafiki się nie zmienią.</Text>
+    <Text style={[styles.muted, { marginBottom: 20 }]}>Zmiany dotyczą nowych propozycji. Zatwierdzone grafiki pozostaną bez zmian.</Text>
 
+    <Disclosure title="Stawka i tryb pracy" summary={`${draft.hourlyRateText || '—'} PLN / h · ${draft.rateKind === 'net' ? 'netto' : 'brutto'} · ${draft.mode === 'elastyczny' ? 'Elastyczny' : 'Zmianowy'}`}>
     <Text style={styles.label}>TRYB PRACY</Text>
     {radio(['elastyczny', 'zmianowy'] as const, draft.mode, (value) => modeLabel[value], (mode) => set({ mode }))}
 
-    <Text style={styles.label}>STAWKA GODZINOWA PLN</Text>
-    <Field label="PLN / GODZ." value={draft.hourlyRateText??''} keyboardType="decimal-pad" editable={!locked} onChangeText={hourlyRateText=>set({hourlyRateText:hourlyRateText.replace(',','.')})} invalid={!!message('hourlyRatePln')} placeholder="np. 30,00"/>
+    <Field label="Stawka za godzinę (PLN)" value={draft.hourlyRateText??''} keyboardType="decimal-pad" editable={!locked} onChangeText={hourlyRateText=>set({hourlyRateText:hourlyRateText.replace(',','.')})} invalid={!!message('hourlyRatePln')} placeholder="np. 30,00"/>
     {!!message('hourlyRatePln')&&<Text style={styles.error}>{message('hourlyRatePln')}</Text>}
     {radio(['gross','net'] as const,draft.rateKind,value=>value==='gross'?'Brutto':'Netto',rateKind=>set({rateKind}))}
     {!!message('rateKind')&&<Text style={styles.error}>{message('rateKind')}</Text>}
-    <Text style={styles.muted}>Zero jest poprawną stawką; puste pole oznacza brak ustawienia. Stawka i brutto/netto zapisują się razem z profilem.</Text>
+    <Text style={styles.muted}>Ustaw stawkę i wybierz brutto lub netto. Stawka 0 PLN jest dozwolona.</Text>
 
+    </Disclosure>
+    <Disclosure title="Cel i limity godzin" summary={`Cel: ${draft.numbers.targetHours} h / ${draft.targetPeriod === 'week' ? 'tydzień' : 'miesiąc'} · Limit tygodniowy: ${draft.numbers.minimumHours}–${draft.numbers.maximumHours} h`}>
     <Text style={styles.label}>LIMITY GODZIN W TYGODNIU</Text>
     <View style={[styles.row, { flexWrap: 'wrap', alignItems: 'flex-start' }]}>
-      {numberField('minimumHours', 'MINIMUM (GODZ./TYDZ.)')}
-      {numberField('maximumHours', 'MAKSIMUM (GODZ./TYDZ.)')}
+      {numberField('minimumHours', 'Minimum godzin / tydzień')}
+      {numberField('maximumHours', 'Maksimum godzin / tydzień')}
     </View>
 
     <Text style={styles.label}>CEL GODZIN PRACY</Text>
@@ -77,20 +82,27 @@ export default function WorkProfileScreen({ state, blockingEvents, disabled = fa
     </View>
     {draft.targetPeriod === 'month' && targetValid && <Text style={[styles.muted, { marginTop: -6, marginBottom: 10 }]}>To ok. {formatNumber(weeklyHours(target!, 'month'))} h tygodniowo – według tej wartości układany jest grafik.</Text>}
 
+    </Disclosure>
+    <Disclosure title="Dojazd i odpoczynek" summary={`Dojazd: ${draft.numbers.commuteBufferMinutes} min · Odpoczynek: ${Math.floor(Number(draft.numbers.minimumRestMinutes) / 60)} h ${Number(draft.numbers.minimumRestMinutes) % 60} min`}>
     <View style={[styles.row, { flexWrap: 'wrap', alignItems: 'flex-start' }]}>
       {numberField('commuteBufferMinutes', 'CZAS DOJAZDU (MIN)')}
-      {numberField('minimumRestMinutes', 'MIN. ODPOCZYNEK (MIN)')}
+      <View style={{ flex: 1, minWidth: compact ? '100%' : 200 }}><DurationField label="Minimalny odpoczynek" value={draft.numbers.minimumRestMinutes} onChange={value => setNumber('minimumRestMinutes',value)} disabled={locked} invalid={!!message('minimumRestMinutes')} />{!!message('minimumRestMinutes') && <Text style={styles.error}>{message('minimumRestMinutes')}</Text>}</View>
     </View>
     <View style={[styles.row, { flexWrap: 'wrap', alignItems: 'flex-start' }]}>
-      {numberField('minimumShiftMinutes', 'MIN. DŁUGOŚĆ ZMIANY (MIN)')}
-      {numberField('maximumSlotMinutes', 'MAKS. DŁUGOŚĆ ZMIANY (MIN)')}
+      <View style={{ flex: 1, minWidth: compact ? '100%' : 200 }}><DurationField label="Najkrótsza zmiana" value={draft.numbers.minimumShiftMinutes} onChange={value => setNumber('minimumShiftMinutes',value)} disabled={locked} invalid={!!message('minimumShiftMinutes')} />{!!message('minimumShiftMinutes') && <Text style={styles.error}>{message('minimumShiftMinutes')}</Text>}</View>
+      <View style={{ flex: 1, minWidth: compact ? '100%' : 200 }}><DurationField label="Najdłuższa zmiana" value={draft.numbers.maximumSlotMinutes} onChange={value => setNumber('maximumSlotMinutes',value)} disabled={locked} invalid={!!message('maximumSlotMinutes')} />{!!message('maximumSlotMinutes') && <Text style={styles.error}>{message('maximumSlotMinutes')}</Text>}</View>
       {numberField('maxHoursPerDay', 'MAKS. GODZIN PRACY NA DZIEŃ')}
     </View>
 
+    </Disclosure>
+    <Disclosure title="Dostępność w tygodniu" summary={`${draft.availability.length} przedziałów · rozwiń, aby edytować dni i godziny`}>
     <AvailabilityEditor messages={Object.fromEntries(Object.keys(errors).filter(field=>field.startsWith('availability')).map(field=>[field,message(field)]))} blockingEvents={blockingEvents} value={draft.availability} saved={state.saved?.availability??[]} targetHours={state.saved?.weeklyTargetHours??null} disabled={locked} onChange={availability=>set({availability})}/>
 
+    </Disclosure>
+    <Disclosure title="Preferowane godziny pracy" summary={draft.preferredWorkWindows.length ? `${draft.preferredWorkWindows.length} preferowanych przedziałów` : 'Opcjonalnie · wybierz ulubione pory pracy'}>
     <PreferredWorkWindowsEditor messages={Object.fromEntries(Object.keys(errors).filter(field=>field.startsWith('preferredWorkWindows')).map(field=>[field,message(field)]))} value={draft.preferredWorkWindows} disabled={locked} onChange={preferredWorkWindows=>set({preferredWorkWindows})}/>  
 
+    </Disclosure>
     {draft.mode === 'zmianowy' && <View style={styles.card}>
       <View style={[styles.row, { justifyContent: 'space-between', flexWrap: 'wrap', marginBottom: 8 }]}>
         <View><Text style={styles.heading}>Szablony zmian</Text><Text style={styles.muted}>Domyślne zmiany możesz zmienić lub dodać własne.</Text></View>
@@ -122,7 +134,7 @@ export default function WorkProfileScreen({ state, blockingEvents, disabled = fa
     </View>}
 
     {dirty && valid && !state.conflict && <Text accessibilityLiveRegion="polite" style={[styles.muted, { color: palette.green, marginBottom: 8 }]}>✓ Dane są poprawne. Zapisz profil, żeby użyć ich przy planowaniu.</Text>}
-    {dirty && !state.conflict && <View style={[styles.row, { flexWrap: 'wrap', marginBottom: 8 }]}>
+    {showSaveActions && dirty && !state.conflict && <View style={[styles.row, { flexWrap: 'wrap', marginBottom: 8 }]}>
       <Button title="Anuluj zmiany" onPress={state.cancel} disabled={locked} />
       <Button title={saving ? 'Zapisywanie…' : 'Zapisz profil'} primary onPress={() => void state.save()} disabled={locked || !valid} />
     </View>}
