@@ -48,5 +48,8 @@
   },
   "devDependencies": {
     "concurrently": "^9.2.1"
+  },
+  "dependencies": {
+    "expo-notifications": "~58.1.9"
   }
 }
