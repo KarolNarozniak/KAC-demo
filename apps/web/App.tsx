@@ -1,7 +1,8 @@
+import SelectionMark from './src/components/SelectionMark';
 import { configureAssistantPreferences, defaultAssistantPreferences, normalizeAssistantPreferences, type AssistantPreferences } from './src/domain/assistantPreferences';
 import type { ChatImportHandoff } from './src/services/chatImportApi';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Text, View, Pressable, Image, Modal, ScrollView, TextInput, Platform } from 'react-native';
+import { Text, View, Pressable, Image, Modal, ScrollView, TextInput, Platform, useWindowDimensions } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -13,6 +14,7 @@ import { BlocksScreen } from './src/screens/BlocksScreen';
 import AssistantScreen from './src/screens/AssistantScreen';
 import { acknowledgeNotification, claimDueNotifications, getNotificationSettings, getWebPushConfig, registerWebPushSubscription, removeWebPushSubscription, updateNotificationSettings, type DueNotification, type NotificationSettings } from './src/services/notificationsApi';
 import type { WeeklySchedule } from './src/services/scheduleApi';
+import NavigationIcon from './src/components/NavigationIcon';
 import ScreenTransition from './src/components/ScreenTransition';
 import { Button, ThemeProvider, ThemeToggle, useTheme, type ThemeMode } from './src/components/ui';
 
@@ -28,7 +30,8 @@ Notifications.setNotificationHandler({
     }),
 });
 
-const tabs = ['Dziś', 'Tydzień', 'Grafik', 'Blokady', 'Ustawienia', 'Asystent'] as const;
+const tabs = ['Dziś', 'Tydzień', 'Asystent', 'Grafik', 'Blokady', 'Ustawienia'] as const;
+const tabIcons = { 'Dziś': 0, 'Tydzień': 1, 'Grafik': 2, 'Blokady': 3, 'Ustawienia': 4, 'Asystent': 5 };
 
 export default function App() {
     const [mode, setMode] = useState<ThemeMode>('dark');
@@ -47,6 +50,8 @@ export default function App() {
 
 function CalendarApp() {
     const { palette, styles } = useTheme();
+    const desktop = useWindowDimensions().width >= 1000;
+    const [menuOpen, setMenuOpen] = useState(false);
     const [tab, setTab] = useState<typeof tabs[number]>('Dziś');
     const [week, setWeek] = useState(new Date());
     const [agentPreferences, setAgentPreferences] = useState<AssistantPreferences>({ ...defaultAssistantPreferences });
@@ -315,7 +320,7 @@ function CalendarApp() {
         return () => clearInterval(timer);
     }, []);
 
-    const [weekLayout, setWeekLayout] = useState<WeekLayout>('days-left');
+    const [weekLayout, setWeekLayout] = useState<WeekLayout>('days-top');
     const [settingsLoaded, setSettingsLoaded] = useState(false);
     const [storageError, setStorageError] = useState('');
     useEffect(() => {
@@ -331,10 +336,14 @@ function CalendarApp() {
     };
 
     return <SafeAreaView style={{ flex: 1, backgroundColor: palette.bg }}>
-        <View style={{ paddingHorizontal: 12, paddingVertical: 6, backgroundColor: palette.surface, borderBottomWidth: 1, borderColor: palette.line, flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{ paddingHorizontal: desktop ? 28 : 16, paddingVertical: 12, backgroundColor: palette.surface, borderBottomWidth: 1, borderColor: palette.line, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <Image accessibilityLabel="Logo Aura Kalendar" source={require('./logo.png')} resizeMode="contain" style={{ width: 36, height: 36 }} />
-            <Text numberOfLines={1} style={[styles.heading, { flex: 1, textAlign: 'center', fontSize: 15 }]}>{now.toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' })}</Text>
-            <View style={{ width: 36 }} />
+            {desktop && <Text style={[styles.heading, { fontSize: 20, marginRight: 26 }]}>Aura<Text style={{ color: palette.blue }}> Kalendar</Text></Text>}
+            {desktop && <View accessibilityRole="tablist" style={{ flexDirection: 'row', flex: 1, gap: 4 }}>{tabs.map(item => <Pressable key={item} accessibilityRole="tab" accessibilityState={{ selected: tab === item }} onPress={() => openTab(item)} style={{ minHeight: 44, paddingHorizontal: 16, justifyContent: 'center', borderRadius: 10, backgroundColor: tab === item ? palette.blueSoft : 'transparent' }}><Text style={[styles.body, { fontWeight: '700', color: tab === item ? palette.blue : palette.muted }]}>{item}</Text></Pressable>)}</View>}
+            <Text numberOfLines={1} style={[styles.muted, { flex: desktop ? undefined : 1, textAlign: desktop ? 'right' : 'center', fontWeight: '600' }]}>{now.toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' })}</Text>
+            {!desktop && <Pressable accessibilityRole="button" accessibilityLabel="Menu" accessibilityState={{ expanded: menuOpen }} onPress={() => setMenuOpen(value => !value)} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', gap: 5, borderRadius: 10, backgroundColor: menuOpen ? palette.blueSoft : 'transparent' }}>
+                {[0, 1, 2].map(line => <View key={line} style={{ width: 20, height: 2, borderRadius: 1, backgroundColor: palette.ink }} />)}
+            </Pressable>}
         </View>
 
         <ScreenTransition screenIndex={tabs.indexOf(tab)} renderScreen={(index, active) => {
@@ -345,11 +354,12 @@ function CalendarApp() {
                     route === 'Grafik' ? <ScheduleScreen active={active} now={now} week={week} setWeek={setWeek} onPreview={setSchedulePreview} onApproved={() => setTab('Tydzień')} onUnsavedChange={onUnsavedChange} discardSignal={discardSignal} /> :
                         route === 'Blokady' ? <BlocksScreen /> :
                             route === 'Asystent' ? <AssistantScreen importHandoff={importHandoff} onHandoffConsumed={()=>setImportHandoff(null)} active={active} onCalendarChange={() => setCalendarRevision((value) => value + 1)} /> :
-                                route === 'Ustawienia' ? <ScrollView style={{ flex: 1, minHeight: 0 }} contentContainerStyle={[styles.content, { padding: 16, paddingBottom: 32 }]} keyboardShouldPersistTaps="handled">
+                                route === 'Ustawienia' ? <ScrollView style={{ flex: 1, minHeight: 0 }} contentContainerStyle={[styles.content, { maxWidth: 860, padding: desktop ? 32 : 16, paddingBottom: 40 }]} keyboardShouldPersistTaps="handled">
+                                    <Text accessibilityRole="header" style={styles.title}>Ustawienia</Text><Text style={[styles.subtitle, { marginBottom: 24 }]}>Dostosuj kalendarz do swojego dnia.</Text>
                                     <View style={[styles.row, { justifyContent: 'space-between', marginBottom: 20 }]}><Text style={styles.heading}>Motyw</Text><ThemeToggle /></View>
-                                    <Text style={[styles.heading, { marginBottom: 12 }]}>Układ tygodnia</Text>
+                                    <Text style={[styles.heading, { marginBottom: 8 }]}>Układ tygodnia na komputerze</Text><Text style={[styles.muted, { marginBottom: 12 }]}>Motyw i układ zapisują się automatycznie. Na telefonie tydzień wyświetla się jako lista.</Text>
                                     <View accessibilityRole="radiogroup" style={{ gap: 8 }}>
-                                        {([{ id: 'days-left', label: 'Dni po lewej · godziny u góry' }, { id: 'days-top', label: 'Dni u góry · godziny po lewej' }] as const).map((option) => <Pressable key={option.id} accessibilityRole="radio" accessibilityState={{ checked: weekLayout === option.id, disabled: !settingsLoaded }} disabled={!settingsLoaded} onPress={() => void changeWeekLayout(option.id)} style={{ padding: 14, borderRadius: 8, borderWidth: 1, borderColor: weekLayout === option.id ? palette.blue : palette.line, backgroundColor: weekLayout === option.id ? palette.blueSoft : palette.surface }}><Text style={styles.body}>{weekLayout === option.id ? '◉' : '○'} {option.label}</Text></Pressable>)}
+                                        {([{ id: 'days-left', label: 'Dni po lewej · godziny u góry' }, { id: 'days-top', label: 'Dni u góry · godziny po lewej' }] as const).map((option) => <Pressable key={option.id} accessibilityRole="radio" accessibilityState={{ checked: weekLayout === option.id, disabled: !settingsLoaded }} disabled={!settingsLoaded} onPress={() => void changeWeekLayout(option.id)} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderRadius: 8, borderWidth: 1, borderColor: weekLayout === option.id ? palette.blue : palette.line, backgroundColor: weekLayout === option.id ? palette.blueSoft : palette.surface }}><SelectionMark radio checked={weekLayout === option.id} /><Text style={[styles.body, { flex: 1 }]}>{option.label}</Text></Pressable>)}
                                     </View>
 
                                     <View style={[styles.card, { marginTop: 20 }]}>
@@ -358,11 +368,11 @@ function CalendarApp() {
                                       <TextInput accessibilityLabel="Forma zwracania się przez agenta" value={agentPreferences.addressAs} placeholder="np. Aniu, Panie Adamie" maxLength={60} editable={agentPreferencesLoaded && !agentPreferencesSaving}
                                         onChangeText={(addressAs) => { setAgentPreferencesNotice(''); setAgentPreferences((current) => ({ ...current, addressAs })); }} style={styles.input} />
                                       <Text style={[styles.label, { marginTop: 12 }]}>Ton wypowiedzi</Text>
-                                      <View accessibilityRole="radiogroup" style={[styles.row, { flexWrap: 'wrap' }]}>
+                                      <View accessibilityRole="radiogroup" style={[styles.row, { flexWrap: 'wrap', marginBottom: 14 }]}>
                                         {([{ tone: 'neutral', label: 'Rzeczowy' }, { tone: 'friendly', label: 'Przyjazny' }, { tone: 'formal', label: 'Formalny' }] as const).map(({ tone, label }) =>
                                           <Pressable key={tone} accessibilityRole="radio" accessibilityState={{ checked: agentPreferences.tone === tone }} disabled={!agentPreferencesLoaded || agentPreferencesSaving}
                                             onPress={() => { setAgentPreferencesNotice(''); setAgentPreferences((current) => ({ ...current, tone })); }} style={{ padding: 10, borderRadius: 8, backgroundColor: agentPreferences.tone === tone ? palette.blueSoft : palette.surfaceAlt }}>
-                                            <Text style={styles.body}>{agentPreferences.tone === tone ? '◉' : '○'} {label}</Text>
+                                            <View style={styles.row}><SelectionMark radio checked={agentPreferences.tone === tone} /><Text style={styles.body}>{label}</Text></View>
                                           </Pressable>)}
                                       </View>
                                       <Button title={agentPreferencesSaving ? 'Zapisywanie…' : 'Zapisz personalizację'} primary disabled={!agentPreferencesLoaded || agentPreferencesSaving} onPress={() => void saveAgentPreferences()} />
@@ -374,7 +384,7 @@ function CalendarApp() {
                                             Przypomnienia dotyczą zatwierdzonych zmian oraz zaplanowanych wydarzeń. Powiadomienia systemowe wymagają zgody urządzenia.
                                         </Text>
                                         <Text style={styles.muted}>
-                                            Uprawnienia: {typeof Notification === 'undefined' ? 'systemowe (Expo)' : Notification.permission === 'granted' ? 'przyznane (Web)' : 'odmówione/nieustalone'}
+                                            Uprawnienia: {typeof Notification === 'undefined' ? 'systemowe (Expo)' : Notification.permission === 'granted' ? 'przyznane' : Notification.permission === 'denied' ? 'wyłączone w przeglądarce' : 'jeszcze nieprzyznane'}
                                         </Text>
                                         {notificationSettings?.enabled && (
                                             <Text style={styles.muted}>
@@ -383,7 +393,7 @@ function CalendarApp() {
                                                     : 'Brak nadchodzących zdarzeń wymagających przypomnienia.'}
                                             </Text>
                                         )}
-                                        {webPushNotice ? <Text style={styles.muted}>{webPushNotice}</Text> : !webPushAvailable && <Text style={styles.muted}>Web Push nie jest skonfigurowany; przypomnienia działają w aktywnej karcie.</Text>}
+                                        {webPushNotice ? <Text style={styles.muted}>{webPushNotice}</Text> : !webPushAvailable && <Text style={styles.muted}>Przypomnienia są dostępne podczas korzystania z aplikacji.</Text>}
 
                                         <Pressable
                                             accessibilityRole="checkbox"
@@ -391,8 +401,8 @@ function CalendarApp() {
                                             onPress={() => setRemindersEnabledDraft(current => !current)}
                                             style={[styles.row, { marginVertical: 12, gap: 10 }]}
                                         >
-                                            <Text style={{ fontSize: 18, color: palette.blue }}>{remindersEnabledDraft ? '☑' : '☐'}</Text>
-                                            <Text style={styles.body}>Włącz powiadomienia o zmianach i wydarzeniach</Text>
+                                            <SelectionMark checked={remindersEnabledDraft} />
+                                            <Text style={[styles.body, { flex: 1 }]}>Włącz powiadomienia o zmianach i wydarzeniach</Text>
                                         </Pressable>
 
                                         {remindersEnabledDraft && (
@@ -404,7 +414,7 @@ function CalendarApp() {
                                                     onPress={() => setClassRemindersDraft(current => !current)}
                                                     style={[styles.row, { gap: 10 }]}
                                                 >
-                                                    <Text style={{ fontSize: 16, color: palette.blue }}>{classRemindersDraft ? '☑' : '☐'}</Text>
+                                                    <SelectionMark checked={classRemindersDraft} />
                                                     <Text style={styles.body}>Zajęcia</Text>
                                                 </Pressable>
                                                 <Pressable
@@ -413,7 +423,7 @@ function CalendarApp() {
                                                     onPress={() => setWorkRemindersDraft(current => !current)}
                                                     style={[styles.row, { gap: 10 }]}
                                                 >
-                                                    <Text style={{ fontSize: 16, color: palette.blue }}>{workRemindersDraft ? '☑' : '☐'}</Text>
+                                                    <SelectionMark checked={workRemindersDraft} />
                                                     <Text style={styles.body}>Praca</Text>
                                                 </Pressable>
                                                 <Pressable
@@ -422,7 +432,7 @@ function CalendarApp() {
                                                     onPress={() => setPrivateRemindersDraft(current => !current)}
                                                     style={[styles.row, { gap: 10 }]}
                                                 >
-                                                    <Text style={{ fontSize: 16, color: palette.blue }}>{privateRemindersDraft ? '☑' : '☐'}</Text>
+                                                    <SelectionMark checked={privateRemindersDraft} />
                                                     <Text style={styles.body}>Prywatne</Text>
                                                 </Pressable>
                                             </View>
@@ -451,9 +461,17 @@ function CalendarApp() {
             );
         }} />
 
-        <View accessibilityRole="tablist" style={{ flexDirection: 'row', backgroundColor: palette.surface, borderTopWidth: 1, borderColor: palette.line, paddingTop: 4, paddingBottom: 4 }}>
-            {tabs.map((item, i) => <Pressable key={item} accessibilityRole="tab" accessibilityState={{ selected: tab === item }} onPress={() => openTab(item)} style={{ flex: 1, minWidth: 0, minHeight: 48, justifyContent: 'center', alignItems: 'center', gap: 4 }}><View style={{ width: 28, height: 24, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: 20, lineHeight: 24, includeFontPadding: false, textAlign: 'center', color: tab === item ? palette.blue : palette.muted }}>{['◷', '▦', '◫', '⊞', '⚙︎', '✧'][i]}</Text></View><Text style={{ width: '100%', height: 16, lineHeight: 16, includeFontPadding: false, textAlign: 'center', fontSize: 12, fontWeight: '700', color: tab === item ? palette.blue : palette.muted }}>{item}</Text></Pressable>)}
-        </View>
+        {!desktop && <View accessibilityRole="tablist" style={{ flexDirection: 'row', backgroundColor: palette.surface, borderTopWidth: 1, borderColor: palette.line, paddingTop: 6, paddingBottom: 6 }}>
+            {tabs.filter(item => item !== 'Blokady' && item !== 'Ustawienia').map(item => <Pressable key={item} accessibilityRole="tab" accessibilityState={{ selected: tab === item }} onPress={() => openTab(item)} style={{ flex: 1, minWidth: 0, minHeight: 48, justifyContent: 'center', alignItems: 'center', gap: 4 }}><View style={{ width: 28, height: 24, alignItems: 'center', justifyContent: 'center' }}><NavigationIcon index={tabIcons[item]} color={tab === item ? palette.blue : palette.muted} /></View><Text style={{ width: '100%', height: 16, lineHeight: 16, includeFontPadding: false, textAlign: 'center', fontSize: 12, fontWeight: '700', color: tab === item ? palette.blue : palette.muted }}>{item}</Text></Pressable>)}
+        </View>}
+
+        <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={() => setMenuOpen(false)}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Zamknij menu" onPress={() => setMenuOpen(false)} style={{ flex: 1, backgroundColor: palette.scrim, alignItems: 'flex-end', padding: 16, paddingTop: 76 }}>
+                <View accessibilityRole="menu" style={[styles.card, { width: 260, padding: 12, gap: 8 }]}>
+                    {(['Blokady', 'Ustawienia'] as const).map(item => <Pressable key={item} accessibilityRole="menuitem" onPress={() => { setMenuOpen(false); openTab(item); }} style={{ padding: 14, minHeight: 48, borderRadius: 10, backgroundColor: tab === item ? palette.blueSoft : palette.surfaceAlt }}><Text style={[styles.body, { fontWeight: '700' }]}>{item}</Text></Pressable>)}
+                </View>
+            </Pressable>
+        </Modal>
 
         <Modal visible={pendingTab !== null} transparent animationType="fade" onRequestClose={() => setPendingTab(null)}>
             <View style={{ flex: 1, backgroundColor: palette.scrim, alignItems: 'center', justifyContent: 'center', padding: 16 }}>

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, Modal, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { Button, useTheme } from '../components/ui';
 import ChatImportCard from '../components/ChatImportCard';
 import { attachChatImport, listChatImports, type ChatImportDraft, type ChatImportHandoff } from '../services/chatImportApi';
@@ -32,6 +32,12 @@ const actionSummary = (action: PendingAssistantAction) => {
 
 export default function AssistantScreen({ active, onCalendarChange, importHandoff, onHandoffConsumed }: Props) {
   const { palette, styles } = useTheme();
+  const compact = useWindowDimensions().width < 760;
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyScroll, setHistoryScroll] = useState({ viewport: 0, content: 0, offset: 0 });
+  const historyTrackHeight = Math.max(0, historyScroll.viewport - 8);
+  const historyThumbHeight = Math.min(historyTrackHeight, Math.max(24, historyTrackHeight * historyScroll.viewport / Math.max(1, historyScroll.content)));
+  const historyProgress = Math.min(1, Math.max(0, historyScroll.offset / Math.max(1, historyScroll.content - historyScroll.viewport)));
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [conversations, setConversations] = useState<AssistantConversation[]>([]);
   const [conversationId, setConversationId] = useState('');
@@ -151,7 +157,7 @@ export default function AssistantScreen({ active, onCalendarChange, importHandof
     setLoading(true); setError('');
     try {
       const created = await createAssistantConversation();
-      setConversations((current) => [created, ...current]); setConversationId(created.id); setMessages([]); setPendingActions([]); setImports([]);
+      setHistoryOpen(false); setConversations((current) => [created, ...current]); setConversationId(created.id); setMessages([]); setPendingActions([]); setImports([]);
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Nie udało się rozpocząć rozmowy.'); }
     finally { setLoading(false); }
   };
@@ -203,25 +209,30 @@ export default function AssistantScreen({ active, onCalendarChange, importHandof
     finally { setSending(false); }
   };
 
-  return <View style={{ flex: 1, flexDirection: 'row', backgroundColor: palette.bg }}>
-    <View style={{ width: 230, maxWidth: '36%', borderRightWidth: 1, borderColor: palette.line, padding: 10, gap: 8 }}>
+  return <View style={{ flex: 1, flexDirection: compact ? 'column' : 'row', backgroundColor: palette.bg, width: '100%', maxWidth: 1240, alignSelf: 'center' }}>
+    {compact && <View style={[styles.row, { padding: 12, borderBottomWidth: 1, borderColor: palette.line, justifyContent: 'space-between' }]}><Text style={styles.heading}>Asystent</Text><Button title={historyOpen ? 'Zamknij historię' : 'Historia rozmów'} onPress={() => setHistoryOpen(value => !value)} /></View>}
+    <View style={{ display: !compact || historyOpen ? 'flex' : 'none', width: compact ? '100%' : 240, flex: compact ? 1 : undefined, minHeight: 0, flexShrink: 0, borderRightWidth: compact ? 0 : 1, borderBottomWidth: compact ? 1 : 0, borderColor: palette.line, backgroundColor: palette.surface, padding: 16, gap: 12 }}>
       <Button title="Nowa rozmowa" primary disabled={!enabled || loading || sending} onPress={() => void newConversation()} />
-      <ScrollView contentContainerStyle={{ gap: 6 }}>
-        {conversations.map((conversation) => <Pressable key={conversation.id} disabled={sending} accessibilityRole="button" accessibilityState={{ selected: conversationId === conversation.id }} onPress={() => { setCollision(null); setConversationId(conversation.id); }} style={{ padding: 10, borderRadius: 9, backgroundColor: conversationId === conversation.id ? palette.blueSoft : palette.surface }}>
+      <View style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+      <ScrollView testID="conversation-history" showsVerticalScrollIndicator persistentScrollbar onLayout={event => setHistoryScroll(current => ({ ...current, viewport: event.nativeEvent.layout.height }))} onContentSizeChange={(_width, height) => setHistoryScroll(current => ({ ...current, content: height }))} onScroll={event => setHistoryScroll(current => ({ ...current, offset: event.nativeEvent.contentOffset.y, viewport: event.nativeEvent.layoutMeasurement.height, content: event.nativeEvent.contentSize.height }))} scrollEventThrottle={32} style={{ flex: 1, overscrollBehavior: 'contain' } as any} contentContainerStyle={{ gap: 6, paddingRight: 12, paddingBottom: 6 }}>
+        {conversations.map((conversation) => <Pressable key={conversation.id} disabled={sending} accessibilityRole="button" accessibilityState={{ selected: conversationId === conversation.id }} onPress={() => { setCollision(null); setConversationId(conversation.id); if (compact) setHistoryOpen(false); }} style={{ padding: 10, borderRadius: 9, backgroundColor: conversationId === conversation.id ? palette.blueSoft : palette.surface }}>
           <Text numberOfLines={2} style={[styles.body, { fontWeight: conversationId === conversation.id ? '800' : '500' }]}>{conversation.title || 'Rozmowa'}</Text>
           <Text style={styles.muted}>{new Date(conversation.updatedAt).toLocaleDateString('pl-PL')}</Text>
         </Pressable>)}
       </ScrollView>
+      {historyScroll.content > historyScroll.viewport + 2 && historyScroll.viewport > 0 && <View pointerEvents="none" accessibilityElementsHidden style={{ position: 'absolute', top: 4, bottom: 4, right: 0, width: 4, borderRadius: 2, backgroundColor: palette.line }}><View style={{ position: 'absolute', width: 4, borderRadius: 2, backgroundColor: palette.muted, height: historyThumbHeight, top: historyProgress * (historyTrackHeight - historyThumbHeight) }} /></View>}
+      </View>
+      <Text accessibilityElementsHidden={historyScroll.content - historyScroll.viewport - historyScroll.offset <= 8} style={[styles.muted, { height: 20, textAlign: 'center', fontSize: 12, opacity: historyScroll.content - historyScroll.viewport - historyScroll.offset > 8 ? 1 : 0 }]}>Więcej rozmów ↓</Text>
       {!!conversationId && <Button title="Usuń rozmowę" danger disabled={sending} onPress={() => void removeConversation()} />}
     </View>
 
-    <View style={{ flex: 1, minWidth: 0, padding: 14 }}>
-      <View style={[styles.row, { justifyContent: 'space-between', flexWrap: 'wrap' }]}><View><Text style={styles.heading}>Asystent KAC</Text><Text style={styles.muted}>Kalendarz i planowanie pracy · zmiany wymagają zatwierdzenia</Text></View></View>
-      {enabled === false && <View style={[styles.card, { borderColor: palette.amber, marginTop: 12 }]}><Text style={styles.heading}>Azure AI Foundry nie jest skonfigurowane</Text><Text style={styles.body}>Ustaw endpoint projektu i nazwę deploymentu modelu w konfiguracji API, a lokalnie zaloguj się przez `az login`. Żadna wiadomość nie została wysłana.</Text></View>}
+    <View style={{ display: compact && historyOpen ? 'none' : 'flex', flex: 1, minWidth: 0, minHeight: 0, padding: compact ? 16 : 28 }}>
+      <View style={[styles.row, { justifyContent: 'space-between', flexWrap: 'wrap' }]}><View>{!compact && <Text style={styles.heading}>Asystent Aura</Text>}<Text style={styles.muted}>Kalendarz i planowanie pracy · zmiany wymagają zatwierdzenia</Text></View></View>
+      {enabled === false && <View style={[styles.card, { borderColor: palette.amber, marginTop: 12 }]}><Text style={styles.heading}>Asystent jest teraz niedostępny</Text><Text style={styles.body}>Możesz nadal korzystać z kalendarza i planować pracę. Spróbuj ponownie później.</Text></View>}
       {!!error && <Text accessibilityRole="alert" style={[styles.error, { marginTop: 8 }]}>{error}</Text>}
       <ScrollView ref={scrollRef} onContentSizeChange={() => { if (followReply.current) scrollRef.current?.scrollToEnd({ animated: false }); }}
         onScroll={({ nativeEvent }) => { followReply.current = nativeEvent.contentOffset.y + nativeEvent.layoutMeasurement.height >= nativeEvent.contentSize.height - 80; }} scrollEventThrottle={100} style={{ flex: 1, marginVertical: 10 }} contentContainerStyle={{ gap: 10, paddingBottom: 16 }}>
-        {messages.filter((message) => message.role !== 'tool' && textOf(message)).map((message) => <View key={message.id} style={{ alignSelf: message.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '90%', padding: 12, borderRadius: 12, backgroundColor: message.role === 'user' ? palette.blueSoft : palette.surface }}>
+        {messages.filter((message) => message.role !== 'tool' && textOf(message)).map((message) => <View key={message.id} style={{ alignSelf: message.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: compact ? '95%' : 720, padding: 16, borderRadius: 12, backgroundColor: message.role === 'user' ? palette.blueSoft : palette.surface }}>
           {!!(message.content.attachment as {thumbnailDataUrl?:string}|undefined)?.thumbnailDataUrl && <Pressable accessibilityRole="button" accessibilityLabel="Powiększ zdjęcie" onPress={()=>setImagePreview(String((message.content.attachment as {thumbnailDataUrl:string}).thumbnailDataUrl))}>
             <Image source={{uri:String((message.content.attachment as {thumbnailDataUrl:string}).thumbnailDataUrl)}} style={{width:260,maxWidth:'100%',height:180,borderRadius:8,marginBottom:8}} resizeMode="contain" accessibilityLabel="Zdjęcie do importu" />
           </Pressable>}
@@ -231,7 +242,7 @@ export default function AssistantScreen({ active, onCalendarChange, importHandof
         {uploading && <View style={styles.row}><ActivityIndicator size="small" color={palette.blue}/><Text accessibilityLiveRegion="polite" style={styles.muted}>Odczytuję zdjęcie i przygotowuję podgląd…</Text></View>}
         {uploadRetry && <Button title="Ponów odczyt zdjęcia" disabled={sending} onPress={()=>void uploadAttachment({...uploadRetry,sessionId:undefined,rows:undefined})}/>}
         {imports.map(draft=><ChatImportCard key={draft.id} draft={draft} onChanged={()=>void refreshImports()} onCalendarChange={onCalendarChange}/>)}
-        {(replying || streamText) && <View style={{ alignSelf: 'flex-start', maxWidth: '90%', padding: 12, borderRadius: 12, backgroundColor: palette.surface }}>
+        {(replying || streamText) && <View style={{ alignSelf: 'flex-start', maxWidth: compact ? '95%' : 720, padding: 16, borderRadius: 12, backgroundColor: palette.surface }}>
           {!!streamText && <Text style={styles.body}>{streamText}</Text>}
           <View accessibilityLiveRegion="polite" style={[styles.row, { marginTop: streamText ? 6 : 0 }]}>
             {replying && <ActivityIndicator size="small" color={palette.blue} />}
@@ -254,25 +265,24 @@ export default function AssistantScreen({ active, onCalendarChange, importHandof
         {pendingActions.length > 1 && <Button title="Zatwierdź wszystko" primary disabled={sending} onPress={() => void confirmActions(pendingActions)} />}
         {loading && <Text accessibilityLiveRegion="polite" style={styles.muted}>Wczytywanie…</Text>}
       </ScrollView>
-      <View style={[styles.row, { alignItems: 'flex-end' }]}>
+      <View style={[styles.row, { alignItems: 'center', gap: 8 }]}>
         <Pressable accessibilityRole="button" accessibilityLabel="Importuj zdjęcie lub plik" accessibilityHint="Wybierz plan zajęć albo grafik pracy i sprawdź dane przed zapisem."
           accessibilityState={{ disabled: sending || loading }} disabled={sending || loading} onPress={() => setAttachmentMenuOpen(true)}
-          style={[styles.button, { minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' }, (sending || loading) && { opacity: 0.5 }]}>
-          <Text style={{ fontSize: 22 }}>📷</Text>
+          style={[styles.button, { width: 44, height: 48, paddingHorizontal: 0, alignItems: 'center', justifyContent: 'center' }, (sending || loading) && { opacity: 0.5 }]}>
+          <Text style={{ fontSize: 24, color: palette.ink }}>+</Text>
         </Pressable>
-        <TextInput value={input} onChangeText={setInput} placeholder={enabled ? 'Zapytaj o kalendarz lub plan pracy…' : 'Skonfiguruj Azure AI, aby rozpocząć'} multiline editable={Boolean(enabled) && !sending}
-          accessibilityLabel="Wiadomość do asystenta" onSubmitEditing={() => void send()} style={[styles.input, { flex: 1, minHeight: 48, maxHeight: 120 }]} />
-        <Button title={sending ? '…' : 'Wyślij'} primary disabled={!enabled || sending || loading || !conversationId || !input.trim()} onPress={() => void send()} />
+        <TextInput value={input} onChangeText={setInput} placeholder={enabled ? 'Napisz wiadomość…' : 'Asystent jest niedostępny'} multiline blurOnSubmit editable={Boolean(enabled) && !sending}
+          accessibilityLabel="Wiadomość do asystenta" onSubmitEditing={() => void send()} style={[styles.input, { flex: 1, minHeight: 48, height: 48, maxHeight: 120, paddingVertical: 12 }]} />
+        <Pressable accessibilityRole="button" accessibilityLabel="Wyślij wiadomość" disabled={!enabled || sending || loading || !conversationId || !input.trim()} onPress={() => void send()} style={[styles.button, styles.primary, { height: 48, paddingHorizontal: 14 }, (!enabled || sending || loading || !conversationId || !input.trim()) && { opacity: 0.5 }]}><Text style={[styles.buttonText, styles.primaryText]}>{sending ? '…' : 'Wyślij'}</Text></Pressable>
       </View>
-      <Text style={[styles.muted, { marginTop: 6 }]}>Załączniki i tekst traktowane są jako niezaufane dane. Asystent nie zapisuje zmian bez Twojej akceptacji.</Text>
     </View>
     <Modal visible={attachmentMenuOpen} transparent animationType="fade" onRequestClose={() => setAttachmentMenuOpen(false)}>
       <View style={{ flex: 1, backgroundColor: palette.scrim, alignItems: 'center', justifyContent: 'center', padding: 16 }}>
         <View style={[styles.card, { width: '100%', maxWidth: 440, gap: 12 }]}>
           <Text style={styles.heading}>Dodaj zdjęcie lub plik</Text>
           <Text style={styles.body}>Co chcesz odczytać?</Text>
-          <View style={styles.row}><Button title="Plan zajęć" primary={attachmentSource==='classes'} onPress={()=>setAttachmentSource('classes')}/><Button title="Grafik pracy" primary={attachmentSource==='work'} onPress={()=>setAttachmentSource('work')}/></View>
-          <View style={styles.row}><Button title="Azure AI" primary={attachmentReader==='ai'} onPress={()=>setAttachmentReader('ai')}/><Button title="Lokalny OCR" primary={attachmentReader==='local'} onPress={()=>setAttachmentReader('local')}/></View>
+          <View accessibilityRole="radiogroup" style={styles.row}>{([{id:'classes',label:'Plan zajęć'},{id:'work',label:'Grafik pracy'}] as const).map(option => <Pressable key={option.id} accessibilityRole="radio" accessibilityState={{checked:attachmentSource===option.id}} onPress={()=>setAttachmentSource(option.id)} style={[styles.button,{flex:1,backgroundColor:attachmentSource===option.id?palette.blueSoft:palette.surfaceAlt,borderColor:attachmentSource===option.id?palette.blue:palette.line}]}><Text style={styles.buttonText}>{option.label}</Text></Pressable>)}</View>
+          <View accessibilityRole="radiogroup" style={styles.row}>{([{id:'ai',label:'Odczyt AI'},{id:'local',label:'Odczyt lokalny'}] as const).map(option => <Pressable key={option.id} accessibilityRole="radio" accessibilityState={{checked:attachmentReader===option.id}} onPress={()=>setAttachmentReader(option.id)} style={[styles.button,{flex:1,backgroundColor:attachmentReader===option.id?palette.blueSoft:palette.surfaceAlt,borderColor:attachmentReader===option.id?palette.blue:palette.line}]}><Text style={styles.buttonText}>{option.label}</Text></Pressable>)}</View>
           <Text style={styles.muted}>{attachmentReader==='ai'?'Zdjęcie zostanie przekazane do Azure AI. Miniatura i odczytane dane pozostaną w rozmowie.':'OCR odczyta zdjęcie na serwerze. Odczytane dane omówisz z AI; obraz pozostanie poza kontekstem modelu.'}</Text>
           <Button title="Wybierz zdjęcie lub plik" primary onPress={()=>void chooseAttachment()}/>
           <Button title="Zrób zdjęcie" onPress={()=>void chooseAttachment(true)}/>

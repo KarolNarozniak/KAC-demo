@@ -12,3 +12,6 @@ apps/web/deploy/
 **/.env
 **/.env.*
 !**/.env.example
+
+# Generated browser screenshots and independent visual audits
+artifacts/ui-review/

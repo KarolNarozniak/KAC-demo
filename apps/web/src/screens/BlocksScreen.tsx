@@ -1,18 +1,24 @@
+import Disclosure from '../components/Disclosure';
 import React, { useEffect, useState } from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { View, Text, Pressable, ScrollView, useWindowDimensions } from 'react-native';
 import { fetchBlocks, createBlock, deleteBlock, type Block, type BlockType } from '../services/blockApi';
 import { Button, Field, useTheme } from '../components/ui';
+import DateField from '../components/DateField';
+import TimeField from '../components/TimeField';
+import { localDateKey } from '../domain/calendar';
 
 export function BlocksScreen() {
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [loading, setLoading] = useState(true);
   const [title, setTitle] = useState('');
-  const [startTime, setStartTime] = useState('');
-  const [endTime, setEndTime] = useState('');
+  const [startTime, setStartTime] = useState(`${localDateKey(new Date())}T08:00`);
+  const [endTime, setEndTime] = useState(`${localDateKey(new Date())}T18:00`);
   const [type, setType] = useState<BlockType>('exam_session');
   const [error, setError] = useState<string | null>(null);
 
   const { palette, styles } = useTheme();
+  const compact = useWindowDimensions().width < 760;
+  const stamp = (value: string) => new Date(value).toLocaleString('pl-PL', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
   const loadBlocks = async () => {
     try {
@@ -36,11 +42,14 @@ export function BlocksScreen() {
       setError('Wypełnij wszystkie pola');
       return;
     }
+    if (!Number.isFinite(Date.parse(startTime)) || !Number.isFinite(Date.parse(endTime)) || Date.parse(endTime) <= Date.parse(startTime)) {
+      setError('Koniec blokady musi być późniejszy niż początek.'); return;
+    }
     try {
       await createBlock({ title: title.trim(), startTime: startTime.trim(), endTime: endTime.trim(), type });
       setTitle('');
-      setStartTime('');
-      setEndTime('');
+      setStartTime(`${localDateKey(new Date())}T08:00`);
+      setEndTime(`${localDateKey(new Date())}T18:00`);
       setError(null);
       loadBlocks();
     } catch (err: any) {
@@ -64,14 +73,33 @@ export function BlocksScreen() {
   };
 
   return (
-    <ScrollView contentContainerStyle={{ width: '100%', maxWidth: 1120, alignSelf: 'center', padding: 16, paddingBottom: 40 }}>
-      <Text style={[styles.title, { fontSize: 25 }]}>Blokady i Sesje Egzaminacyjne</Text>
+    <ScrollView contentContainerStyle={{ width: '100%', maxWidth: 880, alignSelf: 'center', padding: 16, paddingBottom: 40 }}>
+      <Text style={[styles.title, { fontSize: 25 }]}>Blokady czasu</Text>
       <Text style={[styles.subtitle, { marginTop: 0, marginBottom: 14 }]}>Okresy te zostaną wykluczone z automatycznego generowania grafiku pracy.</Text>
 
       {error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
 
-      <View style={styles.card}>
-        <Text style={styles.heading}>Dodaj nową blokadę</Text>
+      <Text style={[styles.heading, { marginTop: 16, marginBottom: 8 }]}>Aktywne blokady</Text>
+
+      {loading ? (
+        <Text accessibilityLiveRegion="polite" style={styles.muted}>Wczytywanie…</Text>
+      ) : blocks.length === 0 ? (
+        <Text style={styles.muted}>Brak zaplanowanych blokad.</Text>
+      ) : (
+        blocks.map((item) => (
+          <View key={item.id} style={[styles.card, { flexDirection: compact ? 'column' : 'row', alignItems: compact ? 'stretch' : 'center', gap: 12, justifyContent: 'space-between', padding: 18, marginBottom: 8 }]}>
+            <View style={{ flex: 1 }}>
+              <View style={{ alignSelf: 'flex-start', backgroundColor: palette.blueSoft, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4, marginBottom: 4 }}>
+                <Text style={{ fontSize: 11, color: palette.blue, fontWeight: '700' }}>{typeLabels[item.type] || item.type}</Text>
+              </View>
+              <Text style={[styles.body, { fontWeight: '700' }]}>{item.title}</Text>
+              <Text style={styles.muted}>{stamp(item.startTime)} – {stamp(item.endTime)}</Text>
+            </View>
+            <View style={{ alignSelf: 'flex-start' }}><Button title="Usuń" danger onPress={() => handleDelete(item.id)} /></View>
+          </View>
+        ))
+      )}
+<Disclosure title="Dodaj blokadę" summary="Urlop, sesja egzaminacyjna lub dzień wolny">
 
         <Field
           label="TYTUŁ (NP. SESJA ZIMOWA, URLOP)"
@@ -81,21 +109,16 @@ export function BlocksScreen() {
           placeholder="np. Sesja zimowa"
         />
 
-        <Field
-          label="OD (NP. 2026-02-01T08:00)"
-          maxLength={50}
-          value={startTime}
-          onChangeText={setStartTime}
-          placeholder="2026-02-01T08:00"
-        />
-
-        <Field
-          label="DO (NP. 2026-02-15T20:00)"
-          maxLength={50}
-          value={endTime}
-          onChangeText={setEndTime}
-          placeholder="2026-02-15T20:00"
-        />
+        <Text style={styles.label}>POCZĄTEK BLOKADY</Text>
+        <View style={[styles.row, { alignItems: 'flex-start', flexWrap: 'wrap' }]}>
+          <DateField label="Data od" value={startTime.split('T')[0]} onChange={date => setStartTime(`${date}T${startTime.split('T')[1]}`)} />
+          <TimeField label="Godzina od" value={startTime.split('T')[1]} onChange={time => setStartTime(`${startTime.split('T')[0]}T${time}`)} />
+        </View>
+        <Text style={styles.label}>KONIEC BLOKADY</Text>
+        <View style={[styles.row, { alignItems: 'flex-start', flexWrap: 'wrap' }]}>
+          <DateField label="Data do" value={endTime.split('T')[0]} onChange={date => setEndTime(`${date}T${endTime.split('T')[1]}`)} />
+          <TimeField label="Godzina do" value={endTime.split('T')[1]} onChange={time => setEndTime(`${endTime.split('T')[0]}T${time}`)} />
+        </View>
 
         <Text style={styles.label}>RODZAJ BLOKADY</Text>
         <View style={[styles.row, { flexWrap: 'wrap', marginBottom: 16, gap: 8 }]}>
@@ -103,6 +126,7 @@ export function BlocksScreen() {
             const isSelected = type === t;
             return (
               <Pressable
+                accessibilityRole="radio" accessibilityState={{ checked: isSelected }}
                 key={t}
                 onPress={() => setType(t)}
                 style={{
@@ -123,28 +147,8 @@ export function BlocksScreen() {
         </View>
 
         <Button title="Dodaj blokadę" primary onPress={handleCreate} />
-      </View>
+      </Disclosure>
 
-      <Text style={[styles.heading, { marginTop: 16, marginBottom: 8 }]}>Aktywne blokady</Text>
-
-      {loading ? (
-        <Text accessibilityLiveRegion="polite" style={styles.muted}>Wczytywanie…</Text>
-      ) : blocks.length === 0 ? (
-        <Text style={styles.muted}>Brak zaplanowanych blokad.</Text>
-      ) : (
-        blocks.map((item) => (
-          <View key={item.id} style={[styles.card, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12, marginBottom: 8 }]}>
-            <View style={{ flex: 1 }}>
-              <View style={{ alignSelf: 'flex-start', backgroundColor: palette.blueSoft, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4, marginBottom: 4 }}>
-                <Text style={{ fontSize: 11, color: palette.blue, fontWeight: '700' }}>{typeLabels[item.type] || item.type}</Text>
-              </View>
-              <Text style={[styles.body, { fontWeight: '700' }]}>{item.title}</Text>
-              <Text style={styles.muted}>{item.startTime} do {item.endTime}</Text>
-            </View>
-            <Button title="Usuń" danger onPress={() => handleDelete(item.id)} />
-          </View>
-        ))
-      )}
     </ScrollView>
   );
 }

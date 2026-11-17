@@ -1,3 +1,4 @@
+import DialogHeading from './DialogHeading';
 // Jednorazowy import wydarzeń z Google Calendar (historyjka S23KC2S1P2-27).
 //
 // Kroki: połączenie z kontem Google i zgoda na odczyt (3a – odmowa) → wybór kalendarza i zakresu dat (6a – brak
@@ -186,15 +187,13 @@ export default function GoogleCalendarImport({ visible, onClose, onImported }: P
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={() => void close()}>
       <View style={{ flex: 1, backgroundColor: palette.scrim, alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-        <ScrollView style={{ backgroundColor: palette.surface, borderRadius: 18, width: '100%', maxWidth: 640, maxHeight: '92%' }} contentContainerStyle={{ padding: 21 }}>
-          <View style={[styles.row, { justifyContent: 'space-between' }]}>
-            <Text style={[styles.heading, { flex: 1 }]}>Importuj z Google Calendar</Text>
-            <Button title="Zamknij" disabled={busy} onPress={() => void close()} />
-          </View>
-          <Text style={styles.subtitle}>Import jednorazowy: wydarzenia zostaną skopiowane do KAC. Późniejsze zmiany w Google Calendar nie aktualizują ich w aplikacji.</Text>
+        <ScrollView style={{ backgroundColor: palette.surface, borderRadius: 18, width: '100%', maxWidth: 640, maxHeight: '92%', flexGrow: 0 }} contentContainerStyle={{ padding: 21 }}>
+          <DialogHeading title="Import Google Calendar" disabled={busy} onClose={() => void close()} />
+          <Text style={styles.subtitle}>Import jednorazowy: wydarzenia trafią do Aura Kalendar. Późniejsze zmiany w Google nie aktualizują ich w aplikacji.</Text>
           {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
           {!!info && <Text accessibilityLiveRegion="polite" style={[styles.body, { marginTop: 10 }]}>{info}</Text>}
           {busy && <Text accessibilityLiveRegion="polite" style={styles.muted}>Proszę czekać…</Text>}
+
 
           {step === 'start' && <View style={{ marginTop: 14 }}>
             <Button title="Połącz z kontem Google" primary disabled={busy} onPress={() => void connect()} />

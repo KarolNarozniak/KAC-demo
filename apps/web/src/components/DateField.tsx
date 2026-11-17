@@ -5,7 +5,7 @@ import { localDateKey } from '../domain/calendar';
 import { Button, useTheme } from './ui';
 import type { DateFieldProps } from './DateField.types';
 
-export default function DateField({ label, value, onChange, invalid = false }: DateFieldProps) {
+export default function DateField({ label, value, onChange, invalid = false, disabled = false }: DateFieldProps) {
   const [open, setOpen] = useState(false);
   const { styles, palette, mode } = useTheme();
   const [year, month, day] = value.split('-').map(Number);
@@ -30,7 +30,7 @@ export default function DateField({ label, value, onChange, invalid = false }: D
   };
   return <View style={{ flex: 1, minWidth: 0, marginBottom: 12 }}>
     <Text style={[styles.label, invalid && { color: palette.red }]}>{label}</Text>
-    <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ expanded: open }} onPress={showPicker} disabled={open} style={[styles.input, { minHeight: 44, justifyContent: 'center' }, invalid && { borderColor: palette.red, borderWidth: 2 }]}>
+    <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ expanded: open }} onPress={showPicker} disabled={open || disabled} style={[styles.input, { minHeight: 44, justifyContent: 'center' }, invalid && { borderColor: palette.red, borderWidth: 2 }]}>
       <Text style={valid ? styles.body : styles.muted}>{valid ? date.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Wybierz datę'}</Text>
     </Pressable>
     {open && Platform.OS === 'ios' && <>

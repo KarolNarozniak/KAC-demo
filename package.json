@@ -44,10 +44,12 @@
     "docs:build": "npm run api:openapi:check && npm run generate-api --workspace @kac/docs && npm run build --workspace @kac/docs",
     "docs:check": "npm run api:openapi:check && npm run docs:build",
     "dev:services": "concurrently --kill-others -n API,WEB,WORKER,DOCS -c blue,green,yellow,magenta \"npm run api:dev\" \"npm run web:dev\" \"npm run worker:dev\" \"npm run serve --workspace @kac/docs\"",
-    "dev:all": "node scripts/dev-all.mjs"
+    "dev:all": "node scripts/dev-all.mjs",
+    "ui:capture": "node scripts/capture-ui.mjs"
   },
   "devDependencies": {
-    "concurrently": "^9.2.1"
+    "concurrently": "^9.2.1",
+    "playwright": "^1.65.1"
   },
   "dependencies": {
     "expo-notifications": "~58.1.9"

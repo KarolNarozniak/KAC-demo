@@ -4,4 +4,5 @@ export type DateFieldProps = {
   onChange: (value: string) => void;
   /** Podświetlenie pola wymagającego poprawy (np. w podglądzie importu). */
   invalid?: boolean;
+  disabled?: boolean;
 };

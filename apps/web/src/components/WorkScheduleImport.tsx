@@ -1,3 +1,5 @@
+import DialogHeading from './DialogHeading';
+import ImportReaderChoice from './ImportReaderChoice';
 // Import grafiku pracy ze zdjęcia lub pliku (historyjka S23KC2S1P2-44)
 // z kontrolą rozpoznanych danych przed zapisem (historyjka S23KC2S1P2-32).
 //
@@ -298,28 +300,17 @@ export default function WorkScheduleImport({ visible, onClose, onImported, onCon
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={() => void close()}>
       <View style={{ flex: 1, backgroundColor: palette.scrim, alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-        <ScrollView style={{ backgroundColor: palette.surface, borderRadius: 18, width: '100%', maxWidth: 640, maxHeight: '92%' }} contentContainerStyle={{ padding: 21 }}>
-          <View style={[styles.row, { justifyContent: 'space-between' }]}>
-            <Text style={[styles.heading, { flex: 1 }]}>Szybki import — grafik pracy</Text>
-            <Button title="Zamknij" accessibilityLabel="Zamknij import" disabled={phase === 'saving'} onPress={() => void close()} />
-          </View>
-          {onContinueInChat&&<Text style={styles.muted}>Przycisk „Dokończ w czacie” przekaże zdjęcie i poprawki do Azure AI.</Text>}
-          <Text style={styles.subtitle}>Zdjęcie JPG/PNG albo plik PDF, maks. 5 MB i 10 stron. Na telefonie możesz od razu zrobić zdjęcie grafiku.</Text>
-          <Text style={[styles.muted, { marginTop: 6 }]}>Najlepiej odczytywany jest grafik w formie listy lub tabeli: data, imię i nazwisko, godziny (np. 16:00-20:00). Zdjęcie rób prosto i bez cieni. Każdą odczytaną zmianę sprawdzisz przed zapisem.</Text>
+        <ScrollView style={{ backgroundColor: palette.surface, borderRadius: 18, width: '100%', maxWidth: 600, maxHeight: '92%', flexGrow: 0 }} contentContainerStyle={{ padding: 24, gap: 8 }}>
+          <DialogHeading title="Import grafiku pracy" disabled={phase === 'saving'} onClose={() => void close()} />
+          <Text style={styles.subtitle}>Wybierz grafik pracy: PDF lub zdjęcie JPG/PNG. Maksymalnie 5 MB i 10 stron PDF.</Text>
+          <Text style={[styles.muted, { marginTop: 6 }]}>Zadbaj o czytelne daty, nazwiska i godziny. Zdjęcie zrób prosto, bez cieni.</Text>
 
           {phase === 'idle' && (
             <View style={{ marginTop: 14 }}>
-            <View style={[styles.row, { flexWrap: 'wrap' }]}>
-              <Text style={styles.label}>ODCZYT PDF / ZDJĘCIA</Text>
-              {choice(readerMode === 'ai' ? '☑ Azure AI Foundry' : '☐ Azure AI Foundry', readerMode === 'ai', () => setReaderMode('ai'))}
-              {choice(readerMode === 'local' ? '☑ Lokalny odczyt' : '☐ Lokalny odczyt', readerMode === 'local', () => setReaderMode('local'))}
-            </View>
-            <Text style={[styles.muted, { marginTop: 5, color: readerMode === 'ai' ? palette.amber : palette.muted }]}>{readerMode === 'ai'
-              ? 'Po kliknięciu „Wczytaj grafik” cały plik zostanie wysłany do Azure AI Foundry w celu odczytu. Oryginał nie jest zapisywany w bazie; żądanie można anulować podczas odczytu.'
-              : 'Lokalny odczyt odbywa się na serwerze API. Potwierdzenie zmian pozostaje wymagane.'}</Text>
+            <ImportReaderChoice value={readerMode} onChange={setReaderMode} />
             <View style={[styles.row, { flexWrap: 'wrap', marginTop: 10 }]}>
               <Button title="Zrób zdjęcie" onPress={() => void chooseFile('camera')} />
-              <Button title={file ? 'Zmień plik' : 'Wybierz zdjęcie lub plik'} onPress={() => void chooseFile('file')} />
+              <Button title={file ? 'Zmień plik' : 'Wybierz zdjęcie lub plik'} primary onPress={() => void chooseFile('file')} />
               {file && <Text style={styles.body}>{file.name} · {(file.size / 1024).toFixed(0)} KB</Text>}
               {file && <Button title="Wczytaj grafik" primary onPress={() => void startImport()} />}
             </View>

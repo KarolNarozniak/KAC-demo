@@ -1,3 +1,5 @@
+import DialogHeading from './DialogHeading';
+import ImportReaderChoice from './ImportReaderChoice';
 import React, { useEffect, useRef, useState } from 'react';
 import { Modal, ScrollView, Text, View } from 'react-native';
 import { Button, Field, useTheme } from './ui';
@@ -138,17 +140,10 @@ export default function ClassScheduleImport({ visible, onClose, onImported, onCo
 
   return <Modal visible={visible} transparent animationType="fade" onRequestClose={() => { if (!busy) void close(); }}>
     <View style={{ flex: 1, backgroundColor: palette.scrim, alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <ScrollView style={{ backgroundColor: palette.surface, borderRadius: 18, width: '100%', maxWidth: 760, maxHeight: '92%' }} contentContainerStyle={{ padding: 20 }}>
-        <Text style={styles.heading}>Szybki import — plan zajęć</Text>
-        {onContinueInChat&&<Text style={styles.muted}>Przycisk „Dokończ w czacie” przekaże zdjęcie i poprawki do Azure AI.</Text>}
-        <Text style={styles.subtitle}>Plik ICS (np. eksport z USOS, Google Calendar, Outlooka), PDF planu WAT (do 10 stron) albo zrzut ekranu Miniatura WAT w PNG/JPG. Maks. 5 MB.</Text>
-        {!session && <View style={[styles.row, { flexWrap: 'wrap', marginVertical: 8 }]}>
-          <Text style={styles.label}>ODCZYT PDF / ZDJĘCIA</Text>
-          <Button title={readerMode === 'ai' ? '☑ Azure AI Foundry' : '☐ Azure AI Foundry'} primary={readerMode === 'ai'} disabled={busy} onPress={() => setReaderMode('ai')} />
-          <Button title={readerMode === 'local' ? '☑ Lokalny odczyt' : '☐ Lokalny odczyt'} primary={readerMode === 'local'} disabled={busy} onPress={() => setReaderMode('local')} />
-          <Text style={styles.muted}>ICS jest zawsze odczytywany lokalnie. AI tworzy tylko podgląd — zapis wymaga osobnego zatwierdzenia.</Text>
-          {readerMode === 'ai' && <Text style={[styles.muted, { color: palette.amber }]}>Po wybraniu PDF, PNG lub JPG jego zawartość zostanie wysłana do Azure AI Foundry w celu odczytu. Oryginał nie jest zapisywany w bazie. W trakcie odczytu możesz przerwać żądanie.</Text>}
-        </View>}
+      <ScrollView style={{ backgroundColor: palette.surface, borderRadius: 18, width: '100%', maxWidth: 600, maxHeight: '92%', flexGrow: 0 }} contentContainerStyle={{ padding: 24, gap: 10 }}>
+        <DialogHeading title="Import planu zajęć" disabled={busy} onClose={() => void close()} />
+        <Text style={styles.subtitle}>Wybierz plan zajęć: ICS, PDF lub zdjęcie JPG/PNG. Maksymalnie 5 MB i 10 stron PDF. Pliki ICS odczytujemy lokalnie.</Text>
+        {!session && <ImportReaderChoice value={readerMode} onChange={setReaderMode} disabled={busy} />}
         {!!fileName && <Text style={styles.body}>{fileName}</Text>}
         {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
         {(Boolean(error)||preview.some(item=>item.status==='error'||item.duplicateOfEvents.length||item.duplicateOfRows.length)||rows.some(row=>row.reviewRequired)) && !busy && pickedFile && /\.(png|jpe?g|pdf)$/i.test(pickedFile.name) && onContinueInChat && <Button title="Dokończ w czacie" accessibilityLabel="Dokończ w czacie — przekaż zdjęcie i dane do Azure AI" primary onPress={()=>{
@@ -217,7 +212,7 @@ export default function ClassScheduleImport({ visible, onClose, onImported, onCo
           <Button title={`Zatwierdź import (${chosen.length})`} primary disabled={busy || checking || !validPreview || undecided} onPress={() => void save()} />
         </>}
         {session ? <Button title="Anuluj import" disabled={busy} onPress={() => void cancel()} />
-          : <Button title="Zamknij" disabled={busy} onPress={() => void close()} />}
+          : null}
       </ScrollView>
     </View>
   </Modal>;
