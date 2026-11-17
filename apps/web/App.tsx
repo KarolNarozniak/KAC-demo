@@ -55,7 +55,7 @@ function CalendarApp() {
   }, []);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || !window.location?.href) return;
     const url = new URL(window.location.href);
     const eventId = url.searchParams.get('notificationEventId');
     const eventStart = url.searchParams.get('notificationEventStart');
