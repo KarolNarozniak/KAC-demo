@@ -3,6 +3,7 @@
 // Jednorazowy import (googleImportApi.ts, S23KC2S1P2-27) ma osobne endpointy.
 
 import { apiBaseUrl } from './importApi';
+import type { PublicationPreview, PublicationResult, PublicationSimulation } from '../domain/googlePublication';
 import {
   apiErrorMessage, type AttemptPurpose, type GoogleAccountView, type GoogleIntegrationStatus, type IntegrationAttempt, type IntegrationCalendar,
   type CalendarSelection, type DisconnectResult, type SimulatedFailure, type SyncAttempt, type SyncStatus,
@@ -58,3 +59,10 @@ export const disconnectGoogleIntegration = () => call<DisconnectResult>('DELETE'
 export const getGoogleCalendarSelection = () => call<CalendarSelection>('GET', '/api/v1/integrations/google/calendar-selection');
 export const saveGoogleCalendarSelection = (version: number, sourceCalendarIds: string[], publicationTargetCalendarId: string | null) =>
   call<CalendarSelection>('PUT', '/api/v1/integrations/google/calendar-selection', { version, sourceCalendarIds, publicationTargetCalendarId });
+
+/** Symulowana publikacja grafiku (S23KC2S1P2-30, G07): podgląd bez zmian i potwierdzona publikacja. Nic nie trafia do Google. */
+export const previewGooglePublication = (weekStart: string, calendarId?: string) =>
+  call<PublicationPreview>('GET', `/api/v1/integrations/google/publications/${encodeURIComponent(weekStart)}/preview${calendarId ? `?calendarId=${encodeURIComponent(calendarId)}` : ''}`);
+export const publishGoogleSchedule = (weekStart: string, expectedVersion: number, calendarId: string, simulate?: PublicationSimulation) =>
+  call<PublicationResult>('POST', `/api/v1/integrations/google/publications/${encodeURIComponent(weekStart)}`,
+    { expectedVersion, calendarId, ...(simulate ? { simulate } : {}) }, 75000);

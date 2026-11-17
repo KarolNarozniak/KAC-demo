@@ -43,6 +43,7 @@ export function classifySyncError(code: string | null | undefined): SyncErrorCla
     case 'network_error': return 'network';
     case 'reconnect_required': return 'reconnect';
     case 'insufficient_permissions':
+    case 'calendar_not_writable':
     case 'calendar_not_found': return 'permissions';
     case 'rate_limited': return 'rate_limit';
     case 'google_unavailable':
@@ -57,15 +58,16 @@ const MESSAGES: Record<string, string> = {
   reconnect_required: 'Google nie przyjmuje zapisanego dostępu – trzeba ponownie połączyć konto.',
   insufficient_permissions: 'Przyznany dostęp nie pozwala odczytać kalendarzy.',
   calendar_not_found: 'Kalendarz nie istnieje albo konto straciło do niego dostęp.',
+  calendar_not_writable: 'Konto nie ma prawa dodawać wydarzeń do wybranego kalendarza.',
   rate_limited: 'Google chwilowo ogranicza liczbę zapytań.',
   google_unavailable: 'Google zwrócił błąd serwera.',
   google_error: 'Google odrzucił zapytanie.',
   api_not_enabled: 'W projekcie Google Cloud nie jest włączone Google Calendar API.',
   sync_interrupted: 'Próba została przerwana (np. restart serwera).',
 };
-const messageFor = (code: string) => MESSAGES[code] ?? 'Synchronizacja nie powiodła się.';
+export const messageFor = (code: string) => MESSAGES[code] ?? 'Synchronizacja nie powiodła się.';
 
-const view = ({ accountId: _accountId, ...attempt }: SyncAttemptRecord): SyncAttemptView => ({
+export const attemptView = ({ accountId: _accountId, ...attempt }: SyncAttemptRecord): SyncAttemptView => ({
   ...attempt,
   errorClass: attempt.status === 'error' ? classifySyncError(attempt.errorCode) : null,
   // Ponowienie ma sens, gdy błąd nie wymaga nowej zgody; przy „Połącz ponownie” zwykłe ponowienie nic nie da.
@@ -95,8 +97,9 @@ export class GoogleSyncService {
     const account = await this.repository.getActiveAccount(scope.userId);
     if (!account) return { connection: 'not_connected', enabled: false, sourcesSelected: 0, state: 'never', lastAttempt: null, lastSuccess: { read: null, publish: null }, history: [] };
     await this.repository.failStaleSyncAttempts(account.accountId);
-    const history = (await this.repository.listSyncAttempts(account.accountId)).map(view);
-    const last = history[0] ?? null;
+    const history = (await this.repository.listSyncAttempts(account.accountId)).map(attemptView);
+    // Stan sekcji synchronizacji wynika z odczytów; próby publikacji (G07) są w tej samej historii, ale mają własny wynik w widoku grafiku.
+    const last = history.find((attempt) => attempt.direction === 'read') ?? null;
     return {
       connection: account.status, enabled: account.syncEnabled, sourcesSelected: await this.repository.countSourceCalendars(account.accountId),
       state: last ? (last.status === 'running' ? 'running' : last.status) : 'never',
@@ -120,7 +123,7 @@ export class GoogleSyncService {
     if (!started) throw new SyncFlowError('sync_in_progress', 409);
 
     const finished = await this.execute(started, account, options.simulate);
-    return { attempt: view(finished), status: await this.status(scope) };
+    return { attempt: attemptView(finished), status: await this.status(scope) };
   }
 
   private async execute(attempt: SyncAttemptRecord, account: GoogleAccountRecord, simulate?: SimulatedFailure): Promise<SyncAttemptRecord> {

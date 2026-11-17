@@ -103,6 +103,12 @@ export const integrationErrors: Record<string, [string, string]> = {
   api_not_enabled: ['Calendar API wyłączone', 'W projekcie Google Cloud nie jest włączone Google Calendar API – to błąd konfiguracji, nie brak zgody użytkownika.'],
   sync_disabled: ['Synchronizacja wyłączona', `Użytkownik odmówił zgody przy ponownym logowaniu. Trzeba połączyć konto ponownie. ${keep}`],
   sync_in_progress: ['Synchronizacja trwa', 'Inna próba synchronizacji tego konta jeszcze trwa. Poczekaj na jej wynik.'],
+  schedule_not_found: ['Brak grafiku', 'W tym tygodniu nie ma grafiku do opublikowania.'],
+  schedule_version_conflict: ['Grafik się zmienił', 'Grafik zmienił się po wyświetleniu podglądu. Nic nie opublikowano – otwórz podgląd ponownie.'],
+  schedule_not_accepted: ['Grafik niezaakceptowany', 'Opublikować można tylko zaakceptowany grafik.'],
+  schedule_empty: ['Pusty grafik', 'Zaakceptowany grafik nie ma żadnej zmiany do opublikowania.'],
+  no_publication_target: ['Brak kalendarza publikacji', 'Wybierz kalendarz publikacji w ustawieniach integracji albo podaj calendarId.'],
+  publication_in_progress: ['Publikacja trwa', 'Inna publikacja dla tego konta jeszcze trwa. Poczekaj na jej wynik.'],
   no_calendars_selected: ['Nie wybrano kalendarzy', 'Synchronizacja dotyczy wybranych kalendarzy – wybierz co najmniej jeden w ustawieniach integracji. Konto zostaje połączone.'],
   selection_conflict: ['Wybór zmienił się w międzyczasie', 'Ktoś zapisał wybór w innym oknie (inna wersja). Nic nie zostało zmienione – wczytaj aktualny wybór.'],
   unknown_calendar: ['Nieznany kalendarz', 'Kalendarz nie należy do połączonego konta Google. Nic nie zostało zmienione.'],
@@ -176,4 +182,35 @@ export const selectionExamples: NamedExamples = {
 export const selectionBodyExamples: NamedExamples = {
   save: { summary: 'Zapis wyboru', value: { version: 2, sourceCalendarIds: ['primary', 'kolo@group.calendar.google.com'], publicationTargetCalendarId: 'praca@group.calendar.google.com' } },
   none: { summary: 'Bez kalendarza publikacji', value: { version: 2, sourceCalendarIds: ['primary'], publicationTargetCalendarId: null } },
+};
+
+// --- Symulowana publikacja (G07) ---
+const publicationItems = [
+  { shiftId: 'z-1', eventId: 'e-1', eventVersion: 1, title: 'Zmiana pracy', start: '2026-11-23T14:00:00.000Z', end: '2026-11-23T19:00:00.000Z', action: 'create', publishedAt: null },
+  { shiftId: 'z-2', eventId: 'e-2', eventVersion: 2, title: 'Zmiana pracy', start: '2026-11-25T08:00:00.000Z', end: '2026-11-25T13:00:00.000Z', action: 'update', publishedAt: '2026-11-17T09:00:00.000Z' },
+  { shiftId: 'z-3', eventId: 'e-3', eventVersion: 1, title: 'Zmiana pracy', start: '2026-11-27T10:00:00.000Z', end: '2026-11-27T16:00:00.000Z', action: 'unchanged', publishedAt: '2026-11-17T09:00:00.000Z' },
+];
+const publicationPreview = {
+  simulated: true, weekStart: '2026-11-23', scheduleId: 'g-1', scheduleVersion: 3, target: { id: 'praca@group.calendar.google.com', name: 'Grafik pracy' },
+  targets: [{ id: 'primary', name: 'Student', primary: true }, { id: 'praca@group.calendar.google.com', name: 'Grafik pracy', primary: false }],
+  items: publicationItems, summary: { create: 1, update: 1, unchanged: 1 },
+};
+export const publicationPreviewExamples: NamedExamples = {
+  preview: { summary: 'Podgląd', description: 'Jedna zmiana do utworzenia, jedna do aktualizacji, jedna bez zmian.', value: publicationPreview },
+};
+const publishAttempt = (status: string, extra: Record<string, unknown>) => syncAttempt(status, { direction: 'publish', scope: 'schedule:2026-11-23', operation: 'Publikacja grafiku (symulacja)', ...extra });
+export const publicationResultExamples: NamedExamples = {
+  success: { summary: 'Symulacja udana', value: { simulated: true,
+    attempt: publishAttempt('success', { changes: 2, message: 'Symulacja: opublikowano 2 z 2 zmian (bez zmian: 1). Nic nie trafiło do Google.' }),
+    items: publicationItems.map((item) => ({ ...item, result: item.action === 'unchanged' ? 'unchanged' : 'published' })),
+    preview: { ...publicationPreview, items: publicationItems.map((item) => ({ ...item, action: 'unchanged', publishedAt: '2026-11-17T10:00:00.000Z' })), summary: { create: 0, update: 0, unchanged: 3 } } } },
+  partial: { summary: 'Symulacja częściowa', description: 'Pierwsza pozycja przeszła, druga nie. Ponowienie opublikuje tylko brakującą.', value: { simulated: true,
+    attempt: publishAttempt('partial', { changes: 1, errorCode: 'google_error', errorClass: 'server', retryable: true, message: 'Symulacja częściowa: opublikowano 1 z 2 zmian. Google odrzucił zapytanie.' }),
+    items: [{ ...publicationItems[0], result: 'published' }, { ...publicationItems[1], result: 'failed' }, { ...publicationItems[2], result: 'unchanged' }],
+    preview: { ...publicationPreview, items: [{ ...publicationItems[0], action: 'unchanged', publishedAt: '2026-11-17T10:00:00.000Z' }, publicationItems[1], publicationItems[2]], summary: { create: 0, update: 1, unchanged: 2 } } } },
+};
+export const publicationBodyExamples: NamedExamples = {
+  publish: { summary: 'Publikacja do kalendarza z ustawień', value: { expectedVersion: 3 } },
+  other: { summary: 'Inny kalendarz z prawem zapisu', value: { expectedVersion: 3, calendarId: 'primary' } },
+  simulate: { summary: 'Wymuszony błąd', description: 'Pokazuje przebieg błędu – wynik nie jest sukcesem.', value: { expectedVersion: 3, simulate: 'network' } },
 };

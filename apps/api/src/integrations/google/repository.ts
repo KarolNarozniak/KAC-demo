@@ -22,6 +22,8 @@ export type StoredCalendar = {
   available: boolean; source: boolean;
 };
 export type StoredSelection = { version: number; publicationTargetRowId: string | null; calendars: StoredCalendar[] };
+export type PublicationShift = { shiftId: string; eventId: string; eventVersion: number; title: string; start: string; end: string };
+export type PublicationSchedule = { scheduleId: string; version: number; accepted: boolean; shifts: PublicationShift[] };
 export type SyncDirection = 'read' | 'publish';
 export type SyncAttemptStatus = 'running' | 'success' | 'partial' | 'error';
 export type SyncAttemptRecord = {
@@ -393,5 +395,51 @@ export class PostgresGoogleIntegrationRepository {
   async countSourceCalendars(accountId: string): Promise<number> {
     const result = await this.pool.query(`select count(*)::int as n from t_kalendarze_google where id_konta = $1 and wybrany and uprawnienia <> 'Brak dostępu'`, [accountId]);
     return result.rows[0].n;
+  }
+
+  // --- Publikacja grafiku (G07) ---
+
+  /**
+   * Najnowsza nieodrzucona wersja grafiku tygodnia w kalendarzu właściciela i jej zatwierdzone zmiany z wydarzeniami
+   * (lokalne ID i wersja wydarzenia). null – brak grafiku.
+   */
+  async getPublicationSchedule(calendarId: string, weekStart: string): Promise<PublicationSchedule | null> {
+    const schedule = await this.pool.query(`select id_grafiku, version, status, approved_at from t_grafiki
+      where generator_version <> 'work-profile-v1' and id_kalendarza = $1 and tydzien_od = $2::date and rejected_at is null
+      order by version desc limit 1`, [calendarId, weekStart]);
+    const row = schedule.rows[0];
+    if (!row) return null;
+    const shifts = await this.pool.query(`select z.id_zmiany, z.id_wydarzenia, e.event_version, e.tytul, e.rozpoczecie, e.zakonczenie
+      from t_zmiany_pracy z join t_wydarzenia e on e.id_wydarzenia = z.id_wydarzenia
+      where z.id_grafiku = $1 and e.status = 'Aktywne' order by e.rozpoczecie, z.id_zmiany`, [row.id_grafiku]);
+    return {
+      scheduleId: String(row.id_grafiku), version: Number(row.version), accepted: row.status === 'accepted' && row.approved_at !== null,
+      shifts: shifts.rows.map((shift) => ({ shiftId: String(shift.id_zmiany), eventId: String(shift.id_wydarzenia), eventVersion: Number(shift.event_version),
+        title: shift.tytul, start: new Date(shift.rozpoczecie).toISOString(), end: new Date(shift.zakonczenie).toISOString() })),
+    };
+  }
+
+  /** Udane publikacje zmian do kalendarza Google (po ID wiersza t_kalendarze_google). */
+  async listPublished(targetRowId: string, shiftIds: string[]): Promise<Map<string, { eventVersion: number; publishedAt: string; mode: 'symulacja' | 'google' }>> {
+    const result = await this.pool.query(`select id_zmiany, wersja_wydarzenia, opublikowano, tryb from t_publikacje
+      where id_kal_google = $1 and id_zmiany = any($2::text[]) and status = 'Opublikowano'`, [targetRowId, shiftIds]);
+    return new Map(result.rows.map((row) => [String(row.id_zmiany),
+      { eventVersion: Number(row.wersja_wydarzenia), publishedAt: new Date(row.opublikowano).toISOString(), mode: row.tryb }]));
+  }
+
+  /**
+   * Zapis pozycji publikacji jednej zmiany. Wiersz jest jeden na zmianę i kalendarz – ponowienie albo aktualizacja
+   * go nadpisuje, więc nie powstają duplikaty. Tryb „symulacja” nigdy nie ma zewnętrznego ID (pilnuje tego też ograniczenie w bazie).
+   */
+  async savePublication(input: { userId: string; accountId: string; targetRowId: string; scheduleId: string; shiftId: string; eventId: string;
+    eventVersion: number; syncId: string; operation: 'Utworzenie' | 'Aktualizacja'; mode: 'symulacja' | 'google'; externalId: string | null }): Promise<void> {
+    await this.pool.query(`insert into t_publikacje (id_grafiku, id_kal_google, id_sync, status, opublikowano, zewnetrzne_id, operacja,
+        id_uzytkownika, id_konta, id_zmiany, id_wydarzenia, wersja_wydarzenia, tryb, zaktualizowano)
+      values ($1, $2, $3, 'Opublikowano', now(), $4, $5, $6, $7, $8, $9, $10, $11, now())
+      on conflict (id_zmiany, id_kal_google) where id_zmiany is not null do update set id_grafiku = excluded.id_grafiku, id_sync = excluded.id_sync,
+        status = 'Opublikowano', opublikowano = now(), zewnetrzne_id = excluded.zewnetrzne_id, operacja = excluded.operacja, id_konta = excluded.id_konta,
+        id_wydarzenia = excluded.id_wydarzenia, wersja_wydarzenia = excluded.wersja_wydarzenia, tryb = excluded.tryb, zaktualizowano = now()`,
+    [input.scheduleId, input.targetRowId, input.syncId, input.mode === 'symulacja' ? null : input.externalId, input.operation, input.userId,
+      input.accountId, input.shiftId, input.eventId, input.eventVersion, input.mode]);
   }
 }

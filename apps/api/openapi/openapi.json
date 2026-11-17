@@ -19545,6 +19545,1391 @@
         }
       }
     },
+    "/api/v1/integrations/google/publications/{weekStart}/preview": {
+      "get": {
+        "operationId": "previewGooglePublication",
+        "summary": "Preview simulated schedule publication",
+        "tags": [
+          "Google integration"
+        ],
+        "description": "Lists the shifts of the accepted schedule for the week that a publication would create or update in the chosen calendar (default: the publication calendar from the calendar selection). Changes nothing. Publication is currently a simulation: nothing is sent to Google.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "in": "query",
+            "name": "calendarId",
+            "required": false,
+            "description": "Inny kalendarz z prawem zapisu niż domyślny."
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "in": "path",
+            "name": "weekStart",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Podgląd publikacji.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "simulated",
+                    "weekStart",
+                    "scheduleId",
+                    "scheduleVersion",
+                    "target",
+                    "targets",
+                    "items",
+                    "summary"
+                  ],
+                  "properties": {
+                    "simulated": {
+                      "type": "boolean",
+                      "description": "true – publikacja demonstracyjna: nic nie trafia do Google."
+                    },
+                    "weekStart": {
+                      "type": "string",
+                      "format": "date"
+                    },
+                    "scheduleId": {
+                      "type": "string"
+                    },
+                    "scheduleVersion": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "target": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "id",
+                        "name"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "targets": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "name",
+                          "primary"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "primary": {
+                            "type": "boolean"
+                          }
+                        }
+                      }
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "shiftId",
+                          "eventId",
+                          "eventVersion",
+                          "title",
+                          "start",
+                          "end",
+                          "action",
+                          "publishedAt"
+                        ],
+                        "properties": {
+                          "shiftId": {
+                            "type": "string"
+                          },
+                          "eventId": {
+                            "type": "string",
+                            "description": "Lokalne wydarzenie KAC utworzone przy zatwierdzeniu grafiku."
+                          },
+                          "eventVersion": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "start": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "end": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "action": {
+                            "type": "string",
+                            "enum": [
+                              "create",
+                              "update",
+                              "unchanged"
+                            ],
+                            "description": "create – jeszcze nie publikowano; update – wydarzenie zmieniło się od publikacji; unchanged – pominięte."
+                          },
+                          "publishedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    "summary": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "create",
+                        "update",
+                        "unchanged"
+                      ],
+                      "properties": {
+                        "create": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "update": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "unchanged": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      }
+                    }
+                  },
+                  "description": "Podgląd publikacji."
+                },
+                "examples": {
+                  "preview": {
+                    "summary": "Podgląd",
+                    "description": "Jedna zmiana do utworzenia, jedna do aktualizacji, jedna bez zmian.",
+                    "value": {
+                      "simulated": true,
+                      "weekStart": "2026-11-23",
+                      "scheduleId": "g-1",
+                      "scheduleVersion": 3,
+                      "target": {
+                        "id": "praca@group.calendar.google.com",
+                        "name": "Grafik pracy"
+                      },
+                      "targets": [
+                        {
+                          "id": "primary",
+                          "name": "Student",
+                          "primary": true
+                        },
+                        {
+                          "id": "praca@group.calendar.google.com",
+                          "name": "Grafik pracy",
+                          "primary": false
+                        }
+                      ],
+                      "items": [
+                        {
+                          "shiftId": "z-1",
+                          "eventId": "e-1",
+                          "eventVersion": 1,
+                          "title": "Zmiana pracy",
+                          "start": "2026-11-23T14:00:00.000Z",
+                          "end": "2026-11-23T19:00:00.000Z",
+                          "action": "create",
+                          "publishedAt": null
+                        },
+                        {
+                          "shiftId": "z-2",
+                          "eventId": "e-2",
+                          "eventVersion": 2,
+                          "title": "Zmiana pracy",
+                          "start": "2026-11-25T08:00:00.000Z",
+                          "end": "2026-11-25T13:00:00.000Z",
+                          "action": "update",
+                          "publishedAt": "2026-11-17T09:00:00.000Z"
+                        },
+                        {
+                          "shiftId": "z-3",
+                          "eventId": "e-3",
+                          "eventVersion": 1,
+                          "title": "Zmiana pracy",
+                          "start": "2026-11-27T10:00:00.000Z",
+                          "end": "2026-11-27T16:00:00.000Z",
+                          "action": "unchanged",
+                          "publishedAt": "2026-11-17T09:00:00.000Z"
+                        }
+                      ],
+                      "summary": {
+                        "create": 1,
+                        "update": 1,
+                        "unchanged": 1
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Kalendarz nie należy do połączonego konta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Kalendarz nie należy do połączonego konta.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unknown_calendar"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unknown_calendar": {
+                    "summary": "Nieznany kalendarz",
+                    "description": "Kalendarz nie należy do połączonego konta Google. Nic nie zostało zmienione.",
+                    "value": {
+                      "error": "unknown_calendar"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Brak konta albo grafiku.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak konta albo grafiku.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "not_connected",
+                        "schedule_not_found"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "not_connected": {
+                    "summary": "Brak połączonego konta",
+                    "description": "Najpierw połącz konto Google.",
+                    "value": {
+                      "error": "not_connected"
+                    }
+                  },
+                  "schedule_not_found": {
+                    "summary": "Brak grafiku",
+                    "description": "W tym tygodniu nie ma grafiku do opublikowania.",
+                    "value": {
+                      "error": "schedule_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Grafiku nie można opublikować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Grafiku nie można opublikować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "schedule_not_accepted",
+                        "schedule_empty",
+                        "no_publication_target",
+                        "calendar_unavailable",
+                        "reconnect_required"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "schedule_not_accepted": {
+                    "summary": "Grafik niezaakceptowany",
+                    "description": "Opublikować można tylko zaakceptowany grafik.",
+                    "value": {
+                      "error": "schedule_not_accepted"
+                    }
+                  },
+                  "schedule_empty": {
+                    "summary": "Pusty grafik",
+                    "description": "Zaakceptowany grafik nie ma żadnej zmiany do opublikowania.",
+                    "value": {
+                      "error": "schedule_empty"
+                    }
+                  },
+                  "no_publication_target": {
+                    "summary": "Brak kalendarza publikacji",
+                    "description": "Wybierz kalendarz publikacji w ustawieniach integracji albo podaj calendarId.",
+                    "value": {
+                      "error": "no_publication_target"
+                    }
+                  },
+                  "calendar_unavailable": {
+                    "summary": "Kalendarz niedostępny",
+                    "description": "Konto Google straciło dostęp do tego kalendarza albo kalendarz usunięto.",
+                    "value": {
+                      "error": "calendar_unavailable"
+                    }
+                  },
+                  "reconnect_required": {
+                    "summary": "Wymagane ponowne logowanie",
+                    "description": "Google nie przyjął zapisanego dostępu (wygasł albo cofnięto zgodę). Dane w KAC są bez zmian.",
+                    "value": {
+                      "error": "reconnect_required"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Kalendarz bez prawa zapisu.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Kalendarz bez prawa zapisu.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "target_not_writable",
+                        "write_access_missing"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "target_not_writable": {
+                    "summary": "Brak prawa zapisu",
+                    "description": "Kalendarz publikacji musi pozwalać na dodawanie wydarzeń (właściciel albo odczyt i zapis).",
+                    "value": {
+                      "error": "target_not_writable"
+                    }
+                  },
+                  "write_access_missing": {
+                    "summary": "Brak zgody na zapis",
+                    "description": "Zgoda Google nie obejmuje dodawania wydarzeń. Połącz konto ponownie i zaznacz dostęp do wydarzeń.",
+                    "value": {
+                      "error": "write_access_missing"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Integracja niedostępna.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Integracja niedostępna.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "integration_not_configured"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "integration_not_configured": {
+                    "summary": "Serwer bez bazy danych",
+                    "description": "API działa bez bazy danych, więc nie może zapisać połączenia z Google.",
+                    "value": {
+                      "error": "integration_not_configured"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/integrations/google/publications/{weekStart}": {
+      "post": {
+        "operationId": "publishGoogleSchedule",
+        "summary": "Publish accepted schedule (simulation)",
+        "tags": [
+          "Google integration"
+        ],
+        "description": "Confirmed publication of the accepted schedule after the preview. Currently a simulation: nothing is sent to Google and no Google event IDs are created; the result is marked simulated. Each shift has one publication record per calendar, so a retry after an error publishes only what is missing. The attempt is recorded in the sync registry with direction publish. A Google-side error is the attempt result (200), not an HTTP error.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "expectedVersion"
+                ],
+                "properties": {
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Wersja grafiku z podglądu."
+                  },
+                  "calendarId": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1024
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "simulate": {
+                    "type": "string",
+                    "enum": [
+                      "network",
+                      "flaky",
+                      "auth",
+                      "server",
+                      "rate_limit",
+                      "partial",
+                      "permissions"
+                    ],
+                    "description": "Wymuszony wynik symulacji (błąd, wynik częściowy)."
+                  }
+                }
+              },
+              "examples": {
+                "publish": {
+                  "summary": "Publikacja do kalendarza z ustawień",
+                  "value": {
+                    "expectedVersion": 3
+                  }
+                },
+                "other": {
+                  "summary": "Inny kalendarz z prawem zapisu",
+                  "value": {
+                    "expectedVersion": 3,
+                    "calendarId": "primary"
+                  }
+                },
+                "simulate": {
+                  "summary": "Wymuszony błąd",
+                  "description": "Pokazuje przebieg błędu – wynik nie jest sukcesem.",
+                  "value": {
+                    "expectedVersion": 3,
+                    "simulate": "network"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "in": "path",
+            "name": "weekStart",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Wynik próby publikacji (symulacja).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "simulated",
+                    "attempt",
+                    "items",
+                    "preview"
+                  ],
+                  "properties": {
+                    "simulated": {
+                      "type": "boolean"
+                    },
+                    "attempt": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "id",
+                        "direction",
+                        "scope",
+                        "operation",
+                        "status",
+                        "startedAt",
+                        "finishedAt",
+                        "tries",
+                        "changes",
+                        "errorCode",
+                        "message",
+                        "errorClass",
+                        "retryable"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "direction": {
+                          "type": "string",
+                          "enum": [
+                            "read",
+                            "publish"
+                          ]
+                        },
+                        "scope": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "operation": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "running",
+                            "success",
+                            "partial",
+                            "error"
+                          ]
+                        },
+                        "startedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "finishedAt": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "tries": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "description": "Liczba prób w tym uruchomieniu (pierwsza + automatyczne ponowienia)."
+                        },
+                        "changes": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "errorCode": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "message": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "errorClass": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "network",
+                                "reconnect",
+                                "permissions",
+                                "rate_limit",
+                                "server",
+                                "other"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "retryable": {
+                          "type": "boolean",
+                          "description": "Czy „Spróbuj ponownie” ma sens (false, gdy trzeba połączyć konto ponownie)."
+                        }
+                      }
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "shiftId",
+                          "eventId",
+                          "eventVersion",
+                          "title",
+                          "start",
+                          "end",
+                          "action",
+                          "publishedAt",
+                          "result"
+                        ],
+                        "properties": {
+                          "shiftId": {
+                            "type": "string"
+                          },
+                          "eventId": {
+                            "type": "string",
+                            "description": "Lokalne wydarzenie KAC utworzone przy zatwierdzeniu grafiku."
+                          },
+                          "eventVersion": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "start": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "end": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "action": {
+                            "type": "string",
+                            "enum": [
+                              "create",
+                              "update",
+                              "unchanged"
+                            ],
+                            "description": "create – jeszcze nie publikowano; update – wydarzenie zmieniło się od publikacji; unchanged – pominięte."
+                          },
+                          "publishedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "result": {
+                            "type": "string",
+                            "enum": [
+                              "published",
+                              "unchanged",
+                              "failed",
+                              "skipped"
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    "preview": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "simulated",
+                        "weekStart",
+                        "scheduleId",
+                        "scheduleVersion",
+                        "target",
+                        "targets",
+                        "items",
+                        "summary"
+                      ],
+                      "properties": {
+                        "simulated": {
+                          "type": "boolean",
+                          "description": "true – publikacja demonstracyjna: nic nie trafia do Google."
+                        },
+                        "weekStart": {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        "scheduleId": {
+                          "type": "string"
+                        },
+                        "scheduleVersion": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "target": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "id",
+                            "name"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "targets": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "id",
+                              "name",
+                              "primary"
+                            ],
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "primary": {
+                                "type": "boolean"
+                              }
+                            }
+                          }
+                        },
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "shiftId",
+                              "eventId",
+                              "eventVersion",
+                              "title",
+                              "start",
+                              "end",
+                              "action",
+                              "publishedAt"
+                            ],
+                            "properties": {
+                              "shiftId": {
+                                "type": "string"
+                              },
+                              "eventId": {
+                                "type": "string",
+                                "description": "Lokalne wydarzenie KAC utworzone przy zatwierdzeniu grafiku."
+                              },
+                              "eventVersion": {
+                                "type": "integer",
+                                "minimum": 1
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "start": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "end": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "action": {
+                                "type": "string",
+                                "enum": [
+                                  "create",
+                                  "update",
+                                  "unchanged"
+                                ],
+                                "description": "create – jeszcze nie publikowano; update – wydarzenie zmieniło się od publikacji; unchanged – pominięte."
+                              },
+                              "publishedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "format": "date-time"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              }
+                            }
+                          }
+                        },
+                        "summary": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "create",
+                            "update",
+                            "unchanged"
+                          ],
+                          "properties": {
+                            "create": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "update": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "unchanged": {
+                              "type": "integer",
+                              "minimum": 0
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "description": "Wynik próby publikacji (symulacja)."
+                },
+                "examples": {
+                  "success": {
+                    "summary": "Symulacja udana",
+                    "value": {
+                      "simulated": true,
+                      "attempt": {
+                        "id": "c1d2e3f4-0000-4000-8000-000000000006",
+                        "direction": "publish",
+                        "scope": "schedule:2026-11-23",
+                        "operation": "Publikacja grafiku (symulacja)",
+                        "status": "success",
+                        "startedAt": "2026-11-17T08:30:00.000Z",
+                        "finishedAt": "2026-11-17T08:30:02.000Z",
+                        "tries": 1,
+                        "changes": 2,
+                        "errorCode": null,
+                        "message": "Symulacja: opublikowano 2 z 2 zmian (bez zmian: 1). Nic nie trafiło do Google.",
+                        "errorClass": null,
+                        "retryable": false
+                      },
+                      "items": [
+                        {
+                          "shiftId": "z-1",
+                          "eventId": "e-1",
+                          "eventVersion": 1,
+                          "title": "Zmiana pracy",
+                          "start": "2026-11-23T14:00:00.000Z",
+                          "end": "2026-11-23T19:00:00.000Z",
+                          "action": "create",
+                          "publishedAt": null,
+                          "result": "published"
+                        },
+                        {
+                          "shiftId": "z-2",
+                          "eventId": "e-2",
+                          "eventVersion": 2,
+                          "title": "Zmiana pracy",
+                          "start": "2026-11-25T08:00:00.000Z",
+                          "end": "2026-11-25T13:00:00.000Z",
+                          "action": "update",
+                          "publishedAt": "2026-11-17T09:00:00.000Z",
+                          "result": "published"
+                        },
+                        {
+                          "shiftId": "z-3",
+                          "eventId": "e-3",
+                          "eventVersion": 1,
+                          "title": "Zmiana pracy",
+                          "start": "2026-11-27T10:00:00.000Z",
+                          "end": "2026-11-27T16:00:00.000Z",
+                          "action": "unchanged",
+                          "publishedAt": "2026-11-17T09:00:00.000Z",
+                          "result": "unchanged"
+                        }
+                      ],
+                      "preview": {
+                        "simulated": true,
+                        "weekStart": "2026-11-23",
+                        "scheduleId": "g-1",
+                        "scheduleVersion": 3,
+                        "target": {
+                          "id": "praca@group.calendar.google.com",
+                          "name": "Grafik pracy"
+                        },
+                        "targets": [
+                          {
+                            "id": "primary",
+                            "name": "Student",
+                            "primary": true
+                          },
+                          {
+                            "id": "praca@group.calendar.google.com",
+                            "name": "Grafik pracy",
+                            "primary": false
+                          }
+                        ],
+                        "items": [
+                          {
+                            "shiftId": "z-1",
+                            "eventId": "e-1",
+                            "eventVersion": 1,
+                            "title": "Zmiana pracy",
+                            "start": "2026-11-23T14:00:00.000Z",
+                            "end": "2026-11-23T19:00:00.000Z",
+                            "action": "unchanged",
+                            "publishedAt": "2026-11-17T10:00:00.000Z"
+                          },
+                          {
+                            "shiftId": "z-2",
+                            "eventId": "e-2",
+                            "eventVersion": 2,
+                            "title": "Zmiana pracy",
+                            "start": "2026-11-25T08:00:00.000Z",
+                            "end": "2026-11-25T13:00:00.000Z",
+                            "action": "unchanged",
+                            "publishedAt": "2026-11-17T10:00:00.000Z"
+                          },
+                          {
+                            "shiftId": "z-3",
+                            "eventId": "e-3",
+                            "eventVersion": 1,
+                            "title": "Zmiana pracy",
+                            "start": "2026-11-27T10:00:00.000Z",
+                            "end": "2026-11-27T16:00:00.000Z",
+                            "action": "unchanged",
+                            "publishedAt": "2026-11-17T10:00:00.000Z"
+                          }
+                        ],
+                        "summary": {
+                          "create": 0,
+                          "update": 0,
+                          "unchanged": 3
+                        }
+                      }
+                    }
+                  },
+                  "partial": {
+                    "summary": "Symulacja częściowa",
+                    "description": "Pierwsza pozycja przeszła, druga nie. Ponowienie opublikuje tylko brakującą.",
+                    "value": {
+                      "simulated": true,
+                      "attempt": {
+                        "id": "c1d2e3f4-0000-4000-8000-000000000006",
+                        "direction": "publish",
+                        "scope": "schedule:2026-11-23",
+                        "operation": "Publikacja grafiku (symulacja)",
+                        "status": "partial",
+                        "startedAt": "2026-11-17T08:30:00.000Z",
+                        "finishedAt": "2026-11-17T08:30:02.000Z",
+                        "tries": 1,
+                        "changes": 1,
+                        "errorCode": "google_error",
+                        "message": "Symulacja częściowa: opublikowano 1 z 2 zmian. Google odrzucił zapytanie.",
+                        "errorClass": "server",
+                        "retryable": true
+                      },
+                      "items": [
+                        {
+                          "shiftId": "z-1",
+                          "eventId": "e-1",
+                          "eventVersion": 1,
+                          "title": "Zmiana pracy",
+                          "start": "2026-11-23T14:00:00.000Z",
+                          "end": "2026-11-23T19:00:00.000Z",
+                          "action": "create",
+                          "publishedAt": null,
+                          "result": "published"
+                        },
+                        {
+                          "shiftId": "z-2",
+                          "eventId": "e-2",
+                          "eventVersion": 2,
+                          "title": "Zmiana pracy",
+                          "start": "2026-11-25T08:00:00.000Z",
+                          "end": "2026-11-25T13:00:00.000Z",
+                          "action": "update",
+                          "publishedAt": "2026-11-17T09:00:00.000Z",
+                          "result": "failed"
+                        },
+                        {
+                          "shiftId": "z-3",
+                          "eventId": "e-3",
+                          "eventVersion": 1,
+                          "title": "Zmiana pracy",
+                          "start": "2026-11-27T10:00:00.000Z",
+                          "end": "2026-11-27T16:00:00.000Z",
+                          "action": "unchanged",
+                          "publishedAt": "2026-11-17T09:00:00.000Z",
+                          "result": "unchanged"
+                        }
+                      ],
+                      "preview": {
+                        "simulated": true,
+                        "weekStart": "2026-11-23",
+                        "scheduleId": "g-1",
+                        "scheduleVersion": 3,
+                        "target": {
+                          "id": "praca@group.calendar.google.com",
+                          "name": "Grafik pracy"
+                        },
+                        "targets": [
+                          {
+                            "id": "primary",
+                            "name": "Student",
+                            "primary": true
+                          },
+                          {
+                            "id": "praca@group.calendar.google.com",
+                            "name": "Grafik pracy",
+                            "primary": false
+                          }
+                        ],
+                        "items": [
+                          {
+                            "shiftId": "z-1",
+                            "eventId": "e-1",
+                            "eventVersion": 1,
+                            "title": "Zmiana pracy",
+                            "start": "2026-11-23T14:00:00.000Z",
+                            "end": "2026-11-23T19:00:00.000Z",
+                            "action": "unchanged",
+                            "publishedAt": "2026-11-17T10:00:00.000Z"
+                          },
+                          {
+                            "shiftId": "z-2",
+                            "eventId": "e-2",
+                            "eventVersion": 2,
+                            "title": "Zmiana pracy",
+                            "start": "2026-11-25T08:00:00.000Z",
+                            "end": "2026-11-25T13:00:00.000Z",
+                            "action": "update",
+                            "publishedAt": "2026-11-17T09:00:00.000Z"
+                          },
+                          {
+                            "shiftId": "z-3",
+                            "eventId": "e-3",
+                            "eventVersion": 1,
+                            "title": "Zmiana pracy",
+                            "start": "2026-11-27T10:00:00.000Z",
+                            "end": "2026-11-27T16:00:00.000Z",
+                            "action": "unchanged",
+                            "publishedAt": "2026-11-17T09:00:00.000Z"
+                          }
+                        ],
+                        "summary": {
+                          "create": 0,
+                          "update": 1,
+                          "unchanged": 2
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Kalendarz nie należy do połączonego konta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Kalendarz nie należy do połączonego konta.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unknown_calendar"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unknown_calendar": {
+                    "summary": "Nieznany kalendarz",
+                    "description": "Kalendarz nie należy do połączonego konta Google. Nic nie zostało zmienione.",
+                    "value": {
+                      "error": "unknown_calendar"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Brak konta albo grafiku.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak konta albo grafiku.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "not_connected",
+                        "schedule_not_found"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "not_connected": {
+                    "summary": "Brak połączonego konta",
+                    "description": "Najpierw połącz konto Google.",
+                    "value": {
+                      "error": "not_connected"
+                    }
+                  },
+                  "schedule_not_found": {
+                    "summary": "Brak grafiku",
+                    "description": "W tym tygodniu nie ma grafiku do opublikowania.",
+                    "value": {
+                      "error": "schedule_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Grafiku nie można opublikować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Grafiku nie można opublikować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "schedule_version_conflict",
+                        "schedule_not_accepted",
+                        "schedule_empty",
+                        "no_publication_target",
+                        "calendar_unavailable",
+                        "reconnect_required",
+                        "publication_in_progress"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "schedule_version_conflict": {
+                    "summary": "Grafik się zmienił",
+                    "description": "Grafik zmienił się po wyświetleniu podglądu. Nic nie opublikowano – otwórz podgląd ponownie.",
+                    "value": {
+                      "error": "schedule_version_conflict"
+                    }
+                  },
+                  "schedule_not_accepted": {
+                    "summary": "Grafik niezaakceptowany",
+                    "description": "Opublikować można tylko zaakceptowany grafik.",
+                    "value": {
+                      "error": "schedule_not_accepted"
+                    }
+                  },
+                  "schedule_empty": {
+                    "summary": "Pusty grafik",
+                    "description": "Zaakceptowany grafik nie ma żadnej zmiany do opublikowania.",
+                    "value": {
+                      "error": "schedule_empty"
+                    }
+                  },
+                  "no_publication_target": {
+                    "summary": "Brak kalendarza publikacji",
+                    "description": "Wybierz kalendarz publikacji w ustawieniach integracji albo podaj calendarId.",
+                    "value": {
+                      "error": "no_publication_target"
+                    }
+                  },
+                  "calendar_unavailable": {
+                    "summary": "Kalendarz niedostępny",
+                    "description": "Konto Google straciło dostęp do tego kalendarza albo kalendarz usunięto.",
+                    "value": {
+                      "error": "calendar_unavailable"
+                    }
+                  },
+                  "reconnect_required": {
+                    "summary": "Wymagane ponowne logowanie",
+                    "description": "Google nie przyjął zapisanego dostępu (wygasł albo cofnięto zgodę). Dane w KAC są bez zmian.",
+                    "value": {
+                      "error": "reconnect_required"
+                    }
+                  },
+                  "publication_in_progress": {
+                    "summary": "Publikacja trwa",
+                    "description": "Inna publikacja dla tego konta jeszcze trwa. Poczekaj na jej wynik.",
+                    "value": {
+                      "error": "publication_in_progress"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Kalendarz bez prawa zapisu.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Kalendarz bez prawa zapisu.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "target_not_writable",
+                        "write_access_missing"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "target_not_writable": {
+                    "summary": "Brak prawa zapisu",
+                    "description": "Kalendarz publikacji musi pozwalać na dodawanie wydarzeń (właściciel albo odczyt i zapis).",
+                    "value": {
+                      "error": "target_not_writable"
+                    }
+                  },
+                  "write_access_missing": {
+                    "summary": "Brak zgody na zapis",
+                    "description": "Zgoda Google nie obejmuje dodawania wydarzeń. Połącz konto ponownie i zaznacz dostęp do wydarzeń.",
+                    "value": {
+                      "error": "write_access_missing"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Integracja niedostępna.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Integracja niedostępna.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "integration_not_configured"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "integration_not_configured": {
+                    "summary": "Serwer bez bazy danych",
+                    "description": "API działa bez bazy danych, więc nie może zapisać połączenia z Google.",
+                    "value": {
+                      "error": "integration_not_configured"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/integrations/google/sync": {
       "get": {
         "operationId": "getGoogleSync",

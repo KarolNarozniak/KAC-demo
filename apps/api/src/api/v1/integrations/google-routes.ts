@@ -19,9 +19,10 @@ import type { AuthAttempt } from '../../../integrations/google/repository.js';
 import { GoogleIntegrationService, IntegrationFlowError } from '../../../integrations/google/service.js';
 import { SIMULATED_FAILURES, SyncFlowError, type SimulatedFailure } from '../../../integrations/google/sync.js';
 import { SelectionError } from '../../../integrations/google/selection.js';
+import { PUBLICATION_SIMULATIONS, PublicationError, type PublicationSimulation } from '../../../integrations/google/publication.js';
 import {
   attemptExamples, calendarsExamples, callbackPage, cancelledExamples, connectBodyExamples, demoConsentBodyExamples, demoConsentExamples,
-  disconnectExamples, integrationErrors, selectionBodyExamples, selectionExamples, startedExamples, statusExamples, syncBodyExamples, syncRunExamples, syncStatusExamples,
+  disconnectExamples, integrationErrors, publicationBodyExamples, publicationPreviewExamples, publicationResultExamples, selectionBodyExamples, selectionExamples, startedExamples, statusExamples, syncBodyExamples, syncRunExamples, syncStatusExamples,
 } from './examples.js';
 
 const nullable = (schema: object) => ({ anyOf: [schema, { type: 'null' }] });
@@ -86,6 +87,30 @@ const selectionSchema = { type: 'object', additionalProperties: false,
     canPublish: { type: 'boolean', description: 'Czy zgoda Google obejmuje zapis wydarzeń.' },
     targetProblem: nullable({ type: 'string', enum: ['unavailable', 'not_writable', 'write_access_missing'] }) } } as const;
 
+const publicationItemSchema = { type: 'object', additionalProperties: false,
+  required: ['shiftId', 'eventId', 'eventVersion', 'title', 'start', 'end', 'action', 'publishedAt'], properties: {
+    shiftId: { type: 'string' }, eventId: { type: 'string', description: 'Lokalne wydarzenie KAC utworzone przy zatwierdzeniu grafiku.' },
+    eventVersion: { type: 'integer', minimum: 1 }, title: { type: 'string' }, start: { type: 'string', format: 'date-time' }, end: { type: 'string', format: 'date-time' },
+    action: { type: 'string', enum: ['create', 'update', 'unchanged'], description: 'create – jeszcze nie publikowano; update – wydarzenie zmieniło się od publikacji; unchanged – pominięte.' },
+    publishedAt: nullable({ type: 'string', format: 'date-time' }) } } as const;
+const publicationPreviewSchema = { type: 'object', additionalProperties: false,
+  required: ['simulated', 'weekStart', 'scheduleId', 'scheduleVersion', 'target', 'targets', 'items', 'summary'], properties: {
+    simulated: { type: 'boolean', description: 'true – publikacja demonstracyjna: nic nie trafia do Google.' },
+    weekStart: { type: 'string', format: 'date' }, scheduleId: { type: 'string' }, scheduleVersion: { type: 'integer', minimum: 1 },
+    target: { type: 'object', additionalProperties: false, required: ['id', 'name'], properties: { id: { type: 'string' }, name: { type: 'string' } } },
+    targets: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['id', 'name', 'primary'],
+      properties: { id: { type: 'string' }, name: { type: 'string' }, primary: { type: 'boolean' } } } },
+    items: { type: 'array', items: publicationItemSchema },
+    summary: { type: 'object', additionalProperties: false, required: ['create', 'update', 'unchanged'], properties: {
+      create: { type: 'integer', minimum: 0 }, update: { type: 'integer', minimum: 0 }, unchanged: { type: 'integer', minimum: 0 } } } } } as const;
+const publicationResultSchema = { type: 'object', additionalProperties: false, required: ['simulated', 'attempt', 'items', 'preview'], properties: {
+  simulated: { type: 'boolean' }, attempt: syncAttemptSchema,
+  items: { type: 'array', items: { ...publicationItemSchema, required: [...publicationItemSchema.required, 'result'], properties: { ...publicationItemSchema.properties,
+    result: { type: 'string', enum: ['published', 'unchanged', 'failed', 'skipped'] } } } },
+  preview: publicationPreviewSchema } } as const;
+const weekParams = { type: 'object', additionalProperties: false, required: ['weekStart'], properties: { weekStart: { type: 'string', format: 'date' } } } as const;
+const publicationBlocked = ['schedule_version_conflict', 'schedule_not_accepted', 'schedule_empty', 'no_publication_target', 'calendar_unavailable', 'reconnect_required'];
+
 const idParams = { type: 'object', additionalProperties: false, required: ['id'], properties: { id: { type: 'string', minLength: 1, maxLength: 64 } } } as const;
 
 const fail = (description: string, codes: string[]) => errorExamples(description, Object.fromEntries(codes.map((code) => [code, integrationErrors[code]!])));
@@ -113,7 +138,7 @@ export function registerGoogleIntegration(app: FastifyInstance, service: GoogleI
     try {
       return await work(service);
     } catch (error) {
-      if (error instanceof IntegrationFlowError || error instanceof SyncFlowError || error instanceof SelectionError) return reply.code(error.status).send({ error: error.code });
+      if (error instanceof IntegrationFlowError || error instanceof SyncFlowError || error instanceof SelectionError || error instanceof PublicationError) return reply.code(error.status).send({ error: error.code });
       if (error instanceof GoogleIntegrationError) return reply.code(GOOGLE_ERROR_STATUS[error.code] ?? 502).send({ error: error.code });
       throw error;
     }
@@ -247,6 +272,39 @@ export function registerGoogleIntegration(app: FastifyInstance, service: GoogleI
       503: fail('Integracja niedostępna.', ['integration_not_configured']),
     },
   } }, async (request, reply) => handle(reply, (google) => google.selection.save(scope(request), request.body)));
+
+  app.get<{ Params: { weekStart: string }; Querystring: { calendarId?: string } }>('/integrations/google/publications/:weekStart/preview', { schema: {
+    tags: ['Google integration'], summary: 'Preview simulated schedule publication', operationId: 'previewGooglePublication',
+    description: 'Lists the shifts of the accepted schedule for the week that a publication would create or update in the chosen calendar (default: the publication calendar from the calendar selection). Changes nothing. Publication is currently a simulation: nothing is sent to Google.',
+    params: weekParams,
+    querystring: { type: 'object', additionalProperties: false, properties: { calendarId: { type: 'string', minLength: 1, maxLength: 1024, description: 'Inny kalendarz z prawem zapisu niż domyślny.' } } },
+    response: {
+      200: documented(publicationPreviewSchema, 'Podgląd publikacji.', publicationPreviewExamples),
+      400: fail('Kalendarz nie należy do połączonego konta.', ['unknown_calendar']),
+      404: fail('Brak konta albo grafiku.', ['not_connected', 'schedule_not_found']),
+      409: fail('Grafiku nie można opublikować.', publicationBlocked.filter((code) => code !== 'schedule_version_conflict')),
+      422: fail('Kalendarz bez prawa zapisu.', ['target_not_writable', 'write_access_missing']),
+      503: fail('Integracja niedostępna.', ['integration_not_configured']),
+    },
+  } }, async (request, reply) => handle(reply, (google) => google.publication.preview(scope(request), request.params.weekStart, request.query.calendarId)));
+
+  app.post<{ Params: { weekStart: string }; Body: { expectedVersion: number; calendarId?: string | null; simulate?: PublicationSimulation } }>('/integrations/google/publications/:weekStart', { schema: {
+    tags: ['Google integration'], summary: 'Publish accepted schedule (simulation)', operationId: 'publishGoogleSchedule',
+    description: 'Confirmed publication of the accepted schedule after the preview. Currently a simulation: nothing is sent to Google and no Google event IDs are created; the result is marked simulated. Each shift has one publication record per calendar, so a retry after an error publishes only what is missing. The attempt is recorded in the sync registry with direction publish. A Google-side error is the attempt result (200), not an HTTP error.',
+    params: weekParams,
+    body: withExamples({ type: 'object', additionalProperties: false, required: ['expectedVersion'], properties: {
+      expectedVersion: { type: 'integer', minimum: 1, description: 'Wersja grafiku z podglądu.' },
+      calendarId: nullable({ type: 'string', minLength: 1, maxLength: 1024 }),
+      simulate: { type: 'string', enum: [...PUBLICATION_SIMULATIONS], description: 'Wymuszony wynik symulacji (błąd, wynik częściowy).' } } }, publicationBodyExamples),
+    response: {
+      200: documented(publicationResultSchema, 'Wynik próby publikacji (symulacja).', publicationResultExamples),
+      400: fail('Kalendarz nie należy do połączonego konta.', ['unknown_calendar']),
+      404: fail('Brak konta albo grafiku.', ['not_connected', 'schedule_not_found']),
+      409: fail('Grafiku nie można opublikować.', [...publicationBlocked, 'publication_in_progress']),
+      422: fail('Kalendarz bez prawa zapisu.', ['target_not_writable', 'write_access_missing']),
+      503: fail('Integracja niedostępna.', ['integration_not_configured']),
+    },
+  } }, async (request, reply) => handle(reply, (google) => google.publication.publish(scope(request), request.params.weekStart, request.body)));
 
   app.get('/integrations/google/sync', { schema: {
     tags: ['Google integration'], summary: 'Get Google sync state', operationId: 'getGoogleSync',

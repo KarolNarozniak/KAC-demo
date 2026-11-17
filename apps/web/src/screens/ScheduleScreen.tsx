@@ -9,6 +9,7 @@ import { classTimeLabel, conflictMessage, shiftClassConflicts, weekClasses, wind
 import { useWorkProfile } from '../hooks/useWorkProfile';
 import { hoursLimitLines, hoursLimitStatus } from '../domain/hoursLimit';
 import WorkProfileScreen from './WorkProfileScreen';
+import GooglePublication from '../components/GooglePublication';
 import { approveSchedule, generateSchedule, loadSchedule, listSchedules, loadScheduleById, type ScheduleListItem, NoClassesConfirmationRequired, rejectSchedule, saveSchedule, type ScheduleShift, type ShiftTemplate, type WeeklySchedule, type WorkMode } from '../services/scheduleApi';
 
 type Props = { week: Date; setWeek: (value: Date) => void; now: Date; active: boolean; onApproved: () => void; onPreview: (schedule: WeeklySchedule | null) => void;
@@ -257,6 +258,8 @@ export default function ScheduleScreen({ week, setWeek, now, active, onApproved,
           <View style={[styles.row, { flexWrap: 'wrap', marginTop: 8 }]}><Button title={saving ? 'Odrzucanie…' : 'Tak, odrzuć'} danger disabled={saving || loading} onPress={() => void reject()} /><Button title="Anuluj" disabled={saving || loading} onPress={() => setConfirmReject(false)} /></View>
         </View>}
         {schedule.isApproved && <Text style={[styles.muted, { color: palette.green, marginTop: 10 }]}>Zatwierdzone zmiany są widoczne jako wydarzenia „Praca” w widoku Tydzień.</Text>}
+        {/* Symulowana publikacja zaakceptowanego grafiku w Google Calendar (S23KC2S1P2-30, G07). */}
+        <GooglePublication weekStart={weekStart} schedule={schedule} readOnly={historyReadOnly} />
       </View>
     </>}
   </ScrollView>;
