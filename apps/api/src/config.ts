@@ -35,4 +35,9 @@ export const config = {
       redirectUri: process.env.GOOGLE_REDIRECT_URI?.trim() || 'http://localhost:4000/api/v1/import/google/callback',
     }
     : null,
+
+    /** Trwała integracja Google (US6/UC4) — osobny redirect URI od jednorazowego importu. Ten sam klient OAuth. */
+    googleIntegrationRedirectUri: process.env.GOOGLE_INTEGRATION_REDIRECT_URI?.trim() || 'http://localhost:4000/api/v1/integrations/google/callback',
+    /** Klucz AES-256-GCM (base64, 32 bajty) do refresh tokenu — poza bazą. Wygeneruj: openssl rand -base64 32 */
+    googleTokenEncryptionKey: process.env.GOOGLE_TOKEN_ENCRYPTION_KEY?.trim() || '',
 };

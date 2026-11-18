@@ -6,6 +6,8 @@ import type { ScheduleRepository } from '../scheduling/repository.js';
 import type { ScheduleReader } from '../import/work-schedule/reader.js';
 import type { WorkProfileRepository } from '../profile/repository.js';
 import type { ScopeResolver } from './scope.js';
+import type { IntegrationsRepository } from '../integrations/google/repository.js';
+import type { GoogleIntegrationOptions } from './v1/integrations/google-routes.js';
 
 export type CalendarRepository = {
   deleteEvent?: (eventId: string) => Promise<string[] | null>;
@@ -33,6 +35,8 @@ export type ApiOptions = {
   workProfileRepository?: WorkProfileRepository;
   /** Ustala użytkownika żądania po stronie serwera (S23KC2S1P2-185). Domyślnie użytkownik demonstracyjny. */
   userScope?: ScopeResolver;
+  integrationsRepository?: IntegrationsRepository;
+  googleIntegration?: GoogleIntegrationOptions;
 };
 
 export type ApiDependencies = {

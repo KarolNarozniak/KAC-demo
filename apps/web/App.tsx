@@ -10,6 +10,7 @@ import { BlocksScreen } from './src/screens/BlocksScreen';
 import type { WeeklySchedule } from './src/services/scheduleApi';
 import ScreenTransition from './src/components/ScreenTransition';
 import { Button, ThemeProvider, ThemeToggle, useTheme, type ThemeMode } from './src/components/ui';
+import GoogleAccountConnection from './src/components/GoogleAccountConnection';
 
 const tabs = ['Dziś', 'Tydzień', 'Grafik', 'Blokady', 'Ustawienia', 'Asystent'] as const;
 
@@ -100,6 +101,7 @@ function CalendarApp() {
             {([{ id: 'days-left', label: 'Dni po lewej · godziny u góry' }, { id: 'days-top', label: 'Dni u góry · godziny po lewej' }] as const).map((option) => <Pressable key={option.id} accessibilityRole="radio" accessibilityState={{ checked: weekLayout === option.id, disabled: !settingsLoaded }} disabled={!settingsLoaded} onPress={() => void changeWeekLayout(option.id)} style={{ padding: 14, borderRadius: 8, borderWidth: 1, borderColor: weekLayout === option.id ? palette.blue : palette.line, backgroundColor: weekLayout === option.id ? palette.blueSoft : palette.surface }}><Text style={styles.body}>{weekLayout === option.id ? '◉' : '○'} {option.label}</Text></Pressable>)}
           </View>
           {!!storageError && <Text accessibilityRole="alert" style={styles.error}>{storageError}</Text>}
+                    <View style={{ marginTop: 24 }}><GoogleAccountConnection /></View>
         </ScrollView> : <View style={[styles.content,{padding:16}]}><Text style={styles.heading}>Asystent</Text><Text style={styles.subtitle}>Wkrótce</Text></View>
       );
     }} />

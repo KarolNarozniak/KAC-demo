@@ -13,6 +13,7 @@ import type { ApiOptions, CalendarRepository } from './api/contracts.js';
 import { registerGoogleImport } from './api/v1/imports/google-routes.js';
 import { DemoScheduleReader } from './import/work-schedule/reader.js';
 import { blockRoutes } from './api/v1/blocks/routes.js';
+import { registerGoogleIntegration } from './api/v1/integrations/google-routes.js';
 
 export type { ApiOptions, CalendarRepository } from './api/contracts.js';
 
@@ -59,6 +60,7 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
         { name: 'Imports', description: 'Reviewable imports from schedules, ICS and class files.' },
         { name: 'Google import', description: 'One-time, read-only Google Calendar import.' },
         { name: 'Blocks', description: 'Vacation, exam sessions and days off blocks.' },
+        { name: 'Integrations', description: 'Persistent account connections used by ongoing sync and schedule publishing.' },
       ],
       externalDocs: { description: 'KAC bilingual developer documentation', url: process.env.DOCUSAURUS_URL ?? 'http://localhost:3000' },
     },
@@ -82,6 +84,7 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
     await importRoutes(v1, { repository, scheduleRepository: options.scheduleRepository, scheduleReader, google: options.google });
     await blockRoutes(v1,{repository,scope:options.userScope});
     registerGoogleImport(v1, repository, options.google);
+    registerGoogleIntegration(v1, options.integrationsRepository ?? null, options.userScope ?? demoScope, options.googleIntegration);
   }, { prefix: API_PREFIX });
 
   return app;
