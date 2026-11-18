@@ -119,9 +119,10 @@ export function registerGoogleImport(app: FastifyInstance, repository: CalendarR
   } } }, async (request, reply) => {
     reply.type('text/html; charset=utf-8');
     const { state, code, error } = request.query;
-    const owner = scope(request);
-    const connection = state ? connections.get(state, owner.userId, owner.calendarId) : null;
-    if (!connection || connection.mode !== 'google' || connection.status !== 'pending') {
+    // Przeglądarka wraca z Google bez sesji KAC – właściciela wskazuje połączenie przypisane do losowego, jednorazowego state.
+    const connection = state ? connections.get(state) : null;
+    const owner = connection ? { userId: connection.userId, calendarId: connection.calendarId } : null;
+    if (!connection || !owner || connection.mode !== 'google' || connection.status !== 'pending') {
       return reply.code(400).send(page('Połączenie wygasło', 'Rozpocznij import z Google Calendar ponownie w aplikacji.'));
     }
     if (error || !code) {

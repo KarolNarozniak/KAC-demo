@@ -1,3 +1,4 @@
+import { authFetch } from './http.ts';
 export type NotificationSettings = { 
   enabled: boolean; 
   classReminders: boolean;
@@ -18,7 +19,7 @@ export type BrowserPushSubscription = { endpoint: string; keys: { p256dh: string
 
 const apiBase = () => process.env.EXPO_PUBLIC_API_URL?.trim().replace(/\/$/, '') || 'http://localhost:4000';
 async function request<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
-  const response = await fetch(`${apiBase()}/api/v1${path}`, { method,
+  const response = await authFetch(`${apiBase()}/api/v1${path}`, { method,
     headers: { Accept: 'application/json', ...(body ? { 'Content-Type': 'application/json' } : {}) },
     ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(10_000) });
   if (!response.ok) throw new Error('Nie udało się obsłużyć powiadomienia.');

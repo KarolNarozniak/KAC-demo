@@ -173,11 +173,12 @@ export class GoogleIntegrationService {
   }
 
   /** Kroki 5–7 po powrocie z Google. Zwraca stronę HTML dla przeglądarki; szczegóły błędu nie zawierają tokenów. */
-  async callback(scope: UserScope, query: { state?: string; code?: string; error?: string }, log: (code: string) => void): Promise<CallbackPage> {
+  async callback(query: { state?: string; code?: string; error?: string }, log: (code: string) => void): Promise<CallbackPage> {
     if (!query.state) return { httpStatus: 400, title: 'Połączenie wygasło', message: 'Rozpocznij łączenie z Google Calendar ponownie w aplikacji.' };
     const stateHash = hashState(query.state);
-    const attempt = await this.repository.claimAttempt(stateHash, scope, 'google');
-    // Wygasły, nieznany, cudzy albo już użyty state (np. odświeżenie strony powrotu) – nic nie zapisujemy.
+    // Właściciela wskazuje próba przypisana do `state` (przeglądarka wraca z Google bez sesji KAC).
+    const attempt = await this.repository.claimAttempt(stateHash, null, 'google');
+    // Wygasły, nieznany albo już użyty state (np. odświeżenie strony powrotu) – nic nie zapisujemy.
     if (!attempt)
       return { httpStatus: 400, title: 'Połączenie wygasło', message: 'Ten link logowania wygasł albo został już użyty. Rozpocznij łączenie ponownie w aplikacji.' };
     if (query.error || !query.code) {
@@ -321,6 +322,7 @@ function callbackConflictMessage(code: string | null | undefined): string {
   if (code === 'already_connected') return 'Masz już połączone konto Google. Żeby połączyć inne, użyj w aplikacji „Zmień konto”.';
   if (code === 'reconnect_account_mismatch') return 'Wybrano inne konto Google niż połączone. Żeby je zmienić, użyj w aplikacji „Zmień konto”.';
   if (code === 'attempt_cancelled') return 'Łączenie zostało anulowane albo konto odłączono w międzyczasie. Nic nie zostało zapisane – połącz konto ponownie w aplikacji.';
+  if (code === 'google_account_in_use') return 'To konto Google jest już połączone z innym kontem KAC. Jedno konto Google może być połączone tylko z jednym kontem KAC – odłącz je tam albo wybierz inne konto Google.';
   if (code === 'no_refresh_token') return 'Google nie wydał trwałego dostępu. Usuń dostęp KAC w ustawieniach konta Google (Bezpieczeństwo → Aplikacje innych firm) i połącz ponownie.';
   return 'Nie udało się zapisać połączenia. Spróbuj ponownie w aplikacji.';
 }

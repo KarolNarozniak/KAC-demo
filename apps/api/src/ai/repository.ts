@@ -106,6 +106,12 @@ export class AiRepository {
     return result.rowCount ?? 0;
   }
 
+  /** Liczba wywołań AI użytkownika w ostatnich `hours` godzinach – do dziennego limitu (api/ai-limit.ts). */
+  async countRecentUsage(userId: string, hours: number): Promise<number> {
+    const result = await this.pool.query(`select count(*)::int as used from t_ai_uzycie where id_uzytkownika = $1 and created_at > now() - make_interval(hours => $2)`, [userId, hours]);
+    return Number(result.rows[0]?.used ?? 0);
+  }
+
   async logUsage(scope: UserScope, operation: string, model: string, inputTokens: number, outputTokens: number, elapsedMs: number, status: 'ok' | 'error', errorCode?: string) {
     await this.pool.query(`insert into t_ai_uzycie
       (id_uzytkownika, operacja, model, tokeny_we, tokeny_wy, czas_ms, status, kod_bledu)

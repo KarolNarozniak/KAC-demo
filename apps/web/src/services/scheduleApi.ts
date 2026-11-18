@@ -1,4 +1,5 @@
 import type { WorkMode, WorkProfile } from './workProfileApi';
+import { authFetch } from './http.ts';
 export type { ShiftTemplate, WorkMode } from './workProfileApi';
 
 export type ScheduleShift = {
@@ -68,7 +69,7 @@ const baseUrl = () => {
 export class NoClassesConfirmationRequired extends Error {}
 
 async function request(path: string, options?: RequestInit): Promise<Response> {
-  return fetch(`${baseUrl()}${path}`, { ...options, headers: { Accept: 'application/json', ...(options?.body ? { 'Content-Type': 'application/json' } : {}) }, signal: AbortSignal.timeout(20000) });
+  return authFetch(`${baseUrl()}${path}`, { ...options, headers: { Accept: 'application/json', ...(options?.body ? { 'Content-Type': 'application/json' } : {}) }, signal: AbortSignal.timeout(20000) });
 }
 
 export async function loadSchedule(weekStart: string): Promise<WeeklySchedule | null> {

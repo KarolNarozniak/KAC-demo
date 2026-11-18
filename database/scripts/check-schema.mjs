@@ -13,7 +13,7 @@ const expectedTables = [
   't_kolizje', 't_importy', 't_pozycje_importu', 't_konta_google', 't_kalendarze_google',
   't_synchronizacje', 't_publikacje', 't_ustaw_powiadomien', 't_powiadomienia', 't_zmiany_historii', 't_szablony_zmian', 'blocks',
   't_ai_rozmowy', 't_ai_wiadomosci', 't_ai_akcje', 't_ai_uzycie', 't_event_outbox', 't_event_outbox_delivery',
-  't_google_tokeny', 't_google_oauth_proby',
+  't_google_tokeny', 't_google_oauth_proby', 't_dane_logowania', 't_sesje',
 ];
 const missing = expectedTables.filter((name) => !new RegExp(`create table if not exists ${name}\\s*\\(`, 'i').test(sql));
 if (missing.length) throw new Error(`Schema missing model tables: ${missing.join(', ')}`);

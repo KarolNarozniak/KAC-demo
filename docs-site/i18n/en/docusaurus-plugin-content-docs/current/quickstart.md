@@ -57,9 +57,23 @@ Main settings are in `.env`; the web client reads `EXPO_PUBLIC_API_URL` from `ap
 | `GOOGLE_REDIRECT_URI` | OAuth callback, defaults to `http://localhost:4000/api/v1/import/google/callback` |
 | `GOOGLE_INTEGRATION_REDIRECT_URI` | Persistent connection callback, defaults to `http://localhost:4000/api/v1/integrations/google/callback` |
 | `GOOGLE_TOKEN_ENCRYPTION_KEY` | Google token encryption key (32 bytes in base64); without it the real connection is disabled |
+| `REGISTRATION_MODE`, `REGISTRATION_INVITE_CODE` | Who can create an account: `open` (default), `invite` with a code or `closed` – see [Sign-in and accounts](./auth.md) |
+| `AI_DAILY_LIMIT` | Daily AI call limit per account, default `200`; `0` disables it |
 | `OPENAPI_SERVER_URL` | Base server written to exported OpenAPI |
 | `API_ORIGIN`, `API_OPENAPI_URL` | Public API host used by Docusaurus Swagger and specification links |
 | `DOCUSAURUS_URL`, `DOCUSAURUS_BASE_URL` | Public docs URL and base path at deployment |
+
+## First sign-in
+
+The app starts with the sign-in screen. Create an account with „Załóż konto” (create account) or set a password for the account with demo data:
+
+```bash
+npm run auth:set-password -- student.demo@example.test
+```
+
+After creating an account the app shows a recovery code once – it sets a new password when you forget the old one ("Nie pamiętasz hasła?" on the sign-in screen). For the demo account create a code in Settings → Account.
+
+After pulling a new version into an existing database run `npm run db:migrate` first (the quickstart scripts do it themselves). Details: [Sign-in and accounts](./auth.md).
 
 ## Separate processes
 

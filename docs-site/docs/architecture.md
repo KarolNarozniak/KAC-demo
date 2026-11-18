@@ -38,7 +38,7 @@ Wszystkie zasoby HTTP należą do jednej domeny API i wspólnej wersji `/api/v1`
 - `src/api/v1/calendar/routes.ts` obsługuje przegląd kalendarza oraz wydarzenia.
 - `src/api/v1/profile/routes.ts` obsługuje profil pracy: limity godzin, cel godzin (tydzień albo miesiąc), dojazd, dostępność, preferencje, blokady i szablony zmian. Zapis jest atomowy i wymaga aktualnej wersji profilu (optimistic locking).
 - `src/api/v1/scheduling/routes.ts` obsługuje generowanie, edycję, walidację, akceptację i historię grafików.
-- `src/api/scope.ts` ustala użytkownika żądania po stronie serwera. Do czasu logowania jest to użytkownik demonstracyjny z konfiguracji.
+- `src/api/auth-guard.ts` wymaga sesji logowania (`Authorization: Bearer`) na wszystkich trasach poza publicznymi i ustala z niej użytkownika oraz kalendarz żądania; `src/api/v1/auth/routes.ts` obsługuje rejestrację, logowanie, wylogowanie, zmianę hasła i usunięcie konta ([Logowanie i konta](./auth.md)). API bez bazy danych używa użytkownika demonstracyjnego z konfiguracji (`src/api/scope.ts`).
 - `src/api/v1/imports/routes.ts` obsługuje podgląd importu, sesje oraz odczyt plików i planów zajęć.
 - `src/api/v1/imports/google-routes.ts` implementuje jednorazowy import Google jako adapter źródła danych.
 - `src/api/v1/imports/ai-routes.ts` obsługuje import zdjęć/PDF przez model Responses API.

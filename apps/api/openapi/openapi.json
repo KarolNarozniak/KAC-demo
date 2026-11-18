@@ -13,9 +13,1966 @@
     }
   },
   "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Token sesji z POST /api/v1/auth/login albo /auth/register."
+      }
+    },
     "schemas": {}
   },
   "paths": {
+    "/api/v1/auth/config": {
+      "get": {
+        "operationId": "getAuthConfig",
+        "summary": "Registration settings",
+        "tags": [
+          "Auth"
+        ],
+        "description": "Public settings for the sign-up screen: whether registration is open, needs an invite code or is closed, and the password length rules.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Ustawienia rejestracji.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "registration",
+                    "passwordMinLength",
+                    "passwordMaxLength"
+                  ],
+                  "properties": {
+                    "registration": {
+                      "type": "string",
+                      "enum": [
+                        "open",
+                        "invite",
+                        "closed"
+                      ]
+                    },
+                    "passwordMinLength": {
+                      "type": "integer"
+                    },
+                    "passwordMaxLength": {
+                      "type": "integer"
+                    }
+                  },
+                  "description": "Ustawienia rejestracji."
+                },
+                "examples": {
+                  "open": {
+                    "summary": "Rejestracja otwarta",
+                    "description": "Każdy może założyć konto (np. lokalnie).",
+                    "value": {
+                      "registration": "open",
+                      "passwordMinLength": 12,
+                      "passwordMaxLength": 128
+                    }
+                  },
+                  "invite": {
+                    "summary": "Rejestracja z kodem zaproszenia",
+                    "description": "Formularz pokazuje pole na kod zaproszenia (REGISTRATION_MODE=invite).",
+                    "value": {
+                      "registration": "invite",
+                      "passwordMinLength": 12,
+                      "passwordMaxLength": 128
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Logowanie wymaga bazy danych.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Logowanie wymaga bazy danych.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "auth_not_configured"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "auth_not_configured": {
+                    "summary": "Logowanie niedostępne",
+                    "description": "API działa bez skonfigurowanej bazy danych (brak DATABASE_URL), więc nie ma kont ani sesji.",
+                    "value": {
+                      "error": "auth_not_configured"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/register": {
+      "post": {
+        "operationId": "register",
+        "summary": "Create an account",
+        "tags": [
+          "Auth"
+        ],
+        "description": "Creates a KAC account (e-mail and password, at least 12 characters), its own calendar and a signed-in session. The response carries a one-time recovery code shown only once – it sets a new password when the old one is forgotten. Google is not needed to use KAC – a Google account is connected later only for Google Calendar.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "email",
+                  "password",
+                  "firstName"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "maxLength": 254
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "firstName": {
+                    "type": "string",
+                    "maxLength": 60
+                  },
+                  "lastName": {
+                    "type": "string",
+                    "maxLength": 80
+                  },
+                  "timeZone": {
+                    "type": "string",
+                    "maxLength": 64,
+                    "description": "Strefa IANA, domyślnie Europe/Warsaw."
+                  },
+                  "inviteCode": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "client": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "description": "Rodzaj aplikacji (np. web, android, ios) – opis sesji na liście urządzeń."
+                  }
+                }
+              },
+              "examples": {
+                "register": {
+                  "summary": "Nowe konto",
+                  "value": {
+                    "email": "anna.nowak@example.test",
+                    "password": "dluga-fraza-na-wiosne",
+                    "firstName": "Anna",
+                    "lastName": "Nowak",
+                    "timeZone": "Europe/Warsaw",
+                    "client": "web"
+                  }
+                },
+                "invite": {
+                  "summary": "Rejestracja z kodem zaproszenia",
+                  "value": {
+                    "email": "jan.kowalski@example.test",
+                    "password": "trzy-slowa-i-rower",
+                    "firstName": "Jan",
+                    "inviteCode": "kod-od-zespolu",
+                    "client": "android"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "responses": {
+          "201": {
+            "description": "Konto utworzone i zalogowane.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "user",
+                    "token",
+                    "expiresAt",
+                    "recoveryCode"
+                  ],
+                  "properties": {
+                    "user": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "id",
+                        "email",
+                        "firstName",
+                        "lastName",
+                        "timeZone",
+                        "hasRecoveryCode"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "email": {
+                          "type": "string"
+                        },
+                        "firstName": {
+                          "type": "string"
+                        },
+                        "lastName": {
+                          "type": "string"
+                        },
+                        "timeZone": {
+                          "type": "string"
+                        },
+                        "hasRecoveryCode": {
+                          "type": "boolean",
+                          "description": "Czy konto ma kod odzyskiwania. Bez kodu zapomniane hasło ustawi tylko administrator – nowy kod tworzy POST /auth/recovery-code."
+                        }
+                      }
+                    },
+                    "token": {
+                      "type": "string",
+                      "description": "Token sesji do nagłówka Authorization: Bearer. Pokazywany tylko raz – serwer przechowuje wyłącznie jego skrót."
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "Najpóźniejszy koniec sesji (90 dni od zalogowania); wcześniej kończy ją 30 dni bez użycia."
+                    },
+                    "recoveryCode": {
+                      "type": "string",
+                      "description": "Jednorazowy kod odzyskiwania (16 znaków w grupach po 4). Pokazywany tylko raz – serwer przechowuje wyłącznie jego skrót; poprzedni kod przestał działać."
+                    }
+                  },
+                  "description": "Konto utworzone i zalogowane."
+                },
+                "examples": {
+                  "created": {
+                    "summary": "Konto utworzone",
+                    "description": "Token zapisuje aplikacja (na telefonie w bezpiecznym magazynie systemu). Kod odzyskiwania aplikacja pokazuje raz, z prośbą o zapisanie.",
+                    "value": {
+                      "user": {
+                        "id": "f3c1d0a2-5b7e-4c1a-9d2e-6a8b1c2d3e4f",
+                        "email": "anna.nowak@example.test",
+                        "firstName": "Anna",
+                        "lastName": "Nowak",
+                        "timeZone": "Europe/Warsaw",
+                        "hasRecoveryCode": true
+                      },
+                      "token": "kac-example-session-token-not-real",
+                      "expiresAt": "2027-02-16T09:30:00.000Z",
+                      "recoveryCode": "7F3Q-9XWM-2HDA-K8PR"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Niepoprawne dane albo słabe hasło. Nic nie zostało zapisane.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Niepoprawne dane albo słabe hasło. Nic nie zostało zapisane.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "invalid_email",
+                        "invalid_name",
+                        "invalid_time_zone",
+                        "password_too_short",
+                        "password_too_long",
+                        "password_too_common",
+                        "password_contains_email"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "invalid_email": {
+                    "summary": "Niepoprawny e-mail",
+                    "description": "Adres nie ma postaci nazwa@domena.",
+                    "value": {
+                      "error": "invalid_email"
+                    }
+                  },
+                  "invalid_name": {
+                    "summary": "Brak imienia",
+                    "description": "Imię jest wymagane (do 60 znaków), nazwisko jest opcjonalne.",
+                    "value": {
+                      "error": "invalid_name"
+                    }
+                  },
+                  "invalid_time_zone": {
+                    "summary": "Nieznana strefa czasowa",
+                    "description": "Strefa musi być nazwą IANA, np. Europe/Warsaw.",
+                    "value": {
+                      "error": "invalid_time_zone"
+                    }
+                  },
+                  "password_too_short": {
+                    "summary": "Hasło za krótkie",
+                    "description": "Hasło musi mieć co najmniej 12 znaków. Długość chroni lepiej niż wymóg cyfr i znaków specjalnych.",
+                    "value": {
+                      "error": "password_too_short"
+                    }
+                  },
+                  "password_too_long": {
+                    "summary": "Hasło za długie",
+                    "description": "Hasło może mieć najwyżej 128 znaków.",
+                    "value": {
+                      "error": "password_too_long"
+                    }
+                  },
+                  "password_too_common": {
+                    "summary": "Hasło zbyt oczywiste",
+                    "description": "Hasło jest na liście popularnych haseł albo składa się z powtórzeń lub ciągu klawiszy.",
+                    "value": {
+                      "error": "password_too_common"
+                    }
+                  },
+                  "password_contains_email": {
+                    "summary": "Hasło zawiera adres e-mail",
+                    "description": "Hasło nie może zawierać nazwy z adresu e-mail.",
+                    "value": {
+                      "error": "password_contains_email"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Rejestracja wyłączona albo zły kod zaproszenia.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Rejestracja wyłączona albo zły kod zaproszenia.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "registration_closed",
+                        "invalid_invite_code"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "registration_closed": {
+                    "summary": "Rejestracja wyłączona",
+                    "description": "Konta zakłada administrator (REGISTRATION_MODE=closed).",
+                    "value": {
+                      "error": "registration_closed"
+                    }
+                  },
+                  "invalid_invite_code": {
+                    "summary": "Zły kod zaproszenia",
+                    "description": "Rejestracja wymaga kodu zaproszenia od zespołu (REGISTRATION_MODE=invite).",
+                    "value": {
+                      "error": "invalid_invite_code"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Adres e-mail ma już konto.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Adres e-mail ma już konto.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "email_taken"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "email_taken": {
+                    "summary": "Konto już istnieje",
+                    "description": "Na ten adres jest już konto KAC – zaloguj się albo użyj innego adresu.",
+                    "value": {
+                      "error": "email_taken"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Za dużo prób – limit żądań z tego adresu albo czasowa blokada konta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Za dużo prób – limit żądań z tego adresu albo czasowa blokada konta.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "too_many_attempts"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "too_many_attempts": {
+                    "summary": "Za dużo prób",
+                    "description": "Po 10 nieudanych logowaniach konto jest blokowane na 15 minut; niezależnie od tego obowiązuje limit żądań z jednego adresu IP. Spróbuj ponownie później.",
+                    "value": {
+                      "error": "too_many_attempts"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Logowanie wymaga bazy danych.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Logowanie wymaga bazy danych.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "auth_not_configured"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "auth_not_configured": {
+                    "summary": "Logowanie niedostępne",
+                    "description": "API działa bez skonfigurowanej bazy danych (brak DATABASE_URL), więc nie ma kont ani sesji.",
+                    "value": {
+                      "error": "auth_not_configured"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "operationId": "login",
+        "summary": "Sign in",
+        "tags": [
+          "Auth"
+        ],
+        "description": "Signs in with e-mail and password and returns a session token for the Authorization: Bearer header. A wrong e-mail and a wrong password give the same answer.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "email",
+                  "password"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "maxLength": 254
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "client": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "description": "Rodzaj aplikacji (np. web, android, ios) – opis sesji na liście urządzeń."
+                  }
+                }
+              },
+              "examples": {
+                "login": {
+                  "summary": "Logowanie",
+                  "value": {
+                    "email": "anna.nowak@example.test",
+                    "password": "dluga-fraza-na-wiosne",
+                    "client": "web"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Zalogowano.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "user",
+                    "token",
+                    "expiresAt"
+                  ],
+                  "properties": {
+                    "user": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "id",
+                        "email",
+                        "firstName",
+                        "lastName",
+                        "timeZone",
+                        "hasRecoveryCode"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "email": {
+                          "type": "string"
+                        },
+                        "firstName": {
+                          "type": "string"
+                        },
+                        "lastName": {
+                          "type": "string"
+                        },
+                        "timeZone": {
+                          "type": "string"
+                        },
+                        "hasRecoveryCode": {
+                          "type": "boolean",
+                          "description": "Czy konto ma kod odzyskiwania. Bez kodu zapomniane hasło ustawi tylko administrator – nowy kod tworzy POST /auth/recovery-code."
+                        }
+                      }
+                    },
+                    "token": {
+                      "type": "string",
+                      "description": "Token sesji do nagłówka Authorization: Bearer. Pokazywany tylko raz – serwer przechowuje wyłącznie jego skrót."
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "Najpóźniejszy koniec sesji (90 dni od zalogowania); wcześniej kończy ją 30 dni bez użycia."
+                    }
+                  },
+                  "description": "Zalogowano."
+                },
+                "examples": {
+                  "signedIn": {
+                    "summary": "Zalogowano",
+                    "value": {
+                      "user": {
+                        "id": "f3c1d0a2-5b7e-4c1a-9d2e-6a8b1c2d3e4f",
+                        "email": "anna.nowak@example.test",
+                        "firstName": "Anna",
+                        "lastName": "Nowak",
+                        "timeZone": "Europe/Warsaw",
+                        "hasRecoveryCode": true
+                      },
+                      "token": "kac-example-session-token-not-real",
+                      "expiresAt": "2027-02-16T09:30:00.000Z"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Zły e-mail albo hasło.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Zły e-mail albo hasło.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "invalid_credentials"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "invalid_credentials": {
+                    "summary": "Nieprawidłowy e-mail lub hasło",
+                    "description": "Ten sam komunikat dla nieistniejącego konta i złego hasła – odpowiedź nie zdradza, czy adres ma konto.",
+                    "value": {
+                      "error": "invalid_credentials"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Za dużo prób – limit żądań z tego adresu albo czasowa blokada konta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Za dużo prób – limit żądań z tego adresu albo czasowa blokada konta.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "too_many_attempts"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "too_many_attempts": {
+                    "summary": "Za dużo prób",
+                    "description": "Po 10 nieudanych logowaniach konto jest blokowane na 15 minut; niezależnie od tego obowiązuje limit żądań z jednego adresu IP. Spróbuj ponownie później.",
+                    "value": {
+                      "error": "too_many_attempts"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Logowanie wymaga bazy danych.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Logowanie wymaga bazy danych.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "auth_not_configured"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "auth_not_configured": {
+                    "summary": "Logowanie niedostępne",
+                    "description": "API działa bez skonfigurowanej bazy danych (brak DATABASE_URL), więc nie ma kont ani sesji.",
+                    "value": {
+                      "error": "auth_not_configured"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/recover": {
+      "post": {
+        "operationId": "recoverAccount",
+        "summary": "Reset a forgotten password with the recovery code",
+        "tags": [
+          "Auth"
+        ],
+        "description": "Sets a new password with the one-time recovery code shown at registration (no e-mail needed). Signs out every device, clears the lockout after failed sign-ins, signs in this device and returns a new recovery code – the used one stops working. A wrong e-mail, an account without a code and a wrong code give the same answer.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "email",
+                  "recoveryCode",
+                  "newPassword"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "maxLength": 254
+                  },
+                  "recoveryCode": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "description": "Kod odzyskiwania; wielkość liter, spacje i myślniki nie mają znaczenia."
+                  },
+                  "newPassword": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "client": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "description": "Rodzaj aplikacji (np. web, android, ios) – opis sesji na liście urządzeń."
+                  }
+                }
+              },
+              "examples": {
+                "recover": {
+                  "summary": "Nowe hasło z kodem",
+                  "value": {
+                    "email": "anna.nowak@example.test",
+                    "recoveryCode": "7F3Q-9XWM-2HDA-K8PR",
+                    "newPassword": "inna-dluga-fraza-na-lato",
+                    "client": "android"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Nowe hasło ustawione i zalogowano.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "user",
+                    "token",
+                    "expiresAt",
+                    "recoveryCode"
+                  ],
+                  "properties": {
+                    "user": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "id",
+                        "email",
+                        "firstName",
+                        "lastName",
+                        "timeZone",
+                        "hasRecoveryCode"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "email": {
+                          "type": "string"
+                        },
+                        "firstName": {
+                          "type": "string"
+                        },
+                        "lastName": {
+                          "type": "string"
+                        },
+                        "timeZone": {
+                          "type": "string"
+                        },
+                        "hasRecoveryCode": {
+                          "type": "boolean",
+                          "description": "Czy konto ma kod odzyskiwania. Bez kodu zapomniane hasło ustawi tylko administrator – nowy kod tworzy POST /auth/recovery-code."
+                        }
+                      }
+                    },
+                    "token": {
+                      "type": "string",
+                      "description": "Token sesji do nagłówka Authorization: Bearer. Pokazywany tylko raz – serwer przechowuje wyłącznie jego skrót."
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "Najpóźniejszy koniec sesji (90 dni od zalogowania); wcześniej kończy ją 30 dni bez użycia."
+                    },
+                    "recoveryCode": {
+                      "type": "string",
+                      "description": "Jednorazowy kod odzyskiwania (16 znaków w grupach po 4). Pokazywany tylko raz – serwer przechowuje wyłącznie jego skrót; poprzedni kod przestał działać."
+                    }
+                  },
+                  "description": "Nowe hasło ustawione i zalogowano."
+                },
+                "examples": {
+                  "recovered": {
+                    "summary": "Hasło ustawione",
+                    "description": "Wszystkie wcześniejsze sesje zostały unieważnione. Aplikacja pokazuje nowy kod odzyskiwania z prośbą o zapisanie.",
+                    "value": {
+                      "user": {
+                        "id": "f3c1d0a2-5b7e-4c1a-9d2e-6a8b1c2d3e4f",
+                        "email": "anna.nowak@example.test",
+                        "firstName": "Anna",
+                        "lastName": "Nowak",
+                        "timeZone": "Europe/Warsaw",
+                        "hasRecoveryCode": true
+                      },
+                      "token": "kac-example-session-token-not-real",
+                      "expiresAt": "2027-02-16T09:30:00.000Z",
+                      "recoveryCode": "M4ZT-0QB8-XK2N-7VHD"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Nowe hasło nie spełnia zasad albo jest takie jak obecne. Nic nie zostało zmienione, kod nadal działa.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Nowe hasło nie spełnia zasad albo jest takie jak obecne. Nic nie zostało zmienione, kod nadal działa.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "password_too_short",
+                        "password_too_long",
+                        "password_too_common",
+                        "password_contains_email",
+                        "password_unchanged"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "password_too_short": {
+                    "summary": "Hasło za krótkie",
+                    "description": "Hasło musi mieć co najmniej 12 znaków. Długość chroni lepiej niż wymóg cyfr i znaków specjalnych.",
+                    "value": {
+                      "error": "password_too_short"
+                    }
+                  },
+                  "password_too_long": {
+                    "summary": "Hasło za długie",
+                    "description": "Hasło może mieć najwyżej 128 znaków.",
+                    "value": {
+                      "error": "password_too_long"
+                    }
+                  },
+                  "password_too_common": {
+                    "summary": "Hasło zbyt oczywiste",
+                    "description": "Hasło jest na liście popularnych haseł albo składa się z powtórzeń lub ciągu klawiszy.",
+                    "value": {
+                      "error": "password_too_common"
+                    }
+                  },
+                  "password_contains_email": {
+                    "summary": "Hasło zawiera adres e-mail",
+                    "description": "Hasło nie może zawierać nazwy z adresu e-mail.",
+                    "value": {
+                      "error": "password_contains_email"
+                    }
+                  },
+                  "password_unchanged": {
+                    "summary": "To samo hasło",
+                    "description": "Nowe hasło jest takie jak obecne – wystarczy się nim zalogować. Kod odzyskiwania nie został zużyty.",
+                    "value": {
+                      "error": "password_unchanged"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Zły e-mail albo kod odzyskiwania.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Zły e-mail albo kod odzyskiwania.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "invalid_recovery_code"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "invalid_recovery_code": {
+                    "summary": "Nieprawidłowy e-mail lub kod odzyskiwania",
+                    "description": "Ten sam komunikat dla nieistniejącego konta, konta bez kodu i złego kodu. Kod jest jednorazowy – po użyciu działa tylko nowy.",
+                    "value": {
+                      "error": "invalid_recovery_code"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Za dużo prób – limit żądań z tego adresu albo czasowa blokada konta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Za dużo prób – limit żądań z tego adresu albo czasowa blokada konta.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "too_many_attempts"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "too_many_attempts": {
+                    "summary": "Za dużo prób",
+                    "description": "Po 10 nieudanych logowaniach konto jest blokowane na 15 minut; niezależnie od tego obowiązuje limit żądań z jednego adresu IP. Spróbuj ponownie później.",
+                    "value": {
+                      "error": "too_many_attempts"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Logowanie wymaga bazy danych.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Logowanie wymaga bazy danych.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "auth_not_configured"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "auth_not_configured": {
+                    "summary": "Logowanie niedostępne",
+                    "description": "API działa bez skonfigurowanej bazy danych (brak DATABASE_URL), więc nie ma kont ani sesji.",
+                    "value": {
+                      "error": "auth_not_configured"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "operationId": "logout",
+        "summary": "Sign out",
+        "tags": [
+          "Auth"
+        ],
+        "description": "Ends the current session immediately; the token stops working on every request.",
+        "responses": {
+          "200": {
+            "description": "Wylogowano.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "loggedOut"
+                  ],
+                  "properties": {
+                    "loggedOut": {
+                      "type": "boolean"
+                    }
+                  },
+                  "description": "Wylogowano."
+                },
+                "examples": {
+                  "loggedOut": {
+                    "summary": "Wylogowano",
+                    "value": {
+                      "loggedOut": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Logowanie wymaga bazy danych.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Logowanie wymaga bazy danych.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "auth_not_configured"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "auth_not_configured": {
+                    "summary": "Logowanie niedostępne",
+                    "description": "API działa bez skonfigurowanej bazy danych (brak DATABASE_URL), więc nie ma kont ani sesji.",
+                    "value": {
+                      "error": "auth_not_configured"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "operationId": "getCurrentUser",
+        "summary": "Current user",
+        "tags": [
+          "Auth"
+        ],
+        "description": "The signed-in user. The app calls it at start to check that the saved session still works.",
+        "responses": {
+          "200": {
+            "description": "Zalogowany użytkownik.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "email",
+                    "firstName",
+                    "lastName",
+                    "timeZone",
+                    "hasRecoveryCode"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "firstName": {
+                      "type": "string"
+                    },
+                    "lastName": {
+                      "type": "string"
+                    },
+                    "timeZone": {
+                      "type": "string"
+                    },
+                    "hasRecoveryCode": {
+                      "type": "boolean",
+                      "description": "Czy konto ma kod odzyskiwania. Bez kodu zapomniane hasło ustawi tylko administrator – nowy kod tworzy POST /auth/recovery-code."
+                    }
+                  },
+                  "description": "Zalogowany użytkownik."
+                },
+                "examples": {
+                  "me": {
+                    "summary": "Zalogowany użytkownik",
+                    "value": {
+                      "id": "f3c1d0a2-5b7e-4c1a-9d2e-6a8b1c2d3e4f",
+                      "email": "anna.nowak@example.test",
+                      "firstName": "Anna",
+                      "lastName": "Nowak",
+                      "timeZone": "Europe/Warsaw",
+                      "hasRecoveryCode": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Konto usunięte.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Konto usunięte.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "account_not_found"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "account_not_found": {
+                    "summary": "Konto nie istnieje",
+                    "value": {
+                      "error": "account_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Logowanie wymaga bazy danych.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Logowanie wymaga bazy danych.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "auth_not_configured"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "auth_not_configured": {
+                    "summary": "Logowanie niedostępne",
+                    "description": "API działa bez skonfigurowanej bazy danych (brak DATABASE_URL), więc nie ma kont ani sesji.",
+                    "value": {
+                      "error": "auth_not_configured"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/recovery-code": {
+      "post": {
+        "operationId": "newRecoveryCode",
+        "summary": "New recovery code",
+        "tags": [
+          "Auth"
+        ],
+        "description": "Creates a new one-time recovery code after checking the password – for a lost code or an account created before recovery codes. The previous code stops working.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "password"
+                ],
+                "properties": {
+                  "password": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  }
+                }
+              },
+              "examples": {
+                "confirm": {
+                  "summary": "Potwierdzenie hasłem",
+                  "value": {
+                    "password": "dluga-fraza-na-wiosne"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Nowy kod odzyskiwania.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "recoveryCode"
+                  ],
+                  "properties": {
+                    "recoveryCode": {
+                      "type": "string",
+                      "description": "Jednorazowy kod odzyskiwania (16 znaków w grupach po 4). Pokazywany tylko raz – serwer przechowuje wyłącznie jego skrót; poprzedni kod przestał działać."
+                    }
+                  },
+                  "description": "Nowy kod odzyskiwania."
+                },
+                "examples": {
+                  "created": {
+                    "summary": "Nowy kod",
+                    "description": "Aplikacja pokazuje kod raz, z prośbą o zapisanie.",
+                    "value": {
+                      "recoveryCode": "7F3Q-9XWM-2HDA-K8PR"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Złe hasło.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Złe hasło.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "invalid_password"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "invalid_password": {
+                    "summary": "Złe hasło",
+                    "description": "Kod nie został zmieniony. To nie wylogowuje – sesja nadal działa.",
+                    "value": {
+                      "error": "invalid_password"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Za dużo prób – limit żądań z tego adresu albo czasowa blokada konta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Za dużo prób – limit żądań z tego adresu albo czasowa blokada konta.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "too_many_attempts"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "too_many_attempts": {
+                    "summary": "Za dużo prób",
+                    "description": "Po 10 nieudanych logowaniach konto jest blokowane na 15 minut; niezależnie od tego obowiązuje limit żądań z jednego adresu IP. Spróbuj ponownie później.",
+                    "value": {
+                      "error": "too_many_attempts"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Logowanie wymaga bazy danych.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Logowanie wymaga bazy danych.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "auth_not_configured"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "auth_not_configured": {
+                    "summary": "Logowanie niedostępne",
+                    "description": "API działa bez skonfigurowanej bazy danych (brak DATABASE_URL), więc nie ma kont ani sesji.",
+                    "value": {
+                      "error": "auth_not_configured"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/change-password": {
+      "post": {
+        "operationId": "changePassword",
+        "summary": "Change password",
+        "tags": [
+          "Auth"
+        ],
+        "description": "Changes the password after checking the current one. Other devices are signed out; this one stays signed in.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "currentPassword",
+                  "newPassword"
+                ],
+                "properties": {
+                  "currentPassword": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "newPassword": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  }
+                }
+              },
+              "examples": {
+                "change": {
+                  "summary": "Nowe hasło",
+                  "value": {
+                    "currentPassword": "dluga-fraza-na-wiosne",
+                    "newPassword": "inna-dluga-fraza-na-lato"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Hasło zmienione.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "otherSessionsRevoked"
+                  ],
+                  "properties": {
+                    "otherSessionsRevoked": {
+                      "type": "integer"
+                    }
+                  },
+                  "description": "Hasło zmienione."
+                },
+                "examples": {
+                  "changed": {
+                    "summary": "Hasło zmienione",
+                    "description": "Dwa inne urządzenia zostały wylogowane.",
+                    "value": {
+                      "otherSessionsRevoked": 2
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Nowe hasło nie spełnia zasad.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Nowe hasło nie spełnia zasad.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "password_too_short",
+                        "password_too_long",
+                        "password_too_common",
+                        "password_contains_email",
+                        "password_unchanged"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "password_too_short": {
+                    "summary": "Hasło za krótkie",
+                    "description": "Hasło musi mieć co najmniej 12 znaków. Długość chroni lepiej niż wymóg cyfr i znaków specjalnych.",
+                    "value": {
+                      "error": "password_too_short"
+                    }
+                  },
+                  "password_too_long": {
+                    "summary": "Hasło za długie",
+                    "description": "Hasło może mieć najwyżej 128 znaków.",
+                    "value": {
+                      "error": "password_too_long"
+                    }
+                  },
+                  "password_too_common": {
+                    "summary": "Hasło zbyt oczywiste",
+                    "description": "Hasło jest na liście popularnych haseł albo składa się z powtórzeń lub ciągu klawiszy.",
+                    "value": {
+                      "error": "password_too_common"
+                    }
+                  },
+                  "password_contains_email": {
+                    "summary": "Hasło zawiera adres e-mail",
+                    "description": "Hasło nie może zawierać nazwy z adresu e-mail.",
+                    "value": {
+                      "error": "password_contains_email"
+                    }
+                  },
+                  "password_unchanged": {
+                    "summary": "To samo hasło",
+                    "description": "Nowe hasło musi się różnić od obecnego.",
+                    "value": {
+                      "error": "password_unchanged"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Złe obecne hasło.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Złe obecne hasło.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "invalid_password"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "invalid_password": {
+                    "summary": "Złe obecne hasło",
+                    "description": "Hasło nie zostało zmienione. To nie wylogowuje – sesja nadal działa.",
+                    "value": {
+                      "error": "invalid_password"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Za dużo prób – limit żądań z tego adresu albo czasowa blokada konta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Za dużo prób – limit żądań z tego adresu albo czasowa blokada konta.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "too_many_attempts"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "too_many_attempts": {
+                    "summary": "Za dużo prób",
+                    "description": "Po 10 nieudanych logowaniach konto jest blokowane na 15 minut; niezależnie od tego obowiązuje limit żądań z jednego adresu IP. Spróbuj ponownie później.",
+                    "value": {
+                      "error": "too_many_attempts"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Logowanie wymaga bazy danych.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Logowanie wymaga bazy danych.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "auth_not_configured"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "auth_not_configured": {
+                    "summary": "Logowanie niedostępne",
+                    "description": "API działa bez skonfigurowanej bazy danych (brak DATABASE_URL), więc nie ma kont ani sesji.",
+                    "value": {
+                      "error": "auth_not_configured"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/account": {
+      "delete": {
+        "operationId": "deleteAccount",
+        "summary": "Delete account",
+        "tags": [
+          "Auth"
+        ],
+        "description": "Deletes the account and all its data (calendar, schedules, imports, assistant conversations, Google connection). The Google consent is revoked first (best effort). Requires the password. Cannot be undone.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "password"
+                ],
+                "properties": {
+                  "password": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  }
+                }
+              },
+              "examples": {
+                "confirm": {
+                  "summary": "Potwierdzenie hasłem",
+                  "value": {
+                    "password": "dluga-fraza-na-wiosne"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Konto usunięte.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "deleted"
+                  ],
+                  "properties": {
+                    "deleted": {
+                      "type": "boolean"
+                    }
+                  },
+                  "description": "Konto usunięte."
+                },
+                "examples": {
+                  "deleted": {
+                    "summary": "Konto usunięte",
+                    "description": "Wszystkie dane użytkownika zostały usunięte, a sesje unieważnione.",
+                    "value": {
+                      "deleted": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Złe hasło.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Złe hasło.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "invalid_password"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "invalid_password": {
+                    "summary": "Złe hasło",
+                    "description": "Konto nie zostało usunięte.",
+                    "value": {
+                      "error": "invalid_password"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Za dużo prób – limit żądań z tego adresu albo czasowa blokada konta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Za dużo prób – limit żądań z tego adresu albo czasowa blokada konta.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "too_many_attempts"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "too_many_attempts": {
+                    "summary": "Za dużo prób",
+                    "description": "Po 10 nieudanych logowaniach konto jest blokowane na 15 minut; niezależnie od tego obowiązuje limit żądań z jednego adresu IP. Spróbuj ponownie później.",
+                    "value": {
+                      "error": "too_many_attempts"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Logowanie wymaga bazy danych.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Logowanie wymaga bazy danych.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "auth_not_configured"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "auth_not_configured": {
+                    "summary": "Logowanie niedostępne",
+                    "description": "API działa bez skonfigurowanej bazy danych (brak DATABASE_URL), więc nie ma kont ani sesji.",
+                    "value": {
+                      "error": "auth_not_configured"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/work-profile/availability": {
       "get": {
         "operationId": "getWorkAvailability",
@@ -126,6 +2083,38 @@
                           "endTime": "02:00"
                         }
                       ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
                     }
                   }
                 }
@@ -467,6 +2456,38 @@
               }
             }
           },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "404": {
             "description": "Użytkownik nie ma profilu pracy.",
             "content": {
@@ -616,6 +2637,7 @@
           "System"
         ],
         "description": "Confirms that the API process is accepting requests.",
+        "security": [],
         "responses": {
           "200": {
             "description": "Proces API odpowiada.",
@@ -659,6 +2681,7 @@
           "System"
         ],
         "description": "Checks API startup and PostgreSQL connectivity.",
+        "security": [],
         "responses": {
           "200": {
             "description": "API i PostgreSQL są gotowe.",
@@ -772,6 +2795,38 @@
                           "mandatory": false
                         }
                       ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
                     }
                   }
                 }
@@ -1014,6 +3069,38 @@
                       "code": "FST_ERR_VALIDATION",
                       "error": "Bad Request",
                       "message": "body/category must be equal to one of the allowed values"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
                     }
                   }
                 }
@@ -1395,6 +3482,38 @@
               }
             }
           },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "404": {
             "description": "Wydarzenie nie istnieje.",
             "content": {
@@ -1670,6 +3789,38 @@
                         "E-ALG-2",
                         "E-ALG-3"
                       ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
                     }
                   }
                 }
@@ -2001,6 +4152,38 @@
                       "code": "FST_ERR_VALIDATION",
                       "error": "Bad Request",
                       "message": "body/category must be equal to one of the allowed values"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
                     }
                   }
                 }
@@ -2465,6 +4648,38 @@
                       "targetMinutes": 960,
                       "weeklyTargetHours": 16,
                       "weeklyTargetMinutes": 960
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
                     }
                   }
                 }
@@ -3345,6 +5560,38 @@
                       "targetMinutes": 960,
                       "weeklyTargetHours": 16,
                       "weeklyTargetMinutes": 960
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
                     }
                   }
                 }
@@ -4817,6 +7064,38 @@
               }
             }
           },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "404": {
             "description": "Brak profilu pracy.",
             "content": {
@@ -5919,6 +8198,38 @@
               }
             }
           },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "404": {
             "description": "Brak profilu albo grafiku.",
             "content": {
@@ -6582,6 +8893,38 @@
               }
             }
           },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "409": {
             "description": "Grafik zmienił się po odczycie albo jest już zatwierdzony.",
             "content": {
@@ -6819,6 +9162,38 @@
                     "description": "Data from jest późniejsza niż to – zamień je miejscami.",
                     "value": {
                       "error": "invalid_date_range"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
                     }
                   }
                 }
@@ -7585,6 +9960,38 @@
                       ],
                       "freeWindows": [],
                       "freeMinutes": 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
                     }
                   }
                 }
@@ -8400,6 +10807,38 @@
               }
             }
           },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "404": {
             "description": "Brak grafiku albo profilu.",
             "content": {
@@ -9052,6 +11491,38 @@
                     "description": "weekStart musi być poniedziałkiem w formacie RRRR-MM-DD, np. 2026-11-16. Nic nie zostało zrobione.",
                     "value": {
                       "error": "invalid_week_start"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
                     }
                   }
                 }
@@ -9816,6 +12287,38 @@
               }
             }
           },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "503": {
             "description": "Baza danych niedostępna albo nieskonfigurowana.",
             "content": {
@@ -10079,6 +12582,38 @@
               }
             }
           },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "503": {
             "description": "Baza danych niedostępna albo nieskonfigurowana.",
             "content": {
@@ -10333,6 +12868,38 @@
               }
             }
           },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "404": {
             "description": "Sesja importu nie istnieje.",
             "content": {
@@ -10566,6 +13133,38 @@
               }
             }
           },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "409": {
             "description": "Sesja nie jest aktywna.",
             "content": {
@@ -10748,6 +13347,38 @@
                         }
                       ],
                       "collisions": []
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
                     }
                   }
                 }
@@ -10993,6 +13624,38 @@
                           "duplicateOfRows": []
                         }
                       ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
                     }
                   }
                 }
@@ -11752,6 +14415,38 @@
               }
             }
           },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "413": {
             "description": "Plik lub jego zdekodowany obraz przekracza limit.",
             "content": {
@@ -11872,7 +14567,8 @@
                       "type": "string",
                       "enum": [
                         "reader-busy",
-                        "azure_ai_rate_limited"
+                        "azure_ai_rate_limited",
+                        "ai_daily_limit"
                       ]
                     }
                   }
@@ -11889,6 +14585,13 @@
                     "summary": "Azure AI ograniczył częstotliwość żądań; spróbuj później.",
                     "value": {
                       "error": "azure_ai_rate_limited"
+                    }
+                  },
+                  "ai_daily_limit": {
+                    "summary": "Dzienny limit AI wyczerpany",
+                    "description": "Konto wykorzystało dzienny limit wywołań Azure AI (AI_DAILY_LIMIT w ciągu ostatnich 24 godzin). Kalendarz nie został zmieniony; spróbuj jutro albo użyj importu bez AI.",
+                    "value": {
+                      "error": "ai_daily_limit"
                     }
                   }
                 }
@@ -12436,6 +15139,38 @@
               }
             }
           },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "404": {
             "description": "Import request failed without confirming calendar changes.",
             "content": {
@@ -12598,6 +15333,13 @@
                     "summary": "Synthetic import error",
                     "value": {
                       "error": "chat_import_not_found"
+                    }
+                  },
+                  "ai_daily_limit": {
+                    "summary": "Dzienny limit AI wyczerpany",
+                    "description": "Konto wykorzystało dzienny limit wywołań Azure AI (AI_DAILY_LIMIT w ciągu ostatnich 24 godzin). Kalendarz nie został zmieniony; spróbuj jutro albo użyj importu bez AI.",
+                    "value": {
+                      "error": "ai_daily_limit"
                     }
                   }
                 }
@@ -12960,6 +15702,38 @@
                     "summary": "Synthetic import error",
                     "value": {
                       "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
                     }
                   }
                 }
@@ -13547,6 +16321,38 @@
                     "summary": "Synthetic import error",
                     "value": {
                       "error": "chat_import_not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
                     }
                   }
                 }
@@ -14212,6 +17018,38 @@
               }
             }
           },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "404": {
             "description": "Import request failed without confirming calendar changes.",
             "content": {
@@ -14504,6 +17342,38 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -14590,6 +17460,38 @@
                     "description": "Przykład zgodny z kontraktem; bez rzeczywistych danych użytkownika.",
                     "value": {
                       "conversations": []
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
                     }
                   }
                 }
@@ -14736,6 +17638,38 @@
                       "title": "Plan tygodnia",
                       "createdAt": "2026-11-13T12:00:00Z",
                       "expiresAt": "2026-12-13T12:00:00Z"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
                     }
                   }
                 }
@@ -15278,6 +18212,38 @@
                     "value": {
                       "messages": [],
                       "pendingActions": []
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
                     }
                   }
                 }
@@ -17026,6 +19992,38 @@
               }
             }
           },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "404": {
             "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika.",
             "content": {
@@ -18300,6 +21298,13 @@
                     "value": {
                       "error": "ai_action_stale_preview",
                       "message": "Wydarzenie zmieniło się od czasu podglądu."
+                    }
+                  },
+                  "ai_daily_limit": {
+                    "summary": "Dzienny limit AI wyczerpany",
+                    "description": "Konto wykorzystało dzienny limit wywołań Azure AI (AI_DAILY_LIMIT w ciągu ostatnich 24 godzin). Kalendarz nie został zmieniony; spróbuj jutro albo użyj importu bez AI.",
+                    "value": {
+                      "error": "ai_daily_limit"
                     }
                   }
                 }
@@ -19419,6 +22424,38 @@
               }
             }
           },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "404": {
             "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika.",
             "content": {
@@ -19723,6 +22760,38 @@
               }
             }
           },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "404": {
             "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika.",
             "content": {
@@ -19965,6 +23034,38 @@
               }
             }
           },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "404": {
             "description": "Błąd domenowy lub infrastrukturalny. Kod `error` określa wynik, a `message` może zawierać informację dla użytkownika.",
             "content": {
@@ -20136,6 +23237,38 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -20272,6 +23405,38 @@
               }
             }
           },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "503": {
             "description": "Notification repository or scope error.",
             "content": {
@@ -20365,6 +23530,38 @@
                     "summary": "Subskrypcja usunięta",
                     "value": {
                       "status": "removed"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
                     }
                   }
                 }
@@ -20483,6 +23680,38 @@
                       "quietStart": null,
                       "quietEnd": null,
                       "pendingReminderCount": 2
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
                     }
                   }
                 }
@@ -20677,6 +23906,38 @@
                     "description": "Kod błędu zależy od operacji.",
                     "value": {
                       "error": "notification_store_unavailable"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
                     }
                   }
                 }
@@ -20963,6 +24224,38 @@
               }
             }
           },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "503": {
             "description": "Notification repository or scope error.",
             "content": {
@@ -21041,6 +24334,38 @@
                     "summary": "Przypomnienie wyświetlone",
                     "value": {
                       "status": "delivered"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
                     }
                   }
                 }
@@ -21192,6 +24517,38 @@
                     "summary": "Brak blokad",
                     "description": "Użytkownik nie ma żadnych blokad – pusta lista to poprawna odpowiedź, nie błąd.",
                     "value": []
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
                   }
                 }
               }
@@ -21426,6 +24783,38 @@
               }
             }
           },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "422": {
             "description": "Pusty tytuł albo koniec nie jest po początku.",
             "content": {
@@ -21567,6 +24956,38 @@
               }
             }
           },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "404": {
             "description": "Blokada nie istnieje albo należy do innego użytkownika.",
             "content": {
@@ -21677,6 +25098,38 @@
                       "connectionId": "a07c583a-58a7-4a43-a4bf-e0da0c8cfb70",
                       "mode": "google",
                       "authUrl": "https://accounts.google.com/o/oauth2/v2/auth?client_id=...&code_challenge_method=S256"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
                     }
                   }
                 }
@@ -21804,6 +25257,38 @@
               }
             }
           },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "404": {
             "description": "Połączenie albo kalendarz nie istnieje.",
             "content": {
@@ -21914,6 +25399,7 @@
             "required": false
           }
         ],
+        "security": [],
         "responses": {
           "200": {
             "description": "Strona HTML: połączono albo użytkownik odmówił zgody.",
@@ -22028,6 +25514,38 @@
               }
             }
           },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "404": {
             "description": "Połączenie albo kalendarz nie istnieje.",
             "content": {
@@ -22085,6 +25603,38 @@
         "responses": {
           "204": {
             "description": "Połączenie i token zapomniane (także gdy już nie istniało)."
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -22939,6 +26489,38 @@
               }
             }
           },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "503": {
             "description": "Integracja niedostępna.",
             "content": {
@@ -23068,6 +26650,38 @@
                       "alreadyDisconnected": true,
                       "local": "nothing_to_remove",
                       "remote": "not_applicable"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
                     }
                   }
                 }
@@ -23254,6 +26868,38 @@
                       "mode": "google",
                       "expiresAt": "2026-11-16T18:00:00.000Z",
                       "authUrl": "https://accounts.google.com/o/oauth2/v2/auth?client_id=example.apps.googleusercontent.com&response_type=code&access_type=offline"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
                     }
                   }
                 }
@@ -23527,6 +27173,38 @@
               }
             }
           },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "404": {
             "description": "Nie ma takiej próby.",
             "content": {
@@ -23705,6 +27383,38 @@
                       "purpose": "connect",
                       "mode": "demo",
                       "expiresAt": "2026-11-16T18:00:00.000Z"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
                     }
                   }
                 }
@@ -23965,6 +27675,38 @@
               }
             }
           },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "404": {
             "description": "Nie ma takiej próby.",
             "content": {
@@ -24101,6 +27843,7 @@
             "required": false
           }
         ],
+        "security": [],
         "responses": {
           "200": {
             "description": "Strona HTML: połączono albo użytkownik odmówił zgody.",
@@ -24382,6 +28125,38 @@
                       },
                       "calendars": [],
                       "complete": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
                     }
                   }
                 }
@@ -24860,6 +28635,38 @@
               }
             }
           },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "404": {
             "description": "Brak połączonego konta.",
             "content": {
@@ -25247,6 +29054,38 @@
                     "description": "Kalendarz nie należy do połączonego konta Google. Nic nie zostało zmienione.",
                     "value": {
                       "error": "unknown_calendar"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
                     }
                   }
                 }
@@ -25690,6 +29529,38 @@
               }
             }
           },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "404": {
             "description": "Brak konta albo grafiku.",
             "content": {
@@ -26053,6 +29924,38 @@
                     "description": "Kalendarz nie należy do połączonego konta Google. Nic nie zostało zmienione.",
                     "value": {
                       "error": "unknown_calendar"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
                     }
                   }
                 }
@@ -26879,6 +30782,38 @@
               }
             }
           },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "404": {
             "description": "Brak konta albo grafiku.",
             "content": {
@@ -27341,6 +31276,38 @@
               }
             }
           },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "404": {
             "description": "Wydarzenie nie było publikowane.",
             "content": {
@@ -27730,6 +31697,38 @@
               }
             }
           },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "404": {
             "description": "Wydarzenie nie było publikowane.",
             "content": {
@@ -28038,6 +32037,38 @@
               }
             }
           },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "503": {
             "description": "Integracja niedostępna.",
             "content": {
@@ -28167,6 +32198,38 @@
                     "summary": "Brak wydarzenia w Google",
                     "value": {
                       "simulate": "missing"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
                     }
                   }
                 }
@@ -28728,6 +32791,38 @@
                           "retryable": false
                         }
                       ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
                     }
                   }
                 }
@@ -29623,6 +33718,38 @@
               }
             }
           },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "404": {
             "description": "Brak połączonego konta.",
             "content": {
@@ -29911,6 +34038,38 @@
               }
             }
           },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "404": {
             "description": "Wydarzenie nie pochodzi z synchronizacji Google.",
             "content": {
@@ -30122,6 +34281,38 @@
               }
             }
           },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "404": {
             "description": "Wydarzenie nie pochodzi z synchronizacji Google.",
             "content": {
@@ -30236,10 +34427,19 @@
       "description": "Current API host"
     }
   ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
   "tags": [
     {
       "name": "System",
       "description": "Liveness and dependency readiness."
+    },
+    {
+      "name": "Auth",
+      "description": "KAC account: registration, sign-in sessions (Authorization: Bearer), password change and account deletion."
     },
     {
       "name": "Calendar",

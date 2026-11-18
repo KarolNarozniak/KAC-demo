@@ -192,12 +192,12 @@ test('Google OAuth (udawany): odmowa, jednorazowy i wygasły state, błąd kodu,
     const authUrl = new URL(started.authUrl);
     assert.deepEqual([authUrl.searchParams.get('access_type'), authUrl.searchParams.get('code_challenge_method'), authUrl.searchParams.get('login_hint')], ['offline', 'S256', null]);
     google.grantCode('code-ok', { sub: 'sub-1', email: 'student@example.test', refreshToken: '1//refresh-secret-A', accessToken: 'ya29.access-secret-A', scope: `openid email ${READ_SCOPE}` });
-    // Powrót z cudzym state (inny użytkownik) jest odrzucany i nie „spala” próby właściciela; kod nie jest wymieniany.
-    const stranger = buildApi(null, [], { userScope: () => ({ userId: 'U-obcy', calendarId: 'K-obcy' }), googleIntegration: service });
-    assert.equal((await callback(stranger, { state: stateOf(started), code: 'code-ok' })).statusCode, 400);
-    await stranger.close();
+    // Przeglądarka wracająca ze strony zgody Google nie ma sesji KAC: właściciela wskazuje jednorazowy state próby,
+    // więc powrót obsłużony przy innym „bieżącym” użytkowniku i tak łączy konto właściciela próby.
     assert.equal((await attempt(app, started.attemptId)).status, 'pending');
-    const connected = await callback(app, { state: stateOf(started), code: 'code-ok' });
+    const stranger = buildApi(null, [], { userScope: () => ({ userId: 'U-obcy', calendarId: 'K-obcy' }), googleIntegration: service });
+    const connected = await callback(stranger, { state: stateOf(started), code: 'code-ok' });
+    await stranger.close();
     assert.equal(connected.statusCode, 200);
     assert.match(connected.body, /Połączono z Google/);
     // PKCE: weryfikator odszyfrowany z próby trafia tylko do serwera tokenów Google.

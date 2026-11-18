@@ -5,6 +5,7 @@
 import { apiBaseUrl } from './importApi';
 import type { PublicationCalendarView, PublicationPreview, PublicationResult, PublicationSimulation } from '../domain/googlePublication';
 import type { CorrectionItem, CorrectionSimulation, CorrectionSyncResult } from '../domain/googleCorrection';
+import { authFetch } from './http.ts';
 import {
   apiErrorMessage, type AttemptPurpose, type GoogleAccountView, type GoogleIntegrationStatus, type IntegrationAttempt, type IntegrationCalendar,
   type CalendarSelection, type DisconnectResult, type ImportedEvent, type SimulatedFailure, type SyncAttempt, type SyncStatus, type SyncSummary,
@@ -19,7 +20,7 @@ export class GoogleIntegrationApiError extends Error {
 async function call<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown, timeoutMs = 30000): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(`${apiBaseUrl()}${path}`, {
+    response = await authFetch(`${apiBaseUrl()}${path}`, {
       method,
       headers: { Accept: 'application/json', ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
       body: body !== undefined ? JSON.stringify(body) : undefined,

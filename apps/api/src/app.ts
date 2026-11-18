@@ -2,6 +2,7 @@ import { demoScope } from './api/scope.js';
 import { registerWorkProfile } from './api/v1/work-profile/routes.js';
 import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { calendarRoutes } from './api/v1/calendar/routes.js';
@@ -13,6 +14,10 @@ import type { ApiOptions, CalendarRepository } from './api/contracts.js';
 import { registerGoogleImport } from './api/v1/imports/google-routes.js';
 import { registerGoogleIntegration } from './api/v1/integrations/google-routes.js';
 import { requestLogSerializer } from './api/log-redaction.js';
+import { documentAuth, enforceAuth } from './api/auth-guard.js';
+import { documentAiLimit, enforceAiLimit } from './api/ai-limit.js';
+import { authRoutes } from './api/v1/auth/routes.js';
+import { clientAddress, trustProxyOption } from './api/client-address.js';
 import { DemoScheduleReader } from './import/work-schedule/reader.js';
 import { blockRoutes } from './api/v1/blocks/routes.js';
 import { aiImportRoutes } from './api/v1/imports/ai-routes.js';
@@ -31,7 +36,8 @@ const API_PREFIX = '/api/v1';
 export function buildApi(repository: CalendarRepository | null, allowedOrigins: string[] = [], options: ApiOptions = {}) {
   // `x-examples` to przykłady dla Swagger UI (api/examples.ts); Ajv w trybie strict musi znać ten klucz.
   // Log żądań bez kodu autoryzacji i state z adresów powrotu Google (api/log-redaction.ts).
-  const app: FastifyInstance = Fastify({ logger: { serializers: { req: requestLogSerializer } }, ajv: { customOptions: { keywords: ['x-examples'] } } });
+  const app: FastifyInstance = Fastify({ logger: { serializers: { req: requestLogSerializer } }, ajv: { customOptions: { keywords: ['x-examples'] } },
+    trustProxy: trustProxyOption(options.trustProxy ?? config.trustProxy) });
   const allowAnyOrigin = allowedOrigins.includes('*');
   const origins = new Set(allowedOrigins);
 
@@ -64,6 +70,7 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
       servers: [{ url: process.env.OPENAPI_SERVER_URL?.trim() || 'http://localhost:4000', description: 'Current API host' }],
       tags: [
         { name: 'System', description: 'Liveness and dependency readiness.' },
+        { name: 'Auth', description: 'KAC account: registration, sign-in sessions (Authorization: Bearer), password change and account deletion.' },
         { name: 'Calendar', description: 'Calendar overview and event lifecycle.' },
         { name: 'Work profile', description: 'Work limits, hour target, commute, versioned availability, hourly rate and shift templates used by planning.' },
         { name: 'Scheduling', description: 'Weekly planning, versions, validation and approval.' },
@@ -76,6 +83,8 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
         { name: 'Notifications', description: 'In-app notification preferences and due reminder queue.' },
       ],
       externalDocs: { description: 'KAC bilingual developer documentation', url: process.env.DOCUSAURUS_URL ?? 'http://localhost:3000' },
+      components: { securitySchemes: { bearerAuth: { type: 'http', scheme: 'bearer', description: 'Token sesji z POST /api/v1/auth/login albo /auth/register.' } } },
+      security: [{ bearerAuth: [] }],
     },
   });
   app.register(swaggerUi, {
@@ -83,6 +92,14 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
     staticCSP: true,
     uiConfig: { deepLinking: true, displayRequestDuration: true, docExpansion: 'list', url: `${API_PREFIX}/openapi.json` },
   });
+
+  // Logowanie: kontrakt zawsze opisuje sesję (bearerAuth, 401), a sprawdzanie sesji działa, gdy serwer ma usługę kont (baza danych).
+  // Bez niej (testy z wstrzykniętym użytkownikiem, API bez bazy) zakres użytkownika ustala options.userScope albo użytkownik demonstracyjny.
+  documentAuth(app);
+  app.register(rateLimit, { global: false, keyGenerator: (request) => clientAddress(request.ip) });
+  const scope = options.auth ? enforceAuth(app, options.auth) : options.userScope ?? demoScope;
+  documentAiLimit(app);
+  enforceAiLimit(app, { repository: options.aiRepository, scope, dailyLimit: options.aiDailyLimit ?? config.aiDailyLimit });
 
   // This route is the stable JSON artifact consumed by Swagger UI, Docusaurus and CI drift checks.
   app.get(`${API_PREFIX}/openapi.json`, { schema: { hide: true } }, async () => app.swagger());
@@ -92,19 +109,21 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
     ? new AiService(new FoundryResponsesClient(config.azureAi))
     : undefined);
   app.register(async (v1) => {
-    registerWorkProfile(v1,options.workProfileRepository,options.userScope??demoScope);
+    // Własna obsługa błędów logowania – w osobnym kontekście, żeby nie zmieniała odpowiedzi pozostałych tras.
+    await v1.register(async (group) => authRoutes(group, { auth: options.auth ?? null, limits: options.authRateLimits }));
+    registerWorkProfile(v1, options.workProfileRepository, scope);
     await healthRoutes(v1, { repository });
-    await calendarRoutes(v1, { repository, scope: options.userScope ?? demoScope });
-    await profileRoutes(v1, { repository: options.workProfileRepository, scope: options.userScope });
-    await schedulingRoutes(v1, { repository: options.scheduleRepository, scope: options.userScope ?? demoScope });
-    await importRoutes(v1, { repository, scheduleRepository: options.scheduleRepository, scheduleReader, google: options.google, scope: options.userScope ?? demoScope });
-    await aiImportRoutes(v1, { repository, aiService, aiRepository: options.aiRepository, scope: options.userScope ?? demoScope });
-    await assistantImportRoutes(v1, { repository, aiService, aiRepository: options.aiRepository, scheduleReader, scope: options.userScope ?? demoScope });
-    await assistantRoutes(v1, { repository, workProfileRepository: options.workProfileRepository, aiService, aiRepository: options.aiRepository, scope: options.userScope ?? demoScope });
-    await notificationRoutes(v1, { repository: options.notificationRepository, scope: options.userScope ?? demoScope });
-    await blockRoutes(v1,{repository,scope:options.userScope});
-    registerGoogleImport(v1, repository, options.google ?? {}, options.userScope ?? demoScope);
-    registerGoogleIntegration(v1, options.googleIntegration ?? null, options.userScope ?? demoScope);
+    await calendarRoutes(v1, { repository, scope });
+    await profileRoutes(v1, { repository: options.workProfileRepository, scope });
+    await schedulingRoutes(v1, { repository: options.scheduleRepository, scope });
+    await importRoutes(v1, { repository, scheduleRepository: options.scheduleRepository, scheduleReader, google: options.google, scope });
+    await aiImportRoutes(v1, { repository, aiService, aiRepository: options.aiRepository, scope });
+    await assistantImportRoutes(v1, { repository, aiService, aiRepository: options.aiRepository, scheduleReader, scope });
+    await assistantRoutes(v1, { repository, workProfileRepository: options.workProfileRepository, aiService, aiRepository: options.aiRepository, scope });
+    await notificationRoutes(v1, { repository: options.notificationRepository, scope });
+    await blockRoutes(v1, { repository, scope });
+    registerGoogleImport(v1, repository, options.google ?? {}, scope);
+    registerGoogleIntegration(v1, options.googleIntegration ?? null, scope);
   }, { prefix: API_PREFIX });
 
   return app;

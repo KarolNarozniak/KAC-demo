@@ -128,7 +128,7 @@ Decision D03: after the local changes are committed KAC asks Google to revoke it
 
 ## Security
 
-- OAuth 2.0 authorization code flow with PKCE (S256) and offline access. The `state` has 32 random bytes, is single-use, valid for 10 minutes and stored only as a SHA-256 hash. The Google return must reach the same user who started the attempt.
+- OAuth 2.0 authorization code flow with PKCE (S256) and offline access. The `state` has 32 random bytes, is single-use, valid for 10 minutes and stored only as a SHA-256 hash. A browser returning from Google has no KAC session, so this `state` identifies the attempt owner. One Google account can be connected to only one KAC account (`google_account_in_use`) – see [Sign-in and accounts](./auth.md).
 - The account identity is `sub` from the `id_token` (the email address can change). Accounts without a verified email are rejected.
 - Tokens are encrypted with AES-256-GCM using `GOOGLE_TOKEN_ENCRYPTION_KEY`, kept outside the database. Additional authenticated data binds each ciphertext to its account and token kind, so a ciphertext moved to another row cannot be decrypted. The PKCE verifier is encrypted too and deleted after use.
 - Tokens never reach API responses, the app or logs. The request log masks `code` and `state` in the return URL; errors are logged as codes only.
@@ -186,7 +186,7 @@ Migration `022_google_event_sync.sql` adds the downloaded-event mapping `t_googl
 ## Tests
 
 - `apps/api/tests/google-integration.test.ts` – encryption, consent URL, code exchange, refresh (single flight, rotation, `invalid_grant`), calendar list, key configuration, logs without OAuth codes.
-- `apps/api/tests/google-integration.integration.test.ts` (PostgreSQL) – demo mode (denial, 1a, account change, 7a, expired attempt, another user's attempt), simulated Google (single-use and expired `state`, 6a, missing refresh token, ciphertexts in the database, no tokens in responses, reconnect) and parallel refresh from two instances. Every scenario checks that the user's events did not change.
+- `apps/api/tests/google-integration.integration.test.ts` (PostgreSQL) – demo mode (denial, 1a, account change, 7a, expired attempt, another user's attempt), simulated Google (single-use and expired `state`, return without a KAC session, 6a, missing refresh token, ciphertexts in the database, no tokens in responses, reconnect) and parallel refresh from two instances. Every scenario checks that the user's events did not change.
 - `apps/web/tests/googleIntegration.test.ts` – panel state and messages.
 - `apps/api/tests/google-disconnect.integration.test.ts` (PostgreSQL) – disconnecting in demo mode and with simulated Google, repeating, cancelled attempt, stopped outbox work, rejected old generation and late callback, failed revoke (network, 503), revoke on account change; `apps/web/tests/googleDisconnect.test.ts` – confirmation and result texts.
 - `apps/api/tests/google-events-sync.integration.test.ts` (PostgreSQL, simulated Google and a fixed clock) – pages, series instances, DST change, skipped all-day/declined/own, empty calendar, repeat without duplicates, window move, incremental changes, manual entry untouched, conflict and restore, permanent deletion in KAC, page error and cursor, rollback, 410, unselect and reselect, account change, another user's scope, demo; `apps/api/tests/google-events.test.ts` – events.list requests and error codes, demo, message; `apps/web/tests/googleEventsSync.test.ts` – per-calendar result and event details.

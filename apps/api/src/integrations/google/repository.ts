@@ -39,7 +39,7 @@ export type StoredTokens = EncryptedTokens & { accountId: string; generation: nu
 
 /** Konflikt przy zapisie połączenia – wynik jest kontrolowany, nic nie zostaje nadpisane. */
 export class ConnectionConflictError extends Error {
-  constructor(readonly code: 'already_connected' | 'reconnect_account_mismatch' | 'no_refresh_token' | 'not_connected' | 'attempt_cancelled') { super(code); }
+  constructor(readonly code: 'already_connected' | 'reconnect_account_mismatch' | 'no_refresh_token' | 'not_connected' | 'attempt_cancelled' | 'google_account_in_use') { super(code); }
 }
 
 const STATUS_DB: Record<AccountStatus, string> = { connected: 'Połączone', reconnect_required: 'Wymaga ponownego logowania' };
@@ -111,10 +111,15 @@ export class PostgresGoogleIntegrationRepository {
    * Jednorazowe przejęcie próby: tylko oczekująca, nieprzeterminowana i należąca do użytkownika, który wrócił z Google.
    * Ponowne użycie tego samego state zwraca null; cudzy powrót nie „spala” próby właściciela.
    */
-  async claimAttempt(stateHash: string, scope: UserScope, mode: IntegrationMode): Promise<AuthAttempt | null> {
+  /**
+   * Przejęcie próby po skrócie `state`. Powrót z Google nie ma sesji KAC (przeglądarka wraca bez nagłówka Authorization), więc
+   * właściciela wskazuje sama próba: `state` jest losowy, jednorazowy, krótko ważny i przypisany do użytkownika przy starcie.
+   * scope – dodatkowe zawężenie do użytkownika (gdy znany).
+   */
+  async claimAttempt(stateHash: string, scope: UserScope | null, mode: IntegrationMode): Promise<AuthAttempt | null> {
     const result = await this.pool.query(`update t_google_oauth_proby set status = 'processing'
-      where state_hash = $1 and id_uzytkownika = $2 and id_kalendarza = $3 and tryb = $4 and status = 'pending' and expires_at > now() returning *`,
-    [stateHash, scope.userId, scope.calendarId, mode]);
+      where state_hash = $1 and ($2::text is null or (id_uzytkownika = $2 and id_kalendarza = $3)) and tryb = $4 and status = 'pending' and expires_at > now() returning *`,
+    [stateHash, scope?.userId ?? null, scope?.calendarId ?? null, mode]);
     return result.rows[0] ? attemptFrom(result.rows[0]) : null;
   }
 
@@ -149,6 +154,18 @@ export class PostgresGoogleIntegrationRepository {
    */
   async saveConnectionWith(scope: UserScope, input: { purpose: AttemptPurpose; mode: IntegrationMode; sub: string; email: string; grantedScopes: string[]; attemptId?: string },
     tokensFor: ((accountId: string) => EncryptedTokens) | null): Promise<{ account: GoogleAccountRecord; replaced: { account: GoogleAccountRecord; refreshEnc: string | null } | null }> {
+    try {
+      return await this.saveConnectionInTransaction(scope, input, tokensFor);
+    } catch (error) {
+      // Dwóch użytkowników KAC kończy łączenie tego samego konta Google w tej samej chwili – indeks przepuszcza tylko jednego.
+      if ((error as { code?: string; constraint?: string }).code === '23505' && (error as { constraint?: string }).constraint === 'uq_t_konta_google_active_sub')
+        throw new ConnectionConflictError('google_account_in_use');
+      throw error;
+    }
+  }
+
+  private async saveConnectionInTransaction(scope: UserScope, input: { purpose: AttemptPurpose; mode: IntegrationMode; sub: string; email: string; grantedScopes: string[]; attemptId?: string },
+    tokensFor: ((accountId: string) => EncryptedTokens) | null): Promise<{ account: GoogleAccountRecord; replaced: { account: GoogleAccountRecord; refreshEnc: string | null } | null }> {
     return this.transaction(async (client) => {
       // Blokada kont użytkownika – równoległe dokończenia logowania i odłączenie (G03) wykonują się po kolei.
       await client.query('select pg_advisory_xact_lock(hashtext($1))', [`google-account:${scope.userId}`]);
@@ -174,6 +191,13 @@ export class PostgresGoogleIntegrationRepository {
         await client.query('delete from t_google_tokeny where id_konta = $1', [active.accountId]);
       }
       if (!active && input.purpose === 'reconnect') throw new ConnectionConflictError('not_connected');
+      // Jedno prawdziwe konto Google – jedno konto KAC (indeks uq_t_konta_google_active_sub). Odłączenie u jednego użytkownika cofa zgodę
+      // w Google, więc wspólne konto Google rozłączałoby się drugiemu. Konta demonstracyjne są wspólne i tego nie dotyczy.
+      if (input.mode === 'google') {
+        const taken = await client.query(`select 1 from t_konta_google where google_sub = $1 and tryb = 'google' and status_polaczenia <> 'Niepołączone'
+          and id_uzytkownika <> $2 limit 1`, [input.sub, scope.userId]);
+        if (taken.rowCount) throw new ConnectionConflictError('google_account_in_use');
+      }
 
       let accountId: string;
       if (active && sameAccount) {

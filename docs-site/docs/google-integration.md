@@ -128,7 +128,7 @@ Decyzja D03: po zatwierdzeniu lokalnych zmian KAC prosi Google o cofnięcie zgod
 
 ## Bezpieczeństwo
 
-- OAuth 2.0 „authorization code” z PKCE (S256) i dostępem offline. `state` ma 32 losowe bajty, jest jednorazowy, ważny 10 minut i zapisany wyłącznie jako skrót SHA-256. Powrót z Google musi trafić do tego samego użytkownika, który rozpoczął próbę.
+- OAuth 2.0 „authorization code” z PKCE (S256) i dostępem offline. `state` ma 32 losowe bajty, jest jednorazowy, ważny 10 minut i zapisany wyłącznie jako skrót SHA-256. Przeglądarka wracająca z Google nie ma sesji KAC, więc właściciela próby wskazuje ten `state`. Jedno konto Google może być połączone tylko z jednym kontem KAC (`google_account_in_use`) – patrz [Logowanie i konta](./auth.md).
 - Tożsamością konta jest `sub` z `id_token` (adres e-mail może się zmienić). Konto bez potwierdzonego adresu e-mail jest odrzucane.
 - Tokeny są szyfrowane AES-256-GCM kluczem `GOOGLE_TOKEN_ENCRYPTION_KEY` spoza bazy. Dane dodatkowe szyfrogramu wiążą go z kontem i rodzajem tokenu, więc przeniesiony do innego wiersza nie da się odszyfrować. Weryfikator PKCE też jest szyfrowany i usuwany po użyciu.
 - Tokeny nie trafiają do odpowiedzi API, aplikacji ani logów. Log żądań zamazuje `code` i `state` w adresie powrotu; błędy są logowane tylko jako kod.
@@ -186,7 +186,7 @@ Migracja `022_google_event_sync.sql` dodaje mapowanie pobranych wydarzeń `t_goo
 ## Testy
 
 - `apps/api/tests/google-integration.test.ts` – szyfrowanie, adres zgody, wymiana kodu, odświeżanie (jedno naraz, rotacja, `invalid_grant`), lista kalendarzy, konfiguracja klucza, logi bez kodu OAuth.
-- `apps/api/tests/google-integration.integration.test.ts` (PostgreSQL) – makieta (odmowa, 1a, zmiana konta, 7a, wygasła próba, cudza próba), udawany Google (jednorazowy i wygasły `state`, 6a, brak tokenu odświeżania, szyfrogramy w bazie, brak tokenów w odpowiedziach, ponowne logowanie) oraz równoległe odświeżanie z dwóch instancji. Każdy scenariusz sprawdza, że wydarzenia użytkownika się nie zmieniły.
+- `apps/api/tests/google-integration.integration.test.ts` (PostgreSQL) – makieta (odmowa, 1a, zmiana konta, 7a, wygasła próba, cudza próba), udawany Google (jednorazowy i wygasły `state`, powrót bez sesji KAC, 6a, brak tokenu odświeżania, szyfrogramy w bazie, brak tokenów w odpowiedziach, ponowne logowanie) oraz równoległe odświeżanie z dwóch instancji. Każdy scenariusz sprawdza, że wydarzenia użytkownika się nie zmieniły.
 - `apps/web/tests/googleIntegration.test.ts` – stan panelu i komunikaty.
 - `apps/api/tests/google-disconnect.integration.test.ts` (PostgreSQL) – odłączenie w makiecie i z udawanym Google, powtórzenie, anulowana próba, zatrzymane prace outboxa, odrzucona stara generacja i spóźniony powrót, nieudane cofnięcie zgody (sieć, 503), cofnięcie zgody przy zmianie konta; `apps/web/tests/googleDisconnect.test.ts` – teksty potwierdzenia i wyniku.
 - `apps/api/tests/google-events-sync.integration.test.ts` (PostgreSQL, udawany Google i stały zegar) – strony, instancje serii, zmiana czasu, pominięte całodniowe/odrzucone/własne, pusty kalendarz, powtórka bez duplikatów, przesunięcie okna, zmiany przyrostowe, ręczny wpis nietknięty, konflikt i przywrócenie, trwałe usunięcie w KAC, błąd strony i kursor, rollback, 410, odznaczenie i ponowny wybór, zmiana konta, cudzy zakres, makieta; `apps/api/tests/google-events.test.ts` – żądania events.list i kody błędów, makieta, komunikat; `apps/web/tests/googleEventsSync.test.ts` – wynik per kalendarz i szczegóły wydarzenia.

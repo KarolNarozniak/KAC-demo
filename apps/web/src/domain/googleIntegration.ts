@@ -135,6 +135,7 @@ function attemptErrorText(code: string | null): string {
     case 'authorization_code_invalid': return 'Kod logowania wygasł albo został już użyty. Spróbuj ponownie.';
     case 'google_unavailable': return 'Google nie odpowiada. Sprawdź połączenie z internetem i spróbuj ponownie.';
     case 'missing_account_identity': return 'Google nie potwierdził adresu e-mail konta. Wybierz konto z potwierdzonym adresem.';
+    case 'google_account_in_use': return 'To konto Google jest już połączone z innym kontem KAC. Odłącz je tam albo wybierz inne konto Google.';
     default: return 'Nie udało się połączyć z Google (błąd autoryzacji). Spróbuj ponownie.';
   }
 }

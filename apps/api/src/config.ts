@@ -23,6 +23,20 @@ const positiveInt = (value: string | undefined, fallback: number, maximum: numbe
   return Number.isInteger(parsed) && parsed > 0 && parsed <= maximum ? parsed : fallback;
 };
 
+/**
+ * Ilu serwerom pośredniczącym przed API ufać przy ustalaniu adresu klienta (X-Forwarded-For) – od tego zależą limity logowania na adres IP.
+ * TRUST_PROXY: liczba pośredników albo true/false. Domyślnie 1 w Azure App Service (ustawia WEBSITE_SITE_NAME), lokalnie brak pośrednika.
+ * true ufa całemu nagłówkowi, który klient może sfałszować – zalecana jest liczba.
+ */
+export function parseTrustProxy(value: string | undefined, onAzure: boolean): boolean | number {
+  const text = value?.trim().toLowerCase();
+  if (text === 'true') return true;
+  if (text === 'false') return false;
+  const hops = Number(text);
+  if (text && Number.isInteger(hops) && hops >= 0) return hops;
+  return onAzure ? 1 : false;
+}
+
 export const config = {
   port: parsePort(process.env.PORT || process.env.API_PORT, 4000),
   databaseUrl: process.env.DATABASE_URL?.trim() || '',
@@ -39,6 +53,18 @@ export const config = {
     .split(',')
     .map((value) => value.trim())
     .filter(Boolean),
+  /**
+   * Logowanie do KAC. REGISTRATION_MODE: open (każdy zakłada konto), invite (wymaga REGISTRATION_INVITE_CODE), closed (konta zakłada
+   * administrator skryptem auth:set-password). Na serwerze dostępnym z internetu zalecane invite.
+   */
+  auth: {
+    registration: (['open', 'invite', 'closed'].includes(process.env.REGISTRATION_MODE?.trim().toLowerCase() ?? '')
+      ? process.env.REGISTRATION_MODE!.trim().toLowerCase() : 'open') as 'open' | 'invite' | 'closed',
+    inviteCode: process.env.REGISTRATION_INVITE_CODE?.trim() ?? '',
+  },
+  trustProxy: parseTrustProxy(process.env.TRUST_PROXY, Boolean(process.env.WEBSITE_SITE_NAME)),
+  /** Dzienny limit wywołań Azure AI na użytkownika (ostatnie 24 h); 0 wyłącza limit. */
+  aiDailyLimit: (() => { const value = Number(process.env.AI_DAILY_LIMIT ?? 200); return Number.isInteger(value) && value >= 0 ? value : 200; })(),
   demoUserId: process.env.DB_DEMO_USER_ID || 'U001',
   demoCalendarId: process.env.DB_DEMO_CALENDAR_ID || 'K001',
   /** Odczyt grafiku pracy: 'local' (PDF + OCR na serwerze) albo 'demo' (przykładowy grafik, bez OCR). */
