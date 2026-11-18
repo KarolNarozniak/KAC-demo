@@ -44,6 +44,17 @@ jobs:
       - name: Install workspace dependencies
         run: npm ci
 
+      - name: Require the single-App-Service public origin for deployments
+        if: github.event_name != 'pull_request'
+        env:
+          KAC_API_URL: ${{ vars.KAC_API_URL }}
+        run: |
+          test -n "$KAC_API_URL"
+          case "$KAC_API_URL" in
+            https://*) ;;
+            *) echo "KAC_API_URL must be the HTTPS origin of KAC (without /api/v1)." >&2; exit 1 ;;
+          esac
+
       - name: Enforce versioned OpenAPI contract
         run: npm run api:openapi:check
 
@@ -65,32 +76,26 @@ jobs:
       - name: Build frontend, backend and bilingual documentation
         run: npm run build
 
-      - name: Prepare minimal web deployment package
-        run: npm run package:deploy --workspace @kac/web
-
-      - name: Prepare standalone API deployment package
+      - name: Prepare unified frontend, API and worker package
         run: npm run package:deploy --workspace @kac/api
 
       - name: Verify deployment packages
         run: |
-          test -f apps/web/deploy/dist/index.html
-          test -f apps/web/deploy/server.mjs
+          test -f apps/api/deploy/web/index.html
+          test -f apps/api/deploy/web/service-worker.js
           test -f apps/api/deploy/dist/server.js
+          test -f apps/api/deploy/dist/worker.js
           test -f apps/api/deploy/node_modules/fastify/package.json
+          test -f apps/api/deploy/App_Data/jobs/continuous/kac-outbox/run.sh
+          test -f apps/api/deploy/App_Data/jobs/continuous/kac-outbox/settings.job
 
-      - name: Upload web deployment package
+      - name: Upload unified KAC deployment package
         uses: actions/upload-artifact@v6
         with:
-          name: kac-web
-          path: apps/web/deploy/
-
-      - name: Upload API deployment package
-        uses: actions/upload-artifact@v6
-        with:
-          name: kac-api
+          name: kac-app
           path: apps/api/deploy/
 
-  deploy-web:
+  deploy-app:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-24.04
     needs: build-and-test
@@ -99,11 +104,11 @@ jobs:
       id-token: write
 
     steps:
-      - name: Download web package
+      - name: Download unified KAC package
         uses: actions/download-artifact@v7
         with:
-          name: kac-web
-          path: web-package
+          name: kac-app
+          path: app-package
 
       - name: Sign in to Azure
         uses: azure/login@v3.1.0
@@ -112,39 +117,10 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_348FBFF3B5BD408BBBFD5B656B478EB7 }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_BC4E5D8B5D42471DBFA98CF110CDE0A2 }}
 
-      - name: Deploy web frontend to Azure App Service
+      - name: Deploy the unified web and API app to KAC
         uses: azure/webapps-deploy@v3
         with:
           app-name: KAC
           slot-name: Production
-          package: web-package
-          startup-command: node server.mjs
-
-  deploy-api:
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master' && vars.AZURE_API_WEBAPP_NAME != ''
-    runs-on: ubuntu-24.04
-    needs: build-and-test
-    permissions:
-      contents: read
-      id-token: write
-
-    steps:
-      - name: Download API package
-        uses: actions/download-artifact@v7
-        with:
-          name: kac-api
-          path: api-package
-
-      - name: Sign in to Azure
-        uses: azure/login@v3.1.0
-        with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_94A10D8762FE4A29B43EAEF6FB30E582 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_348FBFF3B5BD408BBBFD5B656B478EB7 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_BC4E5D8B5D42471DBFA98CF110CDE0A2 }}
-
-      - name: Deploy API to its separate Azure App Service
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: ${{ vars.AZURE_API_WEBAPP_NAME }}
-          package: api-package
+          package: app-package
           startup-command: npm start
