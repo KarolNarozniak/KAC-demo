@@ -242,7 +242,7 @@ export default function AssistantScreen({ active, onCalendarChange, importHandof
         {uploading && <View style={styles.row}><ActivityIndicator size="small" color={palette.blue}/><Text accessibilityLiveRegion="polite" style={styles.muted}>Odczytuję zdjęcie i przygotowuję podgląd…</Text></View>}
         {uploadRetry && <Button title="Ponów odczyt zdjęcia" disabled={sending} onPress={()=>void uploadAttachment({...uploadRetry,sessionId:undefined,rows:undefined})}/>}
         {imports.map(draft=><ChatImportCard key={draft.id} draft={draft} onChanged={()=>void refreshImports()} onCalendarChange={onCalendarChange}/>)}
-        {(replying || streamText) && <View style={{ alignSelf: 'flex-start', maxWidth: compact ? '95%' : 720, padding: 16, borderRadius: 12, backgroundColor: palette.surface }}>
+        {(replying || !!streamText) && <View style={{ alignSelf: 'flex-start', maxWidth: compact ? '95%' : 720, padding: 16, borderRadius: 12, backgroundColor: palette.surface }}>
           {!!streamText && <Text style={styles.body}>{streamText}</Text>}
           <View accessibilityLiveRegion="polite" style={[styles.row, { marginTop: streamText ? 6 : 0 }]}>
             {replying && <ActivityIndicator size="small" color={palette.blue} />}

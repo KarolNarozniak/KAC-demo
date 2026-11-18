@@ -1,5 +1,6 @@
 // Klient API importu: kontrola rozpoznanych danych przed zapisem (S23KC2S1P2-32)
 // i import grafiku pracy ze zdjęcia lub pliku (S23KC2S1P2-44).
+import { authFetch } from './http.ts';
 
 const baseUrl = () => {
   const configured = process.env.EXPO_PUBLIC_API_URL?.trim();
@@ -13,7 +14,7 @@ const baseUrl = () => {
 export const apiBaseUrl = baseUrl;
 
 async function postJson(path: string, body: unknown, signal?: AbortSignal): Promise<Response> {
-  return fetch(`${baseUrl()}${path}`, {
+  return authFetch(`${baseUrl()}${path}`, {
     method: 'POST',
     headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -135,6 +136,7 @@ export async function readWorkSchedule(fileName: string, dataBase64: string): Pr
 const aiReadErrors: Record<string, string> = {
   azure_ai_not_configured: 'Azure AI Foundry nie jest skonfigurowane. Sprawdź endpoint projektu, deployment modelu i logowanie API.',
   azure_ai_rate_limited: 'Azure AI ograniczył liczbę żądań. Poczekaj chwilę i spróbuj ponownie.',
+  ai_daily_limit: 'Wykorzystano dzienny limit odczytu przez AI dla tego konta. Wybierz odczyt lokalny albo spróbuj ponownie jutro.',
   azure_ai_timeout: 'Odczyt AI przekroczył limit czasu. Wybierz mniejszy fragment i spróbuj ponownie.',
   database_not_configured: 'Serwer nie ma skonfigurowanej bazy danych. Plik nie został zapisany.',
   'file-too-large': 'Plik może mieć maksymalnie 5 MB.',

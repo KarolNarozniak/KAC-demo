@@ -2,6 +2,7 @@
 // Zatwierdzenie i anulowanie korzysta ze wspólnych funkcji sesji importu (confirmImport, cancelImport).
 
 import { apiBaseUrl, type ImportCategory, type ImportCollision, type ImportPreviewRow, type ImportRowInput } from './importApi';
+import { authFetch } from './http.ts';
 
 export type GoogleConnectionStart =
   | { connectionId: string; mode: 'google'; authUrl: string }
@@ -36,7 +37,7 @@ export class GoogleImportError extends Error {
 async function call<T>(method: 'GET' | 'POST' | 'DELETE', path: string, body?: unknown): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(`${apiBaseUrl()}${path}`, {
+    response = await authFetch(`${apiBaseUrl()}${path}`, {
       method,
       headers: { Accept: 'application/json', ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
       body: body !== undefined ? JSON.stringify(body) : undefined,

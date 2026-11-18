@@ -1,4 +1,5 @@
 import type { CalendarEvent } from '../domain/model';
+import { authFetch } from './http.ts';
 export type EventCollision = { id: string; title: string; category: string; start: string; end: string; overlapStart: string; overlapEnd: string;
   /** S23KC2S1P2-302: rodzaj i powtarzalność kolizji. */
   mandatory?: boolean; repeatWeekly?: boolean; recurring?: boolean };
@@ -14,7 +15,7 @@ const baseUrl = () => {
   throw new Error('Brak konfiguracji adresu API.');
 };
 async function request(path: string, options?: RequestInit) {
-  const response = await fetch(`${baseUrl()}${path}`, { ...options, headers: { Accept: 'application/json', ...(options?.body ? { 'Content-Type': 'application/json' } : {}) }, signal: AbortSignal.timeout(15000) });
+  const response = await authFetch(`${baseUrl()}${path}`, { ...options, headers: { Accept: 'application/json', ...(options?.body ? { 'Content-Type': 'application/json' } : {}) }, signal: AbortSignal.timeout(15000) });
   if (response.status === 409) {
     const data = await response.json();
     if (data.error === 'event_collision') throw new EventCollisionError(data.conflicts, data.collisionToken);

@@ -2,7 +2,7 @@ import SelectionMark from './src/components/SelectionMark';
 import { configureAssistantPreferences, defaultAssistantPreferences, normalizeAssistantPreferences, type AssistantPreferences } from './src/domain/assistantPreferences';
 import type { ChatImportHandoff } from './src/services/chatImportApi';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Text, View, Pressable, Image, Modal, ScrollView, TextInput, Platform, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Text, View, Pressable, Image, Modal, ScrollView, TextInput, Platform, useWindowDimensions } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -19,7 +19,15 @@ import KeyboardFrame from './src/components/KeyboardFrame';
 import { useKeyboardVisible } from './src/components/keyboardVisibility';
 import ScreenTransition from './src/components/ScreenTransition';
 import GoogleIntegrationPanel from './src/components/GoogleIntegrationPanel';
+import AccountPanel from './src/components/AccountPanel';
+import AuthScreen, { type SignInVia } from './src/screens/AuthScreen';
+import RecoveryCodeScreen, { type RecoveryCodeReason } from './src/screens/RecoveryCodeScreen';
 import { Button, ThemeProvider, ThemeToggle, useTheme, type ThemeMode } from './src/components/ui';
+import { authErrorMessage, type AuthSession, type AuthUser } from './src/domain/auth';
+import { AuthApiError, currentUser, logout } from './src/services/authApi';
+import { forgetDailySummary } from './src/services/assistantApi';
+import { onSessionExpired, setSessionToken } from './src/services/http';
+import { clearSessionToken, loadSessionToken, saveSessionToken } from './src/services/sessionStore';
 
 // Konfiguracja obsługi powiadomień w tle / na pierwszym planie dla Expo (Mobile) z uwzględnieniem właściwości typu NotificationBehavior
 Notifications.setNotificationHandler({
@@ -48,10 +56,107 @@ export default function App() {
         setMode(next);
         void AsyncStorage.setItem('kac-theme', next).catch(() => { });
     };
-    return <SafeAreaProvider><ThemeProvider mode={mode} toggleMode={toggleMode}><StatusBar style={mode === 'dark' ? 'light' : 'dark'} /><KeyboardFrame><CalendarApp /></KeyboardFrame></ThemeProvider></SafeAreaProvider>;
+    return <SafeAreaProvider><ThemeProvider mode={mode} toggleMode={toggleMode}><StatusBar style={mode === 'dark' ? 'light' : 'dark'} /><KeyboardFrame><AuthGate /></KeyboardFrame></ThemeProvider></SafeAreaProvider>;
 }
 
-function CalendarApp() {
+type AuthState =
+    | { status: 'loading' }
+    | { status: 'signed-out'; notice?: string }
+    | { status: 'offline'; message: string }
+    | { status: 'signed-in'; user: AuthUser }
+    // Po rejestracji i po resecie hasła: kod odzyskiwania do zapisania, zanim użytkownik wejdzie do aplikacji (sesja jest już zapisana).
+    | { status: 'recovery-code'; user: AuthUser; code: string; reason: RecoveryCodeReason };
+
+/** Po wyjściu z konta to urządzenie nie dostaje już jego przypomnień Web Push ani nie pamięta ustawień asystenta. */
+async function forgetAccountOnDevice(removeOnServer: boolean) {
+    try {
+        if (Platform.OS === 'web' && typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+            const registration = await navigator.serviceWorker.getRegistration('/');
+            const subscription = await registration?.pushManager?.getSubscription();
+            if (subscription) {
+                if (removeOnServer) await removeWebPushSubscription(subscription.endpoint).catch(() => undefined);
+                await subscription.unsubscribe().catch(() => false);
+            }
+        }
+    } catch { /* przeglądarka bez Web Push */ }
+    await AsyncStorage.removeItem('kac-assistant-preferences').catch(() => undefined);
+    configureAssistantPreferences({ ...defaultAssistantPreferences });
+    forgetDailySummary();
+}
+
+/** Logowanie przed kalendarzem: zapisana sesja → /auth/me; wygasła sesja (401) w dowolnym zapytaniu wraca do ekranu logowania. */
+function AuthGate() {
+    const { palette, styles } = useTheme();
+    const [state, setState] = useState<AuthState>({ status: 'loading' });
+
+    const restore = useCallback(async () => {
+        setState({ status: 'loading' });
+        const token = await loadSessionToken();
+        if (!token) { setState({ status: 'signed-out' }); return; }
+        setSessionToken(token);
+        try {
+            setState({ status: 'signed-in', user: await currentUser() });
+        } catch (error) {
+            // 401 obsługuje onSessionExpired poniżej; brak sieci nie wylogowuje – sesja może być nadal ważna.
+            if (error instanceof AuthApiError && error.status === 401) return;
+            setState({ status: 'offline', message: error instanceof Error ? error.message : authErrorMessage('network') });
+        }
+    }, []);
+
+    useEffect(() => onSessionExpired(() => {
+        void clearSessionToken();
+        void forgetAccountOnDevice(false);
+        setState({ status: 'signed-out', notice: authErrorMessage('unauthorized') });
+    }), []);
+    useEffect(() => { void restore(); }, [restore]);
+
+    const signedIn = (session: AuthSession, via: SignInVia) => {
+        setSessionToken(session.token);
+        void saveSessionToken(session.token);
+        setState(session.recoveryCode
+            ? { status: 'recovery-code', user: session.user, code: session.recoveryCode, reason: via === 'recover' ? 'recovered' : 'registered' }
+            : { status: 'signed-in', user: session.user });
+    };
+    // Np. nowy kod odzyskiwania w Ustawieniach – zmienia dane konta bez ponownego logowania.
+    const userUpdated = (user: AuthUser) => setState((current) => current.status === 'signed-in' && current.user.id === user.id ? { status: 'signed-in', user } : current);
+    const leave = async (notice: string) => {
+        setSessionToken(null);
+        await clearSessionToken();
+        setState({ status: 'signed-out', notice });
+    };
+    const signOut = async () => {
+        await forgetAccountOnDevice(true);
+        await logout().catch(() => undefined);
+        await leave('Wylogowano. Do zobaczenia!');
+    };
+    const accountDeleted = async () => {
+        await forgetAccountOnDevice(false);
+        await leave('Konto i jego dane zostały usunięte.');
+    };
+
+    if (state.status === 'signed-in') return <CalendarApp key={state.user.id} user={state.user} onSignOut={signOut} onAccountDeleted={accountDeleted} onUserUpdated={userUpdated} />;
+    if (state.status === 'recovery-code') {
+        const { user } = state;
+        return <RecoveryCodeScreen code={state.code} reason={state.reason} onContinue={() => setState({ status: 'signed-in', user })} />;
+    }
+    if (state.status === 'signed-out') return <AuthScreen notice={state.notice} onSignedIn={signedIn} />;
+    return <SafeAreaView style={{ flex: 1, backgroundColor: palette.bg, alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+        <Image accessibilityLabel="Logo Aura Kalendar" source={require('./logo.png')} resizeMode="contain" style={{ width: 56, height: 56, marginBottom: 16 }} />
+        {state.status === 'loading' ? <ActivityIndicator accessibilityLabel="Wczytywanie" color={palette.blue} /> :
+            <View accessibilityRole="alert" style={[styles.card, { width: '100%', maxWidth: 440 }]}>
+                <Text style={styles.heading}>Nie można połączyć się z KAC</Text>
+                <Text style={[styles.body, { marginTop: 8 }]}>{state.message}</Text>
+                <View style={[styles.row, { flexWrap: 'wrap', marginTop: 14 }]}>
+                    <Button title="Spróbuj ponownie" primary onPress={() => void restore()} />
+                    <Button title="Wyloguj na tym urządzeniu" onPress={() => void forgetAccountOnDevice(false).then(() => leave('Wylogowano na tym urządzeniu.'))} />
+                </View>
+            </View>}
+    </SafeAreaView>;
+}
+
+function CalendarApp({ user, onSignOut, onAccountDeleted, onUserUpdated }: {
+    user: AuthUser; onSignOut: () => Promise<void>; onAccountDeleted: () => Promise<void>; onUserUpdated: (user: AuthUser) => void;
+}) {
     const { palette, styles } = useTheme();
     const desktop = useWindowDimensions().width >= 1000;
     const keyboardVisible = useKeyboardVisible();
@@ -96,7 +201,9 @@ function CalendarApp() {
 
     useEffect(() => {
         let alive = true;
-        void getNotificationSettings().then((settings) => {
+        const settingsLoad = getNotificationSettings();
+        const pushConfigLoad = getWebPushConfig();
+        void settingsLoad.then((settings) => {
             if (alive) {
                 setNotificationSettings(settings);
                 setNotificationMinutes(String(settings.minutesBefore));
@@ -106,7 +213,12 @@ function CalendarApp() {
                 setPrivateRemindersDraft(settings.privateReminders ?? true);
             }
         }).catch(() => { });
-        void getWebPushConfig().then((push) => { if (alive) setWebPushAvailable(push.enabled); }).catch(() => { });
+        void pushConfigLoad.then((push) => { if (alive) setWebPushAvailable(push.enabled); }).catch(() => { });
+        // Wylogowanie wyłącza Web Push tej przeglądarki (forgetAccountOnDevice) – po zalogowaniu przywracamy go dla bieżącego konta.
+        void Promise.all([settingsLoad, pushConfigLoad]).then(([settings, push]) => {
+            const granted = Platform.OS === 'web' && typeof Notification !== 'undefined' && Notification.permission === 'granted';
+            if (alive && settings.enabled && push.enabled && granted) void syncWebPushSubscription(true);
+        }).catch(() => { });
         return () => { alive = false; };
     }, []);
 
@@ -360,6 +472,7 @@ function CalendarApp() {
                             route === 'Asystent' ? <AssistantScreen importHandoff={importHandoff} onHandoffConsumed={()=>setImportHandoff(null)} active={active} onCalendarChange={() => setCalendarRevision((value) => value + 1)} /> :
                                 route === 'Ustawienia' ? <ScrollView style={{ flex: 1, minHeight: 0 }} contentContainerStyle={[styles.content, { maxWidth: 860, padding: desktop ? 32 : 16, paddingBottom: 40 }]} keyboardShouldPersistTaps="handled">
                                     <Text accessibilityRole="header" style={styles.title}>Ustawienia</Text><Text style={[styles.subtitle, { marginBottom: 24 }]}>Dostosuj kalendarz do swojego dnia.</Text>
+                                    <AccountPanel user={user} onSignOut={onSignOut} onAccountDeleted={onAccountDeleted} onUserUpdated={onUserUpdated} />
                                     <View style={[styles.row, { justifyContent: 'space-between', marginBottom: 20 }]}><Text style={styles.heading}>Motyw</Text><ThemeToggle /></View>
                                     <Text style={[styles.heading, { marginBottom: 8 }]}>Układ tygodnia na komputerze</Text><Text style={[styles.muted, { marginBottom: 12 }]}>Motyw i układ zapisują się automatycznie. Na telefonie tydzień wyświetla się jako lista.</Text>
                                     <View accessibilityRole="radiogroup" style={{ gap: 8 }}>

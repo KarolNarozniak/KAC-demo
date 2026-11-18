@@ -61,9 +61,23 @@ Najważniejsze zmienne:
 | `GOOGLE_REDIRECT_URI` | Callback OAuth, domyślnie `http://localhost:4000/api/v1/import/google/callback` |
 | `GOOGLE_INTEGRATION_REDIRECT_URI` | Callback trwałego połączenia, domyślnie `http://localhost:4000/api/v1/integrations/google/callback` |
 | `GOOGLE_TOKEN_ENCRYPTION_KEY` | Klucz szyfrowania tokenów Google (32 bajty w base64); bez niego prawdziwe połączenie jest wyłączone |
+| `REGISTRATION_MODE`, `REGISTRATION_INVITE_CODE` | Kto może założyć konto: `open` (domyślnie), `invite` z kodem albo `closed` – patrz [Logowanie i konta](./auth.md) |
+| `AI_DAILY_LIMIT` | Dzienny limit wywołań AI na konto, domyślnie `200`; `0` wyłącza limit |
 | `OPENAPI_SERVER_URL` | Bazowy serwer wpisany do eksportowanego OpenAPI |
 | `API_ORIGIN`, `API_OPENAPI_URL` | Publiczny host API używany przez Docusaurus w linkach do Swaggera i specyfikacji |
 | `DOCUSAURUS_URL`, `DOCUSAURUS_BASE_URL` | Publiczny URL i base path dokumentacji przy wdrożeniu |
+
+## Pierwsze logowanie
+
+Aplikacja zaczyna od ekranu logowania. Załóż konto przyciskiem „Załóż konto” albo ustaw hasło kontu z danymi demonstracyjnymi:
+
+```bash
+npm run auth:set-password -- student.demo@example.test
+```
+
+Po założeniu konta aplikacja raz pokazuje kod odzyskiwania – przyda się, gdy zapomnisz hasła („Nie pamiętasz hasła?” na ekranie logowania). Kontu demonstracyjnemu utworzysz kod w Ustawienia → Konto.
+
+Po pobraniu nowej wersji do istniejącej bazy najpierw wykonaj `npm run db:migrate` (skrypty quickstart robią to same). Szczegóły: [Logowanie i konta](./auth.md).
 
 ## Oddzielne procesy
 

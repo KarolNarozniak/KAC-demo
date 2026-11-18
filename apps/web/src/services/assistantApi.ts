@@ -2,6 +2,7 @@ import { apiBaseUrl } from './importApi.ts';
 import type { CalendarEvent } from '../domain/model.ts';
 import { dailySummaryContext } from '../domain/dailySummary.ts';
 import { getAssistantPreferences } from '../domain/assistantPreferences.ts';
+import { authFetch } from './http.ts';
 
 export type AssistantMessage = { id: string; role: 'user' | 'assistant' | 'tool'; content: Record<string, unknown>; createdAt: string };
 export type AssistantConversation = { id: string; title: string; modelDeployment: string; createdAt: string; updatedAt: string; expiresAt: string };
@@ -22,7 +23,7 @@ export class AssistantApiError extends Error {
 }
 
 async function call<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
-  const response = await fetch(`${apiBaseUrl()}${path}`, {
+  const response = await authFetch(`${apiBaseUrl()}${path}`, {
     method,
     headers: { Accept: 'application/json', ...(body ? { 'Content-Type': 'application/json' } : {}) },
     ...(body ? { body: JSON.stringify(body) } : {}),
@@ -38,6 +39,7 @@ const aiErrorText: Record<string, string> = {
   ai_storage_not_configured: 'Baza rozmów AI nie jest skonfigurowana.',
   assistant_unavailable: 'Asystent jest chwilowo niedostępny. Wiadomość pozostała w historii, możesz spróbować ponownie.',
   assistant_rate_limited: 'Azure AI ograniczył liczbę żądań. Poczekaj chwilę i spróbuj ponownie.',
+  ai_daily_limit: 'Wykorzystano dzienny limit asystenta AI dla tego konta. Spróbuj ponownie jutro – kalendarz działa bez zmian.',
   assistant_timeout: 'Odpowiedź asystenta przekroczyła limit czasu. Możesz wysłać krótszą wiadomość i spróbować ponownie.',
   ai_action_stale_preview: 'Wydarzenie zmieniło się od czasu przygotowania podglądu. Poproś o nową propozycję.',
   action_not_found_or_expired: 'Ta propozycja wygasła lub nie istnieje. Poproś asystenta o przygotowanie nowej.',
@@ -74,7 +76,7 @@ export type AssistantStreamEvent =
 
 export async function streamAssistantMessage(id: string, content: string, onEvent: (event: AssistantStreamEvent) => void, signal?: AbortSignal): Promise<AssistantTurnResult> {
   const timeout = AbortSignal.timeout(120_000);
-  const response = await fetch(`${apiBaseUrl()}/api/v1/assistant/conversations/${encodeURIComponent(id)}/messages?stream=true`, {
+  const response = await authFetch(`${apiBaseUrl()}/api/v1/assistant/conversations/${encodeURIComponent(id)}/messages?stream=true`, {
     method: 'POST', headers: { Accept: 'application/x-ndjson', 'Content-Type': 'application/json' },
     body: JSON.stringify({ content, preferences: getAssistantPreferences() }), signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
   });
@@ -148,6 +150,9 @@ export async function getDailySummary(dateKey: string, refresh = false) {
 }
 
 let calendarSummaryCache: { key: string; result: Promise<{ text: string }> } | undefined;
+
+/** Wylogowanie: zapamiętane podsumowanie dnia należało do poprzedniego konta. */
+export function forgetDailySummary() { calendarSummaryCache = undefined; }
 
 /** Reuse an unchanged day's result; an empty day never contacts the assistant API. */
 export function getDailySummaryForCalendar(events: CalendarEvent[], now: Date): Promise<{ text: string }> {

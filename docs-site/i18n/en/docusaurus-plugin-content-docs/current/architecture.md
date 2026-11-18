@@ -38,7 +38,7 @@ All HTTP resources belong to one API domain and the shared `/api/v1` version. Ro
 - `src/api/v1/calendar/routes.ts` handles calendar overview and events.
 - `src/api/v1/profile/routes.ts` handles the work profile: hour limits, the hour target (week or month), commute, availability, preferences, blocked periods and shift templates. Saving is atomic and requires the current profile version (optimistic locking).
 - `src/api/v1/scheduling/routes.ts` handles generation, editing, validation, approval and schedule history.
-- `src/api/scope.ts` resolves the request user on the server. Until login exists it is the demo user from configuration.
+- `src/api/auth-guard.ts` requires a sign-in session (`Authorization: Bearer`) on every non-public route and takes the request user and calendar from it; `src/api/v1/auth/routes.ts` handles registration, sign-in, sign-out, password change and account deletion ([Sign-in and accounts](./auth.md)). An API without a database uses the demo user from configuration (`src/api/scope.ts`).
 - `src/api/v1/imports/routes.ts` handles import previews, sessions, file readers and class schedules.
 - `src/api/v1/imports/google-routes.ts` implements one-time Google import as a data-source adapter.
 - `src/api/v1/imports/ai-routes.ts` handles image/PDF imports through the Responses API.

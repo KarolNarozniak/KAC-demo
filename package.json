@@ -35,6 +35,7 @@
     "db:seed": "npm run seed --workspace @kac/database",
     "db:seed:if-empty": "npm run seed:if-empty --workspace @kac/database",
     "db:check": "npm run check --workspace @kac/database",
+    "auth:set-password": "npm run auth:set-password --workspace @kac/api --",
     "db:setup-local": "npm run db:up && npm run db:migrate && npm run db:seed",
     "api:openapi:export": "npm run openapi:export --workspace @kac/api",
     "api:openapi:check": "npm run openapi:check --workspace @kac/api",

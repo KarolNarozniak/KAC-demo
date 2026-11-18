@@ -274,7 +274,8 @@ export function registerGoogleIntegration(app: FastifyInstance, service: GoogleI
     reply.type('text/html; charset=utf-8');
     if (!service) return reply.code(503).send(page('Integracja niedostępna', 'Serwer nie może zapisać połączenia z Google.'));
     // Do logu trafia tylko kod błędu – nigdy kod autoryzacji ani tokeny.
-    const result = await service.callback(scope(request), request.query, (code) => request.log.warn({ code }, 'Google integration sign-in failed'));
+    // Bez sesji KAC: przeglądarka wraca z Google bez nagłówka Authorization, właściciela wskazuje jednorazowy state.
+    const result = await service.callback(request.query, (code) => request.log.warn({ code }, 'Google integration sign-in failed'));
     return reply.code(result.httpStatus).send(page(result.title, result.message));
   });
 

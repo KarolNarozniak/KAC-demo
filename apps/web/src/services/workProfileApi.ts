@@ -1,5 +1,6 @@
 // Klient API profilu pracy (S23KC2S1P2-181): GET/PUT /api/v1/work-profile.
 import { apiBaseUrl } from './importApi';
+import { authFetch } from './http.ts';
 
 export type WorkMode = 'elastyczny' | 'zmianowy';
 export type TargetPeriod = 'week' | 'month';
@@ -47,7 +48,7 @@ export class WorkProfileConflictError extends Error {
 
 async function call(method: 'GET' | 'PUT', body?: unknown): Promise<Response> {
   try {
-    return await fetch(`${apiBaseUrl()}/api/v1/work-profile`, {
+    return await authFetch(`${apiBaseUrl()}/api/v1/work-profile`, {
       method,
       headers: { Accept: 'application/json', ...(body ? { 'Content-Type': 'application/json' } : {}) },
       body: body ? JSON.stringify(body) : undefined,

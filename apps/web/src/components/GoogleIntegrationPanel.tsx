@@ -260,6 +260,7 @@ export default function GoogleIntegrationPanel({ onShowPlan, active = true }: { 
         {attempt.mode === 'google' ? <>
           <Text style={styles.body}>Dokończ logowanie na stronie Google, która otworzyła się w nowej karcie: wybierz konto i zdecyduj o dostępie.</Text>
           <Text style={[styles.muted, { marginTop: 6 }]}>Ten panel sam pokaże wynik. Jeśli strona Google się nie otworzyła, użyj przycisku poniżej. Link jest ważny do {timeLabel(attempt.expiresAt)}.</Text>
+          <Text style={[styles.muted, { marginTop: 6 }]}>Google pokazuje „Dostęp zablokowany” (błąd 403: access_denied)? To konto Google nie jest jeszcze dopuszczone do testów aplikacji KAC – poproś zespół o dodanie go albo korzystaj z KAC bez Google Calendar. Anuluj wtedy tę próbę.</Text>
           <View style={[styles.row, { marginTop: 12, flexWrap: 'wrap' }]}>
             {!!attempt.authUrl && <Button title="Otwórz stronę Google ponownie" primary disabled={busy} onPress={() => void Linking.openURL(attempt.authUrl!)} />}
             <Button title="Anuluj" disabled={busy} onPress={() => void cancel()} />

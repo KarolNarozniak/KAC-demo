@@ -6,6 +6,8 @@ import { DemoScheduleReader } from './import/work-schedule/reader.js';
 import { PostgresScheduleRepository } from './scheduling/repository.js';
 import { PostgresWorkProfileRepository } from './profile/repository.js';
 import { demoScope } from './api/scope.js';
+import { PostgresAuthRepository } from './auth/repository.js';
+import { AuthService } from './auth/service.js';
 import { AiRepository } from './ai/repository.js';
 import { PostgresNotificationRepository } from './notifications/repository.js';
 import { createGoogleIntegrationService } from './integrations/google/service.js';
@@ -24,8 +26,11 @@ const printText = (source: string, lines: { text: string; confidence: number }[]
 const scheduleReader = config.workScheduleReader === 'demo'
   ? new DemoScheduleReader()
   : new LocalScheduleReader(process.env.WORK_SCHEDULE_DEBUG === '1' ? { onText: printText } : {});
-// Użytkownika żądania ustala serwer (S23KC2S1P2-185). Do czasu logowania to użytkownik demonstracyjny z konfiguracji.
-const app = buildApi(repository, config.corsOrigins, { scheduleReader, scheduleRepository, workProfileRepository, aiRepository, notificationRepository, userScope: demoScope, google: { oauth: config.google }, googleIntegration });
+// Użytkownika żądania ustala serwer (S23KC2S1P2-185) – z sesji logowania. Bez bazy (tryb tylko do podglądu) nie ma kont,
+// więc wszystkie żądania należą do użytkownika demonstracyjnego z konfiguracji.
+// Usunięcie konta najpierw cofa zgodę Google (G03), żeby w Google nie został dostęp dla KAC.
+const auth = pool ? new AuthService(new PostgresAuthRepository(pool), config.auth, async (scope) => googleIntegration?.disconnect(scope)) : null;
+const app = buildApi(repository, config.corsOrigins, { scheduleReader, scheduleRepository, workProfileRepository, aiRepository, notificationRepository, auth, userScope: auth ? undefined : demoScope, google: { oauth: config.google }, googleIntegration });
 
 try {
   await app.listen({ host: '0.0.0.0', port: config.port });
