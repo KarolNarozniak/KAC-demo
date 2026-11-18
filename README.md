@@ -39,7 +39,7 @@ The dependency audit on 2026-10-22 decreased from **55 findings (1 critical, 37 
 - The week keeps time slots readable with at least 80 pixels per hour horizontally (48 vertically in the alternate layout), scrolling along the time axis with fixed day labels. The single-day home view shows only upcoming events, from the current device time to midnight, with at least 48 pixels per hour and vertical scrolling. It has no repeated day header. The current week opens near the device time and displays a line across all days: thin gray on other days and thicker red on today. Manual scrolling is preserved as the clock updates. By default, days run down the left and hours across the top. The cog tab offers a switch to days across the top; the choice is saved on the device. Tap a day label to add an event or an event to open details.
 - Tabs slide out and in together, retaining visited screens and respecting reduced-motion settings.
 - The header shows the logo and the centered current date. Dark mode is the default; the theme switch is in Ustawienia and remembers the chosen theme.
-- Dziś is the home screen, with a welcome and a reserved area for a future agent-generated daily summary. No agent is connected yet.
+- Dziś is the home screen, with a short daily summary generated through the application-scoped assistant conversation. The result is reused for the same calendar day and can be refreshed manually.
 - Dziś keeps a day grid visible even when empty, showing only today's events whose start time has not passed according to the device clock, updating while the tab is open.
 - Date and start/end times use platform-native pickers on web, Android and iOS.
 - Open an event to delete it after confirmation. Deleting a weekly event removes the entire series. Database failures keep the event visible and allow retrying.
@@ -63,6 +63,14 @@ The dependency audit on 2026-10-22 decreased from **55 findings (1 critical, 37 
 `npm run typecheck`, `npm test`, `npm run api:openapi:check`, `npm run docs:build`, `npm run build`. API changes must update the route JSON Schemas, exported OpenAPI file and both language versions of the Docusaurus documentation in the same change. See [API change standard](docs-site/docs/api-standard.md). With PostgreSQL migrated and seeded, run `npm run test:api:db` to verify persistence through a fresh API instance.
 
 The API, Expo web and docs builds are included in CI. Configure API `DATABASE_URL`, `PGSSLMODE=require` and `API_CORS_ORIGINS`; the web build embeds `EXPO_PUBLIC_API_URL`. Apply database migrations before deploying the updated API.
+
+### Azure: one App Service
+
+`master_kac.yml` builds a single deployment package containing the Expo web export, Fastify API and the continuous outbox WebJob, then deploys it to the existing App Service `KAC`. Set GitHub Actions repository variable `KAC_API_URL` to the HTTPS KAC origin, without `/api/v1`; the workflow requires it on deployment, and the web build embeds it as `EXPO_PUBLIC_API_URL`. The App Service must use the Linux Node 24 code runtime; set its startup command to `npm start` (which starts `dist/server.js`). The app serves both the UI and `/api/v1` from the same origin. Do not keep the old frontend-only `node server.mjs` startup command for this combined package.
+
+In KAC App Settings configure `NODE_ENV=production`, `DATABASE_URL` (preferably a Key Vault reference), `PGSSLMODE=require`, `API_CORS_ORIGINS` with the exact KAC origin, `OPENAPI_SERVER_URL` with the KAC origin so Swagger's “Try it out” targets the deployed host, and `WEBSITE_SKIP_RUNNING_KUDUAGENT=false` for the Linux WebJob host. Also configure `AZURE_AI_PROJECT_ENDPOINT`, `AZURE_AI_MODEL_DEPLOYMENT`, and `AZURE_AI_AUTH_MODE=managed-identity`; enable KAC's system-assigned identity and grant it Foundry User on the Foundry project.
+
+PostgreSQL remains a separate Azure Database for PostgreSQL Flexible Server, not a container or App Service add-on. Prefer private VNet access and connect KAC using `DATABASE_URL` with TLS. Run `npm run db:migrate` and the initial `npm run db:seed:if-empty` from a runner/machine that can reach the database; the migrations must not be run from the build job's temporary CI database. The worker runs as `App_Data/jobs/continuous/kac-outbox` in the same App Service, so enable **Always On** on a Basic-or-higher plan. Docker Compose multi-container hosting is intentionally not used: Azure plans to retire that App Service feature on March 31, 2027, and its current limitations conflict with Managed Identity and private VNet access.
 
 ## Feature validation (S23KC2S1P2-43, -14, -38)
 

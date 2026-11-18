@@ -1,0 +1,27 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "subscriptionId": {
+      "value": "22ffdeb9-5883-4b80-a028-c2f346a36303"
+    },
+    "resourceGroupName": {
+      "value": "KAC_group"
+    },
+    "location": {
+      "value": "switzerlandnorth"
+    },
+    "databaseName": {
+      "value": "kac-api-prod-database"
+    },
+    "serverName": {
+      "value": "kac-api-prod-server"
+    },
+    "serverUsername": {
+      "value": "kalfcgjfvj"
+    },
+    "serverPassword": {
+      "value": ""
+    }
+  }
+}

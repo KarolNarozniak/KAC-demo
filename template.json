@@ -1,0 +1,229 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "subscriptionId": {
+      "type": "string"
+    },
+    "resourceGroupName": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    },
+    "databaseName": {
+      "type": "string"
+    },
+    "serverName": {
+      "type": "string"
+    },
+    "serverUsername": {
+      "type": "string"
+    },
+    "serverPassword": {
+      "type": "securestring"
+    }
+  },
+  "variables": {},
+  "resources": [
+    {
+      "apiVersion": "2025-05-01",
+      "name": "ASP-KACgroup-opc6w",
+      "type": "Microsoft.Web/serverfarms",
+      "kind": "linux",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "B1",
+        "tier": "Basic",
+        "size": "Small",
+        "capacity": 1
+      },
+      "properties": {
+        "reserved": true,
+        "numberOfWorkers": 1
+      }
+    },
+    {
+      "apiVersion": "2025-08-01",
+      "name": "kac-api-prod-server",
+      "type": "Microsoft.DBforPostgreSQL/flexibleServers",
+      "location": "[parameters('location')]",
+      "properties": {
+        "version": "14",
+        "administratorLogin": "[parameters('serverUsername')]",
+        "administratorLoginPassword": "[parameters('serverPassword')]",
+        "createMode": "Create",
+        "backup": {
+          "backupRetentionDays": 7,
+          "geoRedundantBackup": "Disabled"
+        },
+        "highAvailability": {
+          "mode": "Disabled"
+        },
+        "network": {
+          "publicNetworkAccess": "Enabled"
+        },
+        "storage": {
+          "storageSizeGB": 128
+        }
+      },
+      "sku": {
+        "name": "Standard_B1ms",
+        "tier": "Burstable"
+      },
+      "resources": [
+        {
+          "apiVersion": "2025-08-01",
+          "name": "kac-api-prod-database",
+          "type": "databases",
+          "dependsOn": [
+            "[concat('Microsoft.DBforPostgreSQL/flexibleServers', '/', parameters('serverName'))]"
+          ],
+          "properties": {
+            "charset": "utf8",
+            "collation": "en_US.utf8"
+          }
+        }
+      ]
+    },
+    {
+      "apiVersion": "2025-05-01",
+      "name": "kac-api-prod",
+      "type": "Microsoft.Web/sites",
+      "kind": "app,linux",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', 'ASP-KACgroup-opc6w')]"
+      ],
+      "properties": {
+        "name": "kac-api-prod",
+        "serverFarmId": "/subscriptions/22ffdeb9-5883-4b80-a028-c2f346a36303/resourceGroups/KAC_group/providers/Microsoft.Web/serverfarms/ASP-KACgroup-opc6w",
+        "httpsOnly": true,
+        "clientAffinityEnabled": false,
+        "siteConfig": {
+          "appSettings": [],
+          "alwaysOn": false,
+          "ftpsState": "FtpsOnly",
+          "linuxFxVersion": "NODE|26"
+        }
+      }
+    },
+    {
+      "apiVersion": "2025-05-01",
+      "name": "kac-api-prod/connectionstrings",
+      "type": "Microsoft.Web/sites/config",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', 'kac-api-prod')]",
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', 'kac-api-prod-server')]"
+      ],
+      "properties": {
+        "AZURE_POSTGRESQL_CONNECTIONSTRING": {
+          "value": "[concat('Host=', parameters('serverName'), '.postgres.database.azure.com;Database=', parameters('databaseName'), ';Port=5432;User Id=', parameters('serverUsername'), ';Password=', parameters('serverPassword'), ';Ssl Mode=Require;')]",
+          "type": "Custom"
+        }
+      }
+    },
+    {
+      "apiVersion": "2023-01-31",
+      "name": "kac-api-prod-id-dcad",
+      "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', 'kac-api-prod')]"
+      ],
+      "properties": {},
+      "resources": [
+        {
+          "apiVersion": "2023-01-31",
+          "name": "[uniqueString(resourceGroup().id)]",
+          "type": "federatedIdentityCredentials",
+          "dependsOn": [
+            "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', 'kac-api-prod-id-dcad')]"
+          ],
+          "properties": {
+            "audiences": [
+              "api://AzureADTokenExchange"
+            ],
+            "issuer": "https://token.actions.githubusercontent.com",
+            "subject": "repo:KarolNarozniak@119491458/KAC-demo@1414272870:ref:refs/heads/master"
+          }
+        }
+      ]
+    },
+    {
+      "apiVersion": "2022-04-01",
+      "name": "[guid(resourceGroup().id, deployment().name)]",
+      "type": "Microsoft.Authorization/roleAssignments",
+      "scope": "Microsoft.Web/sites/kac-api-prod",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', 'kac-api-prod')]",
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', 'kac-api-prod-id-dcad')]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Authorization/roleDefinitions/de139f84-1756-47ae-9be6-808fbbe84772')]",
+        "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', 'kac-api-prod-id-dcad'), '2023-01-31').principalId]",
+        "principalType": "ServicePrincipal"
+      }
+    },
+    {
+      "apiVersion": "2024-11-01",
+      "name": "kac-api-prod/scm",
+      "type": "Microsoft.Web/sites/basicPublishingCredentialsPolicies",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', 'kac-api-prod')]"
+      ],
+      "properties": {
+        "allow": false
+      }
+    },
+    {
+      "apiVersion": "2024-11-01",
+      "name": "kac-api-prod/ftp",
+      "type": "Microsoft.Web/sites/basicPublishingCredentialsPolicies",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', 'kac-api-prod')]"
+      ],
+      "properties": {
+        "allow": false
+      }
+    },
+    {
+      "apiVersion": "2025-05-01",
+      "name": "kac-api-prod/web",
+      "type": "Microsoft.Web/sites/sourcecontrols",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', 'kac-api-prod')]",
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', 'kac-api-prod-id-dcad')]",
+        "[extensionResourceId(resourceId('Microsoft.Web/sites', 'kac-api-prod'), 'Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, deployment().name))]",
+        "[resourceId('Microsoft.Web/sites/basicPublishingCredentialsPolicies', 'kac-api-prod', 'scm')]",
+        "[resourceId('Microsoft.Web/sites/basicPublishingCredentialsPolicies', 'kac-api-prod', 'ftp')]"
+      ],
+      "properties": {
+        "repoUrl": "https://github.com/KarolNarozniak/KAC-demo",
+        "branch": "master",
+        "isManualIntegration": false,
+        "isGitHubAction": true,
+        "deploymentRollbackEnabled": false,
+        "isMercurial": false,
+        "gitHubActionConfiguration": {
+          "generateWorkflowFile": true,
+          "workflowSettings": {
+            "appType": "webapp",
+            "authType": "oidc",
+            "publishType": "code",
+            "os": "linux",
+            "runtimeStack": "node",
+            "workflowApiVersion": "2022-10-01",
+            "slotName": "production",
+            "variables": {
+              "runtimeVersion": "26",
+              "clientId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', 'kac-api-prod-id-dcad'), '2023-01-31').clientId]",
+              "tenantId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', 'kac-api-prod-id-dcad'), '2023-01-31').tenantId]",
+              "resourceGroup": "KAC_group"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -11,6 +11,9 @@ import { AuthService } from './auth/service.js';
 import { AiRepository } from './ai/repository.js';
 import { PostgresNotificationRepository } from './notifications/repository.js';
 import { createGoogleIntegrationService } from './integrations/google/service.js';
+import { existsSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const repository = pool ? new PostgresCalendarRepository(pool) : null;
 // Trwałe połączenie z Google (S23KC2S1P2-12) wymaga bazy: konto, zgoda i zaszyfrowane tokeny są zapisywane w PostgreSQL.
@@ -30,7 +33,9 @@ const scheduleReader = config.workScheduleReader === 'demo'
 // więc wszystkie żądania należą do użytkownika demonstracyjnego z konfiguracji.
 // Usunięcie konta najpierw cofa zgodę Google (G03), żeby w Google nie został dostęp dla KAC.
 const auth = pool ? new AuthService(new PostgresAuthRepository(pool), config.auth, async (scope) => googleIntegration?.disconnect(scope)) : null;
-const app = buildApi(repository, config.corsOrigins, { scheduleReader, scheduleRepository, workProfileRepository, aiRepository, notificationRepository, auth, userScope: auth ? undefined : demoScope, google: { oauth: config.google }, googleIntegration });
+const webRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../web');
+const staticWebRoot = existsSync(resolve(webRoot, 'index.html')) ? webRoot : undefined;
+const app = buildApi(repository, config.corsOrigins, { webRoot: staticWebRoot, scheduleReader, scheduleRepository, workProfileRepository, aiRepository, notificationRepository, auth, userScope: auth ? undefined : demoScope, google: { oauth: config.google }, googleIntegration });
 
 try {
   await app.listen({ host: '0.0.0.0', port: config.port });
