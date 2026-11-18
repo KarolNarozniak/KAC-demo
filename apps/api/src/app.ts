@@ -1,6 +1,8 @@
 import { demoScope } from './api/scope.js';
 import { registerWorkProfile } from './api/v1/work-profile/routes.js';
 import Fastify, { type FastifyInstance } from 'fastify';
+import fastifyStatic from '@fastify/static';
+import { extname } from 'node:path';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import swagger from '@fastify/swagger';
@@ -125,6 +127,27 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
     registerGoogleImport(v1, repository, options.google ?? {}, scope);
     registerGoogleIntegration(v1, options.googleIntegration ?? null, scope);
   }, { prefix: API_PREFIX });
+
+  if (options.webRoot) {
+    app.register(fastifyStatic, {
+      root: options.webRoot,
+      prefix: '/',
+      dotfiles: 'ignore',
+      maxAge: 0,
+      allowedPath: (_pathName, _root, request) => {
+        const pathname = new URL(request.raw.url ?? '/', 'http://localhost').pathname;
+        return pathname !== API_PREFIX && !pathname.startsWith(`${API_PREFIX}/`);
+      },
+    });
+    app.setNotFoundHandler((request, reply) => {
+      const pathname = new URL(request.raw.url ?? '/', 'http://localhost').pathname;
+      const isApiPath = pathname === API_PREFIX || pathname.startsWith(`${API_PREFIX}/`);
+      const isAssetPath = extname(pathname) !== '' || pathname.startsWith('/_expo/') || pathname.startsWith('/assets/');
+      if (request.method === 'GET' && !isApiPath && !isAssetPath && request.headers.accept?.includes('text/html'))
+        return reply.type('text/html; charset=utf-8').sendFile('index.html');
+      return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: `Route ${request.method}:${pathname} not found` });
+    });
+  }
 
   return app;
 }

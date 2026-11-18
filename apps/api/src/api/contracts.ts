@@ -45,6 +45,8 @@ export type CalendarRepository = {
 };
 
 export type ApiOptions = {
+  /** Static Expo web export served by the same App Service origin, when packaged for unified hosting. */
+  webRoot?: string;
   scheduleReader?: ScheduleReader;
   google?: GoogleImportOptions;
   scheduleRepository?: ScheduleRepository;
