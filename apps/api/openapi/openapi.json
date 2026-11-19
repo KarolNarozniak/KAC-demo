@@ -18427,6 +18427,13 @@
                   "value": {
                     "content": "Pokaż mój plan na jutro."
                   }
+                },
+                "question": {
+                  "summary": "Ask about free time",
+                  "description": "Synthetic example. The answer is read-only and based on calendar events; it is not work availability from the schedule generator.",
+                  "value": {
+                    "content": "Ile mam wolnego czasu w czwartek?"
+                  }
                 }
               }
             }
