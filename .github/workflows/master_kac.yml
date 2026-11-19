@@ -85,6 +85,9 @@ jobs:
           test -f apps/api/deploy/web/service-worker.js
           test -f apps/api/deploy/dist/server.js
           test -f apps/api/deploy/dist/worker.js
+          test -f apps/api/deploy/database/scripts/migrate.mjs
+          test -f apps/api/deploy/database/scripts/seed-if-empty.mjs
+          test -f apps/api/deploy/database/seed.sql
           test -f apps/api/deploy/node_modules/fastify/package.json
           test -f apps/api/deploy/App_Data/jobs/continuous/kac-outbox/run.sh
           test -f apps/api/deploy/App_Data/jobs/continuous/kac-outbox/settings.job
