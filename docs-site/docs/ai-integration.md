@@ -231,3 +231,52 @@ Formularze planu i grafiku noszą nazwę **Szybki import**. Gdy odczyt, walidacj
 3. Odśwież stronę i otwórz rozmowę ponownie — zdjęcie i szkic powinny pozostać dostępne.
 4. Zatwierdź import. Ponowienie tej samej rewizji nie powinno dodać kolejnych kopii. Sprawdź też anulowanie i odrzucenie starej rewizji po poprawkach.
 5. W Szybkim imporcie doprowadź do błędu/niekompletnego wiersza. Wybierz Dokończ w czacie i sprawdź zachowanie zdjęcia oraz wcześniejszych poprawek.
+
+## Planowanie przez rozmowę (S23KC2S1P2-257)
+
+### Stan obecny
+
+Asystent **nie uruchamia generatora grafiku**. Rejestr narzędzi (`apps/api/src/ai/tools.ts`) nie zawiera narzędzia planowania ani zapisu grafiku. W rozmowie o planowaniu pracy asystent może:
+
+- odczytać profil pracy narzędziem `work_profile_get`: cel i limity godzin, tryb pracy, dostępność, preferowane okna, blokady, szablony zmian, dojazd i odpoczynek;
+- odczytać kalendarz narzędziem `calendar_search_events` (zakres do 93 dni, maks. 100 wydarzeń, bez rozwijania serii cotygodniowych);
+- przygotować podgląd pojedynczej zmiany pracy narzędziem `calendar_prepare_event_create` (kategoria `Work`), który zapisuje się dopiero po **Zatwierdź**.
+
+Pełny grafik tygodnia tworzy się na ekranie **Grafik** (`POST /api/v1/schedules/generate`), a zatwierdza przyciskiem w tym ekranie (`POST /api/v1/schedules/{weekStart}/approve`). Przekazanie propozycji z Asystenta do Grafiku nie jest jeszcze zaimplementowane.
+
+### Odpowiedź asystenta a wynik generatora
+
+| | Asystent w rozmowie | Generator na ekranie Grafik |
+| --- | --- | --- |
+| Źródło profilu | `work_profile_get` – ten sam odczyt co `GET /api/v1/work-profile` (`profileFromContext` z kontekstu planowania) | `getPlanningContext` – ten sam kontekst planowania |
+| Zajęcia cotygodniowe | Nie rozwija serii; może nie widzieć zajęć rozpoczętych wcześniej | Rozwija serie w wybranym tygodniu, także po zmianie czasu |
+| Wolny czas | Szacuje z listy wydarzeń | Liczy `freeWindows`: dostępność minus zajęcia obowiązkowe, inne wydarzenia, bufor dojazdu, odpoczynek i dni niedostępne; okna krótsze niż minimalna zmiana są pomijane |
+| Wynik | Tekst i ewentualne podglądy pojedynczych wydarzeń | Zapisana propozycja grafiku z `solutionStatus`, zmianami, sumą godzin i ostrzeżeniami |
+| Zapis do kalendarza | Tylko po Zatwierdź dla każdego podglądu | Tylko po zatwierdzeniu grafiku |
+
+Wiążący jest wynik generatora. Odpowiedź asystenta o tym, czy cel godzin się zmieści, jest pomocnicza – może różnić się od generatora, bo model nie stosuje jego reguł (bufory, odpoczynek, minimalna zmiana, limity dzienne) i nie widzi wszystkich wystąpień serii.
+
+### Sytuacje szczególne
+
+| Sytuacja | Asystent | Generator (`POST /schedules/generate`) |
+| --- | --- | --- |
+| Brak profilu pracy | `work_profile_get` zwraca `work_profile_not_found`; asystent nie zgaduje celu ani dostępności | 404 `work_profile_not_found` |
+| Profil bez dostępności albo celu | Widzi puste pola w profilu | 409 `profile_setup_required` z listą `missing` (`availability`, `target`) |
+| Nieaktualna wersja profilu | – | 409 `profile_version_conflict` z bieżącą `profileVersion` |
+| Brak zajęć w tygodniu | Może o tym poinformować na podstawie kalendarza | 409 `no_classes_for_week` z `requiresConfirmation: true`; ponowienie z `confirmNoClasses: true` |
+| Niedobór czasu na cel | Szacunek modelu | Poprawny wynik (201) z ostrzeżeniem `insufficient_free_time` (`freeMinutes`, `missingMinutes`), `shortfallMinutes` i `solutionStatus` `proven_infeasible` albo `not_found` |
+| Ponowienie | Identyczny, niewygasły podgląd jest używany ponownie; wygasłe, anulowane i potwierdzone wymagają nowej prośby; ponowienie zatwierdzenia nie dubluje wydarzenia | Generowanie jest deterministyczne dla tych samych danych; zatwierdzenie wymaga aktualnej wersji (`schedule_version_conflict`, `schedule_already_approved`) |
+
+### Brak zapisu bez akceptacji
+
+- Model nie ma narzędzia zatwierdzania. Narzędzia `calendar_prepare_*` tworzą wyłącznie podgląd w `t_ai_akcje` z TTL 15 minut.
+- Wydarzenie powstaje dopiero po `POST /api/v1/assistant/actions/{id}/confirm`, wywołanym przyciskiem **Zatwierdź**. Samo „tak” w rozmowie niczego nie zapisuje. Kolizje wymagają osobnej decyzji (`collisionToken`).
+- Wygenerowany grafik jest zapisaną propozycją, nie wydarzeniami. Zmiany trafiają do kalendarza dopiero po zatwierdzeniu grafiku, które ponownie sprawdza kolizje z zajęciami obowiązkowymi i limity.
+
+### Test ręczny
+
+1. Bez profilu pracy zapytaj w Asystencie: „Zaplanuj mi pracę na przyszły tydzień”. Asystent informuje o braku profilu i nie tworzy propozycji.
+2. Uzupełnij profil (dostępność i cel). Zapytaj: „Czy zmieszczę 20 godzin pracy w przyszłym tygodniu?”. Porównaj odpowiedź z wynikiem **Generuj** na ekranie Grafik dla tego samego tygodnia – rozstrzyga wynik generatora.
+3. Poproś o dodanie jednej zmiany pracy. Sprawdź podgląd i brak wydarzenia w kalendarzu przed **Zatwierdź**; po **Odrzuć** kalendarz pozostaje bez zmian.
+4. W tygodniu bez zajęć wygeneruj grafik na ekranie Grafik – wymagane jest potwierdzenie braku zajęć.
+5. Ustaw cel większy niż dostępny czas – wynik zawiera ostrzeżenie o niedoborze czasu, a kalendarz się nie zmienia do zatwierdzenia grafiku.
