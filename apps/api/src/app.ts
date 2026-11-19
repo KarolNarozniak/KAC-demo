@@ -20,6 +20,7 @@ import { documentAuth, enforceAuth } from './api/auth-guard.js';
 import { documentAiLimit, enforceAiLimit } from './api/ai-limit.js';
 import { authRoutes } from './api/v1/auth/routes.js';
 import { clientAddress, trustProxyOption } from './api/client-address.js';
+import { acceptEmptyBodies } from './api/empty-body.js';
 import { DemoScheduleReader } from './import/work-schedule/reader.js';
 import { blockRoutes } from './api/v1/blocks/routes.js';
 import { aiImportRoutes } from './api/v1/imports/ai-routes.js';
@@ -43,6 +44,7 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
   const allowAnyOrigin = allowedOrigins.includes('*');
   const origins = new Set(allowedOrigins);
 
+  acceptEmptyBodies(app);
   app.register(cors, {
     origin: (origin, callback) => {
       if (!origin || allowAnyOrigin || origins.has(origin)) callback(null, true);
