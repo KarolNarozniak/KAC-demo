@@ -109,11 +109,80 @@ Po utracie odpowiedzi ponów zatwierdzenie **tej samej propozycji**. Idempotencj
 4. Dodaj drugie wydarzenie na ten sam termin. Sprawdź listę konfliktów, a następnie świadomie wybierz zapis mimo kolizji. Sprawdź również wariant odrzucenia i podania innej godziny.
 5. Przy utracie odpowiedzi ponów zatwierdzenie tej samej karty. W kalendarzu ma powstać tylko jedno wydarzenie dla tej akcji.
 
-## Karta „Dziś”
+## Karta „Dziś” i pytania o kalendarz (S23KC2S1P2-254)
 
-Pusty dzień wyświetla stały komunikat bez odpytywania API asystenta i Azure. Sprawdzane są także dzisiejsze wystąpienia cotygodniowe oraz wydarzenia przechodzące przez północ. Podsumowanie odświeża się automatycznie po zmianie dzisiejszych wydarzeń; nie ma przycisku „Odśwież”. Niezmienione dane korzystają z wyniku zachowanego w bieżącej sesji aplikacji. Powitanie wyświetla aplikacja: „Dzień dobry!” od 05:00 do 17:59, „Dobry wieczór!” poza tym zakresem, według lokalnego czasu urządzenia. Model otrzymuje instrukcję pominięcia daty i dodatkowego powitania.
+### Źródła danych
 
-Rozmowy techniczne zatytułowane „Dzień w skrócie YYYY-MM-DD” są wykorzystywane przez kartę, ale ukryte na liście rozmów w Asystencie.
+| Dane | Skąd pochodzą | Kto je liczy |
+| --- | --- | --- |
+| Dzisiejsze wydarzenia na karcie | Kalendarz pobrany przez aplikację, rozwinięty dla bieżącego dnia funkcją `occurrencesForRange` | Aplikacja (urządzenie) |
+| Wydarzenia w odpowiedzi modelu | Narzędzie `calendar_search_events`, tylko kalendarz bieżącego `UserScope` | Backend |
+| Profil, dostępność, cel godzin | Narzędzie `work_profile_get` | Backend |
+| Bieżąca data, godzina i strefa | Zaufany kontekst serwera (`trustedTimeContext`): czas UTC i czas w strefie IANA właściciela kalendarza | Backend |
+
+Model nie dostaje danych spoza tych źródeł. Treść wiadomości, nazwy i lokalizacje wydarzeń są danymi niezaufanymi — zdanie „dziś jest 1 stycznia” nie zmienia zaufanego czasu. Nieprawidłowa strefa konta jest zastępowana strefą `Europe/Warsaw`.
+
+`calendar_search_events` przyjmuje zakres dat do 93 dni i zwraca najwyżej 100 wydarzeń. Filtr tekstowy sprawdza tytuł i lokalizację.
+
+### Obliczenia
+
+Karta „Dziś” prosi model o 2–4 zdania: najważniejsze wydarzenia z godzinami i dłuższe wolne okna. Model nie zapisuje zmian i nie przygotowuje akcji.
+
+Na pytania typu „ile mam zajęć w czwartek?” albo „kiedy mam wolne?” model odpowiada na podstawie listy wydarzeń zwróconej przez narzędzie. Backend nie ma jeszcze osobnego narzędzia liczącego sumę godzin ani wolne okna — sumy i przerwy wylicza model z tej listy, dlatego odpowiedź należy traktować jako pomocniczą. Dokładne wolne okna do planowania pracy liczy generator grafiku (zob. niżej).
+
+Przedziały czasu są półotwarte `[początek, koniec)`: wydarzenia 10:00–11:00 i 11:00–12:00 nie nakładają się i nie tworzą przerwy.
+
+### Cykliczność
+
+Na karcie „Dziś” wydarzenia z `repeatWeekly` są rozwijane na bieżący dzień — wystąpienie serii rozpoczętej w poprzednich tygodniach pojawia się w podsumowaniu. Wystąpienie zachowuje lokalną godzinę serii.
+
+Ograniczenie: `calendar_search_events` porównuje daty pierwszego wystąpienia, nie rozwija serii. W pytaniu o przyszły tydzień model może nie zobaczyć zajęć cotygodniowych, które zaczęły się wcześniej. Pełna obsługa wystąpień w wyszukiwaniu należy do części backendowej historyjki.
+
+### Północ i zmiana czasu (DST)
+
+- Wydarzenie przechodzące przez północ (np. 23:00–01:00) należy do obu dni: wpływa na podsumowanie dnia, w którym się zaczyna, i dnia, w którym się kończy. Wydarzenie kończące się dokładnie o 00:00 nie należy do następnego dnia.
+- O północy zmienia się klucz dnia — karta tworzy nowe podsumowanie w nowej ukrytej rozmowie „Dzień w skrócie YYYY-MM-DD”.
+- Przy zmianie czasu (w strefie `Europe/Warsaw` 29.03.2026 doba ma 23 h, 25.10.2026 — 25 h) wydarzenia cotygodniowe zachowują godzinę lokalną, np. zajęcia o 10:00 pozostają o 10:00. Czas trwania liczony jest w czasie rzeczywistym: wydarzenie 01:00–04:00 w dniu 25.10.2026 trwa 4 h.
+- Karta wyznacza „dziś” i powitanie według strefy **urządzenia**, a model — według strefy **konta** z zaufanego kontekstu. Przy urządzeniu w innej strefie niż konto oba widoki mogą wskazywać inny dzień.
+- Powitanie: „Dzień dobry!” od 05:00 do 17:59, „Dobry wieczór!” poza tym zakresem.
+
+### Cache i odświeżanie
+
+- Pusty dzień wyświetla stały komunikat „Nie masz dziś zaplanowanych wydarzeń” bez wywołania API asystenta i Azure.
+- Klucz podsumowania to data oraz migawka dzisiejszych wystąpień: identyfikator, tytuł, kategoria, lokalizacja, obowiązkowość, powtarzanie, początek i koniec. Zmiana dowolnego z tych pól w dzisiejszym wydarzeniu generuje nowe podsumowanie; zmiana wydarzenia z innego dnia — nie.
+- Niezmieniony dzień korzysta z wyniku zachowanego w pamięci bieżącej sesji aplikacji. Cache jest czyszczony przy wylogowaniu, przy błędzie generowania i po przejściu na pusty dzień. Po ponownym uruchomieniu aplikacji cache jest pusty, więc powstaje nowe podsumowanie.
+- Każde nowe podsumowanie powstaje w świeżej ukrytej rozmowie, aby model nie użył starego wyniku odczytu kalendarza. Nie ma przycisku „Odśwież”.
+- Gdyby model przygotował akcję w rozmowie podsumowania, aplikacja ją anuluje — karta nie zmienia kalendarza.
+- Gdy asystent jest wyłączony (`GET /api/v1/assistant/config` zwraca `enabled: false`), karta pokazuje komunikat o niedostępności Azure AI.
+- Rozmowy „Dzień w skrócie YYYY-MM-DD” są ukryte na liście rozmów w Asystencie.
+
+### Luka w kalendarzu a dostępność do pracy
+
+Te pojęcia nie są tożsame:
+
+- **Luka w kalendarzu** to czas między wydarzeniami danego dnia. Wynika wyłącznie z kalendarza i pojawia się w podsumowaniu jako „wolne okno”. Nie oznacza, że w tym czasie można pracować.
+- **Dostępność do pracy** wylicza generator grafiku (`freeWindows`): okna dostępności z profilu pracy minus zajęcia obowiązkowe i inne wydarzenia, minus bufor dojazdu i odpoczynek, minus dni niedostępne. Pozostają tylko okna nie krótsze niż minimalna długość zmiany. Zajęcia nieobowiązkowe są ograniczeniem miękkim (ostrzeżenie).
+
+Przykład: przerwa 13:00–14:30 między zajęciami jest luką w kalendarzu. Przy dojeździe 30 min i minimalnej zmianie 3 h nie jest dostępnością do pracy. Odwrotnie — wolny wieczór w kalendarzu nie jest dostępnością, jeśli profil nie ma na ten czas okna dostępności. Pytania o możliwość pracy należy kierować do Grafiku; asystent odczytuje profil, ale nie uruchamia generatora.
+
+### Testy
+
+| Obszar | Testy |
+| --- | --- |
+| Kontekst dnia, cykliczność, północ, powitanie | `apps/web/tests/dailySummary.test.ts` |
+| Cache, pusty dzień, regeneracja, ukrycie rozmów | `apps/web/tests/dailySummary.test.ts` |
+| Narzędzia, zaufany czas, zakres użytkownika | `apps/api/tests/ai.test.ts`, `apps/api/tests/assistant-api.test.ts` |
+| Wolne okna i dostępność do pracy | `apps/api/tests/class-constraints.test.ts`, `apps/api/tests/class-constraints.integration.test.ts` |
+
+Testy zależne od strefy uruchamiaj ze strefą `Europe/Warsaw` (np. `TZ=Europe/Warsaw`).
+
+#### Test ręczny
+
+1. Dodaj zajęcia cotygodniowe rozpoczęte tydzień wcześniej i otwórz Dziś — zajęcia muszą być w podsumowaniu.
+2. Przejdź na inną zakładkę i wróć do Dziś bez zmian w kalendarzu — tekst się nie zmienia, nie ma nowej tury asystenta.
+3. Zmień godzinę dzisiejszego wydarzenia — podsumowanie odświeża się samo. Zmiana jutrzejszego wydarzenia nie zmienia podsumowania.
+4. Usuń wszystkie dzisiejsze wydarzenia — pojawia się stały komunikat bez wywołania asystenta.
+5. Zapytaj w Asystencie: „Ile mam wolnego czasu jutro?”. Sprawdź, czy odpowiedź opiera się na wydarzeniach z kalendarza i czy nie przygotowano żadnej akcji.
 
 ## Czat, streaming i personalizacja
 

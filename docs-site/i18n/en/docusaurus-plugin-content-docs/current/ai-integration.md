@@ -109,11 +109,80 @@ After a lost response, confirm **the same proposal** again. Existing action iden
 4. Propose another event at the same time. Review the collision list and explicitly save despite collisions. Also test rejecting it and requesting another time.
 5. After losing a confirmation response, retry the same card. Only one event should exist for that action.
 
-## Today card
+## Today card and calendar questions (S23KC2S1P2-254)
 
-An empty day displays a fixed message without calling the assistant API or Azure. Detection includes today's weekly occurrences and events crossing midnight. The summary refreshes automatically when today's events change; there is no Refresh button. Unchanged data reuses the result within the current app session. The application displays “Dzień dobry!” from 05:00 through 17:59 and “Dobry wieczór!” otherwise, using the device's local time. The model is instructed to omit the date and an additional greeting.
+### Data sources
 
-Internal conversations titled “Dzień w skrócie YYYY-MM-DD” remain available to the card but are hidden from the Assistant conversation list.
+| Data | Source | Computed by |
+| --- | --- | --- |
+| Today's events on the card | Calendar loaded by the app, expanded for the current day by `occurrencesForRange` | App (device) |
+| Events in the model's answer | `calendar_search_events` tool, current `UserScope` calendar only | Backend |
+| Profile, availability, hour target | `work_profile_get` tool | Backend |
+| Current date, time and zone | Trusted server context (`trustedTimeContext`): UTC time and time in the calendar owner's IANA zone | Backend |
+
+The model receives no data outside these sources. Message text, event titles and locations are untrusted data — writing "today is 1 January" does not change the trusted time. An invalid account zone falls back to `Europe/Warsaw`.
+
+`calendar_search_events` accepts a date range of up to 93 days and returns at most 100 events. The text filter checks title and location.
+
+### Calculations
+
+The Today card asks the model for 2–4 sentences: the main events with times and the longer free windows. The model does not save changes or prepare actions.
+
+For questions such as "how many classes do I have on Thursday?" or "when am I free?", the model answers from the event list returned by the tool. The backend does not yet have a dedicated tool for hour totals or free windows — the model derives totals and gaps from that list, so the answer is advisory. Exact free windows for work planning are computed by the schedule generator (see below).
+
+Time ranges are half-open `[start, end)`: events 10:00–11:00 and 11:00–12:00 do not overlap and leave no gap.
+
+### Recurrence
+
+On the Today card, `repeatWeekly` events are expanded to the current day — an occurrence of a series that started in earlier weeks appears in the summary. Each occurrence keeps the series' local time.
+
+Limitation: `calendar_search_events` compares first-occurrence dates and does not expand series. When asked about next week, the model may miss weekly classes that started earlier. Full occurrence support in search belongs to the backend part of the story.
+
+### Midnight and daylight saving time (DST)
+
+- An event crossing midnight (e.g. 23:00–01:00) belongs to both days: it affects the summary of the day it starts and the day it ends. An event ending exactly at 00:00 does not belong to the next day.
+- At midnight the day key changes — the card creates a new summary in a new hidden conversation "Dzień w skrócie YYYY-MM-DD".
+- On DST changes (in `Europe/Warsaw`, 29 March 2026 has 23 hours and 25 October 2026 has 25 hours) weekly events keep their local time, e.g. 10:00 classes stay at 10:00. Duration is measured in real time: a 01:00–04:00 event on 25 October 2026 lasts 4 hours.
+- The card determines "today" and the greeting by the **device** time zone, while the model uses the **account** zone from the trusted context. If the device is in a different zone than the account, the two views may point to different days.
+- Greeting: "Dzień dobry!" from 05:00 to 17:59, "Dobry wieczór!" otherwise.
+
+### Cache and refresh
+
+- An empty day shows the fixed message "Nie masz dziś zaplanowanych wydarzeń" without calling the assistant API or Azure.
+- The summary key is the date plus a snapshot of today's occurrences: ID, title, category, location, mandatory flag, recurrence, start and end. Changing any of these fields in today's event generates a new summary; changing an event on another day does not.
+- An unchanged day reuses the result kept in memory for the current app session. The cache is cleared on sign-out, after a generation error and when the day becomes empty. After an app restart the cache is empty, so a new summary is generated.
+- Every new summary runs in a fresh hidden conversation so the model cannot reuse an old calendar read. There is no "Refresh" button.
+- If the model prepares an action in a summary conversation, the app cancels it — the card never changes the calendar.
+- When the assistant is disabled (`GET /api/v1/assistant/config` returns `enabled: false`), the card shows an Azure AI unavailability message.
+- "Dzień w skrócie YYYY-MM-DD" conversations are hidden from the Assistant conversation list.
+
+### Calendar gap versus work availability
+
+These are different concepts:
+
+- A **calendar gap** is the time between events on a given day. It comes from the calendar only and appears in the summary as a "free window". It does not mean that work is possible at that time.
+- **Work availability** is computed by the schedule generator (`freeWindows`): availability windows from the work profile minus mandatory classes and other events, minus commute buffer and rest, minus unavailable days. Only windows at least as long as the minimum shift remain. Optional classes are a soft constraint (warning).
+
+Example: a 13:00–14:30 break between classes is a calendar gap. With a 30-minute commute and a 3-hour minimum shift it is not work availability. Conversely, a free evening in the calendar is not availability if the profile has no availability window at that time. Questions about whether work fits should go to the Schedule screen; the assistant reads the profile but does not run the generator.
+
+### Tests
+
+| Area | Tests |
+| --- | --- |
+| Day context, recurrence, midnight, greeting | `apps/web/tests/dailySummary.test.ts` |
+| Cache, empty day, regeneration, hidden conversations | `apps/web/tests/dailySummary.test.ts` |
+| Tools, trusted time, user scope | `apps/api/tests/ai.test.ts`, `apps/api/tests/assistant-api.test.ts` |
+| Free windows and work availability | `apps/api/tests/class-constraints.test.ts`, `apps/api/tests/class-constraints.integration.test.ts` |
+
+Run time-zone-dependent tests with `Europe/Warsaw` (e.g. `TZ=Europe/Warsaw`).
+
+#### Manual test
+
+1. Add weekly classes that started a week earlier and open Today — the classes must appear in the summary.
+2. Switch to another tab and back to Today without calendar changes — the text stays the same and no new assistant turn runs.
+3. Change the time of today's event — the summary refreshes automatically. Changing tomorrow's event does not change it.
+4. Delete all of today's events — the fixed message appears without an assistant call.
+5. Ask the Assistant: "How much free time do I have tomorrow?". Check that the answer is based on calendar events and that no action was prepared.
 
 ## Chat, streaming and personalization
 
