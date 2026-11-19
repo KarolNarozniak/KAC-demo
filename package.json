@@ -50,6 +50,7 @@
   },
   "devDependencies": {
     "concurrently": "^9.2.1",
-    "playwright": "^1.65.1"
+    "playwright": "^1.65.1",
+    "pg": "^8.x"
   }
 }
