@@ -231,3 +231,52 @@ The existing timetable and work schedule forms are now **Szybki import** (Quick 
 3. Reload and reopen the conversation; the image and draft should remain available.
 4. Confirm the import; retrying the same revision must not add copies. Also test cancellation and rejection of an old revision after corrections.
 5. Trigger an incomplete row or error in Quick import. Select Dokończ w czacie and verify the image and earlier corrections are retained.
+
+## Planning through chat (S23KC2S1P2-257)
+
+### Current state
+
+The assistant **does not run the schedule generator**. The tool registry (`apps/api/src/ai/tools.ts`) has no planning or schedule-saving tool. In a conversation about work planning the assistant can:
+
+- read the work profile with `work_profile_get`: hour target and limits, work mode, availability, preferred windows, blocked periods, shift templates, commute and rest;
+- read the calendar with `calendar_search_events` (range up to 93 days, at most 100 events, weekly series are not expanded);
+- prepare a preview of a single work shift with `calendar_prepare_event_create` (category `Work`), saved only after **Zatwierdź** (Confirm).
+
+A full weekly schedule is created on the **Grafik** (Schedule) screen (`POST /api/v1/schedules/generate`) and approved with the button on that screen (`POST /api/v1/schedules/{weekStart}/approve`). Handing a proposal from the Assistant over to the Schedule screen is not implemented yet.
+
+### Assistant answer versus generator result
+
+| | Assistant in chat | Generator on the Schedule screen |
+| --- | --- | --- |
+| Profile source | `work_profile_get` – the same read as `GET /api/v1/work-profile` (`profileFromContext` built from the planning context) | `getPlanningContext` – the same planning context |
+| Weekly classes | Series are not expanded; classes that started earlier may be missed | Series are expanded in the selected week, also across DST changes |
+| Free time | Estimated from the event list | Computed as `freeWindows`: availability minus mandatory classes, other events, commute buffer, rest and unavailable days; windows shorter than the minimum shift are dropped |
+| Result | Text and optional single-event previews | Saved schedule proposal with `solutionStatus`, shifts, hour total and warnings |
+| Calendar write | Only after Confirm on each preview | Only after the schedule is approved |
+
+The generator result is authoritative. The assistant's answer on whether the hour target fits is advisory – it may differ from the generator because the model does not apply its rules (buffers, rest, minimum shift, daily limits) and does not see every occurrence of a series.
+
+### Special cases
+
+| Case | Assistant | Generator (`POST /schedules/generate`) |
+| --- | --- | --- |
+| No work profile | `work_profile_get` returns `work_profile_not_found`; the assistant does not guess the target or availability | 404 `work_profile_not_found` |
+| Profile without availability or target | Sees empty profile fields | 409 `profile_setup_required` with a `missing` list (`availability`, `target`) |
+| Outdated profile version | – | 409 `profile_version_conflict` with the current `profileVersion` |
+| No classes in the week | May report it from the calendar | 409 `no_classes_for_week` with `requiresConfirmation: true`; retry with `confirmNoClasses: true` |
+| Not enough time for the target | Model estimate | Valid result (201) with the `insufficient_free_time` warning (`freeMinutes`, `missingMinutes`), `shortfallMinutes` and `solutionStatus` `proven_infeasible` or `not_found` |
+| Retry | An identical unexpired preview is reused; expired, cancelled and confirmed previews require a new request; retrying a confirmation does not duplicate the event | Generation is deterministic for the same data; approval requires the current version (`schedule_version_conflict`, `schedule_already_approved`) |
+
+### No writes without acceptance
+
+- The model has no confirmation tool. `calendar_prepare_*` tools only create a preview in `t_ai_akcje` with a 15-minute TTL.
+- An event is created only by `POST /api/v1/assistant/actions/{id}/confirm`, triggered by the **Zatwierdź** button. Typing "yes" in the chat saves nothing. Collisions require a separate decision (`collisionToken`).
+- A generated schedule is a saved proposal, not events. Shifts reach the calendar only after the schedule is approved, which re-checks collisions with mandatory classes and limits.
+
+### Manual test
+
+1. Without a work profile, ask the Assistant: "Zaplanuj mi pracę na przyszły tydzień". The assistant reports the missing profile and creates no proposal.
+2. Complete the profile (availability and target). Ask: "Czy zmieszczę 20 godzin pracy w przyszłym tygodniu?". Compare the answer with **Generuj** on the Schedule screen for the same week – the generator result decides.
+3. Ask to add a single work shift. Check the preview and that no event exists before **Zatwierdź**; after **Odrzuć** the calendar is unchanged.
+4. Generate a schedule for a week without classes on the Schedule screen – confirmation of no classes is required.
+5. Set a target larger than the available time – the result contains the insufficient-time warning, and the calendar does not change until the schedule is approved.

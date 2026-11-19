@@ -18434,6 +18434,13 @@
                   "value": {
                     "content": "Ile mam wolnego czasu w czwartek?"
                   }
+                },
+                "planning": {
+                  "summary": "Ask about planning work hours",
+                  "description": "Synthetic example. The assistant reads the work profile and calendar but does not run the schedule generator; the authoritative weekly schedule is created on the Schedule screen.",
+                  "value": {
+                    "content": "Czy zmieszczę 20 godzin pracy w przyszłym tygodniu?"
+                  }
                 }
               }
             }
