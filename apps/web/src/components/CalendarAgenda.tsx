@@ -26,13 +26,19 @@ export default function CalendarAgenda({ days, events, now, onSelect, onDaySelec
           </View>
         </View>,
         <View key={`${localDateKey(day)}-events`} onLayout={event => { positions.current[localDateKey(day)] = event.nativeEvent.layout.y - (headerHeights.current[localDateKey(day)] ?? 44); }} style={{ paddingTop: 4, paddingBottom: 12 }}>
-        {items.length ? items.map(event => <Pressable key={`${event.id}-${event.start}`} accessibilityRole="button" accessibilityLabel={`${event.title}, ${time(event.occurrenceStart)}–${time(event.occurrenceEnd)}`} disabled={event.preview} onPress={() => onSelect(event)}
-          style={{ backgroundColor: palette.surface, borderWidth: 1, borderColor: palette.line, borderLeftWidth: 4, borderLeftColor: colors[event.category], borderRadius: 14, padding: 16, marginBottom: 10, gap: 6 }}>
-          <View style={[styles.row, { justifyContent: 'space-between', flexWrap: 'wrap' }]}><Text style={[styles.body, { fontWeight: '700' }]}>{time(event.occurrenceStart)} – {time(event.occurrenceEnd)}</Text><Text style={{ color: colors[event.category], fontSize: 12, fontWeight: '700' }}>{event.preview ? 'Propozycja pracy' : labels[event.category]}</Text></View>
-          <Text style={[styles.heading, { fontSize: 17, lineHeight: 24 }]}>{event.title}</Text>
-          {!!event.location && <Text style={styles.muted}>{event.location}</Text>}
-          {localDateKey(event.occurrenceStart) !== localDateKey(event.occurrenceEnd) && <Text style={styles.muted}>{event.occurrenceStart.toLocaleDateString('pl-PL')} – {event.occurrenceEnd.toLocaleDateString('pl-PL')}</Text>}
-        </Pressable>) : <View style={{ padding: 12, backgroundColor: palette.surface, borderWidth: 1, borderStyle: 'dashed', borderColor: palette.line, borderRadius: 14 }}><Text style={styles.body}>Czas dla Ciebie</Text><Text style={styles.muted}>Brak wydarzeń · dodaj plan lub odpocznij.</Text></View>}
+                {items.length ? items.map(event => {
+          // Tylko w widoku jednego dnia („Dziś”): co już minęło, a co trwa teraz.
+          const ended = days.length === 1 && event.occurrenceEnd <= now;
+          const ongoing = days.length === 1 && event.occurrenceStart <= now && !ended;
+          const status = ended ? ' · zakończone' : ongoing ? ' · trwa teraz' : '';
+          return <Pressable key={`${event.id}-${event.start}`} accessibilityRole="button" accessibilityLabel={`${event.title}, ${time(event.occurrenceStart)}–${time(event.occurrenceEnd)}${status}`} disabled={event.preview} onPress={() => onSelect(event)}
+            style={{ backgroundColor: palette.surface, borderWidth: 1, borderColor: palette.line, borderLeftWidth: 4, borderLeftColor: colors[event.category], borderRadius: 14, padding: 16, marginBottom: 10, gap: 6, opacity: ended ? 0.6 : 1 }}>
+            <View style={[styles.row, { justifyContent: 'space-between', flexWrap: 'wrap' }]}><Text style={[styles.body, { fontWeight: '700' }]}>{time(event.occurrenceStart)} – {time(event.occurrenceEnd)}</Text><Text style={{ color: colors[event.category], fontSize: 12, fontWeight: '700' }}>{event.preview ? 'Propozycja pracy' : `${labels[event.category]}${status}`}</Text></View>
+            <Text style={[styles.heading, { fontSize: 17, lineHeight: 24 }]}>{event.title}</Text>
+            {!!event.location && <Text style={styles.muted}>{event.location}</Text>}
+            {localDateKey(event.occurrenceStart) !== localDateKey(event.occurrenceEnd) && <Text style={styles.muted}>{event.occurrenceStart.toLocaleDateString('pl-PL')} – {event.occurrenceEnd.toLocaleDateString('pl-PL')}</Text>}
+          </Pressable>;
+        }) : <View style={{ padding: 12, backgroundColor: palette.surface, borderWidth: 1, borderStyle: 'dashed', borderColor: palette.line, borderRadius: 14 }}><Text style={styles.body}>Czas dla Ciebie</Text><Text style={styles.muted}>Brak wydarzeń · dodaj plan lub odpocznij.</Text></View>}
       </View>];
     })}
   </ScrollView>

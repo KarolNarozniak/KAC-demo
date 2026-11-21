@@ -173,7 +173,8 @@ export default function CalendarScreen({ onContinueInChat, refreshVersion = 0, w
     if (!draft) return; const validation = validateEventInput(draft); if (validation) { setError(validation); return; }
     commit({ ...draft, title: draft.title.trim(), mandatory: draft.category === 'Class' && draft.mandatory });
   };
-  const upcoming = list.filter((item) => localDateKey(item.occurrenceStart) === localDateKey(now) && item.occurrenceStart >= now);
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const todayEvents = list.filter((item) => item.occurrenceStart < addCalendarDays(todayStart, 1) && item.occurrenceEnd > todayStart);
   const selectedWeek = `${monday.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' })} – ${addCalendarDays(monday, 6).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short', year: 'numeric' })}`;
   const changeDraft = (field: 'title' | 'location', value: string) => setDraft((current) => current ? { ...current, [field]: value } : current);
   const changeDate = (value: string) => setDraft((current) => current ? { ...current, start: `${value}T${current.start.split('T')[1]}`, end: `${value}T${current.end.split('T')[1]}` } : current);
@@ -202,7 +203,7 @@ export default function CalendarScreen({ onContinueInChat, refreshVersion = 0, w
            : dailySummary?.key === summaryContext.key ? <Text accessibilityLiveRegion="polite" style={styles.body}>{dailySummary.text}</Text>
            : <Text style={styles.muted}>Asystent przygotuje podsumowanie dzisiejszego kalendarza.</Text>}
        </View>
-      <CalendarAgenda days={[now]} events={upcoming} now={now} onDaySelected={setAgendaDay} onSelect={details} />
+      <CalendarAgenda days={[now]} events={todayEvents} now={now} onDaySelected={setAgendaDay} onSelect={details} />
     </View> : compact ? <CalendarAgenda days={weekDays} events={gridEvents} now={now} onDaySelected={setAgendaDay} onSelect={details} /> : <WeekGrid active={active} days={weekDays} events={gridEvents} layout={weekLayout} now={now} onAdd={newEvent} onSelect={details} />}
     {compact && <Pressable accessibilityRole="button" accessibilityLabel="Dodaj wydarzenie" onPress={() => newEvent(todayOnly ? now : agendaDay && agendaDay >= monday && agendaDay < addCalendarDays(monday, 7) ? agendaDay : weekDays.some(date => localDateKey(date) === localDateKey(now)) ? now : monday)} style={{ position: 'absolute', right: 24, bottom: 12, width: 56, height: 56, borderRadius: 28, backgroundColor: palette.blue, alignItems: 'center', justifyContent: 'center', shadowColor: '#000000', shadowOpacity: 0.3, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 6, zIndex: 10 }}><Text style={[styles.primaryText, { fontSize: 32, lineHeight: 38, fontWeight: '400' }]}>+</Text></Pressable>}
     <Modal visible={dialog !== null} transparent animationType="fade" onRequestClose={() => { if (!saving) close(); }}><View style={{ flex: 1, backgroundColor: palette.scrim, alignItems: 'center', justifyContent: 'center', padding: 16 }}><ScrollView style={{ backgroundColor: palette.surface, borderRadius: 18, width: '100%', maxWidth: 480, maxHeight: '92%', flexGrow: 0 }} contentContainerStyle={{ padding: 21 }}>
