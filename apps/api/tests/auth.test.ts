@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { buildApi } from '../src/app.js';
+import { makeTestAuth, premiumTestHeaders } from './helpers/premium-auth.js';
 import { isPublicRoute } from '../src/api/auth-guard.js';
 import { clientAddress } from '../src/api/client-address.js';
 import { parseTrustProxy } from '../src/config.js';
@@ -116,20 +117,20 @@ test('limit logowania liczy adres klienta za serwerem pośredniczącym (Azure): 
 test('dzienny limit AI: po wyczerpaniu 429 ai_daily_limit przed wywołaniem Azure; lokalny odczyt załącznika nie jest liczony', async () => {
   const counted: string[] = [];
   const aiRepository = { countRecentUsage: async (userId: string) => { counted.push(userId); return 5; } } as never;
-  const app = buildApi(null, [], { aiRepository, aiDailyLimit: 5 });
+  const app = buildApi(null, [], { auth: makeTestAuth({ sessionId: 'session', scope: { userId: 'U001', calendarId: 'K001' }, isPremium: true, premiumExpiresAt: '2035-01-01T00:00:00.000Z' }), aiRepository, aiDailyLimit: 5 });
   try {
-    const read = await app.inject({ method: 'POST', url: '/api/v1/import/ai/read', payload: { fileName: 'plan.pdf', dataBase64: 'JVBERi0=', source: 'classes' } });
+    const read = await app.inject({ method: 'POST', url: '/api/v1/import/ai/read', headers: premiumTestHeaders, payload: { fileName: 'plan.pdf', dataBase64: 'JVBERi0=', source: 'classes' } });
     assert.deepEqual([read.statusCode, read.json()], [429, { error: 'ai_daily_limit' }]);
     assert.deepEqual(counted, ['U001']);
     const local = await app.inject({ method: 'POST', url: '/api/v1/assistant/conversations/c1/attachments',
-      payload: { fileName: 'plan.pdf', dataBase64: 'JVBERi0=', source: 'classes', reader: 'local' } });
+      headers: premiumTestHeaders, payload: { fileName: 'plan.pdf', dataBase64: 'JVBERi0=', source: 'classes', reader: 'local' } });
     assert.notEqual(local.statusCode, 429);
     const spec = (await app.inject({ method: 'GET', url: '/api/v1/openapi.json' })).json();
     assert.ok(spec.paths['/api/v1/import/ai/read'].post.responses['429'].content['application/json'].examples.ai_daily_limit);
   } finally { await app.close(); }
-  const unlimited = buildApi(null, [], { aiRepository: { countRecentUsage: async () => 999 } as never, aiDailyLimit: 0 });
+  const unlimited = buildApi(null, [], { auth: makeTestAuth({ sessionId: 'session', scope: { userId: 'U001', calendarId: 'K001' }, isPremium: true, premiumExpiresAt: '2035-01-01T00:00:00.000Z' }), aiRepository: { countRecentUsage: async () => 999 } as never, aiDailyLimit: 0 });
   try {
-    const read = await unlimited.inject({ method: 'POST', url: '/api/v1/import/ai/read', payload: { fileName: 'plan.pdf', dataBase64: 'JVBERi0=', source: 'classes' } });
+    const read = await unlimited.inject({ method: 'POST', url: '/api/v1/import/ai/read', headers: premiumTestHeaders, payload: { fileName: 'plan.pdf', dataBase64: 'JVBERi0=', source: 'classes' } });
     assert.notEqual(read.statusCode, 429);
   } finally { await unlimited.close(); }
 });

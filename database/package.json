@@ -7,6 +7,7 @@
     "migrate": "node scripts/migrate.mjs",
     "seed": "node scripts/seed.mjs",
     "seed:if-empty": "node scripts/seed-if-empty.mjs",
+    "premium:grant": "node scripts/grant-premium.mjs",
     "check": "node scripts/check-schema.mjs"
   },
   "dependencies": {

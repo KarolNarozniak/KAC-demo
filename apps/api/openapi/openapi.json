@@ -226,7 +226,9 @@
                         "firstName",
                         "lastName",
                         "timeZone",
-                        "hasRecoveryCode"
+                        "hasRecoveryCode",
+                        "isPremium",
+                        "premiumExpiresAt"
                       ],
                       "properties": {
                         "id": {
@@ -247,6 +249,18 @@
                         "hasRecoveryCode": {
                           "type": "boolean",
                           "description": "Czy konto ma kod odzyskiwania. Bez kodu zapomniane hasło ustawi tylko administrator – nowy kod tworzy POST /auth/recovery-code."
+                        },
+                        "isPremium": {
+                          "type": "boolean",
+                          "description": "Czy konto ma obecnie aktywne uprawnienie Premium."
+                        },
+                        "premiumExpiresAt": {
+                          "type": [
+                            "null",
+                            "string"
+                          ],
+                          "format": "date-time",
+                          "description": "Data wygaśnięcia Premium albo null, jeśli konto nie ma uprawnienia."
                         }
                       }
                     },
@@ -277,7 +291,9 @@
                         "firstName": "Anna",
                         "lastName": "Nowak",
                         "timeZone": "Europe/Warsaw",
-                        "hasRecoveryCode": true
+                        "hasRecoveryCode": true,
+                        "isPremium": false,
+                        "premiumExpiresAt": null
                       },
                       "token": "kac-example-session-token-not-real",
                       "expiresAt": "2027-02-16T09:30:00.000Z",
@@ -580,7 +596,9 @@
                         "firstName",
                         "lastName",
                         "timeZone",
-                        "hasRecoveryCode"
+                        "hasRecoveryCode",
+                        "isPremium",
+                        "premiumExpiresAt"
                       ],
                       "properties": {
                         "id": {
@@ -601,6 +619,18 @@
                         "hasRecoveryCode": {
                           "type": "boolean",
                           "description": "Czy konto ma kod odzyskiwania. Bez kodu zapomniane hasło ustawi tylko administrator – nowy kod tworzy POST /auth/recovery-code."
+                        },
+                        "isPremium": {
+                          "type": "boolean",
+                          "description": "Czy konto ma obecnie aktywne uprawnienie Premium."
+                        },
+                        "premiumExpiresAt": {
+                          "type": [
+                            "null",
+                            "string"
+                          ],
+                          "format": "date-time",
+                          "description": "Data wygaśnięcia Premium albo null, jeśli konto nie ma uprawnienia."
                         }
                       }
                     },
@@ -626,7 +656,9 @@
                         "firstName": "Anna",
                         "lastName": "Nowak",
                         "timeZone": "Europe/Warsaw",
-                        "hasRecoveryCode": true
+                        "hasRecoveryCode": true,
+                        "isPremium": false,
+                        "premiumExpiresAt": null
                       },
                       "token": "kac-example-session-token-not-real",
                       "expiresAt": "2027-02-16T09:30:00.000Z"
@@ -817,7 +849,9 @@
                         "firstName",
                         "lastName",
                         "timeZone",
-                        "hasRecoveryCode"
+                        "hasRecoveryCode",
+                        "isPremium",
+                        "premiumExpiresAt"
                       ],
                       "properties": {
                         "id": {
@@ -838,6 +872,18 @@
                         "hasRecoveryCode": {
                           "type": "boolean",
                           "description": "Czy konto ma kod odzyskiwania. Bez kodu zapomniane hasło ustawi tylko administrator – nowy kod tworzy POST /auth/recovery-code."
+                        },
+                        "isPremium": {
+                          "type": "boolean",
+                          "description": "Czy konto ma obecnie aktywne uprawnienie Premium."
+                        },
+                        "premiumExpiresAt": {
+                          "type": [
+                            "null",
+                            "string"
+                          ],
+                          "format": "date-time",
+                          "description": "Data wygaśnięcia Premium albo null, jeśli konto nie ma uprawnienia."
                         }
                       }
                     },
@@ -868,7 +914,9 @@
                         "firstName": "Anna",
                         "lastName": "Nowak",
                         "timeZone": "Europe/Warsaw",
-                        "hasRecoveryCode": true
+                        "hasRecoveryCode": true,
+                        "isPremium": false,
+                        "premiumExpiresAt": null
                       },
                       "token": "kac-example-session-token-not-real",
                       "expiresAt": "2027-02-16T09:30:00.000Z",
@@ -1168,7 +1216,9 @@
                     "firstName",
                     "lastName",
                     "timeZone",
-                    "hasRecoveryCode"
+                    "hasRecoveryCode",
+                    "isPremium",
+                    "premiumExpiresAt"
                   ],
                   "properties": {
                     "id": {
@@ -1189,6 +1239,18 @@
                     "hasRecoveryCode": {
                       "type": "boolean",
                       "description": "Czy konto ma kod odzyskiwania. Bez kodu zapomniane hasło ustawi tylko administrator – nowy kod tworzy POST /auth/recovery-code."
+                    },
+                    "isPremium": {
+                      "type": "boolean",
+                      "description": "Czy konto ma obecnie aktywne uprawnienie Premium."
+                    },
+                    "premiumExpiresAt": {
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "format": "date-time",
+                      "description": "Data wygaśnięcia Premium albo null, jeśli konto nie ma uprawnienia."
                     }
                   },
                   "description": "Zalogowany użytkownik."
@@ -1202,7 +1264,9 @@
                       "firstName": "Anna",
                       "lastName": "Nowak",
                       "timeZone": "Europe/Warsaw",
-                      "hasRecoveryCode": true
+                      "hasRecoveryCode": true,
+                      "isPremium": false,
+                      "premiumExpiresAt": null
                     }
                   }
                 }
@@ -14447,6 +14511,38 @@
               }
             }
           },
+          "403": {
+            "description": "Ta funkcja wymaga aktywnego Premium.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Ta funkcja wymaga aktywnego Premium.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "premium_required"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "premium_required": {
+                    "summary": "Wymagane Premium",
+                    "description": "Aktywuj kod Premium w ustawieniach konta, aby skorzystać z funkcji AI.",
+                    "value": {
+                      "error": "premium_required"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "413": {
             "description": "Plik lub jego zdekodowany obraz przekracza limit.",
             "content": {
@@ -15171,6 +15267,38 @@
               }
             }
           },
+          "403": {
+            "description": "Ta funkcja wymaga aktywnego Premium.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Ta funkcja wymaga aktywnego Premium.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "premium_required"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "premium_required": {
+                    "summary": "Wymagane Premium",
+                    "description": "Aktywuj kod Premium w ustawieniach konta, aby skorzystać z funkcji AI.",
+                    "value": {
+                      "error": "premium_required"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "404": {
             "description": "Import request failed without confirming calendar changes.",
             "content": {
@@ -15734,6 +15862,38 @@
                     "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
                     "value": {
                       "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ta funkcja wymaga aktywnego Premium.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Ta funkcja wymaga aktywnego Premium.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "premium_required"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "premium_required": {
+                    "summary": "Wymagane Premium",
+                    "description": "Aktywuj kod Premium w ustawieniach konta, aby skorzystać z funkcji AI.",
+                    "value": {
+                      "error": "premium_required"
                     }
                   }
                 }
@@ -16353,6 +16513,38 @@
                     "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
                     "value": {
                       "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ta funkcja wymaga aktywnego Premium.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Ta funkcja wymaga aktywnego Premium.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "premium_required"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "premium_required": {
+                    "summary": "Wymagane Premium",
+                    "description": "Aktywuj kod Premium w ustawieniach konta, aby skorzystać z funkcji AI.",
+                    "value": {
+                      "error": "premium_required"
                     }
                   }
                 }
@@ -17050,6 +17242,38 @@
               }
             }
           },
+          "403": {
+            "description": "Ta funkcja wymaga aktywnego Premium.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Ta funkcja wymaga aktywnego Premium.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "premium_required"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "premium_required": {
+                    "summary": "Wymagane Premium",
+                    "description": "Aktywuj kod Premium w ustawieniach konta, aby skorzystać z funkcji AI.",
+                    "value": {
+                      "error": "premium_required"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "404": {
             "description": "Import request failed without confirming calendar changes.",
             "content": {
@@ -17568,7 +17792,7 @@
         "tags": [
           "Assistant"
         ],
-        "description": "Creates an app-owned conversation. Each Azure Responses turn is stateless and reconstructed from recent PostgreSQL messages.",
+        "description": "Creates a Premium assistant conversation. Responses turns are stateless and reconstructed from recent PostgreSQL messages.",
         "requestBody": {
           "required": true,
           "content": {
@@ -17670,6 +17894,38 @@
                     "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
                     "value": {
                       "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ta funkcja wymaga aktywnego Premium.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Ta funkcja wymaga aktywnego Premium.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "premium_required"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "premium_required": {
+                    "summary": "Wymagane Premium",
+                    "description": "Aktywuj kod Premium w ustawieniach konta, aby skorzystać z funkcji AI.",
+                    "value": {
+                      "error": "premium_required"
                     }
                   }
                 }
@@ -20032,6 +20288,38 @@
                     "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
                     "value": {
                       "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ta funkcja wymaga aktywnego Premium.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Ta funkcja wymaga aktywnego Premium.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "premium_required"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "premium_required": {
+                    "summary": "Wymagane Premium",
+                    "description": "Aktywuj kod Premium w ustawieniach konta, aby skorzystać z funkcji AI.",
+                    "value": {
+                      "error": "premium_required"
                     }
                   }
                 }
@@ -24438,6 +24726,514 @@
                     "description": "Kod błędu zależy od operacji.",
                     "value": {
                       "error": "notification_store_unavailable"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/premium/config": {
+      "get": {
+        "operationId": "getPremiumCampaign",
+        "summary": "Read Premium campaign information",
+        "tags": [
+          "Premium"
+        ],
+        "description": "Returns non-secret campaign dates and activation period for the paywall. The redemption code is never exposed.",
+        "responses": {
+          "200": {
+            "description": "Public campaign information only; the redemption secret is never returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "available",
+                    "redeemedByAccount",
+                    "campaignName",
+                    "campaignEndsAt",
+                    "durationDays"
+                  ],
+                  "properties": {
+                    "available": {
+                      "type": "boolean"
+                    },
+                    "redeemedByAccount": {
+                      "type": "boolean"
+                    },
+                    "campaignName": {
+                      "type": "string"
+                    },
+                    "campaignEndsAt": {
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "format": "date-time"
+                    },
+                    "durationDays": {
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  },
+                  "description": "Public campaign information only; the redemption secret is never returned."
+                },
+                "examples": {
+                  "active": {
+                    "summary": "Black Friday campaign",
+                    "value": {
+                      "available": true,
+                      "redeemedByAccount": false,
+                      "campaignName": "Black Friday",
+                      "campaignEndsAt": "2026-11-30T22:59:59Z",
+                      "durationDays": 365
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Premium code is invalid, expired, already redeemed by this account, or unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Premium code is invalid, expired, already redeemed by this account, or unavailable."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Invalid campaign code",
+                    "value": {
+                      "error": "premium_code_invalid"
+                    }
+                  },
+                  "redeemed": {
+                    "summary": "Code already used",
+                    "value": {
+                      "error": "premium_code_already_redeemed"
+                    }
+                  },
+                  "expired": {
+                    "summary": "Campaign is unavailable",
+                    "value": {
+                      "error": "premium_not_configured"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/premium/redeem": {
+      "post": {
+        "operationId": "redeemPremiumCode",
+        "summary": "Redeem a Premium campaign code",
+        "tags": [
+          "Premium"
+        ],
+        "description": "Validates a server-configured code, records one redemption per account and activates the entitlement for the campaign duration.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "code"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  }
+                }
+              },
+              "examples": {
+                "synthetic": {
+                  "summary": "Redeem a code",
+                  "description": "Synthetic example only. Never use a real campaign code in OpenAPI examples.",
+                  "value": {
+                    "code": "KAC-BLACK-FRIDAY-EXAMPLE"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated authenticated account after redeeming a Premium code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "user"
+                  ],
+                  "properties": {
+                    "user": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "id",
+                        "email",
+                        "firstName",
+                        "lastName",
+                        "timeZone",
+                        "hasRecoveryCode",
+                        "isPremium",
+                        "premiumExpiresAt"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "email": {
+                          "type": "string",
+                          "format": "email"
+                        },
+                        "firstName": {
+                          "type": "string"
+                        },
+                        "lastName": {
+                          "type": "string"
+                        },
+                        "timeZone": {
+                          "type": "string"
+                        },
+                        "hasRecoveryCode": {
+                          "type": "boolean"
+                        },
+                        "isPremium": {
+                          "type": "boolean"
+                        },
+                        "premiumExpiresAt": {
+                          "type": [
+                            "null",
+                            "string"
+                          ],
+                          "format": "date-time"
+                        }
+                      }
+                    }
+                  },
+                  "description": "Updated authenticated account after redeeming a Premium code."
+                },
+                "examples": {
+                  "active": {
+                    "summary": "Premium activated for one year",
+                    "value": {
+                      "user": {
+                        "id": "synthetic-user",
+                        "email": "user@example.test",
+                        "firstName": "Synthetic",
+                        "lastName": "User",
+                        "timeZone": "Europe/Warsaw",
+                        "hasRecoveryCode": true,
+                        "isPremium": true,
+                        "premiumExpiresAt": "2027-11-24T12:00:00Z"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Premium code is invalid, expired, already redeemed by this account, or unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Premium code is invalid, expired, already redeemed by this account, or unavailable."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Invalid campaign code",
+                    "value": {
+                      "error": "premium_code_invalid"
+                    }
+                  },
+                  "redeemed": {
+                    "summary": "Code already used",
+                    "value": {
+                      "error": "premium_code_already_redeemed"
+                    }
+                  },
+                  "expired": {
+                    "summary": "Campaign is unavailable",
+                    "value": {
+                      "error": "premium_not_configured"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Brak ważnej sesji – trzeba się zalogować.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Brak ważnej sesji – trzeba się zalogować.",
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "unauthorized"
+                      ]
+                    }
+                  }
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Brak logowania albo sesja wygasła",
+                    "description": "Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.",
+                    "value": {
+                      "error": "unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Premium code is invalid, expired, already redeemed by this account, or unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Premium code is invalid, expired, already redeemed by this account, or unavailable."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Invalid campaign code",
+                    "value": {
+                      "error": "premium_code_invalid"
+                    }
+                  },
+                  "redeemed": {
+                    "summary": "Code already used",
+                    "value": {
+                      "error": "premium_code_already_redeemed"
+                    }
+                  },
+                  "expired": {
+                    "summary": "Campaign is unavailable",
+                    "value": {
+                      "error": "premium_not_configured"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Premium code is invalid, expired, already redeemed by this account, or unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Premium code is invalid, expired, already redeemed by this account, or unavailable."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Invalid campaign code",
+                    "value": {
+                      "error": "premium_code_invalid"
+                    }
+                  },
+                  "redeemed": {
+                    "summary": "Code already used",
+                    "value": {
+                      "error": "premium_code_already_redeemed"
+                    }
+                  },
+                  "expired": {
+                    "summary": "Campaign is unavailable",
+                    "value": {
+                      "error": "premium_not_configured"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Premium code is invalid, expired, already redeemed by this account, or unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Premium code is invalid, expired, already redeemed by this account, or unavailable."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Invalid campaign code",
+                    "value": {
+                      "error": "premium_code_invalid"
+                    }
+                  },
+                  "redeemed": {
+                    "summary": "Code already used",
+                    "value": {
+                      "error": "premium_code_already_redeemed"
+                    }
+                  },
+                  "expired": {
+                    "summary": "Campaign is unavailable",
+                    "value": {
+                      "error": "premium_not_configured"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Premium code is invalid, expired, already redeemed by this account, or unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "description": "Premium code is invalid, expired, already redeemed by this account, or unavailable."
+                },
+                "examples": {
+                  "invalid": {
+                    "summary": "Invalid campaign code",
+                    "value": {
+                      "error": "premium_code_invalid"
+                    }
+                  },
+                  "redeemed": {
+                    "summary": "Code already used",
+                    "value": {
+                      "error": "premium_code_already_redeemed"
+                    }
+                  },
+                  "expired": {
+                    "summary": "Campaign is unavailable",
+                    "value": {
+                      "error": "premium_not_configured"
                     }
                   }
                 }
@@ -34490,6 +35286,10 @@
     {
       "name": "Assistant",
       "description": "Application-scoped conversations and confirmation-gated calendar actions."
+    },
+    {
+      "name": "Premium",
+      "description": "Premium campaign information and account-bound code redemption."
     },
     {
       "name": "Notifications",

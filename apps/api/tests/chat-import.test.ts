@@ -4,6 +4,7 @@ import sharp from 'sharp';
 import {buildApi} from '../src/app.js';
 import {applyImportPatches,type ChatImport,type ChatImportPatch} from '../src/import/chat.js';
 import {executeAssistantTool} from '../src/ai/tools.js';
+import {makeTestAuth,premiumTestHeaders} from './helpers/premium-auth.js';
 const patch=(rowId:string,values:Partial<ChatImportPatch>={}):ChatImportPatch=>({rowId,title:null,date:null,startTime:null,endTime:null,location:null,employee:null,selected:null,overnightConfirmed:null,duplicateDecision:null,replacementId:null,...values});
 
 test('photo stays in conversation and import can be corrected through tools then explicitly confirmed',async()=>{
@@ -15,7 +16,7 @@ test('photo stays in conversation and import can be corrected through tools then
   listChatImports:async(scope,conversationId)=>{assert.deepEqual(scope,owner);return conversationId==='conversation'&&draft?[draft]:[];},
   updateChatImport:async(_scope,id,_conversationId,revision,changes)=>{assert.equal(id,draft!.id);if(revision!==draft!.revision)throw new Error('chat_import_revision_conflict');draft={...draft!,rows:applyImportPatches(draft!.rows,changes),revision:revision+1};return draft;},
   confirmImportSession:async(_id,_rows,_user,_calendar,revision)=>{if(revision!==draft?.revision)return {kind:'revision-conflict'};if(draft.status!=='confirmed'){writes++;draft={...draft,status:'confirmed',summary:{added:1,replaced:0,skipped:0,rejected:0}};}return {kind:'ok',saved:[],summary:draft.summary!};},
- },[],{userScope:()=>owner,aiRepository:{
+  },[],{auth:makeTestAuth({sessionId:'session',scope:owner,isPremium:true,premiumExpiresAt:'2035-01-01T00:00:00.000Z'}),aiRepository:{
   getConversation:async(_scope:any,id:string)=>id==='conversation'?{id}:null,
   appendMessage:async(_scope:any,_id:string,role:string,content:Record<string,unknown>)=>{const message={id:`m-${messages.length}`,role,content,createdAt:new Date().toISOString()};messages.push(message);return message;},
   listMessages:async()=>messages,listPendingActions:async()=>[],logUsage:async()=>{},
@@ -28,17 +29,17 @@ test('photo stays in conversation and import can be corrected through tools then
  }} });
  try{
   const image=(await sharp({create:{width:4,height:4,channels:3,background:'#ffffff'}}).png().toBuffer()).toString('base64');
-  const upload=await app.inject({method:'POST',url:'/api/v1/assistant/conversations/conversation/attachments',payload:{fileName:'test.png',dataBase64:image,source:'classes',reader:'ai'}});
+   const upload=await app.inject({method:'POST',url:'/api/v1/assistant/conversations/conversation/attachments',headers:premiumTestHeaders,payload:{fileName:'test.png',dataBase64:image,source:'classes',reader:'ai'}});
   assert.equal(upload.statusCode,201,upload.body);assert.equal(writes,0);assert.match(upload.json().thumbnailDataUrl,/^data:image\/jpeg;base64,/);
   assert.ok(messages[0].content.attachment);assert.equal(JSON.stringify(messages).includes(image),false);
   const confirm='/api/v1/assistant/imports/import-test/confirm';
-  assert.equal((await app.inject({method:'POST',url:confirm,payload:{conversationId:'conversation',revision:1}})).statusCode,422);
-  const sent=await app.inject({method:'POST',url:'/api/v1/assistant/conversations/conversation/messages',payload:{content:'Koniec o 10:00.'}});
+   assert.equal((await app.inject({method:'POST',url:confirm,headers:premiumTestHeaders,payload:{conversationId:'conversation',revision:1}})).statusCode,422);
+   const sent=await app.inject({method:'POST',url:'/api/v1/assistant/conversations/conversation/messages',headers:premiumTestHeaders,payload:{content:'Koniec o 10:00.'}});
   assert.equal(sent.statusCode,200,sent.body);assert.equal(draft!.revision,2);assert.equal(draft!.rows[0].endTime,'10:00');assert.deepEqual(draft!.rows[0].unresolvedFields,[]);assert.equal(writes,0);
-  assert.equal((await app.inject({method:'POST',url:confirm,payload:{conversationId:'conversation',revision:1}})).statusCode,409);
-  const accepted=await app.inject({method:'POST',url:confirm,payload:{conversationId:'conversation',revision:2}});assert.equal(accepted.statusCode,200,accepted.body);
-  assert.equal((await app.inject({method:'POST',url:confirm,payload:{conversationId:'conversation',revision:2}})).statusCode,200);assert.equal(writes,1);
-  assert.equal((await app.inject({method:'GET',url:'/api/v1/assistant/conversations/foreign/imports'})).statusCode,404);
+   assert.equal((await app.inject({method:'POST',url:confirm,headers:premiumTestHeaders,payload:{conversationId:'conversation',revision:1}})).statusCode,409);
+   const accepted=await app.inject({method:'POST',url:confirm,headers:premiumTestHeaders,payload:{conversationId:'conversation',revision:2}});assert.equal(accepted.statusCode,200,accepted.body);
+   assert.equal((await app.inject({method:'POST',url:confirm,headers:premiumTestHeaders,payload:{conversationId:'conversation',revision:2}})).statusCode,200);assert.equal(writes,1);
+   assert.equal((await app.inject({method:'GET',url:'/api/v1/assistant/conversations/foreign/imports',headers:premiumTestHeaders})).statusCode,404);
  }finally{await app.close();}
 });
 
@@ -64,30 +65,31 @@ test('quick import transfers corrected rows without extracting the image again',
  let bound=false;
  const app=buildApi({checkConnection:async()=>{},getOverview:async()=>null,createImportSession:async()=>{throw new Error('must reuse session');},
  bindChatImport:async(id,input)=>{assert.equal(id,'quick-session');assert.deepEqual(input.rows,rows);bound=true;return {...input,id,revision:1,status:'pending',summary:null,expiresAt:'2035-01-01T00:00:00Z'};}
- },[],{userScope:()=>({userId:'u',calendarId:'c'}),aiRepository:{getConversation:async()=>({id:'chat'}),appendMessage:async()=>({id:'message'})}as never});
+  },[],{auth:makeTestAuth({sessionId:'session',scope:{userId:'u',calendarId:'c'},isPremium:true,premiumExpiresAt:'2035-01-01T00:00:00.000Z'}),aiRepository:{getConversation:async()=>({id:'chat'}),appendMessage:async()=>({id:'message'})}as never});
  try{
  const image=(await sharp({create:{width:4,height:4,channels:3,background:'#ffffff'}}).png().toBuffer()).toString('base64');
- const result=await app.inject({method:'POST',url:'/api/v1/assistant/conversations/chat/attachments',payload:{fileName:'synthetic.png',dataBase64:image,source:'classes',reader:'ai',sessionId:'quick-session',rows}});
+  const result=await app.inject({method:'POST',url:'/api/v1/assistant/conversations/chat/attachments',headers:premiumTestHeaders,payload:{fileName:'synthetic.png',dataBase64:image,source:'classes',reader:'ai',sessionId:'quick-session',rows}});
  assert.equal(result.statusCode,201,result.body);assert.equal(bound,true);
  }finally{await app.close();}
 });
 
 test('empty recognition retains the image and an editable empty draft without calendar events',async()=>{
  const messages:any[]=[];let sessions=0;
- const app=buildApi({checkConnection:async()=>{},getOverview:async()=>null,getImportUserName:async()=>'',createImportSession:async()=>{sessions++;return {id:'empty-session',expiresAt:new Date(Date.now()+900000)};},bindChatImport:async(id,input)=>({...input,id,revision:1,status:'pending',expiresAt:new Date(Date.now()+900000).toISOString(),summary:null})},[],{
+  const app=buildApi({checkConnection:async()=>{},getOverview:async()=>null,getImportUserName:async()=>'',createImportSession:async()=>{sessions++;return {id:'empty-session',expiresAt:new Date(Date.now()+900000)};},bindChatImport:async(id,input)=>({...input,id,revision:1,status:'pending',expiresAt:new Date(Date.now()+900000).toISOString(),summary:null})},[],{
+   auth:makeTestAuth({sessionId:'session',scope:{userId:'U001',calendarId:'K001'},isPremium:true,premiumExpiresAt:'2035-01-01T00:00:00.000Z'}),
   aiRepository:{getConversation:async()=>({id:'chat'}),appendMessage:async(_scope:any,_id:string,role:string,content:unknown)=>{messages.push({role,content});return {id:'image-message'};}}as never,
   aiService:{extractSchedule:async()=>({rows:[],usage:{inputTokens:1,outputTokens:1},responseId:'synthetic'}),sendAssistantMessage:async()=>{throw new Error('unused');}},
  });
  try{
  const image=(await sharp({create:{width:4,height:4,channels:3,background:'#ffffff'}}).png().toBuffer()).toString('base64');
- const result=await app.inject({method:'POST',url:'/api/v1/assistant/conversations/chat/attachments',payload:{fileName:'synthetic.png',dataBase64:image,source:'classes',reader:'ai'}});
+  const result=await app.inject({method:'POST',url:'/api/v1/assistant/conversations/chat/attachments',headers:premiumTestHeaders,payload:{fileName:'synthetic.png',dataBase64:image,source:'classes',reader:'ai'}});
  assert.equal(result.statusCode,201,result.body);assert.equal(sessions,1);assert.equal(messages.length,2);assert.ok(messages[0].content.attachment.thumbnailDataUrl);assert.deepEqual(result.json().rows,[]);
  }finally{await app.close();}
 });
 
 test('local OCR image pixels are not included in follow-up model context',async()=>{
  const messages:any[]=[{id:'local-image',role:'user',content:{text:'Import: local.png',attachment:{fileName:'local.png',mimeType:'image/png',thumbnailDataUrl:'data:image/jpeg;base64,c3ludGhldGlj',reader:'local'}},createdAt:new Date().toISOString()}];
- const app=buildApi({checkConnection:async()=>{},getOverview:async()=>null},[],{aiRepository:{getConversation:async()=>({id:'chat'}),listMessages:async()=>messages,listPendingActions:async()=>[],logUsage:async()=>{},appendMessage:async(_scope:any,_id:string,role:string,content:unknown)=>{const message={id:'m',role,content,createdAt:new Date().toISOString()};messages.push(message);return message;}}as never,
+  const app=buildApi({checkConnection:async()=>{},getOverview:async()=>null},[],{auth:makeTestAuth({sessionId:'session',scope:{userId:'U001',calendarId:'K001'},isPremium:true,premiumExpiresAt:'2035-01-01T00:00:00.000Z'}),aiRepository:{getConversation:async()=>({id:'chat'}),listMessages:async()=>messages,listPendingActions:async()=>[],logUsage:async()=>{},appendMessage:async(_scope:any,_id:string,role:string,content:unknown)=>{const message={id:'m',role,content,createdAt:new Date().toISOString()};messages.push(message);return message;}}as never,
  aiService:{extractSchedule:async()=>{throw new Error('unused');},sendAssistantMessage:async(input)=>{assert.ok(input.every((item:any)=>!Array.isArray(item.content)||item.content.every((part:any)=>part.type!=='input_image')));return {output:[],output_text:'Omówmy odczytane dane.'}as never;}}});
- try{const result=await app.inject({method:'POST',url:'/api/v1/assistant/conversations/chat/messages',payload:{content:'Omów odczytane dane.'}});assert.equal(result.statusCode,200,result.body);}finally{await app.close();}
+  try{const result=await app.inject({method:'POST',url:'/api/v1/assistant/conversations/chat/messages',headers:premiumTestHeaders,payload:{content:'Omów odczytane dane.'}});assert.equal(result.statusCode,200,result.body);}finally{await app.close();}
 });

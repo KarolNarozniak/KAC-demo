@@ -62,6 +62,13 @@ export const config = {
       ? process.env.REGISTRATION_MODE!.trim().toLowerCase() : 'open') as 'open' | 'invite' | 'closed',
     inviteCode: process.env.REGISTRATION_INVITE_CODE?.trim() ?? '',
   },
+  premium: {
+    redemptionCode: process.env.PREMIUM_REDEMPTION_CODE?.trim() ?? '',
+    campaignId: process.env.PREMIUM_CAMPAIGN_ID?.trim() || 'black-friday-2026',
+    campaignName: process.env.PREMIUM_CAMPAIGN_NAME?.trim() || 'Black Friday',
+    campaignEndsAt: process.env.PREMIUM_CAMPAIGN_ENDS_AT?.trim() || '2026-11-30T22:59:59Z',
+    durationDays: positiveInt(process.env.PREMIUM_DURATION_DAYS, 365, 3650),
+  },
   trustProxy: parseTrustProxy(process.env.TRUST_PROXY, Boolean(process.env.WEBSITE_SITE_NAME)),
   /** Dzienny limit wywołań Azure AI na użytkownika (ostatnie 24 h); 0 wyłącza limit. */
   aiDailyLimit: (() => { const value = Number(process.env.AI_DAILY_LIMIT ?? 200); return Number.isInteger(value) && value >= 0 ? value : 200; })(),

@@ -25,6 +25,7 @@ const runtimeManifest = {
     'db:seed': 'node database/scripts/seed.mjs',
     'db:seed:if-empty': 'node database/scripts/seed-if-empty.mjs',
     'db:check': 'node database/scripts/check-schema.mjs',
+    'premium:grant': 'node database/scripts/grant-premium.mjs',
   },
   dependencies: sourceManifest.dependencies,
 };

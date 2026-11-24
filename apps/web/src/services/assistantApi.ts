@@ -36,6 +36,7 @@ async function call<T>(path: string, method = 'GET', body?: unknown): Promise<T>
 
 const aiErrorText: Record<string, string> = {
   azure_ai_not_configured: 'Azure AI Foundry nie jest skonfigurowane dla API.',
+  premium_required: 'Ta funkcja wymaga aktywnego Premium. Włącz Premium w ustawieniach konta.',
   ai_storage_not_configured: 'Baza rozmów AI nie jest skonfigurowana.',
   assistant_unavailable: 'Asystent jest chwilowo niedostępny. Wiadomość pozostała w historii, możesz spróbować ponownie.',
   assistant_rate_limited: 'Azure AI ograniczył liczbę żądań. Poczekaj chwilę i spróbuj ponownie.',

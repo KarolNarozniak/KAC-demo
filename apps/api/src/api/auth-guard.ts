@@ -27,6 +27,15 @@ export const unauthorizedResponse = errorExamples('Brak ważnej sesji – trzeba
     'Żądanie nie ma nagłówka Authorization: Bearer albo sesja wygasła (30 dni bez użycia, 90 dni od zalogowania) lub została unieważniona – wylogowanie, zmiana hasła, usunięcie konta. Trzeba zalogować się ponownie.'],
 });
 
+export const premiumRequiredResponse = errorExamples('Ta funkcja wymaga aktywnego Premium.', {
+  premium_required: ['Wymagane Premium', 'Aktywuj kod Premium w ustawieniach konta, aby skorzystać z funkcji AI.'],
+});
+
+/** Premium is derived from the server-validated session, never from a request body or client-supplied account id. */
+export function hasPremium(request: FastifyRequest) {
+  return request.authSession?.isPremium === true;
+}
+
 /**
  * Kontrakt OpenAPI: schemat bearerAuth jest globalny, trasy publiczne mają `security: []`, a każda chroniona dokumentuje 401.
  * Działa zawsze (także bez bazy), żeby wyeksportowany kontrakt opisywał API produkcyjne.

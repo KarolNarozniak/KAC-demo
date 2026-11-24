@@ -33,6 +33,7 @@ async function call<T>(path: string, method = 'GET', body?: unknown): Promise<T>
 }
 
 export type RegisterInput = { email: string; password: string; firstName: string; lastName: string; timeZone: string; inviteCode?: string; client: string };
+export type PremiumCampaignConfig = { available: boolean; redeemedByAccount: boolean; campaignName: string; campaignEndsAt: string | null; durationDays: number };
 
 export const getAuthConfig = () => call<AuthConfig>('/api/v1/auth/config');
 export const login = (email: string, password: string, client: string) =>
@@ -48,6 +49,8 @@ export const recoverAccount = (input: { email: string; code: string; newPassword
 export const newRecoveryCode = (password: string) => call<{ recoveryCode: string }>('/api/v1/auth/recovery-code', 'POST', { password });
 export const logout = () => call<{ loggedOut: boolean }>('/api/v1/auth/logout', 'POST', {});
 export const currentUser = () => call<AuthUser>('/api/v1/auth/me');
+export const getPremiumCampaign = () => call<PremiumCampaignConfig>('/api/v1/premium/config');
+export const redeemPremiumCode = (code: string) => call<{ user: AuthUser }>('/api/v1/premium/redeem', 'POST', { code });
 export const changePassword = (currentPassword: string, newPassword: string) =>
   call<{ otherSessionsRevoked: number }>('/api/v1/auth/change-password', 'POST', { currentPassword, newPassword });
 export const deleteAccount = (password: string) => call<{ deleted: boolean }>('/api/v1/auth/account', 'DELETE', { password });

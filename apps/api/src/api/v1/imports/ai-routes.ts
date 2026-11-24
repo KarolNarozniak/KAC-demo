@@ -10,6 +10,7 @@ import { config } from '../../../config.js';
 import { AiInvalidOutputError } from '../../../ai/service.js';
 import { documented, errorExamples, withExamples } from '../../examples.js';
 import { classifyAiProviderFailure, safeAiProviderDiagnostics } from '../../../ai/provider-errors.js';
+import { hasPremium, premiumRequiredResponse } from '../../auth-guard.js';
 
 const maximumBodyBytes = Math.ceil(MAX_SCHEDULE_FILE_BYTES * 1.4) + 4096;
 const aiReadSchema = { body: withExamples({ type: 'object', required: ['fileName', 'dataBase64', 'source'], additionalProperties: false,
@@ -57,6 +58,7 @@ export async function aiImportRoutes(app: FastifyInstance, options: Pick<ApiDepe
         400: errorExamples('Fastify odrzucił żądanie niezgodne ze schematem.', { FST_ERR_VALIDATION: 'Niepoprawne body requestu.' }),
         413: errorExamples('Plik lub jego zdekodowany obraz przekracza limit.', { 'file-too-large': 'Plik przekracza 5 MB.', 'too-many-pages': 'PDF przekracza limit stron.', 'image-too-large': 'Obraz przekracza limit pikseli.', 'ai-payload-too-large': 'Obraz po kompresji nadal przekracza limit requestu modelu.' }),
         422: errorExamples('Format albo wynik AI nie nadaje się do bezpiecznego importu.', { 'unsupported-format': 'Nieobsługiwany format.', 'corrupted-file': 'Plik jest uszkodzony.', invalid_ai_output: 'Wynik AI nie pasuje do oczekiwanego JSON.', nothing_recognized: 'Nie rozpoznano wierszy do importu.' }),
+        403: premiumRequiredResponse,
         429: errorExamples('Dostawca AI ograniczył żądania lub lokalny parser PDF jest zajęty.', { 'reader-busy': 'Spróbuj ponownie po zakończeniu bieżącej walidacji.', azure_ai_rate_limited: 'Azure AI ograniczył częstotliwość żądań; spróbuj później.' }),
         502: errorExamples('Odpowiedź AI jest niepoprawna.', { invalid_ai_output: 'Wynik AI nie pasuje do oczekiwanego JSON.' }),
         503: errorExamples('Wymagana usługa jest niedostępna lub nieskonfigurowana.', { azure_ai_not_configured: 'Azure AI nie jest skonfigurowane.', database_not_configured: 'Baza danych nie jest skonfigurowana.', azure_ai_request_failed: 'Wywołanie modelu nie powiodło się.' }),
@@ -66,6 +68,7 @@ export async function aiImportRoutes(app: FastifyInstance, options: Pick<ApiDepe
   }, async (request, reply) => {
     const abortController = new AbortController();
     request.raw.once('aborted', () => abortController.abort());
+    if (!hasPremium(request)) return reply.code(403).send({ error: 'premium_required' });
     const { repository, aiService, aiRepository } = options;
     if (!aiService) return reply.code(503).send({ error: 'azure_ai_not_configured' });
     if (!repository?.createImportSession || !repository.listEventsForImport || !repository.getImportUserName) return reply.code(503).send({ error: 'database_not_configured' });

@@ -4,6 +4,9 @@ import { buildApi } from '../src/app.js';
 import type { ApiOptions } from '../src/api/contracts.js';
 import type { Response as OpenAIResponse, ResponseInputItem } from 'openai/resources/responses/responses.js';
 import { AiActionNotFoundError, AiActionStalePreviewError } from '../src/ai/repository.js';
+import { makeTestAuth, premiumTestHeaders } from './helpers/premium-auth.js';
+
+const premiumSession = { sessionId: 'test-session', scope: { userId: 'U001', calendarId: 'K001' }, isPremium: true, premiumExpiresAt: '2035-01-01T00:00:00.000Z' };
 
 const response = (overrides: Record<string, unknown>) => ({ id: 'response-test', status: 'completed', output_text: '', output: [], usage: { input_tokens: 12, output_tokens: 8 }, ...overrides }) as unknown as OpenAIResponse;
 
@@ -13,7 +16,7 @@ test('assistant reconstructs stateless history, calls only registered tools and 
   const timeContexts: string[] = [];
   let modelCalls = 0;
   const options: ApiOptions = {
-    userScope: () => ({ userId: 'U001', calendarId: 'K001' }),
+    auth: makeTestAuth(premiumSession),
     aiRepository: {
       createConversation: async () => ({ id: 'conversation-1', modelDeployment: 'gpt-5-mini', title: 'Nowa rozmowa', status: 'active',
         createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 86_400_000).toISOString() }),
@@ -51,9 +54,9 @@ test('assistant reconstructs stateless history, calls only registered tools and 
     checkConnection: async () => {}, getOverview: async () => ({ user: { timezone: 'Europe/Warsaw' }, events: [], calendar: { id: 'K001' }, counts: { events: 0, categories: 0 } } as never),
   }, [], options);
   try {
-    const created = await app.inject({ method: 'POST', url: '/api/v1/assistant/conversations', payload: { title: 'Test planowania' } });
+    const created = await app.inject({ method: 'POST', url: '/api/v1/assistant/conversations', headers: premiumTestHeaders, payload: { title: 'Test planowania' } });
     assert.equal(created.statusCode, 201, created.body);
-    const sent = await app.inject({ method: 'POST', url: '/api/v1/assistant/conversations/conversation-1/messages', payload: { content: 'Ile godzin mam w celu?' } });
+    const sent = await app.inject({ method: 'POST', url: '/api/v1/assistant/conversations/conversation-1/messages', headers: premiumTestHeaders, payload: { content: 'Ile godzin mam w celu?' } });
     assert.equal(sent.statusCode, 200, sent.body);
     assert.equal(sent.json().message.content, 'Masz profil pracy z celem 20 godzin.');
     assert.equal(modelCalls, 3);
@@ -64,7 +67,7 @@ test('assistant reconstructs stateless history, calls only registered tools and 
     pendingActions.push({ id: 'pending-1', conversationId: 'conversation-1', kind: 'calendar_event_update', status: 'pending', expiresAt: new Date(Date.now() + 60_000).toISOString(),
       payload: { id: 'event-1', original: { title: 'Existing', start: '2026-11-16T10:00', end: '2026-11-16T11:00', category: 'Praca', location: '', mandatory: false, repeatWeekly: false, eventVersion: 1 },
         event: { title: 'Updated', start: '2026-11-16T12:00', end: '2026-11-16T13:00', category: 'Work', location: '', mandatory: false, repeatWeekly: false } } });
-    const history = await app.inject({ method: 'GET', url: '/api/v1/assistant/conversations/conversation-1/messages' });
+    const history = await app.inject({ method: 'GET', url: '/api/v1/assistant/conversations/conversation-1/messages', headers: premiumTestHeaders });
     assert.equal(history.statusCode, 200, history.body);
     assert.equal(history.json().messages.length, messages.length);
     assert.equal(history.json().pendingActions[0].id, 'pending-1');
@@ -120,7 +123,7 @@ test('assistant provider 429 and timeout failures stop after one request and ret
   ]) {
     let providerCalls = 0;
     const app = buildApi({ checkConnection: async () => {}, getOverview: async () => null } as never, [], {
-      userScope: () => ({ userId: 'U001', calendarId: 'K001' }),
+      auth: makeTestAuth(premiumSession),
       aiRepository: {
         getConversation: async () => ({ id: 'conversation-1', title: 'Test', modelDeployment: 'gpt-5-mini', status: 'active',
           createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 60_000).toISOString() }),
@@ -130,7 +133,7 @@ test('assistant provider 429 and timeout failures stop after one request and ret
       aiService: { sendAssistantMessage: async () => { providerCalls++; throw scenario.error; } } as never,
     });
     try {
-      const created = await app.inject({ method: 'POST', url: '/api/v1/assistant/conversations/conversation-1/messages', payload: { content: 'test' } });
+      const created = await app.inject({ method: 'POST', url: '/api/v1/assistant/conversations/conversation-1/messages', headers: premiumTestHeaders, payload: { content: 'test' } });
       assert.equal(created.statusCode, scenario.status);
       assert.equal(created.json().error, scenario.code);
       assert.equal(providerCalls, 1);
@@ -183,7 +186,7 @@ test('assistant create confirmation returns collisions and retries the same acti
 function streamingApi(send: (...args: any[]) => Promise<OpenAIResponse>, extraAi: Record<string, unknown> = {}, extraCalendar: Record<string, unknown> = {}) {
   const messages: Array<{ id: string; role: string; content: Record<string, unknown>; createdAt: string }> = [];
   const app = buildApi({ checkConnection: async () => {}, getOverview: async () => ({ user: { timezone: 'Europe/Warsaw' }, events: [] } as never), ...extraCalendar }, [], {
-    userScope: () => ({ userId: 'U001', calendarId: 'K001' }),
+    auth: makeTestAuth(premiumSession),
     aiRepository: {
       getConversation: async () => ({ id: 'stream-conversation' }),
       appendMessage: async (_scope: unknown, _id: string, role: string, content: Record<string, unknown>) => {
@@ -193,7 +196,8 @@ function streamingApi(send: (...args: any[]) => Promise<OpenAIResponse>, extraAi
     } as never,
     aiService: { sendAssistantMessage: send } as never,
   });
-  return { app, messages };
+  const inject = (options: Parameters<typeof app.inject>[0]) => app.inject({ ...options, headers: { ...premiumTestHeaders, ...options.headers } });
+  return { app, messages, inject };
 }
 
 test('assistant stream delivers accepted and text deltas before generation finishes, then persists one final answer', async () => {
@@ -208,7 +212,7 @@ test('assistant stream delivers accepted and text deltas before generation finis
   try {
     const address = await app.listen({ port: 0, host: '127.0.0.1' });
     const result = await fetch(`${address}/api/v1/assistant/conversations/stream-conversation/messages?stream=true`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: 'Cześć' }),
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...premiumTestHeaders }, body: JSON.stringify({ content: 'Cześć' }),
     });
     assert.equal(result.status, 200);
     assert.match(result.headers.get('content-type') ?? '', /application\/x-ndjson/);
@@ -239,7 +243,7 @@ test('assistant stream resets provisional text around tool rounds and returns co
     delta('Brak wydarzeń.'); return response({ output_text: 'Brak wydarzeń.' });
   });
   try {
-    const result = await first.app.inject({ method: 'POST', url: '/api/v1/assistant/conversations/stream-conversation/messages?stream=true', payload: { content: 'Sprawdź jutro' } });
+    const result = await first.inject({ method: 'POST', url: '/api/v1/assistant/conversations/stream-conversation/messages?stream=true', payload: { content: 'Sprawdź jutro' } });
     assert.equal(result.statusCode, 200, result.body);
     const events = result.body.trim().split('\n').map((line) => JSON.parse(line));
     assert.deepEqual(events.map((event) => event.type), ['accepted', 'delta', 'reset', 'delta', 'done']);
@@ -249,7 +253,7 @@ test('assistant stream resets provisional text around tool rounds and returns co
     delta('Fragment'); throw Object.assign(new Error('synthetic'), { status: 429 });
   });
   try {
-    const result = await failed.app.inject({ method: 'POST', url: '/api/v1/assistant/conversations/stream-conversation/messages?stream=true', payload: { content: 'Cześć' } });
+    const result = await failed.inject({ method: 'POST', url: '/api/v1/assistant/conversations/stream-conversation/messages?stream=true', payload: { content: 'Cześć' } });
     const events = result.body.trim().split('\n').map((line) => JSON.parse(line));
     assert.equal(events.at(-1).type, 'error');
     assert.equal(events.at(-1).error, 'assistant_rate_limited');
@@ -260,7 +264,7 @@ test('assistant stream resets provisional text around tool rounds and returns co
 
 test('assistant validates personalization and includes it as style data without removing confirmation rules', async () => {
   let calls = 0;
-  const { app } = streamingApi(async (_input, _tools, context) => {
+  const { app, inject } = streamingApi(async (_input, _tools, context) => {
     calls++;
     assert.match(context, /formalny i uprzejmy/);
     assert.match(context, /Pani Testowa/);
@@ -269,9 +273,9 @@ test('assistant validates personalization and includes it as style data without 
   });
   const url = '/api/v1/assistant/conversations/stream-conversation/messages';
   try {
-    assert.equal((await app.inject({ method: 'POST', url, payload: { content: 'Cześć', preferences: { addressAs: 'Pani Testowa', tone: 'formal' } } })).statusCode, 200);
-    assert.equal((await app.inject({ method: 'POST', url, payload: { content: 'Cześć', preferences: { tone: 'unknown' } } })).statusCode, 400);
-    assert.equal((await app.inject({ method: 'POST', url, payload: { content: 'Cześć', preferences: { addressAs: 'x'.repeat(61) } } })).statusCode, 400);
+    assert.equal((await inject({ method: 'POST', url, payload: { content: 'Cześć', preferences: { addressAs: 'Pani Testowa', tone: 'formal' } } })).statusCode, 200);
+    assert.equal((await inject({ method: 'POST', url, payload: { content: 'Cześć', preferences: { tone: 'unknown' } } })).statusCode, 400);
+    assert.equal((await inject({ method: 'POST', url, payload: { content: 'Cześć', preferences: { addressAs: 'x'.repeat(61) } } })).statusCode, 400);
     assert.equal(calls, 1);
   } finally { await app.close(); }
 });
@@ -290,7 +294,7 @@ test('closing the assistant stream aborts the upstream response request', async 
   try {
     const address = await app.listen({ port: 0, host: '127.0.0.1' });
     const result = await fetch(`${address}/api/v1/assistant/conversations/stream-conversation/messages?stream=true`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: 'Cześć' }), signal: controller.signal,
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...premiumTestHeaders }, body: JSON.stringify({ content: 'Cześć' }), signal: controller.signal,
     });
     const reader = result.body!.getReader();
     await reader.read(); controller.abort(); await reader.cancel().catch(() => {});
@@ -300,9 +304,9 @@ test('closing the assistant stream aborts the upstream response request', async 
 });
 
 test('assistant does not persist an empty answer as a successful summary', async () => {
-  const { app, messages } = streamingApi(async () => response({ output_text: '' }));
+  const { app, messages, inject } = streamingApi(async () => response({ output_text: '' }));
   try {
-    const result = await app.inject({ method: 'POST', url: '/api/v1/assistant/conversations/stream-conversation/messages', payload: { content: 'Podsumuj dzień' } });
+    const result = await inject({ method: 'POST', url: '/api/v1/assistant/conversations/stream-conversation/messages', payload: { content: 'Podsumuj dzień' } });
     assert.equal(result.statusCode, 502, result.body);
     assert.equal(result.json().error, 'assistant_incomplete_response');
     assert.equal(messages.some((message) => message.role === 'assistant'), false);
@@ -316,14 +320,14 @@ test('assistant reports Azure filtering consistently for a blocked HTTP call and
     { error: Object.assign(new Error('synthetic provider error'), { status: 400, code: 'content_filter' }), code: 'assistant_content_filtered' },
     { error: new AiModelRefusalError('assistant_refused'), code: 'assistant_refused' },
   ]) {
-    const { app, messages } = streamingApi(async (_input, _tools, _context, _signal, delta) => {
+    const { app, messages, inject } = streamingApi(async (_input, _tools, _context, _signal, delta) => {
       delta?.('Synthetic partial refusal'); throw scenario.error;
     });
     const url = '/api/v1/assistant/conversations/stream-conversation/messages';
     try {
-      const json = await app.inject({ method: 'POST', url, payload: { content: 'Przygotuj podgląd wydarzenia' } });
+      const json = await inject({ method: 'POST', url, payload: { content: 'Przygotuj podgląd wydarzenia' } });
       assert.equal(json.statusCode, 422, json.body); assert.equal(json.json().error, scenario.code);
-      const stream = await app.inject({ method: 'POST', url: `${url}?stream=true`, payload: { content: 'Przygotuj podgląd wydarzenia' } });
+      const stream = await inject({ method: 'POST', url: `${url}?stream=true`, payload: { content: 'Przygotuj podgląd wydarzenia' } });
       assert.equal(stream.statusCode, 200);
       const events = stream.body.trim().split('\n').map((line) => JSON.parse(line));
       assert.equal(events.at(-1).type, 'error'); assert.equal(events.at(-1).error, scenario.code);
@@ -365,7 +369,7 @@ test('assistant prepares four updates and one creation in either serial or group
   try {
     for (const grouped of [false, true]) {
       const fixture = bulkFixture(); let calls = 0;
-      const { app } = streamingApi(async (input) => {
+      const { app, inject } = streamingApi(async (input) => {
         const priorCalls = new Set(input.filter((item: any) => item.type === 'function_call').map((item: any) => item.call_id));
         for (const item of input.filter((item: any) => item.type === 'function_call_output')) assert.ok(priorCalls.has(item.call_id));
         const index = calls++;
@@ -373,7 +377,7 @@ test('assistant prepares four updates and one creation in either serial or group
         return response({ output_text: 'Przygotowano pięć propozycji do potwierdzenia.' });
       }, fixture.ai, fixture.calendar);
       try {
-        const result = await app.inject({ method: 'POST', url: '/api/v1/assistant/conversations/stream-conversation/messages?stream=true', payload: { content: 'Przygotuj cztery zmiany i dodanie zajęć testowych.' } });
+        const result = await inject({ method: 'POST', url: '/api/v1/assistant/conversations/stream-conversation/messages?stream=true', payload: { content: 'Przygotuj cztery zmiany i dodanie zajęć testowych.' } });
         const events = result.body.trim().split('\n').map((line) => JSON.parse(line));
         assert.equal(events.at(-1).type, 'done', result.body);
         assert.equal(events.at(-1).result.pendingActions.length, 5);
@@ -389,20 +393,20 @@ test('tool limit returns prepared previews and retry reuses them instead of crea
   const { config } = await import('../src/config.js');
   const originalRounds = config.azureAi.maxToolRounds; config.azureAi.maxToolRounds = 2;
   const fixture = bulkFixture(); let calls = 0;
-  const { app } = streamingApi(async () => {
+  const { app, inject } = streamingApi(async () => {
     const index = calls++;
     if (index < bulkCalls.length) return response({ output: [bulkCalls[index]] });
     return response({ output_text: 'Przygotowano wszystkie propozycje.' });
   }, fixture.ai, fixture.calendar);
   const url = '/api/v1/assistant/conversations/stream-conversation/messages?stream=true';
   try {
-    const stopped = await app.inject({ method: 'POST', url, payload: { content: 'Przygotuj zmiany zajęć.' } });
+    const stopped = await inject({ method: 'POST', url, payload: { content: 'Przygotuj zmiany zajęć.' } });
     const failure = stopped.body.trim().split('\n').map((line) => JSON.parse(line)).at(-1);
     assert.equal(failure.type, 'error'); assert.equal(failure.error, 'assistant_tool_limit');
     assert.equal(failure.pendingActions.length, 2);
     const existingIds = fixture.pending.map((action) => action.id);
     calls = 0; config.azureAi.maxToolRounds = 8;
-    const retried = await app.inject({ method: 'POST', url, payload: { content: 'Przygotuj pozostałe propozycje.' } });
+    const retried = await inject({ method: 'POST', url, payload: { content: 'Przygotuj pozostałe propozycje.' } });
     const done = retried.body.trim().split('\n').map((line) => JSON.parse(line)).at(-1);
     assert.equal(done.type, 'done', retried.body); assert.equal(done.result.pendingActions.length, 5);
     assert.deepEqual(fixture.pending.slice(0, 2).map((action) => action.id), existingIds);
@@ -412,7 +416,7 @@ test('tool limit returns prepared previews and retry reuses them instead of crea
 
 test('assistant retains complete tool context when the current turn exceeds the 24-message history window', async () => {
   let calls = 0;
-  const { app } = streamingApi(async (input) => {
+  const { app, inject } = streamingApi(async (input) => {
     if (calls++ === 0) return response({ output: Array.from({ length: 30 }, (_, index) => ({ type: 'function_call', id: `fc-read-${index}`, call_id: `read-${index}`, name: 'calendar_search_events', arguments: JSON.stringify({ from: '2026-11-16', to: '2026-11-16', query: null }) })) });
     assert.equal(input.filter((item: any) => item.type === 'function_call').length, 30);
     assert.equal(input.filter((item: any) => item.type === 'function_call_output').length, 30);
@@ -420,7 +424,7 @@ test('assistant retains complete tool context when the current turn exceeds the 
     return response({ output_text: 'Terminy sprawdzone.' });
   });
   try {
-    const result = await app.inject({ method: 'POST', url: '/api/v1/assistant/conversations/stream-conversation/messages', payload: { content: 'Sprawdź terminy testowe' } });
+    const result = await inject({ method: 'POST', url: '/api/v1/assistant/conversations/stream-conversation/messages', payload: { content: 'Sprawdź terminy testowe' } });
     assert.equal(result.statusCode, 200, result.body); assert.equal(result.json().message.content, 'Terminy sprawdzone.');
   } finally { await app.close(); }
 });
@@ -430,9 +434,9 @@ test('assistant replaces a stale pending update rather than reusing its obsolete
   fixture.pending.push({ id: 'stale-proposal', kind: 'calendar_event_update', conversationId: 'stream-conversation', status: 'pending', expiresAt: new Date(Date.now() + 900_000).toISOString(),
     payload: { id: 'event-0', original: { ...bulkEvent, category: 'Zajęcia', eventVersion: 99 }, event: { ...bulkEvent } } });
   let calls = 0;
-  const { app } = streamingApi(async () => calls++ === 0 ? response({ output: [bulkCalls[0]] }) : response({ output_text: 'Nowa propozycja gotowa.' }), fixture.ai, fixture.calendar);
+  const { app, inject } = streamingApi(async () => calls++ === 0 ? response({ output: [bulkCalls[0]] }) : response({ output_text: 'Nowa propozycja gotowa.' }), fixture.ai, fixture.calendar);
   try {
-    const result = await app.inject({ method: 'POST', url: '/api/v1/assistant/conversations/stream-conversation/messages', payload: { content: 'Przygotuj ponownie zmianę.' } });
+    const result = await inject({ method: 'POST', url: '/api/v1/assistant/conversations/stream-conversation/messages', payload: { content: 'Przygotuj ponownie zmianę.' } });
     assert.equal(result.statusCode, 200, result.body);
     assert.equal(fixture.pending.length, 2);
     assert.equal(fixture.pending[1].payload.original.eventVersion, 1);
@@ -457,7 +461,7 @@ test('retry refreshes expired action results and prepares only three missing upd
       result: { status: 'awaiting_user_confirmation', actionId: action.id, expiresAt: action.expiresAt, preview: action.payload } }, createdAt: '2026-01-01T00:00:00Z' })),
   ];
   let liveMessages: any[] = []; let calls = 0;
-  const { app, messages } = streamingApi(async (input) => {
+  const { app, messages, inject } = streamingApi(async (input) => {
     if (calls++ === 0) {
       const results = input.filter((item: any) => item.type === 'function_call_output').map((item: any) => JSON.parse(item.output));
       assert.deepEqual(results.map((result: any) => result.status), ['expired', 'expired', 'expired', 'confirmed', 'confirmed']);
@@ -470,7 +474,7 @@ test('retry refreshes expired action results and prepares only three missing upd
   } }, { ...fixture.calendar, getOverview: async () => overview });
   liveMessages = messages;
   try {
-    const result = await app.inject({ method: 'POST', url: '/api/v1/assistant/conversations/stream-conversation/messages', payload: { content: 'Przygotuj ponownie brakujące przesunięcia.' } });
+    const result = await inject({ method: 'POST', url: '/api/v1/assistant/conversations/stream-conversation/messages', payload: { content: 'Przygotuj ponownie brakujące przesunięcia.' } });
     assert.equal(result.statusCode, 200, result.body); assert.equal(result.json().pendingActions.length, 3);
     assert.deepEqual(fixture.pending.map((action) => action.payload.event.start), ['2026-11-17T09:00', '2026-11-18T09:00', '2026-11-19T09:00']);
     assert.equal(fixture.writes(), 0);

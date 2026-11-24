@@ -1,19 +1,23 @@
 // Konta i sesje logowania w PostgreSQL (migracje 024 i 025).
 import type { Pool, PoolClient } from 'pg';
 
-export type AuthUser = { id: string; email: string; firstName: string; lastName: string; timeZone: string; hasRecoveryCode: boolean };
+export type AuthUser = { id: string; email: string; firstName: string; lastName: string; timeZone: string; hasRecoveryCode: boolean; isPremium: boolean; premiumExpiresAt: string | null };
 export type LoginRecord = { userId: string; passwordHash: string; lockedUntil: Date | null };
 export type RecoveryRecord = { userId: string; recoveryCodeHash: string | null; passwordHash: string };
-export type SessionRecord = { sessionId: string; userId: string; calendarId: string | null; lastUsedAt: Date };
+export type SessionRecord = { sessionId: string; userId: string; calendarId: string | null; lastUsedAt: Date; isPremium: boolean; premiumExpiresAt: string | null };
+export type PremiumRedemptionResult = { kind: 'redeemed'; user: AuthUser } | { kind: 'account_not_found' } | { kind: 'already_redeemed' };
 export type RevokeReason = 'wylogowanie' | 'zmiana_hasla' | 'reset_hasla' | 'usuniecie_konta';
 
 /** Adres e-mail jest loginem – zawsze porównujemy i zapisujemy go małymi literami, bez spacji na brzegach. */
 export const normalizeEmail = (email: string) => email.trim().toLowerCase();
 
 const userFrom = (row: any): AuthUser => ({ id: row.id_uzytkownika, email: row.email, firstName: row.imie, lastName: row.nazwisko, timeZone: row.strefa_czasowa,
-  hasRecoveryCode: Boolean(row.ma_kod_odzyskiwania) });
+  hasRecoveryCode: Boolean(row.ma_kod_odzyskiwania), isPremium: Boolean(row.is_premium),
+  premiumExpiresAt: row.premium_expires_at ? new Date(row.premium_expires_at).toISOString() : null });
 const USER_COLUMNS = `u.id_uzytkownika, u.imie, u.nazwisko, u.email, u.strefa_czasowa, d.kod_odzyskiwania_hash is not null as ma_kod_odzyskiwania
-  from t_uzytkownicy u left join t_dane_logowania d using (id_uzytkownika)`;
+  , p.wygasa_at as premium_expires_at, coalesce(p.wygasa_at > now(), false) as is_premium
+  from t_uzytkownicy u left join t_dane_logowania d using (id_uzytkownika)
+  left join t_premium_entitlements p using (id_uzytkownika)`;
 
 export class EmailTakenError extends Error { constructor() { super('email_taken'); } }
 
@@ -92,14 +96,55 @@ export class PostgresAuthRepository {
 
   /** Ważna sesja: nieunieważniona, przed terminem i używana w ostatnich `idleDays` dniach. Razem z aktywnym kalendarzem użytkownika. */
   async findSession(tokenHash: string, idleDays: number): Promise<SessionRecord | null> {
-    const result = await this.pool.query(`select s.id_sesji, s.id_uzytkownika, s.ostatnio_uzyto_at, k.id_kalendarza
+    const result = await this.pool.query(`select s.id_sesji, s.id_uzytkownika, s.ostatnio_uzyto_at, k.id_kalendarza,
+        p.wygasa_at as premium_expires_at, coalesce(p.wygasa_at > now(), false) as is_premium
       from t_sesje s
+      left join t_premium_entitlements p using (id_uzytkownika)
       left join lateral (select id_kalendarza from t_kalendarze where id_uzytkownika = s.id_uzytkownika and aktywny
         order by created_at, id_kalendarza limit 1) k on true
       where s.token_hash = $1 and s.uniewazniono_at is null and s.wygasa_at > now() and s.ostatnio_uzyto_at > now() - make_interval(days => $2)`,
     [tokenHash, idleDays]);
     const row = result.rows[0];
-    return row ? { sessionId: row.id_sesji, userId: row.id_uzytkownika, calendarId: row.id_kalendarza ?? null, lastUsedAt: new Date(row.ostatnio_uzyto_at) } : null;
+    return row ? { sessionId: row.id_sesji, userId: row.id_uzytkownika, calendarId: row.id_kalendarza ?? null, lastUsedAt: new Date(row.ostatnio_uzyto_at),
+      isPremium: Boolean(row.is_premium), premiumExpiresAt: row.premium_expires_at ? new Date(row.premium_expires_at).toISOString() : null } : null;
+  }
+
+  async redeemPremiumCode(userId: string, campaignId: string, durationDays: number): Promise<PremiumRedemptionResult> {
+    return this.transaction(async (client) => {
+      const user = await client.query('select id_uzytkownika from t_uzytkownicy where id_uzytkownika = $1 for update', [userId]);
+      if (!user.rowCount) return { kind: 'account_not_found' };
+      const claimed = await client.query(`insert into t_premium_redemptions (id_uzytkownika, campaign_id, zrodlo, premium_until)
+        values ($1, $2, 'code', now() + make_interval(days => $3)) on conflict (id_uzytkownika, campaign_id) do nothing returning id_redemption`,
+      [userId, campaignId, durationDays]);
+      if (!claimed.rowCount) return { kind: 'already_redeemed' };
+      const entitlement = await client.query(`insert into t_premium_entitlements (id_uzytkownika, wygasa_at, zrodlo, campaign_id)
+        values ($1, now() + make_interval(days => $2), 'code', $3)
+        on conflict (id_uzytkownika) do update set wygasa_at = greatest(t_premium_entitlements.wygasa_at, now()) + make_interval(days => $2),
+          zrodlo = 'code', campaign_id = excluded.campaign_id, updated_at = now()
+        returning wygasa_at`, [userId, durationDays, campaignId]);
+      await client.query(`update t_premium_redemptions set premium_until = $2 where id_redemption = $1`,
+        [claimed.rows[0].id_redemption, entitlement.rows[0].wygasa_at]);
+      const updated = await client.query(`select ${USER_COLUMNS} where u.id_uzytkownika = $1`, [userId]);
+      return { kind: 'redeemed', user: userFrom(updated.rows[0]) };
+    });
+  }
+
+  async grantPremiumByEmail(email: string, durationDays: number, campaignId = 'black-friday-2026') {
+    return this.transaction(async (client) => {
+      const target = await client.query('select id_uzytkownika from t_uzytkownicy where lower(email) = $1 for update', [normalizeEmail(email)]);
+      if (!target.rowCount) return null;
+      const userId = String(target.rows[0].id_uzytkownika);
+      const entitlement = await client.query(`insert into t_premium_entitlements (id_uzytkownika, wygasa_at, zrodlo, campaign_id)
+        values ($1, now() + make_interval(days => $2), 'manual', null)
+        on conflict (id_uzytkownika) do update set wygasa_at = case when t_premium_entitlements.wygasa_at > now()
+          then t_premium_entitlements.wygasa_at else now() + make_interval(days => $2) end,
+          zrodlo = 'manual', campaign_id = null, updated_at = now() returning wygasa_at`, [userId, durationDays]);
+      await client.query(`insert into t_premium_redemptions (id_uzytkownika, campaign_id, zrodlo, premium_until)
+        values ($1, $2, 'manual', $3) on conflict (id_uzytkownika, campaign_id) do nothing`,
+      [userId, campaignId, entitlement.rows[0].wygasa_at]);
+      const updated = await client.query(`select ${USER_COLUMNS} where u.id_uzytkownika = $1`, [userId]);
+      return userFrom(updated.rows[0]);
+    });
   }
 
   async touchSession(sessionId: string): Promise<void> {
@@ -125,6 +170,11 @@ export class PostgresAuthRepository {
   async findUserByEmail(email: string): Promise<AuthUser | null> {
     const result = await this.pool.query(`select ${USER_COLUMNS} where lower(u.email) = $1`, [normalizeEmail(email)]);
     return result.rows[0] ? userFrom(result.rows[0]) : null;
+  }
+
+  async hasRedeemedPremiumCampaign(userId: string, campaignId: string) {
+    const result = await this.pool.query(`select 1 from t_premium_redemptions where id_uzytkownika = $1 and campaign_id = $2`, [userId, campaignId]);
+    return Boolean(result.rowCount);
   }
 
   /** Konto do resetu kodem odzyskiwania: null – nie ma konta z hasłem; recoveryCodeHash null – konto nie ma kodu. */
