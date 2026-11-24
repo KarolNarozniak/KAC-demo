@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Modal, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions, Platform } from 'react-native';
 import { Button, useTheme } from '../components/ui';
+import PremiumCrown from '../components/PremiumCrown';
+import PremiumActionButton from '../components/PremiumActionButton';
 import ChatImportCard from '../components/ChatImportCard';
 import { attachChatImport, listChatImports, type ChatImportDraft, type ChatImportHandoff } from '../services/chatImportApi';
 import { pickPdf } from '../services/pickPdf';
@@ -12,7 +14,7 @@ import {
   AssistantApiError,
 } from '../services/assistantApi';
 
-type Props = { active: boolean; onCalendarChange: () => void; importHandoff?: ChatImportHandoff | null; onHandoffConsumed?: () => void };
+type Props = { active: boolean; onCalendarChange: () => void; importHandoff?: ChatImportHandoff | null; onHandoffConsumed?: () => void; isPremium: boolean; onOpenPremium: () => void };
 const textOf = (message: AssistantMessage) => typeof message.content.text === 'string' ? message.content.text : '';
 const eventDetails = (event: Record<string, unknown>) => [
   `Kategoria: ${{ Class: 'Zajęcia', Work: 'Praca', Personal: 'Osobiste' }[String(event.category)] ?? String(event.category)}`,
@@ -30,7 +32,7 @@ const actionSummary = (action: PendingAssistantAction) => {
   return `Dodać „${String(value?.title ?? 'wydarzenie')}” · ${String(value?.start ?? '')} – ${String(value?.end ?? '')}?`;
 };
 
-export default function AssistantScreen({ active, onCalendarChange, importHandoff, onHandoffConsumed }: Props) {
+export default function AssistantScreen({ active, onCalendarChange, importHandoff, onHandoffConsumed, isPremium, onOpenPremium }: Props) {
   const { palette, styles } = useTheme();
   const compact = useWindowDimensions().width < 760;
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -65,7 +67,7 @@ export default function AssistantScreen({ active, onCalendarChange, importHandof
 
   useEffect(() => {
     setCollision(null);
-    if (!active) return;
+    if (!active || !isPremium) return;
     let alive = true;
     setLoading(true); setError('');
     void Promise.all([getAssistantConfig(), listAssistantConversations()]).then(([config, result]) => {
@@ -75,11 +77,11 @@ export default function AssistantScreen({ active, onCalendarChange, importHandof
     }).catch((reason) => { if (alive) setError(reason instanceof Error ? reason.message : 'Nie udało się połączyć z asystentem.'); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [active]);
+  }, [active, isPremium]);
 
   useEffect(() => {
     if (!conversationId) { setMessages([]); setPendingActions([]); return; }
-    if (!active || requestRef.current) return;
+    if (!active || !isPremium || requestRef.current) return;
     let alive = true;
     setStreamText('');
     setLoading(true); setError('');
@@ -88,11 +90,11 @@ export default function AssistantScreen({ active, onCalendarChange, importHandof
     }).catch((reason) => { if (alive) setError(reason instanceof Error ? reason.message : 'Nie udało się wczytać rozmowy.'); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [active, conversationId]);
+  }, [active, conversationId, isPremium]);
 
   const send = async (targetConversationId = conversationId) => {
     const content = input.trim();
-    if (!content || !targetConversationId || sending || !enabled) return;
+    if (!isPremium || !content || !targetConversationId || sending || !enabled) return;
     if (requestRef.current || loading) return;
     const controller = new AbortController(); requestRef.current = controller;
     const localId = `local-user-${Date.now()}`;
@@ -126,6 +128,7 @@ export default function AssistantScreen({ active, onCalendarChange, importHandof
     catch (reason) { setError(reason instanceof Error ? reason.message : 'Nie udało się odświeżyć podglądu.'); }
   };
   const uploadAttachment = async (handoff: ChatImportHandoff) => {
+    if (!isPremium) { onOpenPremium(); return; }
     if (requestRef.current || sending) return;
     const controller = new AbortController(); requestRef.current = controller;
     setAttachmentMenuOpen(false); setSending(true); setUploading(true); setError(''); setUploadRetry(null);
@@ -146,11 +149,11 @@ export default function AssistantScreen({ active, onCalendarChange, importHandof
     catch(reason) {setError(reason instanceof Error?reason.message:'Nie udało się wybrać zdjęcia.');}
   };
   useEffect(()=>{
-    if(!active || !importHandoff || consumedHandoff.current===importHandoff || requestRef.current) return;
+    if(!active || !isPremium || !importHandoff || consumedHandoff.current===importHandoff || requestRef.current) return;
     consumedHandoff.current=importHandoff;
     void uploadAttachment(importHandoff);
     onHandoffConsumed?.();
-  },[active,importHandoff,sending]);
+  },[active,isPremium,importHandoff,sending]);
 
   const newConversation = async () => {
     if (!enabled || sending) return;
@@ -208,6 +211,15 @@ export default function AssistantScreen({ active, onCalendarChange, importHandof
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Nie udało się usunąć rozmowy.'); }
     finally { setSending(false); }
   };
+
+  if (!isPremium) return <View style={{ flex: 1, backgroundColor: palette.bg, width: '100%', maxWidth: 1240, alignSelf: 'center', justifyContent: 'center', padding: compact ? 16 : 28 }}>
+    <View accessibilityLabel="Asystent AI wymaga Premium" style={[styles.card, { alignSelf: 'center', width: '100%', maxWidth: 640, gap: 14, padding: compact ? 20 : 28, backgroundColor: palette.surface }]}>
+      <View style={[styles.row, { alignItems: 'center', gap: 10 }]}><PremiumCrown size={24} /><Text accessibilityRole="header" style={styles.heading}>Asystent AI · Premium</Text></View>
+      <Text style={styles.body}>Rozmawiaj o kalendarzu, przygotowuj propozycje wydarzeń i zatwierdzaj je przed zapisem. Kalendarz nie zmieni się bez Twojego potwierdzenia.</Text>
+      <Text style={styles.muted}>Rozmowy i wybrane dane kalendarza są przekazywane do Azure AI. Lokalny import w kalendarzu działa także bez Premium.</Text>
+      <PremiumActionButton title="Odblokuj Premium · Black Friday" primary onPress={onOpenPremium} />
+    </View>
+  </View>;
 
   return <View style={{ flex: 1, flexDirection: compact ? 'column' : 'row', backgroundColor: palette.bg, width: '100%', maxWidth: 1240, alignSelf: 'center' }}>
     {compact && <View style={[styles.row, { padding: 12, borderBottomWidth: 1, borderColor: palette.line, justifyContent: 'space-between' }]}><Text style={styles.heading}>Asystent</Text><Button title={historyOpen ? 'Zamknij historię' : 'Historia rozmów'} onPress={() => setHistoryOpen(value => !value)} /></View>}

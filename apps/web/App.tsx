@@ -20,6 +20,8 @@ import { useKeyboardVisible } from './src/components/keyboardVisibility';
 import ScreenTransition from './src/components/ScreenTransition';
 import GoogleIntegrationPanel from './src/components/GoogleIntegrationPanel';
 import AccountPanel from './src/components/AccountPanel';
+import PremiumCrown from './src/components/PremiumCrown';
+import PremiumPaywall from './src/components/PremiumPaywall';
 import AuthScreen, { type SignInVia } from './src/screens/AuthScreen';
 import RecoveryCodeScreen, { type RecoveryCodeReason } from './src/screens/RecoveryCodeScreen';
 import { Button, ThemeProvider, ThemeToggle, useTheme, type ThemeMode } from './src/components/ui';
@@ -161,6 +163,9 @@ function CalendarApp({ user, onSignOut, onAccountDeleted, onUserUpdated }: {
     const desktop = useWindowDimensions().width >= 1000;
     const keyboardVisible = useKeyboardVisible();
     const [menuOpen, setMenuOpen] = useState(false);
+    const [premiumPaywallOpen, setPremiumPaywallOpen] = useState(false);
+    const [premiumReturnTo, setPremiumReturnTo] = useState<'classes' | 'work' | null>(null);
+    const [resumePremiumImport, setResumePremiumImport] = useState<'classes' | 'work' | null>(null);
     const [tab, setTab] = useState<typeof tabs[number]>('Dziś');
     const [week, setWeek] = useState(new Date());
     const [agentPreferences, setAgentPreferences] = useState<AssistantPreferences>({ ...defaultAssistantPreferences });
@@ -198,6 +203,12 @@ function CalendarApp({ user, onSignOut, onAccountDeleted, onUserUpdated }: {
     const [notificationTarget, setNotificationTarget] = useState<DueNotification | null>(null);
     const [webPushAvailable, setWebPushAvailable] = useState(false);
     const [webPushNotice, setWebPushNotice] = useState('');
+    const openPremiumPaywall = (returnTo?: 'classes' | 'work') => { setPremiumReturnTo(returnTo ?? null); setPremiumPaywallOpen(true); };
+    const closePremiumPaywall = (redeemed = false) => {
+        setPremiumPaywallOpen(false);
+        setResumePremiumImport(redeemed ? premiumReturnTo : null);
+        setPremiumReturnTo(null);
+    };
 
     useEffect(() => {
         let alive = true;
@@ -455,7 +466,7 @@ function CalendarApp({ user, onSignOut, onAccountDeleted, onUserUpdated }: {
         <View style={{ paddingHorizontal: desktop ? 28 : 16, paddingVertical: 12, backgroundColor: palette.surface, borderBottomWidth: 1, borderColor: palette.line, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <Image accessibilityLabel="Logo Aura Kalendar" source={require('./logo.png')} resizeMode="contain" style={{ width: 36, height: 36 }} />
             {desktop && <Text style={[styles.heading, { fontSize: 20, marginRight: 26 }]}>Aura<Text style={{ color: palette.blue }}> Kalendar</Text></Text>}
-            {desktop && <View accessibilityRole="tablist" style={{ flexDirection: 'row', flex: 1, gap: 4 }}>{tabs.map(item => <Pressable key={item} accessibilityRole="tab" accessibilityState={{ selected: tab === item }} onPress={() => openTab(item)} style={{ minHeight: 44, paddingHorizontal: 16, justifyContent: 'center', borderRadius: 10, backgroundColor: tab === item ? palette.blueSoft : 'transparent' }}><Text style={[styles.body, { fontWeight: '700', color: tab === item ? palette.blue : palette.muted }]}>{item}</Text></Pressable>)}</View>}
+            {desktop && <View accessibilityRole="tablist" style={{ flexDirection: 'row', flex: 1, gap: 4 }}>{tabs.map(item => <Pressable key={item} accessibilityRole="tab" accessibilityState={{ selected: tab === item }} onPress={() => openTab(item)} style={{ minHeight: 44, paddingHorizontal: 16, justifyContent: 'center', borderRadius: 10, backgroundColor: tab === item ? palette.blueSoft : 'transparent' }}><View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><Text style={[styles.body, { fontWeight: '700', color: tab === item ? palette.blue : palette.muted }]}>{item}</Text>{item === 'Asystent' && <PremiumCrown size={12} />}</View></Pressable>)}</View>}
             <Text numberOfLines={1} style={[styles.muted, { flex: desktop ? undefined : 1, textAlign: desktop ? 'right' : 'center', fontWeight: '600' }]}>{now.toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' })}</Text>
             {!desktop && <Pressable accessibilityRole="button" accessibilityLabel="Menu" accessibilityState={{ expanded: menuOpen }} onPress={() => setMenuOpen(value => !value)} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', gap: 5, borderRadius: 10, backgroundColor: menuOpen ? palette.blueSoft : 'transparent' }}>
                 {[0, 1, 2].map(line => <View key={line} style={{ width: 20, height: 2, borderRadius: 1, backgroundColor: palette.ink }} />)}
@@ -465,14 +476,14 @@ function CalendarApp({ user, onSignOut, onAccountDeleted, onUserUpdated }: {
         <ScreenTransition screenIndex={tabs.indexOf(tab)} renderScreen={(index, active) => {
             const route = tabs[index];
             return (
-                route === 'Dziś' || route === 'Tydzień' ? <CalendarScreen onContinueInChat={(handoff)=>{setImportHandoff(handoff);setTab('Asystent');}} refreshVersion={calendarRevision} active={active} now={now} weekLayout={weekLayout} todayOnly={route === 'Dziś'} week={week} setWeek={setWeek} draftSchedule={schedulePreview}
+                route === 'Dziś' || route === 'Tydzień' ? <CalendarScreen isPremium={user.isPremium} onOpenPremium={openPremiumPaywall} resumePremiumImport={resumePremiumImport} onPremiumResumeConsumed={() => setResumePremiumImport(null)} onContinueInChat={(handoff)=>{setImportHandoff(handoff);setTab('Asystent');}} refreshVersion={calendarRevision} active={active} now={now} weekLayout={weekLayout} todayOnly={route === 'Dziś'} week={week} setWeek={setWeek} draftSchedule={schedulePreview}
                     notificationTarget={route === 'Tydzień' ? notificationTarget : null} onNotificationResolved={() => setNotificationTarget(null)} /> :
                     route === 'Grafik' ? <ScheduleScreen active={active} now={now} week={week} setWeek={setWeek} onPreview={setSchedulePreview} onApproved={() => setTab('Tydzień')} onUnsavedChange={onUnsavedChange} discardSignal={discardSignal} onOpenSettings={() => setTab('Ustawienia')}/> :
                         route === 'Blokady' ? <BlocksScreen /> :
-                            route === 'Asystent' ? <AssistantScreen importHandoff={importHandoff} onHandoffConsumed={()=>setImportHandoff(null)} active={active} onCalendarChange={() => setCalendarRevision((value) => value + 1)} /> :
+                            route === 'Asystent' ? <AssistantScreen isPremium={user.isPremium} onOpenPremium={openPremiumPaywall} importHandoff={importHandoff} onHandoffConsumed={()=>setImportHandoff(null)} active={active} onCalendarChange={() => setCalendarRevision((value) => value + 1)} /> :
                                 route === 'Ustawienia' ? <ScrollView style={{ flex: 1, minHeight: 0 }} contentContainerStyle={[styles.content, { maxWidth: 860, padding: desktop ? 32 : 16, paddingBottom: 40 }]} keyboardShouldPersistTaps="handled">
                                     <Text accessibilityRole="header" style={styles.title}>Ustawienia</Text><Text style={[styles.subtitle, { marginBottom: 24 }]}>Dostosuj kalendarz do swojego dnia.</Text>
-                                    <AccountPanel user={user} onSignOut={onSignOut} onAccountDeleted={onAccountDeleted} onUserUpdated={onUserUpdated} />
+                                    <AccountPanel user={user} onSignOut={onSignOut} onAccountDeleted={onAccountDeleted} onUserUpdated={onUserUpdated} onOpenPremium={openPremiumPaywall} />
                                     <View style={[styles.row, { justifyContent: 'space-between', marginBottom: 20 }]}><Text style={styles.heading}>Motyw</Text><ThemeToggle /></View>
                                     <Text style={[styles.heading, { marginBottom: 8 }]}>Układ tygodnia na komputerze</Text><Text style={[styles.muted, { marginBottom: 12 }]}>Motyw i układ zapisują się automatycznie. Na telefonie tydzień wyświetla się jako lista.</Text>
                                     <View accessibilityRole="radiogroup" style={{ gap: 8 }}>
@@ -579,7 +590,7 @@ function CalendarApp({ user, onSignOut, onAccountDeleted, onUserUpdated }: {
         }} />
 
         {!desktop && !keyboardVisible && <View accessibilityRole="tablist" style={{ flexDirection: 'row', backgroundColor: palette.surface, borderTopWidth: 1, borderColor: palette.line, paddingTop: 6, paddingBottom: 6 }}>
-            {tabs.filter(item => item !== 'Blokady' && item !== 'Ustawienia').map(item => <Pressable key={item} accessibilityRole="tab" accessibilityState={{ selected: tab === item }} onPress={() => openTab(item)} style={{ flex: 1, minWidth: 0, minHeight: 48, justifyContent: 'center', alignItems: 'center', gap: 4 }}><View style={{ width: 28, height: 24, alignItems: 'center', justifyContent: 'center' }}><NavigationIcon index={tabIcons[item]} color={tab === item ? palette.blue : palette.muted} /></View><Text style={{ width: '100%', height: 16, lineHeight: 16, includeFontPadding: false, textAlign: 'center', fontSize: 12, fontWeight: '700', color: tab === item ? palette.blue : palette.muted }}>{item}</Text></Pressable>)}
+            {tabs.filter(item => item !== 'Blokady' && item !== 'Ustawienia').map(item => <Pressable key={item} accessibilityRole="tab" accessibilityState={{ selected: tab === item }} onPress={() => openTab(item)} style={{ flex: 1, minWidth: 0, minHeight: 48, justifyContent: 'center', alignItems: 'center', gap: 4 }}><View style={{ width: 28, height: 24, alignItems: 'center', justifyContent: 'center' }}><NavigationIcon index={tabIcons[item]} color={tab === item ? palette.blue : palette.muted} />{item === 'Asystent' && <View style={{ position: 'absolute', top: -5, right: -6 }}><PremiumCrown size={10} /></View>}</View><Text style={{ width: '100%', height: 16, lineHeight: 16, includeFontPadding: false, textAlign: 'center', fontSize: 12, fontWeight: '700', color: tab === item ? palette.blue : palette.muted }}>{item}</Text></Pressable>)}
         </View>}
 
         <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={() => setMenuOpen(false)}>
@@ -602,5 +613,6 @@ function CalendarApp({ user, onSignOut, onAccountDeleted, onUserUpdated }: {
                 </View>
             </View>
         </Modal>
+        <PremiumPaywall visible={premiumPaywallOpen} user={user} onClose={closePremiumPaywall} onUserUpdated={onUserUpdated} />
     </SafeAreaView>;
 }

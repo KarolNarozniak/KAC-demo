@@ -8,6 +8,8 @@ import GoogleImportedEvent from '../components/GoogleImportedEvent';
 import { loadCalendar, createEvent, updateEvent, EventCollisionError, type EventCollision, deleteEvent, checkEventCollisions } from '../services/calendarApi';
 import { collisionSummary, describeCollision } from '../domain/collisions';
 import { Button, Field, useTheme } from '../components/ui';
+import PremiumCrown from '../components/PremiumCrown';
+import PremiumActionButton from '../components/PremiumActionButton';
 import DateField from '../components/DateField';
 import TimeField from '../components/TimeField';
 import CalendarAgenda from '../components/CalendarAgenda';
@@ -23,9 +25,10 @@ import WorkScheduleImport from '../components/WorkScheduleImport';
 import GoogleCalendarImport from '../components/GoogleCalendarImport';
 const categories: Category[] = ['Class', 'Work', 'Personal'];
 const labels: Record<Category, string> = { Class: 'Zajęcia', Work: 'Praca', Personal: 'Prywatne' };
-type Props = { onContinueInChat?: (handoff:ChatImportHandoff)=>void; refreshVersion?: number; week: Date; setWeek: (value: Date) => void; todayOnly?: boolean; weekLayout: WeekLayout; now: Date; active: boolean; draftSchedule?: WeeklySchedule | null;
+type PremiumImportTarget = 'classes' | 'work';
+type Props = { onContinueInChat?: (handoff:ChatImportHandoff)=>void; isPremium: boolean; onOpenPremium: (returnTo?: PremiumImportTarget) => void; resumePremiumImport?: PremiumImportTarget | null; onPremiumResumeConsumed?: () => void; refreshVersion?: number; week: Date; setWeek: (value: Date) => void; todayOnly?: boolean; weekLayout: WeekLayout; now: Date; active: boolean; draftSchedule?: WeeklySchedule | null;
   notificationTarget?: DueNotification | null; onNotificationResolved?: () => void };
-export default function CalendarScreen({ onContinueInChat, refreshVersion = 0, week, setWeek, todayOnly = false, weekLayout, now, active, draftSchedule, notificationTarget, onNotificationResolved }: Props) {
+export default function CalendarScreen({ onContinueInChat, isPremium, onOpenPremium, resumePremiumImport, onPremiumResumeConsumed, refreshVersion = 0, week, setWeek, todayOnly = false, weekLayout, now, active, draftSchedule, notificationTarget, onNotificationResolved }: Props) {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [dailySummary, setDailySummary] = useState<{ key: string; text: string } | null>(null);
@@ -57,7 +60,7 @@ export default function CalendarScreen({ onContinueInChat, refreshVersion = 0, w
   const todayKey = localDateKey(now);
   const summaryContext = useMemo(() => dailySummaryContext(events, now), [events, todayKey]);
   useEffect(() => {
-    if (!active || !todayOnly || loading || loadError) return;
+    if (!active || !todayOnly || !isPremium || loading || loadError) { if (!isPremium) setDailySummaryLoading(false); return; }
     let alive = true;
     setDailySummaryLoading(!summaryContext.empty); setDailySummaryError('');
     void getDailySummaryForCalendar(events, now).then((result) => {
@@ -66,7 +69,21 @@ export default function CalendarScreen({ onContinueInChat, refreshVersion = 0, w
       if (alive) setDailySummaryError(error instanceof Error ? error.message : 'Nie udało się przygotować podsumowania dnia.');
     }).finally(() => { if (alive) setDailySummaryLoading(false); });
     return () => { alive = false; };
-  }, [active, todayOnly, loading, loadError, summaryContext.key]);
+  }, [active, todayOnly, isPremium, loading, loadError, summaryContext.key]);
+  const openPremiumFromImport = (target: PremiumImportTarget) => {
+    setClassImportOpen(false); setImportOpen(false); setImportMenuOpen(false);
+    onOpenPremium(target);
+  };
+  const continueInAssistant = (handoff: ChatImportHandoff) => {
+    if (!isPremium) { openPremiumFromImport(handoff.source === 'classes' ? 'classes' : 'work'); return; }
+    onContinueInChat?.(handoff);
+  };
+  useEffect(() => {
+    if (!active || !isPremium || !resumePremiumImport) return;
+    if (resumePremiumImport === 'classes') setClassImportOpen(true);
+    else setImportOpen(true);
+    onPremiumResumeConsumed?.();
+  }, [active, isPremium, resumePremiumImport, onPremiumResumeConsumed]);
   const list = useMemo(() => occurrencesForRange(events, { start: monday, end: addCalendarDays(monday, 7) }), [events, monday.getTime()]);
   // S23KC2S1P2-299: po kliknięciu „Zmiana planu” najpierw ładujemy aktualny stan kalendarza, potem otwieramy wydarzenie z różnicą.
   const [refreshedFor, setRefreshedFor] = useState('');
@@ -197,11 +214,13 @@ export default function CalendarScreen({ onContinueInChat, refreshVersion = 0, w
     {todayOnly ? <View style={{ flex: 1, minHeight: 0 }}>
       <View style={[styles.row, { justifyContent: 'space-between', paddingVertical: 8 }]}><View><Text style={styles.title}>{dayGreeting(now)}</Text><Text style={styles.subtitle}>Zaplanuj dzień w swoim rytmie.</Text></View>{!compact && <Button title="+ Dodaj wydarzenie" accessibilityLabel="Dodaj wydarzenie" primary onPress={() => newEvent(now)} />}</View>
        <View accessibilityLabel="Podsumowanie dnia od asystenta" style={{ backgroundColor: palette.blueSoft, borderRadius: 16, padding: 20, marginTop: 14, marginBottom: 20, gap: 8, borderWidth: 1, borderColor: palette.line }}>
-         <Text style={[styles.body, { fontWeight: '700' }]}>Twój dzień w skrócie</Text>
-         {dailySummaryLoading ? <Text accessibilityLiveRegion="polite" style={styles.muted}>Asystent analizuje dzisiejsze wydarzenia…</Text>
-           : dailySummaryError ? <Text accessibilityRole="alert" style={styles.error}>{dailySummaryError}</Text>
-           : dailySummary?.key === summaryContext.key ? <Text accessibilityLiveRegion="polite" style={styles.body}>{dailySummary.text}</Text>
-           : <Text style={styles.muted}>Asystent przygotuje podsumowanie dzisiejszego kalendarza.</Text>}
+         <View style={[styles.row, { alignItems: 'center', gap: 8 }]}><PremiumCrown size={17} /><Text style={[styles.body, { fontWeight: '700' }]}>Twój dzień w skrócie</Text></View>
+          {!isPremium ? <><Text style={styles.muted}>To podsumowanie przygotowuje Asystent AI. Jest dostępne w Premium; kalendarz i lokalny import działają bez Premium.</Text>
+            <PremiumActionButton title="Odblokuj Premium · Black Friday" primary onPress={onOpenPremium} /></>
+           : dailySummaryLoading ? <Text accessibilityLiveRegion="polite" style={styles.muted}>Asystent analizuje dzisiejsze wydarzenia…</Text>
+             : dailySummaryError ? <View><Text accessibilityRole="alert" style={styles.error}>{dailySummaryError}</Text><Button title="Spróbuj ponownie" onPress={() => void getDailySummaryForCalendar(events, now).then((result) => setDailySummary({ key: summaryContext.key, text: result.text })).catch((error) => setDailySummaryError(error instanceof Error ? error.message : 'Nie udało się przygotować podsumowania dnia.'))} /></View>
+             : dailySummary?.key === summaryContext.key ? <Text accessibilityLiveRegion="polite" style={styles.body}>{dailySummary.text}</Text>
+               : <Text style={styles.muted}>Asystent przygotuje podsumowanie dzisiejszego kalendarza.</Text>}
        </View>
       <CalendarAgenda days={[now]} events={todayEvents} now={now} onDaySelected={setAgendaDay} onSelect={details} />
     </View> : compact ? <CalendarAgenda days={weekDays} events={gridEvents} now={now} onDaySelected={setAgendaDay} onSelect={details} /> : <WeekGrid active={active} days={weekDays} events={gridEvents} layout={weekLayout} now={now} onAdd={newEvent} onSelect={details} />}
@@ -264,8 +283,8 @@ export default function CalendarScreen({ onContinueInChat, refreshVersion = 0, w
       <Button title="Google Calendar" accessibilityLabel="Importuj z Google Calendar" onPress={() => { setImportMenuOpen(false); setGoogleImportOpen(true); }} />
       <Button title="Anuluj" onPress={() => setImportMenuOpen(false)} />
     </View></View></Modal>
-    <ClassScheduleImport onContinueInChat={onContinueInChat} visible={classImportOpen} onClose={() => setClassImportOpen(false)} onImported={() => void reload()} />
-    <WorkScheduleImport onContinueInChat={onContinueInChat} visible={importOpen} onClose={() => setImportOpen(false)} onImported={() => void reload()} />
+     <ClassScheduleImport isPremium={isPremium} onPremiumRequest={() => openPremiumFromImport('classes')} onContinueInChat={continueInAssistant} visible={classImportOpen} onClose={() => setClassImportOpen(false)} onImported={() => void reload()} />
+     <WorkScheduleImport isPremium={isPremium} onPremiumRequest={() => openPremiumFromImport('work')} onContinueInChat={continueInAssistant} visible={importOpen} onClose={() => setImportOpen(false)} onImported={() => void reload()} />
     <GoogleCalendarImport visible={googleImportOpen} onClose={() => setGoogleImportOpen(false)} onImported={() => void reload()} />
   </View>;
 }
