@@ -255,7 +255,14 @@ function CalendarApp({ user, onSignOut, onAccountDeleted, onUserUpdated }: {
         return () => subscription.remove();
     }, []);
 
-    // Cykliczne sprawdzanie i wywoływanie powiadomień (obsługuje zarówno Expo Mobile, jak i Web)
+    // Rejestracja Service Workera od razu przy uruchomieniu aplikacji webowej (wymagane przez Chrome na Androidzie)
+    useEffect(() => {
+        if (Platform.OS === 'web' && typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+            void navigator.serviceWorker.register('/service-worker.js', { scope: '/' }).catch(() => undefined);
+        }
+    }, []);
+
+    // Cykliczne sprawdzanie i wywoływanie powiadomień (obsługuje zarówno Expo Mobile, jak i Web/Android)
     useEffect(() => {
         if (!notificationSettings?.enabled) return;
         let alive = true;
@@ -264,7 +271,39 @@ function CalendarApp({ user, onSignOut, onAccountDeleted, onUserUpdated }: {
                 const due = await claimDueNotifications();
                 if (!alive) return;
                 for (const item of due) {
-                    try {
+                    if (Platform.OS === 'web') {
+                        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+                            const title = item.title || 'Przypomnienie KAC';
+                            const options = {
+                                body: item.message,
+                                tag: item.id,
+                                data: {
+                                    notificationId: item.id,
+                                    eventId: item.eventId,
+                                    eventStart: item.eventStart,
+                                    eventEnd: item.eventEnd,
+                                    title,
+                                    body: item.message,
+                                },
+                            };
+                            const registration = 'serviceWorker' in navigator
+                                ? (await navigator.serviceWorker.getRegistration('/')) ?? (await navigator.serviceWorker.register('/service-worker.js', { scope: '/' }).catch(() => undefined))
+                                : undefined;
+                            if (registration) {
+								const activeRegistration = registration.active ? registration : await navigator.serviceWorker.ready;
+								await activeRegistration.showNotification(title, options);
+							} else {
+                                const notification = new Notification(title, options);
+                                notification.onclick = () => {
+                                    const [year, month, day] = item.eventStart.slice(0, 10).split('-').map(Number);
+                                    setWeek(new Date(year, month - 1, day, 12));
+                                    setNotificationTarget(item);
+                                    setTab('Tydzień');
+                                    globalThis.window?.focus();
+                                };
+                            }
+                        }
+                    } else {
                         await Notifications.scheduleNotificationAsync({
                             content: {
                                 title: item.title || 'Przypomnienie KAC',
@@ -273,17 +312,6 @@ function CalendarApp({ user, onSignOut, onAccountDeleted, onUserUpdated }: {
                             },
                             trigger: null,
                         });
-                    } catch {
-                        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-                            const notification = new Notification(item.title || 'Przypomnienie KAC', { body: item.message, tag: item.id });
-                            notification.onclick = () => {
-                                const [year, month, day] = item.eventStart.slice(0, 10).split('-').map(Number);
-                                setWeek(new Date(year, month - 1, day, 12));
-                                setNotificationTarget(item);
-                                setTab('Tydzień');
-                                globalThis.window?.focus();
-                            };
-                        }
                     }
                     await acknowledgeNotification(item.id);
                 }
