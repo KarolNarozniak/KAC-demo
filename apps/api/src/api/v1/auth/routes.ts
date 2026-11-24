@@ -10,9 +10,11 @@ import { documented, errorExamples, withExamples } from '../../examples.js';
 export type AuthRateLimits = { loginPerMinute: number; registerPerHour: number; sensitivePerQuarter: number };
 export const DEFAULT_AUTH_RATE_LIMITS: AuthRateLimits = { loginPerMinute: 10, registerPerHour: 5, sensitivePerQuarter: 10 };
 
-const user = { type: 'object', additionalProperties: false, required: ['id', 'email', 'firstName', 'lastName', 'timeZone', 'hasRecoveryCode'], properties: {
+const user = { type: 'object', additionalProperties: false, required: ['id', 'email', 'firstName', 'lastName', 'timeZone', 'hasRecoveryCode', 'isPremium', 'premiumExpiresAt'], properties: {
   id: { type: 'string' }, email: { type: 'string' }, firstName: { type: 'string' }, lastName: { type: 'string' }, timeZone: { type: 'string' },
   hasRecoveryCode: { type: 'boolean', description: 'Czy konto ma kod odzyskiwania. Bez kodu zapomniane hasło ustawi tylko administrator – nowy kod tworzy POST /auth/recovery-code.' },
+  isPremium: { type: 'boolean', description: 'Czy konto ma obecnie aktywne uprawnienie Premium.' },
+  premiumExpiresAt: { type: ['string', 'null'], format: 'date-time', description: 'Data wygaśnięcia Premium albo null, jeśli konto nie ma uprawnienia.' },
 } } as const;
 const sessionProperties = {
   user, token: { type: 'string', description: 'Token sesji do nagłówka Authorization: Bearer. Pokazywany tylko raz – serwer przechowuje wyłącznie jego skrót.' },
@@ -22,7 +24,7 @@ const sessionResponse = { type: 'object', additionalProperties: false, required:
 const recoveryCodeProperty = { type: 'string', description: 'Jednorazowy kod odzyskiwania (16 znaków w grupach po 4). Pokazywany tylko raz – serwer przechowuje wyłącznie jego skrót; poprzedni kod przestał działać.' } as const;
 const sessionWithCodeResponse = { type: 'object', additionalProperties: false, required: ['user', 'token', 'expiresAt', 'recoveryCode'],
   properties: { ...sessionProperties, recoveryCode: recoveryCodeProperty } } as const;
-const exampleUser = { id: 'f3c1d0a2-5b7e-4c1a-9d2e-6a8b1c2d3e4f', email: 'anna.nowak@example.test', firstName: 'Anna', lastName: 'Nowak', timeZone: 'Europe/Warsaw', hasRecoveryCode: true };
+const exampleUser = { id: 'f3c1d0a2-5b7e-4c1a-9d2e-6a8b1c2d3e4f', email: 'anna.nowak@example.test', firstName: 'Anna', lastName: 'Nowak', timeZone: 'Europe/Warsaw', hasRecoveryCode: true, isPremium: false, premiumExpiresAt: null };
 const exampleSession = { user: exampleUser, token: 'kac-example-session-token-not-real', expiresAt: '2027-02-16T09:30:00.000Z' };
 const exampleRecoveryCode = '7F3Q-9XWM-2HDA-K8PR';
 const client = { type: 'string', maxLength: 20, description: 'Rodzaj aplikacji (np. web, android, ios) – opis sesji na liście urządzeń.' } as const;

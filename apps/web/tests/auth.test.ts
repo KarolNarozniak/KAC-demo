@@ -147,7 +147,7 @@ test('reset hasła kodem: kod wpisany dowolnie (małe litery, spacje, półpauza
 test('klient resetu hasła: kod bez sesji (bez nagłówka), nowy kod z hasłem i z sesją; 401 złego kodu nie wylogowuje', async () => {
   let expired = 0;
   const unregister = onSessionExpired(() => { expired++; });
-  const session = { user: { id: 'U1', email: 'anna@example.test', firstName: 'Anna', lastName: '', timeZone: 'Europe/Warsaw', hasRecoveryCode: true },
+  const session = { user: { id: 'U1', email: 'anna@example.test', firstName: 'Anna', lastName: '', timeZone: 'Europe/Warsaw', hasRecoveryCode: true, isPremium: false, premiumExpiresAt: null },
     token: 't2', expiresAt: '2027-02-16T10:00:00.000Z', recoveryCode: 'M4ZT-0QB8-XK2N-7VHD' };
   const api = mockFetch((url, init) => {
     if (url.endsWith('/auth/recover')) return JSON.parse(String(init?.body)).recoveryCode === '7F3Q-9XWM-2HDA-K8PR' ? json(200, session) : json(401, { error: 'invalid_recovery_code' });

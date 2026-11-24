@@ -27,6 +27,7 @@ import { aiImportRoutes } from './api/v1/imports/ai-routes.js';
 import { assistantImportRoutes } from './api/v1/assistant/import-routes.js';
 import { assistantRoutes } from './api/v1/assistant/routes.js';
 import { notificationRoutes } from './api/v1/notifications/routes.js';
+import { premiumRoutes } from './api/v1/premium/routes.js';
 import { AiRepository } from './ai/repository.js';
 import { AiService } from './ai/service.js';
 import { FoundryResponsesClient } from './ai/foundry.js';
@@ -84,6 +85,7 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
         { name: 'Blocks', description: 'Vacation, exam sessions and days off blocks.' },
         { name: 'AI imports', description: 'AI document extraction into the existing review/confirmation pipeline.' },
         { name: 'Assistant', description: 'Application-scoped conversations and confirmation-gated calendar actions.' },
+        { name: 'Premium', description: 'Premium campaign information and account-bound code redemption.' },
         { name: 'Notifications', description: 'In-app notification preferences and due reminder queue.' },
       ],
       externalDocs: { description: 'KAC bilingual developer documentation', url: process.env.DOCUSAURUS_URL ?? 'http://localhost:3000' },
@@ -125,6 +127,7 @@ export function buildApi(repository: CalendarRepository | null, allowedOrigins: 
     await assistantImportRoutes(v1, { repository, aiService, aiRepository: options.aiRepository, scheduleReader, scope });
     await assistantRoutes(v1, { repository, workProfileRepository: options.workProfileRepository, aiService, aiRepository: options.aiRepository, scope });
     await notificationRoutes(v1, { repository: options.notificationRepository, scope });
+    await premiumRoutes(v1, { service: options.premiumService, scope });
     await blockRoutes(v1, { repository, scope });
     registerGoogleImport(v1, repository, options.google ?? {}, scope);
     registerGoogleIntegration(v1, options.googleIntegration ?? null, scope);

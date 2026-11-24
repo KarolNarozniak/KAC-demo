@@ -6,7 +6,7 @@ export const PASSWORD_MIN_LENGTH = 12;
 export const PASSWORD_MAX_LENGTH = 128;
 export type RegistrationMode = 'open' | 'invite' | 'closed';
 export type AuthConfig = { registration: RegistrationMode; passwordMinLength: number; passwordMaxLength: number };
-export type AuthUser = { id: string; email: string; firstName: string; lastName: string; timeZone: string; hasRecoveryCode: boolean };
+export type AuthUser = { id: string; email: string; firstName: string; lastName: string; timeZone: string; hasRecoveryCode: boolean; isPremium: boolean; premiumExpiresAt: string | null };
 /** recoveryCode – tylko po rejestracji i po resecie hasła; aplikacja pokazuje go raz, z prośbą o zapisanie. */
 export type AuthSession = { user: AuthUser; token: string; expiresAt: string; recoveryCode?: string };
 
@@ -96,6 +96,11 @@ const messages: Record<string, string> = {
   registration_closed: 'Zakładanie kont jest wyłączone. Konto może założyć administrator KAC.',
   invalid_invite_code: 'Nieprawidłowy kod zaproszenia.',
   account_not_found: 'To konto już nie istnieje.',
+  premium_required: 'Ta funkcja jest dostępna w Premium.',
+  premium_code_invalid: 'Ten kod jest nieprawidłowy. Sprawdź go i spróbuj ponownie.',
+  premium_code_already_redeemed: 'To konto wykorzystało już kod z tej kampanii.',
+  premium_not_configured: 'Kody Premium nie są obecnie dostępne.',
+  premium_service_unavailable: 'Nie udało się aktywować Premium. Spróbuj ponownie później.',
   unauthorized: 'Sesja wygasła albo została zakończona na innym urządzeniu. Zaloguj się ponownie.',
   auth_not_configured: 'Serwer KAC działa bez bazy danych, więc logowanie jest niedostępne.',
   database_unavailable: 'Baza danych KAC jest chwilowo niedostępna. Spróbuj ponownie za chwilę.',

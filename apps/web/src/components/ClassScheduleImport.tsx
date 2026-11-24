@@ -1,5 +1,6 @@
 import DialogHeading from './DialogHeading';
 import ImportReaderChoice from './ImportReaderChoice';
+import PremiumCrown from './PremiumCrown';
 import React, { useEffect, useRef, useState } from 'react';
 import { Modal, ScrollView, Text, View } from 'react-native';
 import { Button, Field, useTheme } from './ui';
@@ -33,8 +34,8 @@ const rowInput = (row: ClassRow): ImportRowInput => ({ id: row.id, title: row.ti
   sourcePage: row.sourcePage, sourceSnippet: row.sourceSnippet, unresolvedFields: row.unresolvedFields,
   duplicateDecision: row.duplicateDecision, replacementId: row.replacementId });
 
-export default function ClassScheduleImport({ visible, onClose, onImported, onContinueInChat }: {
-  visible: boolean; onClose: () => void; onImported: () => void; onContinueInChat?: (handoff: ChatImportHandoff) => void;
+export default function ClassScheduleImport({ visible, onClose, onImported, onContinueInChat, isPremium, onPremiumRequest }: {
+  visible: boolean; onClose: () => void; onImported: () => void; onContinueInChat?: (handoff: ChatImportHandoff) => void; isPremium: boolean; onPremiumRequest: () => void;
 }) {
   const { styles, palette } = useTheme();
   const [session, setSession] = useState<ClassReadResult | null>(null);
@@ -52,10 +53,17 @@ export default function ClassScheduleImport({ visible, onClose, onImported, onCo
   const [status, setStatus] = useState<'' | 'failed' | 'cancelled'>('');
   const [pickedFile, setPickedFile] = useState<PickedPdf|null>(null);
   const [fileName, setFileName] = useState('');
-  const [readerMode, setReaderMode] = useState<'ai' | 'local'>('ai');
+  const [readerMode, setReaderMode] = useState<'ai' | 'local'>(isPremium ? 'ai' : 'local');
+  const premiumWasActive = useRef(isPremium);
   const [page, setPage] = useState(0);
   const [retry, setRetry] = useState(0);
   const chosen = rows.filter(row => selected.has(row.id));
+
+  useEffect(() => {
+    if (!isPremium && readerMode === 'ai') setReaderMode('local');
+    else if (isPremium && !premiumWasActive.current) setReaderMode('ai');
+    premiumWasActive.current = isPremium;
+  }, [isPremium, readerMode]);
 
   useEffect(() => {
     if (!session) return;
@@ -85,6 +93,7 @@ export default function ClassScheduleImport({ visible, onClose, onImported, onCo
     setPickedFile(file); setFileName(file.name);
     setStatus('');
     const useAi = !/\.(ics|csv)$/i.test(file.name) && readerMode === 'ai';
+    if (useAi && !isPremium) { onPremiumRequest(); return; }
     let result: ClassReadResult;
     if (useAi) {
       const controller = new AbortController(); aiReadController.current = controller;
@@ -143,13 +152,14 @@ export default function ClassScheduleImport({ visible, onClose, onImported, onCo
       <ScrollView style={{ backgroundColor: palette.surface, borderRadius: 18, width: '100%', maxWidth: 600, maxHeight: '92%', flexGrow: 0 }} contentContainerStyle={{ padding: 24, gap: 10 }}>
         <DialogHeading title="Import planu zajęć" disabled={busy} onClose={() => void close()} />
         <Text style={styles.subtitle}>Wybierz plan zajęć: ICS, PDF lub zdjęcie JPG/PNG. Maksymalnie 5 MB i 10 stron PDF. Pliki ICS odczytujemy lokalnie.</Text>
-        {!session && <ImportReaderChoice value={readerMode} onChange={setReaderMode} disabled={busy} />}
+        {!session && <ImportReaderChoice value={readerMode} onChange={setReaderMode} isPremium={isPremium} onPremiumRequest={onPremiumRequest} disabled={busy} />}
         {!!fileName && <Text style={styles.body}>{fileName}</Text>}
         {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
-        {(Boolean(error)||preview.some(item=>item.status==='error'||item.duplicateOfEvents.length||item.duplicateOfRows.length)||rows.some(row=>row.reviewRequired)) && !busy && pickedFile && /\.(png|jpe?g|pdf)$/i.test(pickedFile.name) && onContinueInChat && <Button title="Dokończ w czacie" accessibilityLabel="Dokończ w czacie — przekaż zdjęcie i dane do Azure AI" primary onPress={()=>{
+        {(Boolean(error)||preview.some(item=>item.status==='error'||item.duplicateOfEvents.length||item.duplicateOfRows.length)||rows.some(row=>row.reviewRequired)) && !busy && pickedFile && /\.(png|jpe?g|pdf)$/i.test(pickedFile.name) && onContinueInChat && <View style={[styles.row, { alignItems: 'center', gap: 8 }]}>{!isPremium && <PremiumCrown size={14} />}<Button title="Dokończ w czacie" accessibilityLabel="Dokończ w czacie — funkcja Premium używająca Azure AI" primary onPress={()=>{
+          if (!isPremium) { onPremiumRequest(); return; }
           onContinueInChat({file:pickedFile,source:'classes',reader:'ai',...(session?{sessionId:session.importSessionId,rows:rows.map(row=>({...rowInput(row),selected:selected.has(row.id)}))}:{})});
           setSession(null);setRows([]);setPickedFile(null);setError('');onClose();
-        }}/>}
+        }}/></View>}
         {busy && <View style={styles.row}><Text accessibilityLiveRegion="polite" style={styles.body}>Przetwarzanie…</Text>{aiReading && <Button title="Anuluj odczyt AI" onPress={cancelAiRead} />}</View>}
         {summary && <Text accessibilityLiveRegion="polite" style={styles.body}>Import zakończony. Zaimportowano: {summary.added + summary.replaced} (dodano: {summary.added} · zastąpiono: {summary.replaced}) · Pominięto duplikaty: {summary.skipped} · Niewybrane: {summary.rejected}</Text>}
         {status === 'cancelled' && <Text accessibilityLiveRegion="polite" style={styles.body}>Import anulowany. Kalendarz pozostał bez zmian.</Text>}

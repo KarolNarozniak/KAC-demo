@@ -15,6 +15,7 @@ import type { AuthService } from '../auth/service.js';
 import type { AuthRateLimits } from './v1/auth/routes.js';
 import type { AiService } from '../ai/service.js';
 import type { AiRepository } from '../ai/repository.js';
+import type { PremiumService } from '../premium/service.js';
 
 export type AiServiceContract = Pick<AiService, 'extractSchedule' | 'sendAssistantMessage'>;
 export type AiRepositoryContract = Pick<AiRepository,
@@ -61,6 +62,8 @@ export type ApiOptions = {
   googleIntegration?: GoogleIntegrationService | null;
   /** Logowanie do KAC (sesje w bazie). Podane – każda trasa poza publicznymi wymaga sesji, a zakres użytkownika pochodzi z sesji. */
   auth?: AuthService | null;
+  /** Premium code and campaign service. Without it, Premium activation is disabled. */
+  premiumService?: PremiumService;
   /** Limity żądań tras logowania na adres IP (domyślnie: logowanie 10/min, rejestracja 5/h, zmiana hasła i usunięcie konta 10/15 min). */
   authRateLimits?: Partial<AuthRateLimits>;
   /** Zaufani pośrednicy przed API (domyślnie TRUST_PROXY z konfiguracji) – adres klienta dla limitów logowania. */

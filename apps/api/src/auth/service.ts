@@ -38,7 +38,7 @@ export class AuthError extends Error {
 }
 
 /** Zalogowana sesja żądania: czyje dane obsługuje (UserScope) i którą sesję można wylogować. */
-export type AuthSession = { sessionId: string; scope: UserScope };
+export type AuthSession = { sessionId: string; scope: UserScope; isPremium: boolean; premiumExpiresAt: string | null };
 export type SessionResult = { user: AuthUser; token: string; expiresAt: string };
 /** Sesja z nowym kodem odzyskiwania – po rejestracji i po resecie hasła. Kod pokazujemy tylko raz; serwer zna wyłącznie jego skrót. */
 export type SessionWithCode = SessionResult & { recoveryCode: string };
@@ -161,7 +161,8 @@ export class AuthService {
       return this.authenticate(token);
     }
     if (Date.now() - session.lastUsedAt.getTime() > 10 * 60_000) await this.repository.touchSession(session.sessionId);
-    return { sessionId: session.sessionId, scope: { userId: session.userId, calendarId: session.calendarId } };
+    return { sessionId: session.sessionId, scope: { userId: session.userId, calendarId: session.calendarId },
+      isPremium: session.isPremium, premiumExpiresAt: session.premiumExpiresAt };
   }
 
   async logout(session: AuthSession): Promise<void> {

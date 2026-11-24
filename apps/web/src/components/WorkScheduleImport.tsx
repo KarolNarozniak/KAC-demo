@@ -1,5 +1,6 @@
 import DialogHeading from './DialogHeading';
 import ImportReaderChoice from './ImportReaderChoice';
+import PremiumCrown from './PremiumCrown';
 // Import grafiku pracy ze zdjęcia lub pliku (historyjka S23KC2S1P2-44)
 // z kontrolą rozpoznanych danych przed zapisem (historyjka S23KC2S1P2-32).
 //
@@ -30,7 +31,7 @@ import type { ChatImportHandoff } from '../services/chatImportApi';
 import { pickPdf } from '../services/pickPdf';
 import { takePhoto } from '../services/takePhoto';
 
-type Props = { visible: boolean; onClose: () => void; onImported: () => void; onContinueInChat?: (handoff:ChatImportHandoff)=>void };
+type Props = { visible: boolean; onClose: () => void; onImported: () => void; onContinueInChat?: (handoff:ChatImportHandoff)=>void; isPremium: boolean; onPremiumRequest: () => void };
 
 /** Poniżej tej pewności odczytu wiersz jest dodatkowo oznaczony do sprawdzenia (historyjka 32). */
 const LOW_CONFIDENCE = 0.7;
@@ -69,10 +70,10 @@ type PickedFile = { name: string; size: number; base64: string };
 type Session = { id: string; readStatusLabel: string; readerIsDemo: boolean; readerProvider?: 'local' | 'azure-ai-foundry'; userName: string };
 type Phase = 'idle' | 'reading' | 'preview' | 'saving' | 'saveFailed';
 
-export default function WorkScheduleImport({ visible, onClose, onImported, onContinueInChat }: Props) {
+export default function WorkScheduleImport({ visible, onClose, onImported, onContinueInChat, isPremium, onPremiumRequest }: Props) {
   const { palette, styles } = useTheme();
   const [file, setFile] = useState<PickedFile | null>(null);
-  const [readerMode, setReaderMode] = useState<'ai' | 'local'>('ai');
+  const [readerMode, setReaderMode] = useState<'ai' | 'local'>(isPremium ? 'ai' : 'local');
   const [phase, setPhase] = useState<Phase>('idle');
   const [session, setSession] = useState<Session | null>(null);
   const [rows, setRows] = useState<ScheduleRow[]>([]);
@@ -86,6 +87,13 @@ export default function WorkScheduleImport({ visible, onClose, onImported, onCon
   const [summary, setSummary] = useState<ImportSummary | null>(null);
   const aiReadController = useRef<AbortController | null>(null);
   const closeDuringAiRead = useRef(false);
+  const premiumWasActive = useRef(isPremium);
+
+  useEffect(() => {
+    if (!isPremium && readerMode === 'ai') setReaderMode('local');
+    else if (isPremium && !premiumWasActive.current) setReaderMode('ai');
+    premiumWasActive.current = isPremium;
+  }, [isPremium, readerMode]);
 
   const reset = () => {
     setPhase('idle'); setSession(null); setRows([]); setSelected({}); setOvernightOk({}); setDecisions({}); setReplacementIds({}); setPreview({});
@@ -124,6 +132,7 @@ export default function WorkScheduleImport({ visible, onClose, onImported, onCon
 
   const startImport = async () => {
     if (!file) return;
+    if (readerMode === 'ai' && !isPremium) { onPremiumRequest(); return; }
     setError(''); setNotice(''); setSummary(null); setPhase('reading');
     const controller = readerMode === 'ai' ? new AbortController() : null;
     aiReadController.current = controller;
@@ -307,7 +316,7 @@ export default function WorkScheduleImport({ visible, onClose, onImported, onCon
 
           {phase === 'idle' && (
             <View style={{ marginTop: 14 }}>
-            <ImportReaderChoice value={readerMode} onChange={setReaderMode} />
+            <ImportReaderChoice value={readerMode} onChange={setReaderMode} isPremium={isPremium} onPremiumRequest={onPremiumRequest} />
             <View style={[styles.row, { flexWrap: 'wrap', marginTop: 10 }]}>
               <Button title="Zrób zdjęcie" onPress={() => void chooseFile('camera')} />
               <Button title={file ? 'Zmień plik' : 'Wybierz zdjęcie lub plik'} primary onPress={() => void chooseFile('file')} />
@@ -319,10 +328,11 @@ export default function WorkScheduleImport({ visible, onClose, onImported, onCon
           {phase === 'reading' && <View style={[styles.row, { marginTop: 14 }]}><Text accessibilityLiveRegion="polite" style={styles.body}>Sprawdzanie pliku i odczyt grafiku…</Text>{aiReadController.current && <Button title="Anuluj odczyt AI" onPress={cancelAiRead} />}</View>}
 
           {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
-          {(Boolean(error)||phase==='saveFailed'||Object.values(preview).some(item=>item.status==='error'||item.duplicateOfEvents.length||item.duplicateOfRows.length)||rows.some(row=>row.incomplete)) && phase!=='reading' && phase!=='saving' && file && onContinueInChat && <Button title="Dokończ w czacie" accessibilityLabel="Dokończ w czacie — przekaż zdjęcie i dane do Azure AI" primary onPress={()=>{
+          {(Boolean(error)||phase==='saveFailed'||Object.values(preview).some(item=>item.status==='error'||item.duplicateOfEvents.length||item.duplicateOfRows.length)||rows.some(row=>row.incomplete)) && phase!=='reading' && phase!=='saving' && file && onContinueInChat && <View style={[styles.row, { alignItems: 'center', gap: 8 }]}>{!isPremium && <PremiumCrown size={14} />}<Button title="Dokończ w czacie" accessibilityLabel="Dokończ w czacie — funkcja Premium używająca Azure AI" primary onPress={()=>{
+            if (!isPremium) { onPremiumRequest(); return; }
             onContinueInChat({file,source:'work',reader:'ai',...(session?{sessionId:session.id,rows:rows.map(row=>({...toInput(row),selected:Boolean(selected[row.id]),overnightConfirmed:Boolean(overnightOk[row.id]),duplicateDecision:decisions[row.id],replacementId:replacementIds[row.id]}))}:{})});
             reset();setFile(null);setError('');onClose();
-          }}/>}
+          }}/></View>}
           {!!notice && <Text style={[styles.body, { marginTop: 11 }]}>{notice}</Text>}
 
           {summary && (

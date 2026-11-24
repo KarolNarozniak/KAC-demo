@@ -134,6 +134,7 @@ export async function readWorkSchedule(fileName: string, dataBase64: string): Pr
 }
 
 const aiReadErrors: Record<string, string> = {
+  premium_required: 'Odczyt AI wymaga aktywnego Premium. Włącz Premium w ustawieniach konta.',
   azure_ai_not_configured: 'Azure AI Foundry nie jest skonfigurowane. Sprawdź endpoint projektu, deployment modelu i logowanie API.',
   azure_ai_rate_limited: 'Azure AI ograniczył liczbę żądań. Poczekaj chwilę i spróbuj ponownie.',
   ai_daily_limit: 'Wykorzystano dzienny limit odczytu przez AI dla tego konta. Wybierz odczyt lokalny albo spróbuj ponownie jutro.',

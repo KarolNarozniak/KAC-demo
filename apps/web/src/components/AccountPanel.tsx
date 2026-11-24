@@ -5,14 +5,16 @@ import { Text, View } from 'react-native';
 import { AuthField, ShowPasswordToggle } from './AuthField';
 import { RecoveryCodeCard } from './RecoveryCodeCard';
 import { Button, useTheme } from './ui';
+import PremiumCrown from './PremiumCrown';
+import PremiumActionButton from './PremiumActionButton';
 import { displayName, hasErrors, PASSWORD_MIN_LENGTH, validatePasswordChange, type AuthUser, type PasswordChangeDraft } from '../domain/auth';
 import { AuthApiError, changePassword, deleteAccount, newRecoveryCode } from '../services/authApi';
 
 type Section = 'none' | 'password' | 'recovery' | 'delete';
 const emptyChange: PasswordChangeDraft = { current: '', next: '', confirm: '' };
 
-export default function AccountPanel({ user, onSignOut, onAccountDeleted, onUserUpdated }: {
-  user: AuthUser; onSignOut: () => Promise<void>; onAccountDeleted: () => Promise<void>; onUserUpdated: (user: AuthUser) => void;
+export default function AccountPanel({ user, onSignOut, onAccountDeleted, onUserUpdated, onOpenPremium }: {
+  user: AuthUser; onSignOut: () => Promise<void>; onAccountDeleted: () => Promise<void>; onUserUpdated: (user: AuthUser) => void; onOpenPremium: () => void;
 }) {
   const { palette, styles } = useTheme();
   const [section, setSection] = useState<Section>('none');
@@ -101,6 +103,14 @@ export default function AccountPanel({ user, onSignOut, onAccountDeleted, onUser
       : <View style={{ marginTop: 10, padding: 12, borderRadius: 11, backgroundColor: palette.amberSoft }}>
         <Text style={styles.body}>Nie masz kodu odzyskiwania. Jeśli zapomnisz hasła, nowe ustawi tylko administrator – utwórz kod i zapisz go.</Text>
       </View>}
+    <View accessibilityLabel="Stan KAC Premium" style={{ marginTop: 14, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: palette.line, backgroundColor: user.isPremium ? palette.greenSoft : palette.surfaceAlt }}>
+      <View style={[styles.row, { alignItems: 'center', gap: 8 }]}><PremiumCrown size={19} /><Text style={[styles.body, { fontWeight: '700' }]}>KAC Premium</Text></View>
+      <Text style={[styles.body, { marginTop: 8 }]}>{user.isPremium
+        ? `Premium aktywne${user.premiumExpiresAt ? ` do ${new Date(user.premiumExpiresAt).toLocaleDateString('pl-PL')}` : ''}.`
+        : 'Konto bez Premium. Korona oznacza funkcję AI, którą odblokowuje kod Premium.'}</Text>
+      <Text style={[styles.muted, { marginTop: 6, marginBottom: 10 }]}>Premium obejmuje Asystenta AI, podsumowanie dnia i odczyt AI planu oraz grafiku. Rozmowy i wybrane dane kalendarza są przekazywane do Azure AI; oryginalne pliki importu nie są zapisywane w bazie KAC.</Text>
+      <PremiumActionButton title={user.isPremium ? 'Zobacz ofertę i kody Premium' : 'Poznaj Premium · Black Friday'} primary={!user.isPremium} onPress={onOpenPremium} />
+    </View>
     {/* Pokazany nowy kod znika po zmianie sekcji, a drugi raz go nie zobaczymy – do „Gotowe” pozostałe przyciski czekają. */}
     <View style={[styles.row, { flexWrap: 'wrap', marginTop: 14 }]}>
       <Button title="Wyloguj" disabled={busy || !!shownCode} onPress={() => void signOut()} />

@@ -8,6 +8,7 @@ import { PostgresWorkProfileRepository } from './profile/repository.js';
 import { demoScope } from './api/scope.js';
 import { PostgresAuthRepository } from './auth/repository.js';
 import { AuthService } from './auth/service.js';
+import { PremiumService } from './premium/service.js';
 import { AiRepository } from './ai/repository.js';
 import { PostgresNotificationRepository } from './notifications/repository.js';
 import { createGoogleIntegrationService } from './integrations/google/service.js';
@@ -32,10 +33,12 @@ const scheduleReader = config.workScheduleReader === 'demo'
 // Użytkownika żądania ustala serwer (S23KC2S1P2-185) – z sesji logowania. Bez bazy (tryb tylko do podglądu) nie ma kont,
 // więc wszystkie żądania należą do użytkownika demonstracyjnego z konfiguracji.
 // Usunięcie konta najpierw cofa zgodę Google (G03), żeby w Google nie został dostęp dla KAC.
-const auth = pool ? new AuthService(new PostgresAuthRepository(pool), config.auth, async (scope) => googleIntegration?.disconnect(scope)) : null;
+const authRepository = pool ? new PostgresAuthRepository(pool) : null;
+const auth = authRepository ? new AuthService(authRepository, config.auth, async (scope) => googleIntegration?.disconnect(scope)) : null;
+const premiumService = authRepository ? new PremiumService(authRepository, config.premium) : undefined;
 const webRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../web');
 const staticWebRoot = existsSync(resolve(webRoot, 'index.html')) ? webRoot : undefined;
-const app = buildApi(repository, config.corsOrigins, { webRoot: staticWebRoot, scheduleReader, scheduleRepository, workProfileRepository, aiRepository, notificationRepository, auth, userScope: auth ? undefined : demoScope, google: { oauth: config.google }, googleIntegration });
+const app = buildApi(repository, config.corsOrigins, { webRoot: staticWebRoot, scheduleReader, scheduleRepository, workProfileRepository, aiRepository, notificationRepository, auth, premiumService, userScope: auth ? undefined : demoScope, google: { oauth: config.google }, googleIntegration });
 
 try {
   await app.listen({ host: '0.0.0.0', port: config.port });

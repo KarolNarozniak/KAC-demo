@@ -4,6 +4,7 @@ import { buildApi } from '../src/app.js';
 import type { CalendarRepository } from '../src/api/contracts.js';
 import { AiInvalidOutputError } from '../src/ai/service.js';
 import type { ImportRow } from '../src/import/rules.js';
+import { makeTestAuth, premiumTestHeaders } from './helpers/premium-auth.js';
 
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/gU8AAAAASUVORK5CYII=', 'base64').toString('base64');
 const extractedRow: ImportRow = { id: 'ai-row-1', title: 'Praca', date: '2026-11-16', startTime: '08:00', endTime: '16:00',
@@ -20,7 +21,7 @@ test('AI file import creates only a review session with source metadata', async 
     createImportSession: async ({ rows }) => { storedRows = rows; return { id: 'session-ai', expiresAt: new Date('2026-11-13T13:00:00Z') }; },
     createEvent: async () => { eventWrites++; return { id: 'must-not-write' } as never; },
   };
-  const app = buildApi(repository, [], { aiService: {
+  const app = buildApi(repository, [], { auth: makeTestAuth({ sessionId: 'session', scope: { userId: 'U001', calendarId: 'K001' }, isPremium: true, premiumExpiresAt: '2035-01-01T00:00:00.000Z' }), aiService: {
     extractSchedule: async (file, source, _userName, signal) => {
       assert.equal(file.mimeType, 'image/png');
       assert.equal(source, 'work');
@@ -31,7 +32,7 @@ test('AI file import creates only a review session with source metadata', async 
     sendAssistantMessage: async () => { throw new Error('unused'); },
   }, aiRepository: { logUsage: async () => {} } as never });
   try {
-    const result = await app.inject({ method: 'POST', url: '/api/v1/import/ai/read', payload: { fileName: 'schedule.png', dataBase64: png, source: 'work' } });
+    const result = await app.inject({ method: 'POST', url: '/api/v1/import/ai/read', headers: premiumTestHeaders, payload: { fileName: 'schedule.png', dataBase64: png, source: 'work' } });
     assert.equal(result.statusCode, 201, result.body);
     assert.equal(result.json().readerProvider, 'azure-ai-foundry');
     assert.equal(result.json().rows[0].employee, 'Anna');
@@ -47,11 +48,12 @@ test('malformed AI JSON is rejected without creating an import session or events
   let sessions = 0;
   const app = buildApi({ checkConnection: async () => {}, getOverview: async () => null, listEventsForImport: async () => [], getImportUserName: async () => 'Użytkownik testowy',
     createImportSession: async () => { sessions++; return { id: 'should-not-exist', expiresAt: new Date() }; } }, [], {
+    auth: makeTestAuth({ sessionId: 'session', scope: { userId: 'U001', calendarId: 'K001' }, isPremium: true, premiumExpiresAt: '2035-01-01T00:00:00.000Z' }),
     aiService: { extractSchedule: async () => { throw new AiInvalidOutputError('invalid_ai_output_json'); }, sendAssistantMessage: async () => { throw new Error('unused'); } },
     aiRepository: { logUsage: async () => {} } as never,
   });
   try {
-    const result = await app.inject({ method: 'POST', url: '/api/v1/import/ai/read', payload: { fileName: 'schedule.png', dataBase64: png, source: 'classes' } });
+    const result = await app.inject({ method: 'POST', url: '/api/v1/import/ai/read', headers: premiumTestHeaders, payload: { fileName: 'schedule.png', dataBase64: png, source: 'classes' } });
     assert.equal(result.statusCode, 502);
     assert.equal(result.json().error, 'invalid_ai_output');
     assert.equal(sessions, 0);
@@ -66,11 +68,12 @@ test('AI provider rate limits and timeouts return controlled errors without crea
     let sessions = 0;
     const app = buildApi({ checkConnection: async () => {}, getOverview: async () => null, listEventsForImport: async () => [], getImportUserName: async () => 'Synthetic',
       createImportSession: async () => { sessions++; return { id: 'unexpected', expiresAt: new Date() }; } }, [], {
+      auth: makeTestAuth({ sessionId: 'session', scope: { userId: 'U001', calendarId: 'K001' }, isPremium: true, premiumExpiresAt: '2035-01-01T00:00:00.000Z' }),
       aiService: { extractSchedule: async () => { throw scenario.error; }, sendAssistantMessage: async () => { throw new Error('unused'); } },
       aiRepository: { logUsage: async () => {} } as never,
     });
     try {
-      const result = await app.inject({ method: 'POST', url: '/api/v1/import/ai/read', payload: { fileName: 'schedule.png', dataBase64: png, source: 'classes' } });
+      const result = await app.inject({ method: 'POST', url: '/api/v1/import/ai/read', headers: premiumTestHeaders, payload: { fileName: 'schedule.png', dataBase64: png, source: 'classes' } });
       assert.equal(result.statusCode, scenario.status);
       assert.equal(result.json().error, scenario.code);
       assert.equal(sessions, 0);
